@@ -1,0 +1,517 @@
+#+TITLE: LatticeWM — Week 0 Spike Results
+#+SUBTITLE: Does the language choice survive contact with river's protocol?
+#+DATE: 2026-07-29
+#+OPTIONS: toc:2 num:t
+#+STARTUP: overview
+
+* Verdict
+:PROPERTIES:
+:CUSTOM_ID: verdict
+:END:
+
+*Green. Proceed in Common Lisp on SBCL with wayflan.*
+
+The Week 0 gate that the entire language decision rested on is passed. wayflan's ASDF
+scanner generates working client bindings from both river protocol XMLs, including the
+server-created =new_id= events that were the named critical path. The wire layer is not
+merely compilable — it connects, binds, dispatches events and completes a roundtrip
+against a live compositor.
+
+Separately, and beyond the scope the plan set for Week 0: the extensibility thesis
+in [[file:README.org::#extensibility][§extensibility]] — which the document itself
+flags as asserted-but-untested — was tested. It holds at the mechanism level. Seven
+tests, seven passes.
+
+Elapsed: about twenty minutes, against a half-day budget.
+
+** One-line summary per question
+:PROPERTIES:
+:CUSTOM_ID: verdict-summary
+:END:
+
+| Question                                     | Answer                                                      |
+|----------------------------------------------+-------------------------------------------------------------|
+| Can wayflan generate river's bindings?       | Yes. 11 interfaces, 68 requests, 49 events, 11 enums.       |
+| Do server-created =new_id= events work?      | Yes. =window=, =output=, =seat= all generate correctly.     |
+| Does the CFFI wire layer actually function?   | Yes. Verified live against a real Wayland compositor.       |
+| Is the extensibility claim real?             | Yes, mechanically. Demonstrated, not asserted.              |
+| Which language, finally?                     | Common Lisp / SBCL. No framework — none exists.             |
+| What is still unknown?                       | Everything river-side. See [[#unproven]].                   |
+
+* Environment
+:PROPERTIES:
+:CUSTOM_ID: environment
+:END:
+
+| Component     | Version / provenance                                                    |
+|---------------+-------------------------------------------------------------------------|
+| OS            | WSL2, Ubuntu 26.04                                                      |
+| Compiler      | SBCL 2.6.0                                                              |
+| Package mgr   | Quicklisp (fresh install)                                               |
+| wayflan       | =git.sr.ht/~shunter/wayflan= @ =f40e8dc= (2026-01-31, "Bump version")   |
+| Protocol XML  | =raw.githubusercontent.com/riverwm/river/master/protocol/= (2026-07-29) |
+| Compositor    | WSLg (Weston-based) at =/run/user/1000/wayland-0=                        |
+| Working dir   | =~/spike= in the WSL filesystem                                         |
+
+*No river compositor was available.* This is the single largest limitation of the spike
+and it bounds every claim below. See [[#unproven]].
+
+* What the codegen actually produced
+:PROPERTIES:
+:CUSTOM_ID: codegen
+:END:
+
+The spike system is four files and no glue code:
+
+#+BEGIN_SRC lisp
+(defsystem "latticewm-spike"
+  :defsystem-depends-on ("wayflan-client")
+  :depends-on ("wayflan-client")
+  :serial t
+  :components ((:file "package")
+               (:module "protocol"
+                :serial t
+                :components
+                ((:wayflan-client-impl "river-window-management-v1"
+                  :in-package "river" :export t)
+                 (:wayflan-client-impl "river-xkb-bindings-v1"
+                  :in-package "river" :export t)))))
+#+END_SRC
+
+That =:wayflan-client-impl= component type is wayflan's own ASDF extension
+(=src/client/asdf.lisp=). It treats the =.xml= as a source file, runs the scanner over
+it at compile time, and emits =(in-package …)= plus =(wl-include <path> :export t)=.
+There is nothing to write by hand and nothing to check in but the XML.
+
+** Counts, measured against the design document's hand-count
+:PROPERTIES:
+:CUSTOM_ID: codegen-counts
+:END:
+
+Macroexpanding =wl-include= over =river-window-management-v1.xml= and tallying the
+forms:
+
+| Form                | Generated | README.org §feasibility hand-count | Match |
+|---------------------+-----------+------------------------------------+-------|
+| =define-interface=  |         8 |                                  8 | ✓     |
+| =define-request=    |        57 |                                 57 | ✓     |
+| =define-event=      |        44 |                                 44 | ✓     |
+| =define-enum=       |        10 |                                 10 | ✓     |
+
+Plus =river-xkb-bindings-v1.xml=: 3 interfaces, 11 requests, 5 events, 1 enum.
+
+Totals across both protocols after loading the system:
+
+- 11 interface classes
+- 91 external symbols in the =RIVER= package
+- 68 callable request functions
+- 120 top-level forms
+- =%version= correctly reports =5= for =river_window_manager_v1=
+
+*The per-protocol table above is accurate to the number* — all four figures for
+=river-window-management-v1= match what the design document measured by hand. The
+aggregate figure quoted in [[file:README.org::#feasibility][§feasibility]] is slightly
+off; see [[#corr-counts]].
+
+** The critical path: server-created =new_id= in events
+:PROPERTIES:
+:CUSTOM_ID: codegen-newid
+:END:
+
+This was called out as the one thing that could sink wayflan, because a client library
+written for client-creates-object flows may not handle the compositor announcing a new
+object it has already allocated. It handles it, with the interface statically known:
+
+#+BEGIN_SRC lisp
+(wl:define-event (:window river-window-manager-v1 6)
+  ((#:id :type (:new-id :interface river-window-v1) :documentation "new window"))
+  (:since 1) (:documentation "new window …"))
+#+END_SRC
+
+All three of the =window=, =output= and =seat= events generate this way, each with the
+correct target interface. The event handler receives a live, typed proxy — no manual
+=wl_registry=-style bind dance, no untyped integer to look up.
+
+** Things that came out better than expected
+:PROPERTIES:
+:CUSTOM_ID: codegen-bonus
+:END:
+
+- *Bitfield enums work.* =edges= and =capabilities= generate with =(:bitfield t)= and
+  named members:
+  #+BEGIN_SRC lisp
+  (wl:define-enum river-window-v1.edges nil
+    ((:none 0) (:top 1) (:bottom 2) (:left 4) (:right 8)) (:bitfield t))
+  #+END_SRC
+- *XML documentation carries through into the Lisp.* Every request, event and argument
+  keeps its protocol prose as a docstring, so =describe= and =C-c C-d= at the REPL
+  answer protocol questions without opening the XML. Nobody planned this; it is the
+  single best maintainability win in the spike, and it matters most in exactly the
+  scenario the document worries about — a future maintainer with no AI budget.
+
+* The wire layer is functional, not just compilable
+:PROPERTIES:
+:CUSTOM_ID: wire
+:END:
+
+The plan only asked for codegen. But WSLg turned out to expose a real Wayland socket,
+so the more interesting test was available for free: does wayflan's hand-rolled CFFI
+layer over =sendmsg=/=msghdr=/=cmsghdr= actually move bytes?
+
+It does. Full path exercised:
+
+#+BEGIN_EXAMPLE
+=== LIVE ROUNDTRIP AGAINST A REAL COMPOSITOR (WSLg) ===
+  connected: #<WL-DISPLAY :ON #P"/run/user/1000/wayland-0" :ID 1 :VERSION 1 …>
+  globals advertised: 20
+    … wl_compositor v4, wl_seat v7, wl_shm v1, xdg_wm_base v1,
+      weston_rdprail_shell v1, …
+  river_window_management_v1 present? no   <- expected; WSLg is Weston, not river
+  => socket, wire marshalling, registry, event dispatch, roundtrip: FUNCTIONAL
+#+END_EXAMPLE
+
+=cffi-grovel= built cleanly against this libc. =with-open-display=, =wl-display.get-registry=,
+=evlambda= dispatch and =wl-display-roundtrip= all behaved. The absence of
+=river_window_management_v1= is the correct result and confirms the probe was really
+reading the server's advertisement rather than echoing a local table.
+
+This retires the second-order risk in [[file:README.org::#language][§language]] — that
+wayflan is a nice piece of code that has never been run in anger. It runs.
+
+* The extensibility thesis, tested rather than asserted
+:PROPERTIES:
+:CUSTOM_ID: extensibility-tested
+:END:
+
+[[file:README.org::#extensibility][§extensibility]] makes an honest, weakened claim and
+then admits it has never been mechanically verified. So: a miniature Layer 0 / Layer 1
+core, and seven tests against it.
+
+The core under test — this is the part an extension is never allowed to edit:
+
+#+BEGIN_SRC lisp
+(defclass node () ((props :initform nil :accessor props)))
+(defclass leaf (node) ((win :initarg :win :accessor win)))
+
+(defgeneric place (policy leaf index)
+  (:documentation "Return (x y w h) for LEAF."))
+(defgeneric spawn-target (policy n))
+
+(defun relayout (policy leaves)          ; the core loop
+  (loop for l in leaves for i from 0 collect (cons (win l) (place policy l i))))
+#+END_SRC
+
+** Results
+:PROPERTIES:
+:CUSTOM_ID: extensibility-results
+:END:
+
+| # | Test                                     | Mechanism                                          | Result |
+|---+------------------------------------------+----------------------------------------------------+--------|
+| 1 | Live method redefinition                 | =defmethod= re-evaluated in a running image         | PASS   |
+| 2 | New policy added from outside the core    | new =defclass= + =defmethod=, *zero core edits*    | PASS   |
+| 3 | Live class redefinition                   | =defclass= + =update-instance-for-redefined-class= | PASS   |
+| 4 | =props= plist as extension-state hatch    | per-object state with no class change              | PASS   |
+| 5 | Policy error does not kill the session    | =handler-bind= + =restart-case= + =invoke-restart= | PASS   |
+| 6 | Extension surface documents itself        | =closer-mop= + =sb-introspect=                     | PASS   |
+| 7 | SBCL catches the Rust-mitigation bugs     | =(optimize (safety 3))= + =ftype=                  | PASS   |
+
+** Test 1 — live method redefinition
+:PROPERTIES:
+:CUSTOM_ID: ext-1
+:END:
+
+Redefined =place= at the REPL, called =relayout= again, got the new layout. Same image,
+same objects, =EQ= on the pre-existing =leaf= instances still true. No restart, no
+reconnect, no lost window state. This is the "iterate on layout in a running session"
+claim, and it is real.
+
+** Test 2 — a new policy from outside, with zero core edits
+:PROPERTIES:
+:CUSTOM_ID: ext-2
+:END:
+
+This is the Week 3 lattice-as-an-extension experiment (D21) in miniature:
+
+#+BEGIN_SRC lisp
+(defclass lattice () ((zoom :initarg :zoom :initform 1 :accessor zoom)))
+(defmethod place ((p lattice) (l leaf) i) …)
+(defmethod spawn-target ((p lattice) n) …)
+#+END_SRC
+
+Correct 2×2 output, and =relayout= — the core loop — was not touched. That is the
+actual load-bearing claim in the whole document: *the lattice must be expressible as an
+extension, or the "extensible" framing is decoration.* In miniature, it is.
+
+** Test 3 — live class redefinition, and a correction to D20
+:PROPERTIES:
+:CUSTOM_ID: ext-3
+:END:
+
+Added a =bonded= slot to =leaf= by re-evaluating =defclass=. An instance created
+*before* the redefinition then had the new slot, correctly initialized, readable and
+writable. No restart, no rebuild, no state migration code.
+
+*This supersedes the rationale behind D20.* The document reaches for a =props= plist in
+part because =defstruct= instances do not migrate across a redefinition. That is true
+of =defstruct= and false of =defclass=. The constraint D20 works around is
+self-inflicted.
+
+*Ruling: use =defclass= for all core state.* The cost is real and should be stated —
+slot access through =standard-object= is slower than a =defstruct= slot, and CLOS
+instances are fatter. The hook that swaps it: if profiling ever shows node-slot access
+in the hot layout path is material, convert *that specific class* to =defstruct= at
+that point and eat the redefinition pain locally. Do not pay for it project-wide up
+front on speculation.
+
+** Test 4 — =props= still earns its keep
+:PROPERTIES:
+:CUSTOM_ID: ext-4
+:END:
+
+Even with =defclass= settled, the =props= plist remains the right tool for extension
+state that has no business becoming a core slot — a third-party extension tagging nodes
+should not be editing a core =defclass=. So D20's mechanism survives; only its
+justification changes.
+
+** Test 5 — a bug in a policy method does not end the session
+:PROPERTIES:
+:CUSTOM_ID: ext-5
+:END:
+
+A =place= method that signals: the condition was caught, a =skip= restart invoked, the
+layout loop continued past the offending window, and the image kept every bit of
+session state. This is the difference between "my layout experiment had a typo" and
+"my layout experiment logged me out," and it is most of why the document argued for a
+live image in the first place.
+
+** Test 6 — the extension surface documents itself
+:PROPERTIES:
+:CUSTOM_ID: ext-6
+:END:
+
+Roughly fifteen lines over =closer-mop:generic-function-methods= and
+=sb-introspect:function-lambda-list= enumerate every policy generic, its lambda list,
+its docstring, and each method with its specializers. Undocumented generics print:
+
+#+BEGIN_EXAMPLE
+  SPAWN-TARGET (policy n)  ->  UNDOCUMENTED  <-- flag me
+#+END_EXAMPLE
+
+*Recommendation: make this a Week 1 deliverable and a CI failure.* It is the cheapest
+possible forcing function against the failure mode the document fears most — an
+extension surface that quietly rots because documenting it is a separate chore from
+writing it. Here it is not a separate chore; the image is the source of truth.
+
+** Test 7 — SBCL recovers part of what Rust's type checker was giving up
+:PROPERTIES:
+:CUSTOM_ID: ext-7
+:END:
+
+[[file:README.org::#language][§language]] concedes that static checking is Rust's
+strongest remaining advantage. Under =(declaim (optimize (safety 3) (speed 1)))= plus
+=ftype= declarations, SBCL caught, at compile time:
+
+#+BEGIN_EXAMPLE
+SIMPLE-WARNING: The function PLACE-AT is called with two arguments, but wants exactly three.
+TYPE-WARNING:   Constant "wide" conflicts with its asserted type FIXNUM.
+STYLE-WARNING:  undefined function: CELL-XX      (typo'd accessor)
+STYLE-WARNING:  undefined function: RELAYOUTT    (typo'd call)
+#+END_EXAMPLE
+
+Wrong arity, wrong constant type, typo'd accessor, typo'd call. That is the bulk of the
+bug class in question.
+
+*Recommendation:* =ftype= declarations on every Layer 0 function, =safety 3= in
+development, and compile warnings treated as build failures in CI. It is not Rust's
+borrow checker and it will not catch a wrong-but-well-typed argument, but it converts
+the largest slice of "dynamic language, find out at runtime" into "find out at compile
+time" for the price of a declaim and some type declarations.
+
+* Corrections the design document needs
+:PROPERTIES:
+:CUSTOM_ID: corrections
+:END:
+
+** The GitHub mirror is dead
+:PROPERTIES:
+:CUSTOM_ID: corr-mirror
+:END:
+
+=README.org= presents =github.com/ak-coram/wayflan-mirror= and
+=git.sr.ht/~shunter/wayflan= as interchangeable sources. They are not:
+
+| Source                        | HEAD                  |
+|-------------------------------+-----------------------|
+| =ak-coram/wayflan-mirror=     | =3fbd216=, 2022-11-07 |
+| =git.sr.ht/~shunter/wayflan=  | =f40e8dc=, 2026-01-31 |
+
+The mirror is nearly four years stale. *Use sr.ht.* The source audit in §language is
+still valid — the two differ by about one line in =wire.lisp= — but pinning a
+dependency to a dead mirror is a trap for whoever sets up the next machine.
+
+** The line-count audit undercounts
+:PROPERTIES:
+:CUSTOM_ID: corr-lines
+:END:
+
+The audit totals ~1,550 lines. The real figure is *~1,749*; =asdf.lisp=,
+=wayland-protocol.lisp= and =stable-protocols.lisp= were not counted. This does not
+change the "small enough to fork on a Tuesday" argument — it strengthens the case that
+the argument was measured rather than felt — but the number should be right.
+
+** The aggregate protocol counts are off by three requests and one event
+:PROPERTIES:
+:CUSTOM_ID: corr-counts
+:END:
+
+§feasibility states "11 interfaces, 65 requests, 48 events, and six argument types."
+Counted directly from the XML, and confirmed against what the scanner generated:
+
+| Figure     | README.org | Actual | Note                                  |
+|------------+------------+--------+---------------------------------------|
+| Interfaces |         11 |     11 | ✓                                     |
+| Requests   |         65 | *68*   | 57 window-management + 11 xkb         |
+| Events     |         48 | *49*   | 44 window-management + 5 xkb          |
+| Enums      | not stated |     11 | 10 window-management + 1 xkb          |
+
+The per-protocol table for =river-window-management-v1= is exactly right; only the
+aggregate is. Most likely some of the eight =destroy= requests were skipped in the
+tally. The =check-sequence= wrapper text in §language also says "all 65 requests" and
+should say 68.
+
+** Three requests are never discussed anywhere in the document
+:PROPERTIES:
+:CUSTOM_ID: corr-requests
+:END:
+
+These exist in the XML and have no mention in =README.org=:
+
+| Request                | XML line | Why it matters                                     |
+|------------------------+----------+----------------------------------------------------|
+| =exit_session=         |      313 | since 4. How the WM asks river to shut down.       |
+| =stop=                 |      136 | On the manager. Needs a decision vs. hot-swap.     |
+| =set_xcursor_theme=    |     1777 | since 2. Cursor theming is the WM's job, not river's. |
+
+=get_decoration_above= / =get_decoration_below= *are* covered (§feasibility, render
+ordering) — they were on an earlier draft of this list in error.
+
+* Design notes that fell out of the spike
+:PROPERTIES:
+:CUSTOM_ID: design-notes
+:END:
+
+** Generated requests are functions, not generics
+:PROPERTIES:
+:CUSTOM_ID: note-wrappers
+:END:
+
+wayflan names requests =interface.request= — e.g. =river-window-v1.set-clip-box= — and
+generates them as plain functions in one flat package. Two consequences:
+
+1. You cannot =defmethod= onto them. The manage/render sequence discipline
+   ([[file:README.org::#feasibility][§feasibility]]) therefore *has* to be a wrapper
+   layer; it cannot be bolted on by advising the generated code. Redefining a generated
+   function in place would work and would also be a maintenance crime, because the next
+   scanner run silently reverts it.
+2. Policy code must never call generated request functions directly. Everything goes
+   through the wrapper. The document's plan already does this — it now has a concrete
+   mechanical reason rather than a stylistic one.
+
+The ~20-line =check-sequence= plan is viable as written, given wrappers.
+
+** The flat package will need curation
+:PROPERTIES:
+:CUSTOM_ID: note-package
+:END:
+
+91 exported symbols in one =RIVER= package, 68 of them callable requests. Fine for a
+spike; for the real thing, the wrapper layer should export a deliberately smaller
+vocabulary and leave =RIVER= as plumbing that Layer 1 never sees.
+
+* What is still unproven
+:PROPERTIES:
+:CUSTOM_ID: unproven
+:END:
+
+Stated bluntly, because the temptation after a green spike is to over-read it.
+
+** Everything river-side
+:PROPERTIES:
+:CUSTOM_ID: unproven-river
+:END:
+
+No river compositor was available, so none of the following was touched:
+
+- The *manage/render sequence discipline*, and the spec self-contradiction the document
+  records about whether rendering state is legal inside a =manage= sequence. This is the
+  highest-value open question and it needs a real river.
+- =river_window_manager_v1.error.sequence_order= behaviour in practice.
+- Clip boxes, and =xdg_popup= slicing at viewport edges.
+- =ate_unbound_key= semantics, which D19 depends on.
+- The =wl_shm= minimap path. File-descriptor passing exists in wayflan's code and was
+  not exercised here.
+- The =%find-proxy!= destroy-race gap. Not hit, because no windows churned. It still
+  will be.
+
+** The thing most likely to actually kill this
+:PROPERTIES:
+:CUSTOM_ID: unproven-decomposition
+:END:
+
+The spike proves Common Lisp *can* be shaped the way the document wants. It does not
+prove the codebase *will* be. Extensibility is a property of the decomposition, not of
+the language — that is the document's own sharpest self-criticism and the spike does
+nothing to retire it. Every test above used a five-line toy core. A real Layer 0 under
+schedule pressure is where the thesis actually gets decided.
+
+** External churn
+:PROPERTIES:
+:CUSTOM_ID: unproven-churn
+:END:
+
+=river-window-management-v1= is unreleased and moving. The counts in [[#codegen]] are a
+snapshot of 2026-07-29 =master=. Pin the XML in-tree and re-run the codegen tally as a
+CI check, so a protocol change shows up as a failing build rather than a mystery.
+
+* Reproducing this
+:PROPERTIES:
+:CUSTOM_ID: repro
+:END:
+
+Everything lives in =~/spike= inside WSL Ubuntu:
+
+| File                    | What it does                                          |
+|-------------------------+-------------------------------------------------------|
+| =latticewm-spike.asd=   | the four-line system that drives the scanner          |
+| =package.lisp=          | =RIVER= package with a =wl= local nickname            |
+| =protocol/*.xml=        | the two river protocols, pinned                       |
+| =verify.lisp= … =verify4.lisp= | counts, symbols, macroexpansion audit          |
+| =generated-wm.lisp=     | 1,183 lines of dumped macroexpansion, for reading      |
+| =extensibility.lisp=    | the seven-test miniature core                         |
+| =wire.lisp=             | connect + deliberate-bug static-checking test         |
+| =registry2.lisp=        | live roundtrip against WSLg                           |
+
+Gotchas hit along the way, recorded so nobody re-hits them:
+
+- Pass the XML path to =wl-include= as a *pathname literal* (=#P"…"=), not a string. A
+  string gets handed to =plump= and parsed as XML, producing a baffling
+  =no applicable method for PLUMP-DOM:ATTRIBUTES (NIL)=.
+- =(require :sb-introspect)= before using it; it is not loaded by default.
+- Request functions are named =INTERFACE.REQUEST=, not =REQUEST=. Probing for bare names
+  reports dozens of phantom missing symbols.
+
+* Next steps
+:PROPERTIES:
+:CUSTOM_ID: next
+:END:
+
+1. Fold the [[#corrections][corrections]] into =README.org= — dead mirror, line count,
+   missing requests, and the =defclass= ruling superseding D20's rationale.
+2. Make the [[#ext-6][self-documenting extension surface]] a Week 1 deliverable with a
+   CI gate, and turn on =safety 3= + =ftype= + warnings-as-errors at the same time.
+3. Get access to a machine running river 0.4.0 and do the other half of Week 0. Until
+   then, [[#unproven-river][every river-side question stays open]] and no amount of
+   local work closes them.
+4. Pin the protocol XML and add the codegen tally from [[#codegen-counts]] as a
+   regression check.

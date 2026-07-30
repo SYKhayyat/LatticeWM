@@ -1,0 +1,633 @@
+#+TITLE: LatticeWM — Execution Plan
+#+SUBTITLE: Fifteen days, two packaging targets, one thing that must not be got wrong
+#+DATE: 2026-07-30
+#+OPTIONS: toc:2 num:t
+#+STARTUP: overview
+
+* How to read this file
+:PROPERTIES:
+:CUSTOM_ID: how
+:END:
+
+[[file:README.org][README.org]] is the design. It is *frozen*. Do not add to it; the only
+edits permitted are recording findings this plan produces.
+
+This file is the execution plan and it is the only document that should grow. Where it
+disagrees with README.org's [[file:README.org::#plan][§plan]], this file wins, because
+README's plan was written against a four-week schedule that no longer exists.
+
+*The project's failure mode is not technical.* It is spending the remaining budget on
+artifacts that feel like progress. 2,570 lines of prose exist and zero lines of window
+manager. Every hour of design conversation is drawn from the same account that buys
+code, and that account is denominated in days.
+
+* Hard facts
+:PROPERTIES:
+:CUSTOM_ID: facts
+:END:
+
+| Fact | Value |
+|------+-------|
+| Budget start | 2026-07-24 |
+| Budget length | three to four weeks, *not renewable* |
+| Expiry, worst case | *2026-08-14* |
+| Expiry, best case | 2026-08-21 |
+| Today | 2026-07-30 |
+| Days remaining, planned against | *15* |
+| Lines of window manager written | 0 |
+| Compositor access | none yet |
+
+*This plan is built to the worst case.* Days 16 to 22 are treated as a bonus, not as
+schedule. If a phase slips, it eats the bonus first and the [[#cuts][cut list]] second.
+It never eats [[#phase-2][Phase 2]] or [[#phase-4][Phase 4]].
+
+* What changed from README's plan, and why
+:PROPERTIES:
+:CUSTOM_ID: deltas
+:END:
+
+Three deltas. Each is a reversal of a decision in README.org and is recorded here rather
+than quietly applied, per that document's own standing rule.
+
+** Delta 1 — the conventional layer and the lattice share one geometry
+:PROPERTIES:
+:CUSTOM_ID: delta-1
+:END:
+
+README's [[file:README.org::#plan][§plan]] builds split trees twice: as the whole layout
+model in week 2, then as cell contents in week 3. That is the same code written twice
+under a budget that cannot afford it once.
+
+*A cell boundary and a split boundary are the same thing seen twice.* A split separates
+two subtrees, reached by ~:a~ / ~:b~. A cell separates two subtrees, reached by
+~(x±1, y)~. Nested versus indexed. Nothing else differs.
+
+The consequence that makes it worth doing: *directional motion is continuous across the
+boundary.* Move left from the leftmost leaf of cell ~(0,0)~ and you arrive at the
+rightmost leaf of cell ~(-1,0)~. No mode, no separate command, no discontinuity in the
+user's model. Emacs's ~windmove~ and lattice cell motion are one verb with one
+implementation.
+
+So: build cells-holding-trees on day one. Ship with a single cell at ~(0,0)~ and the
+viewport locked at 1×1, and it *is* a conventional tiling window manager. Unlock
+coordinates and zoom and it is the lattice. Same code, extended, not ported.
+
+** Delta 2 — D21's experiment becomes a daily CI check, not a week-3 milestone
+:PROPERTIES:
+:CUSTOM_ID: delta-2
+:END:
+
+[[file:README.org::#d21][D21]] holds: the lattice must be expressible without core
+surgery, and if it cannot be, *that is the finding*. What changes is when you learn it.
+
+Under D21 as written you learn in week 3, which under this budget may not happen, so the
+experiment that justifies the whole sequencing never runs.
+
+Instead: *the lattice lives in a separate ASDF system* that depends only on the core's
+exported policy package. Core loads, starts and runs with the lattice absent. Any core
+edit the lattice demands shows up as a failing gate, on the day it happens, from day
+one. See [[#gates][CI gates]], gate 3.
+
+This keeps D21's falsifiability and removes its scheduling risk. It costs nothing.
+
+** Delta 3 — the cut list guts D22's own mitigations, so D22 flips
+:PROPERTIES:
+:CUSTOM_ID: delta-3
+:END:
+
+[[file:README.org::#d22][D22]] (exact-fit zoom) accepts, as a stated price, that *panning
+resizes every visible window* on a non-uniform lattice. Terminals rewrap, browsers
+reflow. Pan is the frequent navigational verb, and
+[[file:README.org::#d7][D7]] sells it as pure view control.
+
+D22's own escape hatch: both width solvers ship as two methods on one generic.
+
+*Ruling: ~absolute-with-clipping~ (the old D11 behaviour) is the shipped default;
+~exact-fit~ is the alternate method.* [[file:README.org::#feasibility][§feasibility]]
+already established that ~set_content_clip_box~ renders the partial trailing cell
+cleanly, with the border redrawn at the clip edge, free, from the compositor. D22 traded
+a cosmetic problem that the compositor solves for a functional one that it does not.
+
+This is a one-line default change, not a redesign, and it is reversible by config.
+
+* Architecture
+:PROPERTIES:
+:CUSTOM_ID: arch
+:END:
+
+** Module map
+
+#+begin_example
+latticewm.asd              ; core system
+lattice.asd                ; the extension. depends on LATTICEWM/POLICY only.
+
+src/
+  package.lisp
+  protocol/
+    river-window-management-v1.xml   ; vendored, pinned
+    river-xkb-bindings-v1.xml        ; vendored, pinned
+  wire/
+    sequence.lisp    ; *sequence*, check-sequence, with-manage/with-render
+    wrappers.lisp    ; macro-generated wrapper per generated request (all 68)
+    dispatch.lisp    ; event loop; handler-case on wl-message-error
+    session.lisp     ; connect, bind globals, SWANK thread, *debugger-hook*
+  model/
+    tree.lisp        ; node / leaf / split. pure surgery, no protocol.
+    space.lisp       ; coordinate -> cell map. one cell is the degenerate case.
+    focus.lisp       ; the cursor, and the one focus-repair function
+    geometry.lisp    ; (tree, rect) -> list of (leaf . rect). pure.
+  policy/
+    protocol.lisp    ; DEFGENERIC ONLY. docstrings mandatory. no methods.
+    conventional.lisp; the default methods. the shipped behaviour.
+  runtime/
+    emit.lisp        ; placements -> set_position / propose_dimensions / order
+    windows.lisp     ; window lifecycle, identifier bookkeeping
+    keys.lisp        ; xkb bindings, keymap, submaps
+    commands.lisp    ; the command registry
+  config.lisp        ; loads ~/.config/latticewm/init.lisp
+
+lattice/
+  policy.lisp        ; methods on the same generics. coordinates, viewport, zoom, pan.
+  commands.lisp
+#+end_example
+
+Two rules, and they are the project:
+
+1. *~src/policy/protocol.lisp~ contains no methods.* Generics and docstrings only. It is
+   the extension surface, and it is a file you can read in one sitting.
+2. *Nothing in ~lattice/~ may edit anything in ~src/~.* Enforced by gate 3.
+
+** The policy surface
+:PROPERTIES:
+:CUSTOM_ID: generics
+:END:
+
+This is the whole extension contract. It is deliberately small; a surface nobody can
+hold in their head is not a surface.
+
+| Generic | Question it answers |
+|---------+---------------------|
+| ~place (policy node rect)~ | how does a subtree divide its rectangle? |
+| ~move-focus (policy cursor direction)~ | where does motion go, including across cells? |
+| ~resolve-entry (policy container direction)~ | arriving at a container, which leaf? ([[file:README.org::#d20][D20]]) |
+| ~spawn-target (policy cursor)~ | where does a new window land? ([[file:README.org::#d14][D14]]) |
+| ~on-window-open (policy window)~ | tiled or floating? focus it or not? |
+| ~on-window-close (policy cursor node)~ | collapse or clear; where does focus go? ([[file:README.org::#d17][D17]]) |
+| ~should-float-p (policy window)~ | the floating rule |
+| ~on-minimize (policy window)~ | minimize semantics, ours entirely |
+| ~visible-region (policy viewport)~ | what is shown, what is ~hide~-den |
+| ~column-widths (policy visible-range viewport-w)~ | absolute-with-clipping vs exact-fit ([[#delta-3][Delta 3]]) |
+| ~window-dimensions (policy leaf rect)~ | ~propose_dimensions~, and gravity when refused |
+| ~render-order (policy nodes)~ | the ~place_above~ chain |
+| ~key-unbound (policy cursor keysym)~ | typing in an empty pane ([[file:README.org::#d19][D19]]) |
+
+Thirteen. If this list reaches thirty, the decomposition has gone wrong in the direction
+of ceremony. If it drops below ten, it has gone wrong in the direction of a monolith.
+
+* What extensibility is actually worth here
+:PROPERTIES:
+:CUSTOM_ID: extensibility-real
+:END:
+
+Added 2026-07-30, after pressing on the question honestly. This section is the rationale
+for gate 6, for the SWANK bridge in [[#phase-4][Phase 4]], and for how the worked
+examples are framed. README argued the language decision on *human* extensibility and got
+a thin margin. The real requirement is different and the margin is wider.
+
+** The Emacs mechanism is a ratio, not a language
+
+Lisp is not what kept Emacs alive. *The ratio is.* Emacs is roughly 1.3 to 1.4 million
+lines of Elisp on about 400,000 lines of C. The overwhelming majority of the system is
+written in its own extension language, and three things follow:
+
+- Every feature is a worked example of how to write a feature.
+- Anything you want to change is already written in the language you would change it in.
+- The extension surface is not documented, it is *demonstrated*, a million lines over.
+
+Vim has Vimscript and is not Emacs. Neovim has Lua and is not Emacs. Hyprland has Lua as
+of 0.55 and is not Emacs. In all three the core is C or C++ and the scripting sits on
+top. The boundary is not the disease. *How little of the system lives above it* is.
+
+*Therefore the load-bearing metric is the runtime-to-policy line ratio*, and it is
+checked continuously rather than discovered at the end. See gate 6.
+
+| Shape | Runtime | Policy | Meaning |
+|-------+---------+--------+---------|
+| Emacs shape | ~500 | ~1,500 | the language bought something real |
+| Vim shape | ~2,000 | ~200 | CLOS paid for, nothing received |
+
+*The compounding took Emacs decades and this project has fifteen days.* What gets built
+here is the seed, not the advantage. Whether it compounds is entirely a function of other
+people and cheap AI, which is why [[#phase-4][Phase 4]] is not cuttable.
+
+** The real requirement: a cheaper AI must be able to extend it
+
+Not "Shaul edits a ~defparameter~." The post-expiry maintainer is a weaker and cheaper
+model, plus whatever contributors the release attracts. That is a different set of
+properties from human extensibility, and Common Lisp scores differently on them.
+
+| What a weak model needs | Common Lisp | Compiled + plugin API |
+|-------------------------+-------------+------------------------|
+| Context per change | one docstring, one ~defmethod~ | the trait, its types, the boilerplate |
+| …when the change is *not* covered by the surface | still one ~defmethod~ | read core, edit core, rebuild |
+| Additive vs invasive | new file, zero core diff | additive inside the API, surgical outside |
+| Feedback loop | *eval, observe, correct, re-eval* | edit, build, restart, lose session, reproduce |
+| Intermediate state observable? | *yes, live objects* | no, only rendered output |
+| Discoverability | ask the running image | grep the repo, hope docs are current |
+| Correctness oracle before running | gate 1 only, partial | *the compiler, and it is better* |
+| Bad extension kills the session? | no, signals with a restart | yes, panics |
+
+*The feedback loop is the largest single factor.* It converts "reason correctly on the
+first attempt" into "try, observe, correct." Weak models are bad at the first and decent
+at the second, so this is not a marginal gain, it is a change of task.
+
+*Honest size of the difference:* for changes the extension surface covers, roughly two to
+three times easier, almost all of it from the loop. For changes it does not cover, the
+difference is not a multiplier but a binary: possible, versus needing a rebuild by the
+resource that expired. Window managers are mostly the second case.
+
+** The strongest argument against the above
+
+*A cheap model writes better Rust than it writes Common Lisp.* Training data for Rust
+dwarfs Common Lisp and CLOS specifically is not something small models are fluent in.
+That is a real cost and it partially offsets the loop advantage.
+
+What rescues it: the code a cheap model needs to write here is
+~(defmethod place ((p my-policy) node rect) …)~. Small, formulaic, three worked examples
+beside it, verified live at a REPL before it is committed. That is the easiest possible
+target, and nothing like asking a weak model for 500 lines of new subsystem.
+
+*So the fluency gap is survivable only because the surface is small and the examples
+exist.* Both are [[#phase-4][Phase 4]], which is why it is not cuttable.
+
+** The caveat that must not get lost
+
+Every advantage above routes through /there is a documented generic for the thing you
+want to change/. Without one, Common Lisp's advantage collapses to roughly zero and
+becomes *worse* than the compiled path, because now there is no oracle, no compiler, and
+a weak model editing a monolith.
+
+*The language multiplies the decomposition. It does not substitute for it.*
+[[#phase-2][Phase 2]] is still the entire project.
+
+* CI gates
+:PROPERTIES:
+:CUSTOM_ID: gates
+:END:
+
+All six run on every commit from day one. They are cheap and they are the only automated
+defence the project has.
+
+1. *Zero compiler warnings* under ~(declaim (optimize (safety 3) (speed 1)))~ with
+   ~ftype~ on every exported function. Verified in
+   [[file:SPIKE-WEEK0.org::#ext-7][spike §ext-7]] to catch wrong arity, wrong-typed
+   constants, typo'd accessors and typo'd calls at compile time.
+2. *Every generic in ~policy/protocol.lisp~ has a docstring.* The generated
+   extension-surface document prints ~UNDOCUMENTED <-- flag me~ and the build fails.
+   ~15 lines over ~closer-mop~ and ~sb-introspect~, already written in
+   [[file:SPIKE-WEEK0.org::#ext-6][spike §ext-6]].
+3. *The lattice touches no core.* ~git diff --name-only~ over the lattice work asserts
+   nothing under ~src/~. This is [[file:README.org::#d21][D21]]'s experiment, run daily.
+4. *Core runs without the lattice.* Load ~latticewm.asd~ alone, start, place a window,
+   exit. The extension must be genuinely optional or it is not an extension.
+5. *Codegen counts match the pinned XML.* 8/57/44/10 for window-management, 3/11/5/1
+   for xkb. A protocol change becomes a failing build rather than a mystery.
+6. *The runtime-to-policy line ratio is reported on every build.* Not pass/fail, a
+   number, printed where it cannot be ignored. ~src/wire/~ + ~src/runtime/~ against
+   ~src/model/~ + ~src/policy/~ + ~lattice/~. This is the Emacs-shape test from
+   [[#extensibility-real][§extensibility-real]] and it is the closest thing to a direct
+   measurement of whether the language decision paid off. Check it on Day 9. Runtime
+   growing faster than policy is the earliest visible symptom of the monolith failure
+   mode, and it shows up weeks before anything else does.
+
+*Gate 3 is necessary and not sufficient, and this must be said out loud.* It is
+satisfiable in bad faith: make every core generic take ~&rest args~, push all state
+through ~props~, and the letter passes while the spirit dies. So gate 3 reports two
+numbers alongside pass/fail — *the lattice's ~defmethod~ count and its total lines*. A
+lattice that is three hundred lines of methods is the thesis holding. One that is two
+thousand lines re-implementing geometry is the thesis failing while wearing the gate's
+uniform.
+
+* Packaging: both targets, neither privileged
+:PROPERTIES:
+:CUSTOM_ID: packaging
+:END:
+
+** Plain Linux is the primary build
+
+Ordinary ASDF. SBCL and Quicklisp are packaged on every distribution. ~wayflan~ is not
+in Quicklisp's distribution, so it is a git submodule or a ~qlot~ pin, not a curl.
+
+#+begin_example
+make          -> builds, runs the gates
+make run      -> runs against the current WAYLAND_DISPLAY
+make image    -> save-lisp-and-die -> ./latticewm, one executable
+make install  -> ./latticewm + share/ + a sample init.lisp
+#+end_example
+
+*~save-lisp-and-die~ does not cost live redefinition.* The dumped core retains the
+compiler, so SWANK connects and ~defmethod~ still works at runtime. This is StumpWM's
+shipping model and it is proven. Ship the image with ASDF included so user extensions
+can be ~asdf:load-system~-ed from ~~/.config/latticewm/~.
+
+Result: a single ~40 to 60 MB executable, dependencies libc only, runs on Arch, Fedora,
+Debian, Void, anything.
+
+** Nix is a packaging target, not a dependency
+
+~flake.nix~ exposes ~packages.default~ (the same image), ~devShells.default~ (SBCL,
+Quicklisp, the pinned river), and a NixOS module. It consumes the same ~Makefile~.
+
+*Nothing in ~src/~ may know that nix exists.* If the flake is deleted the project still
+builds. That is the test.
+
+** Protocol pinning, in both worlds
+:PROPERTIES:
+:CUSTOM_ID: pinning
+:END:
+
+~river-window-management-v1~ is *unreleased and moving*, and a pre-release protocol can
+break within a version number rather than politely bumping to v2. After budget expiry a
+river upgrade could break the window manager with no one available to repair it. This is
+the largest threat to the "survives without AI" requirement, larger than any
+decomposition risk, and README treats it as a CI check.
+
+Three layers, and the first two work everywhere:
+
+1. *Vendor the XML in-tree* and generate from the vendored copy, never from a URL.
+2. *Assert the version at bind time.* We generate against
+   ~river_window_manager_v1~ version 5. On registry bind, if the compositor advertises
+   something we did not generate against, *refuse to start* and print the two version
+   numbers, the river commit this build is known good against, and what to do. A clear
+   refusal is repairable by a non-programmer. Silent misbehaviour is not.
+3. *Nix pins river itself* in the flake, so the compositor and the window manager become
+   one versioned pair upgraded deliberately or never. On plain Linux the equivalent is
+   crude and works: record the known-good river commit in the README and *keep a copy of
+   the working river binary*. River is Zig and builds to a single file.
+
+* Phases
+:PROPERTIES:
+:CUSTOM_ID: phases
+:END:
+
+** Phase 0 — unblock the compositor (Day 1, timeboxed, hard)
+:PROPERTIES:
+:CUSTOM_ID: phase-0
+:END:
+
+Runs in parallel with Phase 1. Do not let it block writing code.
+
+- [ ] *Try river nested first.* River is a wlroots compositor and wlroots has a Wayland
+      backend, so it should run inside the existing niri or hyprland session, in a
+      window, on the machine that already exists. *Verify this specifically for river
+      before betting the day on it.* If it works, the dev loop is Emacs on one side,
+      river-in-a-window on the other, SLIME between them, and no second machine is ever
+      needed.
+- [ ] If nested fails, build river main bare-metal on the NixOS box. Half a day.
+- [ ] Build ~canoe~ via its ~shell.nix~ against the same river. It is the known-good
+      reference to diff against when sequencing goes wrong.
+
+*Abort condition: if there is no working river by end of Day 2, stop and re-plan.* Every
+subsequent phase past Phase 2 assumes it.
+
+** Phase 1 — plumbing (Days 1 to 3, needs no river)
+:PROPERTIES:
+:CUSTOM_ID: phase-1
+:END:
+
+All of this is testable against WSLg or any Weston. None of it waits on Phase 0.
+
+- [ ] ASDF skeleton, vendored XML, codegen, package with a ~wl~ local nickname.
+- [ ] ~safety 3~ + ~ftype~ + warnings-as-errors. Gate 1 live.
+- [ ] Extension-surface generator and gate 2. Lift the ~15 lines from the spike.
+- [ ] Sequence discipline: ~*sequence*~, ~check-sequence~, ~with-manage-sequence~,
+      ~with-render-sequence~, and the macro that emits a wrapper for each of the 68
+      generated requests. Test by asserting the condition fires on a deliberate
+      violation.
+- [ ] Dispatch loop with ~handler-case~ on ~wl-message-error~. *Test it properly:* churn
+      surfaces against WSLg until the destroy race fires, then confirm the loop survives
+      and does not desync. README calls this a five-line fix from a source read; that is
+      a claim, not a result.
+- [ ] SWANK in a thread, and the top-level ~*debugger-hook*~. A daemon with no
+      controlling terminal that hits an unhandled condition hangs on a ~stdin~ that is
+      not there.
+- [ ] Gate 5, the codegen count check.
+
+** Phase 2 — the core model (Days 3 to 5, needs no river) — *THE PROJECT*
+:PROPERTIES:
+:CUSTOM_ID: phase-2
+:END:
+
+*This is the phase that decides whether the project succeeds.* Everything before it is
+plumbing anyone can write; everything after it inherits whatever this produces. It has
+no external dependency, so it cannot be blocked, only rushed. Do not rush it.
+
+- [ ] ~model/tree.lisp~ — pure split-tree surgery. split, close-collapse, clear, move,
+      swap, pull. No protocol calls anywhere in this file.
+- [ ] ~model/space.lisp~ — the coordinate map. One cell at ~(0,0)~ is the degenerate
+      case and the conventional layer is exactly that. Written once, per
+      [[#delta-1][Delta 1]].
+- [ ] ~model/focus.lisp~ — the cursor, and *the single focus-repair function every verb
+      calls*. Improvised per-verb repair is how you get fifteen subtly different
+      behaviours and a bug class where focus points at a node that no longer exists.
+- [ ] ~model/geometry.lisp~ — ~(tree, rect) -> ((leaf . rect) …)~. Pure.
+- [ ] ~policy/protocol.lisp~ — the thirteen generics, docstrings mandatory, no methods.
+- [ ] ~policy/conventional.lisp~ — the default methods.
+- [ ] *Unit tests over all of it.* This is the one part of a window manager that is
+      testable without a compositor. Take the free lunch.
+
+** Phase 3 — wire it up (Days 5 to 9)
+:PROPERTIES:
+:CUSTOM_ID: phase-3
+:END:
+
+- [ ] Window lifecycle: ~window~ event to a leaf, closed to tree surgery plus focus
+      repair, ~identifier~ recorded.
+- [ ] ~runtime/emit.lisp~: placements to ~set_position~, ~propose_dimensions~,
+      ~hide~/~show~, and an explicit ~place_above~ chain. Render order is undefined by
+      default; every node must be ordered deliberately.
+- [ ] Keybindings via ~river-xkb-bindings-v1~. Command registry. Spawn.
+- [ ] Floating with explicit render ordering. Minimize leaving the tree.
+- [ ] The [[file:README.org::#week0][Week 0 river-side checks]], which are now due:
+      is rendering state genuinely legal in a manage sequence (the spec contradicts
+      itself); does an ~xdg_popup~ in a straddling cell get sliced by ~set_clip_box~;
+      does ~ate_unbound_key~ fire under ~clear_focus~ and does it carry the keysym.
+- [ ] Persistence: ~identifier~ to location, s-expression under ~$XDG_STATE_HOME~,
+      debounced write.
+
+*Checkpoint, end of Day 9, and it is the one that matters:* a window manager you can
+spawn, split, navigate, close and float, running nested. If this is not true on Day 9,
+*cut Phase 5 rather than Phase 4* and say so in this file.
+
+*Dogfood nested. Do not make it your only window manager yet.* A WM you live in
+generates an unbounded papercut queue, and README's week-2 daily-driver gate was written
+assuming weeks 3 and 4 existed to absorb it. They do not.
+
+** Phase 4 — the extension surface and a public release (Days 9 to 11)
+:PROPERTIES:
+:CUSTOM_ID: phase-4
+:END:
+
+*Not cuttable.* This is the deliverable, not the documentation of it.
+
+- [ ] Audit every policy decision made in Phases 2 and 3. Anything sitting as an inlined
+      ~cond~ that a user might plausibly want to change becomes a generic.
+- [ ] ~~/.config/latticewm/init.lisp~, with every [[file:README.org::#p1][P1]] fork
+      present as a tier-0 value.
+- [ ] *The SWANK bridge. This is a shipped artifact, not an assumption.* A small socket
+      client (or MCP shim) that takes a form, evaluates it inside the running window
+      manager, and returns the value plus any condition and backtrace.
+
+      The entire cheap-AI argument in [[#extensibility-real][§extensibility-real]] rests
+      on a model being able to eval into the live image. Without this tool that argument
+      describes a capability nobody can reach, and the language decision quietly stops
+      paying for itself. With it, the loop advantage becomes real for the exact agent
+      that will be doing the extending after August.
+
+      Secondary benefit that justifies building it even if the first never materialises:
+      *you use it during Phases 3 and 5 yourself.* It is not speculative infrastructure.
+- [ ] *Three worked example extensions, framed as onboarding material for a weak model,
+      not as human documentation.* Each must be one ~defmethod~ shaped, self-contained in
+      one file, and verifiable at the REPL in a single eval. Suggested:
+      focus-follows-mouse; a window rule matching ~app_id~ to a spawn cell; MRU focus
+      after close instead of stay-put.
+
+      The test is not "would a person understand this." It is *"could a cheap model
+      produce a fourth one by pattern-matching on these three."* If the answer is no, the
+      surface is wrong and this is the last moment it can be fixed.
+- [ ] The generated extension-surface document, checked in, regenerated by CI. It is the
+      thing the bridge lets a model query at runtime, so it must be machine-readable
+      first and pretty second.
+- [ ] *Tag v0.1 and announce it.* README notes there has never been a Common Lisp
+      Wayland window manager and that StumpWM's community wants a successor, then never
+      plans for it. *The single best insurance against budget expiry is other people
+      holding the code.* A project with three contributors survives; a perfectly
+      decomposed project with zero does not. This costs half a day and it is the highest
+      expected-value half-day in the plan.
+
+** Phase 5 — the lattice, as a separate system (Days 11 to 15)
+:PROPERTIES:
+:CUSTOM_ID: phase-5
+:END:
+
+~lattice.asd~, depending on ~LATTICEWM/POLICY~ and nothing else. Gate 3 armed.
+
+- [ ] Coordinates, the viewport, zoom as ~(cols, rows)~, pan.
+- [ ] ~move-focus~ continuing across cell boundaries ([[#delta-1][Delta 1]]).
+- [ ] ~column-widths~ defaulting to ~absolute-with-clipping~ ([[#delta-3][Delta 3]]),
+      with ~exact-fit~ shipped as the alternate method.
+- [ ] *The coordinate overlay ([[file:README.org::#d5][D5]]). Not optional, see
+      [[#cuts][the cut list]].*
+- [ ] *Every core edit the lattice demands gets written down here, in this file, as it
+      happens.* That list is the actual result of this project's central experiment,
+      whichever way it comes out.
+
+** Phase 6 — bonus, days 16 to 22 if the budget runs long
+:PROPERTIES:
+:CUSTOM_ID: phase-6
+:END:
+
+In priority order: the drawn map on a ~wl_shm~ shell surface; named cells; the
+~compact~ family; bonds ([[file:README.org::#d16][D16]]); ephemeral jump labels; pan
+animation. Assume none of it happens.
+
+* The cut list, stated explicitly so it does not drift back
+:PROPERTIES:
+:CUSTOM_ID: cuts
+:END:
+
+Cut: the minimap and drawn map, ~wl_shm~ and the fd path, named cells, ephemeral jump
+labels, pan animation, bonds, the ~compact~ family, workspaces beyond a flat list.
+
+Cutting ~wl_shm~ is a bonus rather than a loss: it removes the least-proven part of
+wayflan from the critical path.
+
+*One thing is deliberately un-cut, and the reason matters.* README calls two-dimensional
+navigation "the single biggest design risk" and names three mitigations: the minimap,
+named cells, and the coordinate overlay ([[file:README.org::#d5][D5]]). The cut list
+removes the first two. *Removing all three would ship the ZUI get-lost failure mode with
+nothing standing against it*, and the resulting lattice would plausibly be worse than
+niri's strip rather than better.
+
+The coordinate overlay is by far the cheapest of the three and it stays. It can be text
+on a small shell surface, or in the degenerate case border colour keyed to coordinate
+parity. It ships in Phase 5.
+
+* Decisions taken by fiat, 2026-07-30
+:PROPERTIES:
+:CUSTOM_ID: fiat
+:END:
+
+README's [[file:README.org::#open][open questions]] list eleven core-layer items blocking
+Phase 3. *Every one is a two-way door in a live image, which is what the architecture is
+for.* They are decided here in one pass. Override any of them by editing this table; do
+not reopen them as research.
+
+| Question | Ruling |
+|----------+--------|
+| Floating policy | Windows with a ~parent~ float. Everything else tiles. Manual toggle verb. Floats render above all tiled nodes, below the cursor overlay. |
+| Minimize | Minimized windows leave the tree and enter a flat scratchpad list. Restore returns to the remembered slot if it still exists, else the focused cell. |
+| ~set_capabilities~ | Declare all four: window_menu, maximize, fullscreen, minimize. Fullscreen is cheap to honour. |
+| Gravity when a client refuses its size | Centre. |
+| ~move~ into an occupied target | Joins as a split. ~swap~ stays a separate verb. |
+| Spawn placement default | Split the focused cell, vertical, new window on the right. |
+| Persistence format | S-expression, ~$XDG_STATE_HOME/latticewm/state.lisp~, debounced write on change. |
+| Config schema | ~~/.config/latticewm/init.lisp~. Plain Lisp, loaded at startup. Every P1 fork a ~defparameter~. |
+| Multi-monitor | One model, one viewport per output. |
+| ~exit_session~ / ~stop~ / ~set_xcursor_theme~ | ~exit_session~ bound to a quit command. ~stop~ unused; hot-swap is kill-and-relaunch. ~set_xcursor_theme~ read from config at startup. |
+| Flat bindings or submaps | Flat for v0.1. ~ensure_next_key_eaten~ submaps in Phase 6. |
+| The name | Keep *LatticeWM* until something better arrives. It is a rename, not a decision. |
+
+* Checkpoints and abort conditions
+:PROPERTIES:
+:CUSTOM_ID: checkpoints
+:END:
+
+| Day | Must be true | If not |
+|-----+--------------+--------|
+| 2 | River runs, nested or bare metal | *Stop and re-plan.* Everything past Phase 2 assumes it. |
+| 5 | Phase 2 complete, unit tests green | Take the time. Do not proceed on a rushed core; it is the one thing that cannot be repaired later. |
+| 9 | Spawn, split, navigate, close, float, running nested | Cut Phase 5, keep Phase 4, record it here. |
+| 11 | v0.1 tagged and announced | Do it anyway. Half a day, highest expected value in the plan. |
+| 15 | Lattice runs as a separate system | Whatever core edits it needed are the finding. Write them down. |
+
+* What this plan does not solve
+:PROPERTIES:
+:CUSTOM_ID: honest
+:END:
+
+Recorded so nobody mistakes the plan for a guarantee.
+
+- *Nothing verifies that the decomposition is good.* Gate 2 checks that generics have
+  docstrings. It cannot check that they are the right generics. Gate 3 checks that the
+  lattice did not edit the core, and is satisfiable in bad faith. The only real check is
+  qualitative and there is nobody available to run it.
+- *The realistic post-expiry maintainer is a cheap model plus whatever contributors the
+  release attracts, not Shaul alone.* That is the honest requirement and it is the one
+  [[#extensibility-real][§extensibility-real]] is written against. It makes Phase 4's
+  bridge and examples load-bearing rather than decorative, and it means a cheap model's
+  weaker Common Lisp fluency is a live cost that only a small surface and good examples
+  offset.
+- *The generic "programmable window manager" ground was taken while this was being
+  designed.* Hyprland shipped Lua configuration and user-defined layouts in 0.55 and
+  expanded them in 0.56, July 2026. It cannot express the lattice, for the structural
+  reasons recorded in [[file:README.org::#rejected][README §rejected]] — but it does mean
+  the differentiation is now *the lattice plus depth of extensibility*, and no longer
+  "extensible" on its own. This makes [[file:README.org::#d21][D21]]'s argument sharper
+  than when it was written: stopping after the conventional layer is worth less this
+  month than it was last month.
+- *Days 5 to 9 carry the schedule risk*, and it is concentrated there because that is
+  where an unknown compositor meets a spec that contradicts itself. If wiring takes
+  eight days instead of four, Phase 5 does not happen.
+- *The strongest argument for Rust gets stronger under time pressure, not weaker*
+  ([[file:README.org::#language][§language]], point 1: fewer authored bugs in code
+  nobody reads). Time pressure is exactly when review quality drops. Gate 1 recovers the
+  largest slice of that bug class and does not recover a wrong-but-well-typed argument.
+
+  *Net position after [[#extensibility-real][§extensibility-real]]:* on human
+  extensibility the margin over Rust-with-a-plugin-API is thin, thinner than README's
+  prose implies. On cheap-AI extensibility the margin is wide, and that is the
+  requirement that actually applies after August. The decision stands, on better grounds
+  than the ones README used to reach it — and it stands *conditionally on gate 6*, since
+  a Vim-shaped codebase in Common Lisp would have paid the correctness tax and received
+  none of the benefit.
