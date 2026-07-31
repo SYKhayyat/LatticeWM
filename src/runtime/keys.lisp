@@ -293,7 +293,7 @@ most confusing thing a keymap can do."
 (defun handle-unbound-key (keysym)
   "An unbound key arrived because we had asked to see it.
 
-Two callers: a submap that is waiting for its second key, and README D19's
+Two callers: a submap that is waiting for its second key, and DESIGN D19's
 typing-in-an-empty-pane, which is what gives the empty pane something to be."
   (cond
     (*pending-keymap*

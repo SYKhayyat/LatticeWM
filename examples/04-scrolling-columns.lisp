@@ -6,7 +6,7 @@
 ;;;;
 ;;;; This is niri and PaperWM: an infinite horizontal strip of columns, of which
 ;;;; a window's worth is on screen at a time, scrolling sideways as you move.
-;;;; It is the closest living relative of the lattice — README calls niri "what
+;;;; It is the closest living relative of the lattice — DESIGN calls niri "what
 ;;;; it gets wrong is the sharpest available spec input" — and it is the lattice
 ;;;; with one axis instead of two.
 ;;;;

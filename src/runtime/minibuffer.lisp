@@ -18,7 +18,7 @@
 ;;;;
 ;;;; river_xkb_binding_v1 has enable and disable precisely so a binding can be
 ;;;; conditional.  Two hundred-odd bindings are created once, on first use, and
-;;;; enabled while a prompt is up.  This is the same mechanism README D19 needs
+;;;; enabled while a prompt is up.  This is the same mechanism DESIGN D19 needs
 ;;;; for typing in an empty pane, so the two share it: one set of bindings, one
 ;;;; place that decides whether they are live, and a handler that decides what
 ;;;; a key means right now.

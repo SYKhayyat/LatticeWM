@@ -1,13 +1,6 @@
-This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
-More information about SBCL is available at <http://www.sbcl.org/>.
-
-SBCL is free software, provided as is, with absolutely no warranty.
-It is mostly in the public domain; some portions are provided under
-BSD-style licenses.  See the CREDITS and COPYING files in the
-distribution for more information.
 ============================================================================
 LatticeWM extension surface
-42 generics, 51 options.  Generated from the running image.
+42 generics, 52 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -45,7 +38,7 @@ The border colour for NODE, as (values R G B A), each 0.0 to 1.0.
 
 Note this is also the only decoration an *empty focused pane* can have, and an
 empty pane that does not obviously have the cursor reads as a broken keyboard
-rather than as a place — README D18 lists that as an accepted cost with the
+rather than as a place — DESIGN D18 lists that as an accepted cost with the
 cursor being unmissable as the mitigation.  Do not make the focused colour
 subtle.
 
@@ -164,7 +157,7 @@ maps nodes to their rectangles, or NIL; together they let a container answer
 *geometrically* — with the child that lines up with where you already are —
 rather than with a fixed index.  A method that does not care may ignore both.
 
-The shipped rule is README D20's: directional motion enters through the edge
+The shipped rule is DESIGN D20's: directional motion enters through the edge
 it crossed and lands on the child adjacent to that edge, and non-directional
 jumps land on the first child.  There is deliberately *no memory* of what was
 focused there before, and the reason is not laziness.  Suppose a cell holds a
@@ -194,7 +187,7 @@ focus-after-remove (latticewm/policy:policy latticewm/policy::world
 Where should the cursor go after the node at REMOVED-PATH was taken out?
 
 SUGGESTED is what CORE:REPAIR-PATH proposed — the deepest surviving ancestor's
-first leaf — and returning it is the shipped behaviour.  It implements README
+first leaf — and returning it is the shipped behaviour.  It implements DESIGN
 D18's governing property: *nothing ever moves the viewport except the user*.
 Under a most-recently-used rule the next window can be anywhere on the plane,
 so closing something can teleport you across your desktop.
@@ -227,7 +220,7 @@ Where to place a WIDTH by HEIGHT window inside the larger RECT it was given.
 Returns a RECT.  This is the involuntary case — a client that refused the
 proposed size.  The deliberate case, where a user wants a window to occupy
 less than its pane, is handled by splitting against an empty pane instead
-(README D17), which is why this only needs one sane answer rather than a
+(DESIGN D17), which is why this only needs one sane answer rather than a
 policy language.
 
   methods:
@@ -252,7 +245,7 @@ key-unbound (latticewm/policy:policy latticewm/policy::world
 ----------------------------------------------------------------------------
 An unbound key was pressed while the cursor rests on an empty pane.
 
-README D19: this is what gives the empty pane something to *be*.  The keypress
+DESIGN D19: this is what gives the empty pane something to *be*.  The keypress
 is run through a keysym-to-command table — `e` opens an editor there, `t` a
 terminal, `b` a browser — so that an empty pane is a spawn menu with no menu.
 
@@ -328,7 +321,7 @@ move-into-occupied (latticewm/policy:policy latticewm/policy::world
 ----------------------------------------------------------------------------
 What does moving the subtree at FROM onto an occupied TO mean?
 
-Returns :SPLIT, :SWAP or :STACK.  The shipped answer is :SPLIT — README's open
+Returns :SPLIT, :SWAP or :STACK.  The shipped answer is :SPLIT — DESIGN's open
 question notes that if move-onto-occupied swapped, the separate swap verb
 would be half redundant, and splitting is the only choice that never destroys
 structure.  Both other verbs remain separately bound.
@@ -407,7 +400,7 @@ on-window-close (latticewm/policy:policy latticewm/policy::world
 ----------------------------------------------------------------------------
 WINDOW has gone away and was at PATH.  Repair the tree.
 
-The shipped behaviour is README D17's CLOSE: the pane goes with the window and
+The shipped behaviour is DESIGN D17's CLOSE: the pane goes with the window and
 its sibling grows to fill the space.  The other half of D17 — CLEAR, which
 empties the pane but leaves it standing — is a separate command rather than a
 mode, and configuration decides which one holds the primary binding.
@@ -552,7 +545,7 @@ Returns (values PATH DISPOSITION), where DISPOSITION is
   :STACK   stack the new window onto the node at PATH as a tab,
   :FLOAT   do not tile it at all.
 
-README D14 rules that all three placement modes ship and configuration picks
+DESIGN D14 rules that all three placement modes ship and configuration picks
 the default; this generic plus the *SPAWN-MODE* option is that ruling.  The
 shipped default is 'split the focused pane', which is Emacs's and hyprland's
 behaviour and the one nobody has to be taught.
@@ -779,7 +772,7 @@ at any size.
   now: (0.42 0.56 0.78 1.0)
   Border colour drawn around a focused empty pane.
 
-Deliberately bright.  README D18 accepts, as a cost of focus being a place,
+Deliberately bright.  DESIGN D18 accepts, as a cost of focus being a place,
 that "you can stand somewhere that typing does not reach", and names the
 mitigation: "the cursor being unmissable — that is not optional polish, it is
 what stops an empty pane reading as a broken keyboard."  A subtle colour here
@@ -791,7 +784,7 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
-  README D19's keysym-to-command table for typing in an empty pane.
+  DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up
 here and the named command is run, so the empty pane is a spawn menu with no
@@ -946,7 +939,7 @@ because it is a good idea.
 
 *spawn-mode*
   now: :SPLIT
-  Where a new window goes.  README D14 rules that all three ship.
+  Where a new window goes.  DESIGN D14 rules that all three ship.
 
   :SPLIT       split the focused pane and put it beside — Emacs, hyprland.
   :FILL-FIRST  drop it in the nearest empty pane if there is one, else split.
@@ -974,4 +967,12 @@ fixed-axis window managers is to add a 'split the other way' binding.
 *unfocused-border-color*
   now: (0.22 0.22 0.26 1.0)
   Border colour of every pane that is not focused.
+
+*welcome-on-first-run*
+  now: T
+  Show the welcome overlay the first time LatticeWM starts.
+
+Once only, and it writes a marker under $XDG_STATE_HOME so it never appears
+again.  Set this to NIL to suppress it entirely; M-x welcome shows it on
+demand either way.
 

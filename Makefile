@@ -24,7 +24,7 @@ REGISTRY    := CL_SOURCE_REGISTRY="$(WAYFLAN_SRC)//:$(CURDIR)//"
 else
 REGISTRY    :=
 endif
-RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --non-interactive \
+RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-interactive \
                  --load tools/prelude.lisp
 
 .PHONY: all deps build gates test image release bench run run-bare surface config install uninstall clean distclean help

@@ -1,6 +1,6 @@
 ;;;; runtime/verbs.lisp --- The commands.
 ;;;;
-;;;; README's P1 says that where a fork is situational rather than principled,
+;;;; DESIGN's P1 says that where a fork is situational rather than principled,
 ;;;; both options ship and configuration picks the default.  It also states the
 ;;;; cost honestly: "P1 is only affordable if the verbs are genuinely
 ;;;; orthogonal (verb × direction × scope, composed) rather than enumerated.
@@ -61,7 +61,7 @@ the world does nothing, and that is not an error."
 AXIS is :HORIZONTAL, :VERTICAL, or NIL to let the policy choose — which by
 default cuts along the longer side so panes tend towards square.
 
-This is README D17's resize idiom, and the empty pane it makes is a
+This is DESIGN D17's resize idiom, and the empty pane it makes is a
 first-class object rather than a gap waiting to be filled: you split a pane and
 leave one side empty, and the window occupies the rest.  The cursor moves into
 the new empty pane, where — per D19 — typing a key spawns something."
@@ -79,7 +79,7 @@ the new empty pane, where — per D19 — typing a key spawns something."
 (defcommand (close-window "close") ()
   "Close the focused window, and take its pane with it.
 
-The sibling grows to fill the space.  README D17's CLOSE; see CLEAR for the
+The sibling grows to fill the space.  DESIGN D17's CLOSE; see CLEAR for the
 other half."
   (with-relayout
     (let ((window (focused-window)))
@@ -92,7 +92,7 @@ other half."
 (defcommand clear ()
   "Empty the focused pane but leave it standing.
 
-You are now *in* an empty pane, which still occupies its space.  README D17's
+You are now *in* an empty pane, which still occupies its space.  DESIGN D17's
 CLEAR: a separate verb from CLOSE rather than a mode, because they are
 different intentions and a mode would make you remember which one you were in.
 

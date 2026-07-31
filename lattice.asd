@@ -18,7 +18,7 @@
 (defsystem "lattice"
   :description "An infinite zoomable plane of cells, as an extension to LatticeWM."
   :author "Shaul Khayyat"
-  :license "BSD-3-Clause"
+  :license "GPL-3.0-or-later"
   :version "0.1.0"
   :depends-on ("latticewm")
   :serial t

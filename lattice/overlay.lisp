@@ -1,4 +1,4 @@
-;;;; lattice/overlay.lisp --- Coordinates drawn on the cells.  README D5.
+;;;; lattice/overlay.lisp --- Coordinates drawn on the cells.  DESIGN D5.
 ;;;;
 ;;;; The design's own assessment of the risk this answers:
 ;;;;

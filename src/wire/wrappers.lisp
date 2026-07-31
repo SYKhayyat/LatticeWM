@@ -19,7 +19,7 @@
 ;;;; have been an odd way to honour that.
 ;;;;
 ;;;; Below the wrappers is a deliberately smaller vocabulary — WINDOW-HIDE,
-;;;; NODE-SET-POSITION — which is what the runtime actually calls.  README's
+;;;; NODE-SET-POSITION — which is what the runtime actually calls.  DESIGN's
 ;;;; ruling: "The wrapper layer should export a deliberately smaller vocabulary
 ;;;; and leave RIVER as plumbing that Layer 1 never sees."
 
@@ -288,7 +288,7 @@ place holds no window there is nothing for Wayland focus to be.")
 
 The protocol's own rationale is chorded bindings: without a way to eat the
 next key press, a submap has no way to know it should error out and exit.  It
-is also what README D19's typing-in-an-empty-pane rests on.")
+is also what DESIGN D19's typing-in-an-empty-pane rests on.")
   (alias bindings-seat-cancel-ensure-next-key-eaten
          river-xkb-bindings-seat-v1.cancel-ensure-next-key-eaten)
   (alias bindings-seat-modifiers-watch

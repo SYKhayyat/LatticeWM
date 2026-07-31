@@ -214,7 +214,7 @@ it a policy question."
 ;;; ------------------------------------------------------------ keyboard focus
 
 (defun apply-keyboard-focus ()
-  "Derive Wayland keyboard focus from the cursor.  README D18.
+  "Derive Wayland keyboard focus from the cursor.  DESIGN D18.
 
 Focus is a *place*.  When the place holds a window that window gets focus;
 when it is an empty pane there is nothing for Wayland focus to be, and

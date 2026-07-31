@@ -171,7 +171,7 @@ condition."
   "Put the cursor at PATH, resolving into a leaf if PATH names a container.
 
 Non-directional arrival, so containers answer with their first child rather
-than an edge — README D20's second rule."
+than an edge — DESIGN D20's second rule."
   (let* ((root (c:world-root world))
          (node (c:resolve-path root path))
          (target (if node

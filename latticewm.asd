@@ -6,13 +6,13 @@
 ;;;; The lattice — coordinates, viewport, zoom, pan — is deliberately NOT part
 ;;;; of this system.  It lives in lattice.asd, depends on LATTICEWM/POLICY and
 ;;;; nothing else, and must be expressible with zero edits under src/.  That is
-;;;; README D21's experiment, and keeping it a separate system is what makes
+;;;; DESIGN D21's experiment, and keeping it a separate system is what makes
 ;;;; the experiment run on every build instead of once in week three.
 
 (defsystem "latticewm"
   :description "An extensible window manager for the river Wayland compositor."
   :author "Shaul Khayyat"
-  :license "BSD-3-Clause"
+  :license "GPL-3.0-or-later"
   :version "0.1.0"
   :defsystem-depends-on ("wayflan-client")
   :depends-on ("wayflan-client" "alexandria" "closer-mop" "bordeaux-threads"
@@ -72,6 +72,9 @@
        ;; the launcher commands use, and after keys because it installs the
        ;; default keymap.
        (:file "config")
+       ;; welcome comes after config because it derives its key names from
+       ;; *MODIFIER*, and after help because it is a help page.
+       (:file "welcome")
        (:file "emit")
        (:file "windows")
        (:file "session")

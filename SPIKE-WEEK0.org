@@ -18,7 +18,7 @@ merely compilable — it connects, binds, dispatches events and completes a roun
 against a live compositor.
 
 Separately, and beyond the scope the plan set for Week 0: the extensibility thesis
-in [[file:README.org::#extensibility][§extensibility]] — which the document itself
+in [[file:DESIGN.org::#extensibility][§extensibility]] — which the document itself
 flags as asserted-but-untested — was tested. It holds at the mechanism level. Seven
 tests, seven passes.
 
@@ -91,7 +91,7 @@ There is nothing to write by hand and nothing to check in but the XML.
 Macroexpanding =wl-include= over =river-window-management-v1.xml= and tallying the
 forms:
 
-| Form                | Generated | README.org §feasibility hand-count | Match |
+| Form                | Generated | DESIGN.org §feasibility hand-count | Match |
 |---------------------+-----------+------------------------------------+-------|
 | =define-interface=  |         8 |                                  8 | ✓     |
 | =define-request=    |        57 |                                 57 | ✓     |
@@ -110,7 +110,7 @@ Totals across both protocols after loading the system:
 
 *The per-protocol table above is accurate to the number* — all four figures for
 =river-window-management-v1= match what the design document measured by hand. The
-aggregate figure quoted in [[file:README.org::#feasibility][§feasibility]] is slightly
+aggregate figure quoted in [[file:DESIGN.org::#feasibility][§feasibility]] is slightly
 off; see [[#corr-counts]].
 
 ** The critical path: server-created =new_id= in events
@@ -175,7 +175,7 @@ It does. Full path exercised:
 =river_window_management_v1= is the correct result and confirms the probe was really
 reading the server's advertisement rather than echoing a local table.
 
-This retires the second-order risk in [[file:README.org::#language][§language]] — that
+This retires the second-order risk in [[file:DESIGN.org::#language][§language]] — that
 wayflan is a nice piece of code that has never been run in anger. It runs.
 
 * The extensibility thesis, tested rather than asserted
@@ -183,7 +183,7 @@ wayflan is a nice piece of code that has never been run in anger. It runs.
 :CUSTOM_ID: extensibility-tested
 :END:
 
-[[file:README.org::#extensibility][§extensibility]] makes an honest, weakened claim and
+[[file:DESIGN.org::#extensibility][§extensibility]] makes an honest, weakened claim and
 then admits it has never been mechanically verified. So: a miniature Layer 0 / Layer 1
 core, and seven tests against it.
 
@@ -308,7 +308,7 @@ writing it. Here it is not a separate chore; the image is the source of truth.
 :CUSTOM_ID: ext-7
 :END:
 
-[[file:README.org::#language][§language]] concedes that static checking is Rust's
+[[file:DESIGN.org::#language][§language]] concedes that static checking is Rust's
 strongest remaining advantage. Under =(declaim (optimize (safety 3) (speed 1)))= plus
 =ftype= declarations, SBCL caught, at compile time:
 
@@ -338,7 +338,7 @@ time" for the price of a declaim and some type declarations.
 :CUSTOM_ID: corr-mirror
 :END:
 
-=README.org= presents =github.com/ak-coram/wayflan-mirror= and
+=DESIGN.org= presents =github.com/ak-coram/wayflan-mirror= and
 =git.sr.ht/~shunter/wayflan= as interchangeable sources. They are not:
 
 | Source                        | HEAD                  |
@@ -368,7 +368,7 @@ the argument was measured rather than felt — but the number should be right.
 §feasibility states "11 interfaces, 65 requests, 48 events, and six argument types."
 Counted directly from the XML, and confirmed against what the scanner generated:
 
-| Figure     | README.org | Actual | Note                                  |
+| Figure     | DESIGN.org | Actual | Note                                  |
 |------------+------------+--------+---------------------------------------|
 | Interfaces |         11 |     11 | ✓                                     |
 | Requests   |         65 | *68*   | 57 window-management + 11 xkb         |
@@ -385,7 +385,7 @@ should say 68.
 :CUSTOM_ID: corr-requests
 :END:
 
-These exist in the XML and have no mention in =README.org=:
+These exist in the XML and have no mention in =DESIGN.org=:
 
 | Request                | XML line | Why it matters                                     |
 |------------------------+----------+----------------------------------------------------|
@@ -410,7 +410,7 @@ wayflan names requests =interface.request= — e.g. =river-window-v1.set-clip-bo
 generates them as plain functions in one flat package. Two consequences:
 
 1. You cannot =defmethod= onto them. The manage/render sequence discipline
-   ([[file:README.org::#feasibility][§feasibility]]) therefore *has* to be a wrapper
+   ([[file:DESIGN.org::#feasibility][§feasibility]]) therefore *has* to be a wrapper
    layer; it cannot be bolted on by advising the generated code. Redefining a generated
    function in place would work and would also be a maintenance crime, because the next
    scanner run silently reverts it.
@@ -506,7 +506,7 @@ Gotchas hit along the way, recorded so nobody re-hits them:
 :CUSTOM_ID: next
 :END:
 
-1. Fold the [[#corrections][corrections]] into =README.org= — dead mirror, line count,
+1. Fold the [[#corrections][corrections]] into =DESIGN.org= — dead mirror, line count,
    missing requests, and the =defclass= ruling superseding D20's rationale.
 2. Make the [[#ext-6][self-documenting extension surface]] a Week 1 deliverable with a
    CI gate, and turn on =safety 3= + =ftype= + warnings-as-errors at the same time.

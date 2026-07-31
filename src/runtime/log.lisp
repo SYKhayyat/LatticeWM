@@ -3,7 +3,7 @@
 ;;;; THE HANDLER IS NOT OPTIONAL, and it is here rather than in main.lisp so
 ;;;; that it exists before anything can signal.
 ;;;;
-;;;; README.org: "a daemon with no controlling terminal *must* install a
+;;;; DESIGN.org: "a daemon with no controlling terminal *must* install a
 ;;;; top-level handler / *debugger-hook*, or an unhandled condition will hang
 ;;;; waiting on a stdin that isn't there."  A window manager that hangs takes
 ;;;; the whole session with it, because river waits for the manage sequence to

@@ -1,7 +1,7 @@
 ;;;; lattice/package.lisp --- The lattice extension.
 ;;;;
 ;;;; This system depends on LATTICEWM/POLICY and the runtime, and on nothing
-;;;; else.  It contains no edit to any file under src/, which is README D21's
+;;;; else.  It contains no edit to any file under src/, which is DESIGN D21's
 ;;;; experiment: if the lattice can be added as an extension — new methods, new
 ;;;; state on PROPS, a new container kind, no core surgery — then the
 ;;;; extensibility claim is true and there is proof of it.

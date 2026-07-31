@@ -1,10 +1,3 @@
-This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
-More information about SBCL is available at <http://www.sbcl.org/>.
-
-SBCL is free software, provided as is, with absolutely no warranty.
-It is mostly in the public domain; some portions are provided under
-BSD-style licenses.  See the CREDITS and COPYING files in the
-distribution for more information.
 LatticeWM commands.
 
 (anchor-float &optional (path (current-path)))
@@ -34,7 +27,7 @@ LatticeWM commands.
 (clear)
   Empty the focused pane but leave it standing.
   
-  You are now *in* an empty pane, which still occupies its space.  README D17's
+  You are now *in* an empty pane, which still occupies its space.  DESIGN D17's
   CLEAR: a separate verb from CLOSE rather than a mode, because they are
   different intentions and a mode would make you remember which one you were in.
   
@@ -43,7 +36,7 @@ LatticeWM commands.
 (close)
   Close the focused window, and take its pane with it.
   
-  The sibling grows to fill the space.  README D17's CLOSE; see CLEAR for the
+  The sibling grows to fill the space.  DESIGN D17's CLOSE; see CLEAR for the
   other half.
 
 (close-float)
@@ -258,7 +251,7 @@ LatticeWM commands.
   VALUE is read as a Lisp object, so a number is a number, a string wants its
   quotes, and a colour is a list: (0.9 0.5 0.2 1.0).
   
-  This is the tier-0 half of README's live-reconfiguration argument made
+  This is the tier-0 half of DESIGN's live-reconfiguration argument made
   available without a REPL.  Nothing here is written to your init.lisp — put it
   there when you are sure, and until then the cost of being wrong is one more
   prompt.
@@ -281,7 +274,7 @@ LatticeWM commands.
   AXIS is :HORIZONTAL, :VERTICAL, or NIL to let the policy choose — which by
   default cuts along the longer side so panes tend towards square.
   
-  This is README D17's resize idiom, and the empty pane it makes is a
+  This is DESIGN D17's resize idiom, and the empty pane it makes is a
   first-class object rather than a gap waiting to be filled: you split a pane and
   leave one side empty, and the window occupies the rest.  The cursor moves into
   the new empty pane, where — per D19 — typing a key spawns something.
@@ -329,6 +322,13 @@ LatticeWM commands.
 
 (untab)
   Dissolve the nearest enclosing stack back into a split.
+
+(welcome)
+  Show the handful of keys worth knowing before anything else.
+  
+  This is what appears by itself the first time LatticeWM runs.  Super+/ is the
+  complete keymap; this is the short version, and it ends with how to quit
+  because a window manager you cannot leave is a frightening thing to try.
 
 (workspace number)
   Switch to workspace NUMBER, creating it and any before it if needed.

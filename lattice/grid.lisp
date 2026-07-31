@@ -2,7 +2,7 @@
 ;;;;
 ;;;; THIS FILE IS THE EXPERIMENT.
 ;;;;
-;;;; README D21 makes the extensibility claim falsifiable by requiring the
+;;;; DESIGN D21 makes the extensibility claim falsifiable by requiring the
 ;;;; lattice to be built from outside layer 0: "The rule: no core edits.  Every
 ;;;; time one appears necessary, stop and write down what was missing and why.
 ;;;; That list is the actual result of this project's central experiment."
@@ -18,7 +18,7 @@
 ;;;; It does.  The findings are recorded in FINDINGS.org; the short version is
 ;;;; that one export was missing from the core and nothing else was.
 ;;;;
-;;;; COORDINATES.  README D2: origin (0,0), +X right, +Y *up*.  Mathematical
+;;;; COORDINATES.  DESIGN D2: origin (0,0), +X right, +Y *up*.  Mathematical
 ;;;; convention, deliberately not Wayland's +Y-down, because it matches how a
 ;;;; person reads a map and the lattice is a map.  The cost is one sign
 ;;;; inversion, in CELL-RECTS below, and it is intentional — do not "fix" it.
@@ -92,7 +92,7 @@ up, reading order means *descending* Y."
    (viewport :initform (make-instance 'viewport) :accessor grid-viewport)
    (col-widths :initform (make-hash-table) :accessor grid-col-widths
                :documentation
-               "X -> relative width.  README D8's spreadsheet geometry: a width
+               "X -> relative width.  DESIGN D8's spreadsheet geometry: a width
 belongs to a *column* and spans every row, so cells can be non-uniform without
 the lattice going ragged.  Freely-sized independent cells would destroy the
 alignment that makes integer coordinates describe anything real, and with it
@@ -100,7 +100,7 @@ the whole spatial-memory argument for a lattice over a continuous plane.")
    (row-heights :initform (make-hash-table) :accessor grid-row-heights
                 :documentation "Y -> relative height.  As above, per row.")
    (names :initform (make-hash-table :test #'equal) :accessor grid-names
-          :documentation "NAME -> (X . Y).  README D1 layer 3: durable names
+          :documentation "NAME -> (X . Y).  DESIGN D1 layer 3: durable names
 are the layer humans actually remember."))
   (:documentation
    "An infinite two-dimensional plane of cells, each holding a subtree.
@@ -169,7 +169,7 @@ of the list and stops."
 (defmethod c:insert-child ((grid grid) address node)
   "Fill a coordinate.  Nothing shifts.
 
-README D13: opening and closing never shift anything.  A cell is where you put
+DESIGN D13: opening and closing never shift anything.  A cell is where you put
 it, and it stays there — which is D8's own argument reused, because the entire
 point of spreadsheet geometry is that every address stays where you left it.
 Automatic shifting would move things you were not touching."

@@ -9,12 +9,12 @@
 :CUSTOM_ID: how
 :END:
 
-[[file:README.org][README.org]] is the design. It is *frozen*. Do not add to it; the only
+[[file:DESIGN.org][DESIGN.org]] is the design. It is *frozen*. Do not add to it; the only
 edits permitted are recording findings this plan produces.
 
 This file is the execution plan and it is the only document that should grow. Where it
-disagrees with README.org's [[file:README.org::#plan][§plan]], this file wins, because
-README's plan was written against a four-week schedule that no longer exists.
+disagrees with DESIGN.org's [[file:DESIGN.org::#plan][§plan]], this file wins, because
+DESIGN's plan was written against a four-week schedule that no longer exists.
 
 *The project's failure mode is not technical.* It is spending the remaining budget on
 artifacts that feel like progress. 2,570 lines of prose exist and zero lines of window
@@ -41,12 +41,12 @@ code, and that account is denominated in days.
 schedule. If a phase slips, it eats the bonus first and the [[#cuts][cut list]] second.
 It never eats [[#phase-2][Phase 2]] or [[#phase-4][Phase 4]].
 
-* What changed from README's plan, and why
+* What changed from DESIGN's plan, and why
 :PROPERTIES:
 :CUSTOM_ID: deltas
 :END:
 
-Three deltas. Each is a reversal of a decision in README.org and is recorded here rather
+Three deltas. Each is a reversal of a decision in DESIGN.org and is recorded here rather
 than quietly applied, per that document's own standing rule.
 
 ** Delta 1 — the conventional layer and the lattice share one geometry
@@ -54,7 +54,7 @@ than quietly applied, per that document's own standing rule.
 :CUSTOM_ID: delta-1
 :END:
 
-README's [[file:README.org::#plan][§plan]] builds split trees twice: as the whole layout
+DESIGN's [[file:DESIGN.org::#plan][§plan]] builds split trees twice: as the whole layout
 model in week 2, then as cell contents in week 3. That is the same code written twice
 under a budget that cannot afford it once.
 
@@ -77,7 +77,7 @@ coordinates and zoom and it is the lattice. Same code, extended, not ported.
 :CUSTOM_ID: delta-2
 :END:
 
-[[file:README.org::#d21][D21]] holds: the lattice must be expressible without core
+[[file:DESIGN.org::#d21][D21]] holds: the lattice must be expressible without core
 surgery, and if it cannot be, *that is the finding*. What changes is when you learn it.
 
 Under D21 as written you learn in week 3, which under this budget may not happen, so the
@@ -95,15 +95,15 @@ This keeps D21's falsifiability and removes its scheduling risk. It costs nothin
 :CUSTOM_ID: delta-3
 :END:
 
-[[file:README.org::#d22][D22]] (exact-fit zoom) accepts, as a stated price, that *panning
+[[file:DESIGN.org::#d22][D22]] (exact-fit zoom) accepts, as a stated price, that *panning
 resizes every visible window* on a non-uniform lattice. Terminals rewrap, browsers
 reflow. Pan is the frequent navigational verb, and
-[[file:README.org::#d7][D7]] sells it as pure view control.
+[[file:DESIGN.org::#d7][D7]] sells it as pure view control.
 
 D22's own escape hatch: both width solvers ship as two methods on one generic.
 
 *Ruling: ~absolute-with-clipping~ (the old D11 behaviour) is the shipped default;
-~exact-fit~ is the alternate method.* [[file:README.org::#feasibility][§feasibility]]
+~exact-fit~ is the alternate method.* [[file:DESIGN.org::#feasibility][§feasibility]]
 already established that ~set_content_clip_box~ renders the partial trailing cell
 cleanly, with the border redrawn at the clip edge, free, from the compositor. D22 traded
 a cosmetic problem that the compositor solves for a functional one that it does not.
@@ -169,17 +169,17 @@ hold in their head is not a surface.
 |---------+---------------------|
 | ~place (policy node rect)~ | how does a subtree divide its rectangle? |
 | ~move-focus (policy cursor direction)~ | where does motion go, including across cells? |
-| ~resolve-entry (policy container direction)~ | arriving at a container, which leaf? ([[file:README.org::#d20][D20]]) |
-| ~spawn-target (policy cursor)~ | where does a new window land? ([[file:README.org::#d14][D14]]) |
+| ~resolve-entry (policy container direction)~ | arriving at a container, which leaf? ([[file:DESIGN.org::#d20][D20]]) |
+| ~spawn-target (policy cursor)~ | where does a new window land? ([[file:DESIGN.org::#d14][D14]]) |
 | ~on-window-open (policy window)~ | tiled or floating? focus it or not? |
-| ~on-window-close (policy cursor node)~ | collapse or clear; where does focus go? ([[file:README.org::#d17][D17]]) |
+| ~on-window-close (policy cursor node)~ | collapse or clear; where does focus go? ([[file:DESIGN.org::#d17][D17]]) |
 | ~should-float-p (policy window)~ | the floating rule |
 | ~on-minimize (policy window)~ | minimize semantics, ours entirely |
 | ~visible-region (policy viewport)~ | what is shown, what is ~hide~-den |
 | ~column-widths (policy visible-range viewport-w)~ | absolute-with-clipping vs exact-fit ([[#delta-3][Delta 3]]) |
 | ~window-dimensions (policy leaf rect)~ | ~propose_dimensions~, and gravity when refused |
 | ~render-order (policy nodes)~ | the ~place_above~ chain |
-| ~key-unbound (policy cursor keysym)~ | typing in an empty pane ([[file:README.org::#d19][D19]]) |
+| ~key-unbound (policy cursor keysym)~ | typing in an empty pane ([[file:DESIGN.org::#d19][D19]]) |
 
 Thirteen. If this list reaches thirty, the decomposition has gone wrong in the direction
 of ceremony. If it drops below ten, it has gone wrong in the direction of a monolith.
@@ -191,7 +191,7 @@ of ceremony. If it drops below ten, it has gone wrong in the direction of a mono
 
 Added 2026-07-30, after pressing on the question honestly. This section is the rationale
 for gate 6, for the SWANK bridge in [[#phase-4][Phase 4]], and for how the worked
-examples are framed. README argued the language decision on *human* extensibility and got
+examples are framed. DESIGN argued the language decision on *human* extensibility and got
 a thin margin. The real requirement is different and the margin is wider.
 
 ** The Emacs mechanism is a ratio, not a language
@@ -287,7 +287,7 @@ defence the project has.
    ~15 lines over ~closer-mop~ and ~sb-introspect~, already written in
    [[file:SPIKE-WEEK0.org::#ext-6][spike §ext-6]].
 3. *The lattice touches no core.* ~git diff --name-only~ over the lattice work asserts
-   nothing under ~src/~. This is [[file:README.org::#d21][D21]]'s experiment, run daily.
+   nothing under ~src/~. This is [[file:DESIGN.org::#d21][D21]]'s experiment, run daily.
 4. *Core runs without the lattice.* Load ~latticewm.asd~ alone, start, place a window,
    exit. The extension must be genuinely optional or it is not an extension.
 5. *Codegen counts match the pinned XML.* 8/57/44/10 for window-management, 3/11/5/1
@@ -350,7 +350,7 @@ builds. That is the test.
 break within a version number rather than politely bumping to v2. After budget expiry a
 river upgrade could break the window manager with no one available to repair it. This is
 the largest threat to the "survives without AI" requirement, larger than any
-decomposition risk, and README treats it as a CI check.
+decomposition risk, and DESIGN treats it as a CI check.
 
 Three layers, and the first two work everywhere:
 
@@ -362,7 +362,7 @@ Three layers, and the first two work everywhere:
    refusal is repairable by a non-programmer. Silent misbehaviour is not.
 3. *Nix pins river itself* in the flake, so the compositor and the window manager become
    one versioned pair upgraded deliberately or never. On plain Linux the equivalent is
-   crude and works: record the known-good river commit in the README and *keep a copy of
+   crude and works: record the known-good river commit in the DESIGN and *keep a copy of
    the working river binary*. River is Zig and builds to a single file.
 
 * Phases
@@ -406,7 +406,7 @@ All of this is testable against WSLg or any Weston. None of it waits on Phase 0.
       violation.
 - [ ] Dispatch loop with ~handler-case~ on ~wl-message-error~. *Test it properly:* churn
       surfaces against WSLg until the destroy race fires, then confirm the loop survives
-      and does not desync. README calls this a five-line fix from a source read; that is
+      and does not desync. DESIGN calls this a five-line fix from a source read; that is
       a claim, not a result.
 - [ ] SWANK in a thread, and the top-level ~*debugger-hook*~. A daemon with no
       controlling terminal that hits an unhandled condition hangs on a ~stdin~ that is
@@ -448,7 +448,7 @@ no external dependency, so it cannot be blocked, only rushed. Do not rush it.
       default; every node must be ordered deliberately.
 - [ ] Keybindings via ~river-xkb-bindings-v1~. Command registry. Spawn.
 - [ ] Floating with explicit render ordering. Minimize leaving the tree.
-- [ ] The [[file:README.org::#week0][Week 0 river-side checks]], which are now due:
+- [ ] The [[file:DESIGN.org::#week0][Week 0 river-side checks]], which are now due:
       is rendering state genuinely legal in a manage sequence (the spec contradicts
       itself); does an ~xdg_popup~ in a straddling cell get sliced by ~set_clip_box~;
       does ~ate_unbound_key~ fire under ~clear_focus~ and does it carry the keysym.
@@ -460,7 +460,7 @@ spawn, split, navigate, close and float, running nested. If this is not true on 
 *cut Phase 5 rather than Phase 4* and say so in this file.
 
 *Dogfood nested. Do not make it your only window manager yet.* A WM you live in
-generates an unbounded papercut queue, and README's week-2 daily-driver gate was written
+generates an unbounded papercut queue, and DESIGN's week-2 daily-driver gate was written
 assuming weeks 3 and 4 existed to absorb it. They do not.
 
 ** Phase 4 — the extension surface and a public release (Days 9 to 11)
@@ -472,7 +472,7 @@ assuming weeks 3 and 4 existed to absorb it. They do not.
 
 - [ ] Audit every policy decision made in Phases 2 and 3. Anything sitting as an inlined
       ~cond~ that a user might plausibly want to change becomes a generic.
-- [ ] ~~/.config/latticewm/init.lisp~, with every [[file:README.org::#p1][P1]] fork
+- [ ] ~~/.config/latticewm/init.lisp~, with every [[file:DESIGN.org::#p1][P1]] fork
       present as a tier-0 value.
 - [ ] *The SWANK bridge. This is a shipped artifact, not an assumption.* A small socket
       client (or MCP shim) that takes a form, evaluates it inside the running window
@@ -498,7 +498,7 @@ assuming weeks 3 and 4 existed to absorb it. They do not.
 - [ ] The generated extension-surface document, checked in, regenerated by CI. It is the
       thing the bridge lets a model query at runtime, so it must be machine-readable
       first and pretty second.
-- [ ] *Tag v0.1 and announce it.* README notes there has never been a Common Lisp
+- [ ] *Tag v0.1 and announce it.* DESIGN notes there has never been a Common Lisp
       Wayland window manager and that StumpWM's community wants a successor, then never
       plans for it. *The single best insurance against budget expiry is other people
       holding the code.* A project with three contributors survives; a perfectly
@@ -516,7 +516,7 @@ assuming weeks 3 and 4 existed to absorb it. They do not.
 - [ ] ~move-focus~ continuing across cell boundaries ([[#delta-1][Delta 1]]).
 - [ ] ~column-widths~ defaulting to ~absolute-with-clipping~ ([[#delta-3][Delta 3]]),
       with ~exact-fit~ shipped as the alternate method.
-- [ ] *The coordinate overlay ([[file:README.org::#d5][D5]]). Not optional, see
+- [ ] *The coordinate overlay ([[file:DESIGN.org::#d5][D5]]). Not optional, see
       [[#cuts][the cut list]].*
 - [ ] *Every core edit the lattice demands gets written down here, in this file, as it
       happens.* That list is the actual result of this project's central experiment,
@@ -528,7 +528,7 @@ assuming weeks 3 and 4 existed to absorb it. They do not.
 :END:
 
 In priority order: the drawn map on a ~wl_shm~ shell surface; named cells; the
-~compact~ family; bonds ([[file:README.org::#d16][D16]]); ephemeral jump labels; pan
+~compact~ family; bonds ([[file:DESIGN.org::#d16][D16]]); ephemeral jump labels; pan
 animation. Assume none of it happens.
 
 * The cut list, stated explicitly so it does not drift back
@@ -542,9 +542,9 @@ labels, pan animation, bonds, the ~compact~ family, workspaces beyond a flat lis
 Cutting ~wl_shm~ is a bonus rather than a loss: it removes the least-proven part of
 wayflan from the critical path.
 
-*One thing is deliberately un-cut, and the reason matters.* README calls two-dimensional
+*One thing is deliberately un-cut, and the reason matters.* DESIGN calls two-dimensional
 navigation "the single biggest design risk" and names three mitigations: the minimap,
-named cells, and the coordinate overlay ([[file:README.org::#d5][D5]]). The cut list
+named cells, and the coordinate overlay ([[file:DESIGN.org::#d5][D5]]). The cut list
 removes the first two. *Removing all three would ship the ZUI get-lost failure mode with
 nothing standing against it*, and the resulting lattice would plausibly be worse than
 niri's strip rather than better.
@@ -558,7 +558,7 @@ parity. It ships in Phase 5.
 :CUSTOM_ID: fiat
 :END:
 
-README's [[file:README.org::#open][open questions]] list eleven core-layer items blocking
+DESIGN's [[file:DESIGN.org::#open][open questions]] list eleven core-layer items blocking
 Phase 3. *Every one is a two-way door in a live image, which is what the architecture is
 for.* They are decided here in one pass. Override any of them by editing this table; do
 not reopen them as research.
@@ -611,24 +611,24 @@ Recorded so nobody mistakes the plan for a guarantee.
 - *The generic "programmable window manager" ground was taken while this was being
   designed.* Hyprland shipped Lua configuration and user-defined layouts in 0.55 and
   expanded them in 0.56, July 2026. It cannot express the lattice, for the structural
-  reasons recorded in [[file:README.org::#rejected][README §rejected]] — but it does mean
+  reasons recorded in [[file:DESIGN.org::#rejected][DESIGN §rejected]] — but it does mean
   the differentiation is now *the lattice plus depth of extensibility*, and no longer
-  "extensible" on its own. This makes [[file:README.org::#d21][D21]]'s argument sharper
+  "extensible" on its own. This makes [[file:DESIGN.org::#d21][D21]]'s argument sharper
   than when it was written: stopping after the conventional layer is worth less this
   month than it was last month.
 - *Days 5 to 9 carry the schedule risk*, and it is concentrated there because that is
   where an unknown compositor meets a spec that contradicts itself. If wiring takes
   eight days instead of four, Phase 5 does not happen.
 - *The strongest argument for Rust gets stronger under time pressure, not weaker*
-  ([[file:README.org::#language][§language]], point 1: fewer authored bugs in code
+  ([[file:DESIGN.org::#language][§language]], point 1: fewer authored bugs in code
   nobody reads). Time pressure is exactly when review quality drops. Gate 1 recovers the
   largest slice of that bug class and does not recover a wrong-but-well-typed argument.
 
   *Net position after [[#extensibility-real][§extensibility-real]]:* on human
-  extensibility the margin over Rust-with-a-plugin-API is thin, thinner than README's
+  extensibility the margin over Rust-with-a-plugin-API is thin, thinner than DESIGN's
   prose implies. On cheap-AI extensibility the margin is wide, and that is the
   requirement that actually applies after August. The decision stands, on better grounds
-  than the ones README used to reach it — and it stands *conditionally on gate 6*, since
+  than the ones DESIGN used to reach it — and it stands *conditionally on gate 6*, since
   a Vim-shaped codebase in Common Lisp would have paid the correctness tax and received
   none of the benefit.
 
@@ -660,7 +660,7 @@ nested inside an ordinary Wayland session. [[#phase-0][Phase 0]]'s hopeful first
 "Try river nested first. […] *Verify this specifically for river before betting
 the day on it.*" — was correct, and it took ten minutes rather than a day.
 Everything downstream of "get access to a machine running river 0.4.0", which
-[[file:README.org::#next][README §next]] called "now the critical path", evaporated.
+[[file:DESIGN.org::#next][DESIGN §next]] called "now the critical path", evaporated.
 
 The other estimate that was wrong in the same direction: canoe was budgeted as
 a two-day saving that the language reversal gave up. It was never needed. The
@@ -670,7 +670,7 @@ name and the required context in the error message, three times.
 
 ** Corrections to both documents
 
-Recorded here rather than applied silently, per README's standing rule.
+Recorded here rather than applied silently, per DESIGN's standing rule.
 
 | Claim | Correction |
 |-------+------------|
@@ -678,7 +678,7 @@ Recorded here rather than applied silently, per README's standing rule.
 | Two river protocols | *Six.* =river-layer-shell-v1=, =river-input-management-v1=, =river-xkb-config-v1= and =river-libinput-config-v1= also ship. Three are vendored; the other three are not needed yet. |
 | ~manage_start~ / ~render_start~ are requests | They are *events*. Only ~manage_finish~ and ~render_finish~ are client-callable. |
 | wayflan is on sr.ht and the GitHub mirror is stale | Still true, and nixpkgs already pins the sr.ht tree at 2026-01-01. But =sbclPackages.wayflan= is *broken* — it compiles wayflan-client's sources into a read-only store path. =wayflan-client= builds and omits =wayflan.asd=. The workaround is to take the nixpkgs package's *source* and let ASDF compile it: same pin, no fork. |
-| SBCL images are ~40–60 MB RSS | On this machine a *bare* SBCL image is 111 MB on disk and 64 MB RSS before anything is loaded. The window manager adds ~49 MB, for 113 MB with six windows open. The concession to a compiled binary is larger than README estimated, and most of it is not ours. |
+| SBCL images are ~40–60 MB RSS | On this machine a *bare* SBCL image is 111 MB on disk and 64 MB RSS before anything is loaded. The window manager adds ~49 MB, for 113 MB with six windows open. The concession to a compiled binary is larger than DESIGN estimated, and most of it is not ours. |
 
 ** Deltas 1 and 2 held; Delta 3 is conditional
 
@@ -740,7 +740,7 @@ after the next extension rather than treated as settled.
   a type system would not have either, was the four logic bugs the *tests*
   found — a subtree silently deleted, motion that was not involutive, a stale
   cursor, a container left invalid. Those are wrong-but-well-typed, which
-  [[file:README.org::#language][§language]] names as the residue. The residue was the whole of it.
+  [[file:DESIGN.org::#language][§language]] names as the residue. The residue was the whole of it.
 
 ** The second half of the session: everything the cut list cut
 
@@ -765,7 +765,7 @@ a shared-memory buffer and hanging it on a river node.
 | Help overlay | not planned | Built from the live keymap and each command's docstring, so it cannot go stale |
 | Visible empty pane | *implied by D18 and never scheduled* | D18: "not optional polish, it is what stops an empty pane reading as a broken keyboard" |
 
-The one still outstanding is the *drawn map* at deep zoom — [[file:README.org::#open][README's open
+The one still outstanding is the *drawn map* at deep zoom — [[file:DESIGN.org::#open][DESIGN's open
 question]], which is a ruling rather than an implementation and is still awaiting
 one.
 
@@ -1028,3 +1028,121 @@ which found the bug was running it and looking. It is not an anecdote any more.
   change monthly and a wrong one is worse than telling somebody to run
   ~river -version~. If this project ever has users, that is the line that will
   need a maintainer rather than a document.
+
+* Third session — 2026-07-31: the release shape, and a config file that did nothing
+:PROPERTIES:
+:CUSTOM_ID: log3
+:END:
+
+[[#phase-4][Phase 4]]'s last unticked box was /tag v0.1 and announce it/, called there "the
+highest expected-value half-day in the plan". This session did the tagging half
+and deliberately not the announcing half. What it found on the way was worse
+than anything it set out to fix.
+
+** The finding: twenty-four options that could not be set
+
+The starter configuration this program writes has, on line 55:
+
+: ;; (setf *terminal* "alacritty")
+
+A configuration file is read in ~LATTICEWM/USER~, which inherits
+~LATTICEWM/RUNTIME~ wholesale. ~*TERMINAL*~ was never exported from it. So that
+line — *the line the program itself suggests* — interns a brand new symbol in
+~LATTICEWM/USER~, sets that, and changes nothing whatsoever.
+
+Twenty-four of the thirty-one runtime options were in this state, including
+~*terminal*~, ~*editor*~, ~*browser*~ and ~*modifier*~ — the four values a
+person is most likely to want on their first day — and every colour, scale and
+column count in the entire widget layer.
+
+*Why nothing caught it.* Each one was declared with ~define-option~, so it was
+registered, documented, printed by ~--list-options~, readable through
+~Super+? o~ and settable through ~Super+? s~ and ~M-x set-option~, all of which
+route through the keyword registry rather than the symbol. Gate 2 checks that
+options are documented. The surface tests check that they have defaults and
+round-trip. Six gates and 570 checks passed over a system where the single most
+common thing a user would type into a config file silently did nothing.
+
+It is the same shape as [[file:FINDINGS.org][FINDINGS.org]] core edit 3 — /the shipped defaults were on
+the class users specialise/ — and the same lesson, which §honest predicted and
+which has now happened twice: *nothing verifies that the decomposition is good,
+and every automated check can pass while the thing is unusable in its most
+common mode.* What caught it, again, was going and looking: reading the file a
+new user is handed, and asking whether each line in it actually works.
+
+There is now a test that asserts *symbol identity* — not accessibility — for
+every registered option, and it fails with the name of the offending option and
+the package to export it from. It was checked against the bug rather than
+merely written: re-breaking one symbol makes it fail.
+
+** The release shape
+
+- =LICENSE= — GPL-3.0-or-later. It had none, and [[#phase-4][Phase 4]]'s whole argument for
+  tagging early is that *other people holding the code* is the insurance
+  against budget expiry. Nobody can hold code they have no licence to. The
+  bundled Terminus font stays under the OFL, which is noted where it is used.
+  ~:license~ in both ~.asd~ files said ~BSD-3-Clause~ and was simply wrong.
+- =README.org= is now a *readme*: what it is, how to install it, the keymap in
+  full, how to ask it things, how to extend it, and where everything else
+  lives. The 116 KB design conversation it used to sit on top of is
+  =DESIGN.org=, and all 74 files that referenced it were updated.
+- =make surface= was writing the SBCL banner into the top of every generated
+  document, because ~--noinform~ was missing from the one place it mattered.
+
+** The welcome overlay
+
+A window manager has a discoverability problem no editor has: at startup the
+screen is empty, nothing is clickable, and every key is unlabelled. =Super+/=
+has drawn the whole keymap since the first session, which helps precisely
+nobody who does not already know to press =Super+/=.
+
+niri answers this with an important-hotkeys overlay on first run. So does this,
+now: about a dozen rows, shown once, marked in ~$XDG_STATE_HOME~, and reachable
+forever after with ~M-x welcome~. The rows are derived — key names from
+~*modifier*~, descriptions from each command's own docstring — for the same
+reason the help overlay is: a welcome screen that disagrees with the keymap is
+worse than no welcome screen, and it would disagree the first time anybody
+rebound anything.
+
+The marker is written *before* the overlay is drawn. The two orderings do not
+cost the same: one loses a welcome screen once, the other repeats a failure on
+every subsequent start.
+
+** Gate 6: ruled
+
+[[#log2][§log2]] left the question open — is gate 6 measuring the wrong pair, or is the
+decomposition failing? *Ruled: neither. The widget layer should become
+extensible, and the ratio should go above 1 by moving code rather than by
+moving the measurement.*
+
+The ruling matters because gate 6 counts *by directory* — ~src/wire/~ plus
+~src/runtime/~ against ~src/model/~ plus ~src/policy/~ plus ~lattice/~ — so
+adding a ~define-option~ inside =src/runtime/help.lisp= moves the number by
+exactly zero. That is not a flaw in the gate. It is the gate insisting the
+decomposition be real: a generic that lives in the runtime is still something a
+user has to read the runtime to find.
+
+The split to make is the Emacs one. The C core does redisplay primitives;
+Elisp decides what is on the mode line. Here: shm buffers, the fd path, glyph
+blitting and surface lifecycle stay runtime; colours, column layout, which font
+at which size for which role, what the status line says, how a help page
+composes, and the completion styles become generics under ~src/policy/~.
+
+Roughly 400 lines have to cross to reach 1.0 from the 0.80 this session ends
+at. The candidates, in order of how much of each is genuinely a decision:
+=echo.lisp= (what a status line shows is ~mode-line-format~, and it is
+hardcoded), =minibuffer.lisp=, =help.lisp=, =font.lisp= — where the PSF loader
+is mechanism but *which font for which role* is policy, and making that live is
+runtime font loading, which is a feature rather than an accounting exercise.
+
+** Open
+
+- Everything [[#log2][§log2]] left open. None of it moved: the shift-modifier question,
+  ~ate_unbound_key~ under ~clear_focus~, and bare-metal river all still need a
+  human at a keyboard. The route is now known, though — =tools/wmeval= speaks
+  SWANK over TCP 4005, so an agent can drive a bare-metal instance on another
+  VT from the session it is already in, and only the keypresses themselves need
+  hands. Synthesising those honestly means =/dev/uinput=, because a Wayland
+  virtual-keyboard protocol would bypass the xkb layer that is the actual
+  question.
+- The announcement. Everything it was waiting on is now true.

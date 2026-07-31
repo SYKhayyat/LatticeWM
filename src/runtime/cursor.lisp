@@ -1,6 +1,6 @@
 ;;;; runtime/cursor.lisp --- Drawing the empty pane.
 ;;;;
-;;;; README D18 rules that focus is a *place* rather than a window, and lists
+;;;; DESIGN D18 rules that focus is a *place* rather than a window, and lists
 ;;;; the costs of that honestly.  This file pays the first one:
 ;;;;
 ;;;;   "A focused *empty* cell has no window to hang set_borders on, so the

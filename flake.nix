@@ -13,7 +13,7 @@
   # upgraded deliberately or never.
   #
   # The plain-Linux equivalent is crude and works: the known-good river commit
-  # is recorded in README, and river is Zig and builds to a single file, so
+  # is recorded in DESIGN, and river is Zig and builds to a single file, so
   # keeping a copy of the working binary is a real fallback.
 
   # One input, deliberately.  Every flake input is a thing that can rot, and

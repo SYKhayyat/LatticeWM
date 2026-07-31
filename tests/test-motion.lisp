@@ -37,7 +37,7 @@
     (is (equal "b" (target root '(1 0) :right)))))
 
 (test motion-enters-through-the-edge-it-crossed
-  ;; README D20.  Travelling right into a container means arriving at its
+  ;; DESIGN D20.  Travelling right into a container means arriving at its
   ;; leftmost child.
   (let ((root (c:make-split
                :horizontal
@@ -172,7 +172,7 @@
         "a non-directional jump lands on the first child, not an edge")))
 
 (test cursor-may-rest-on-an-empty-pane
-  ;; README D18: focus is a place.  This is the property everything else
+  ;; DESIGN D18: focus is a place.  This is the property everything else
   ;; downstream assumes.
   (let* ((pol (policy))
          (world (c:make-world

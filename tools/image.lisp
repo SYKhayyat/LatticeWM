@@ -6,7 +6,7 @@
 ;;;; that user extensions can be ASDF:LOAD-SYSTEM-ed from ~/.config/latticewm/.
 ;;;;
 ;;;; The three lines before the dump are worth their space.  A Lisp image is
-;;;; the largest single thing this project asks a user to accept — README
+;;;; the largest single thing this project asks a user to accept — DESIGN
 ;;;; estimated 40 to 60 MB RSS and conceded it against a compiled binary's 10 —
 ;;;; so it is worth spending a minute of build time to keep the concession
 ;;;; small.  Together they take the resident set from ~108 MB to well under

@@ -5,7 +5,7 @@
 ;;;; exists for the same reason: *a keybinding should name a thing, not be the
 ;;;; thing.*
 ;;;;
-;;;; That matters more here than it looks.  README's P1 — where a fork is
+;;;; That matters more here than it looks.  DESIGN's P1 — where a fork is
 ;;;; situational rather than principled, both options ship and configuration
 ;;;; picks the default — guarantees a large command count.  P1's own stated
 ;;;; cost is that it is only affordable if the verbs are genuinely orthogonal

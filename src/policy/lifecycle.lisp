@@ -82,7 +82,7 @@ the runtime that no tiled path exists."
                             path)
   "Take the window's pane out with it, and let its sibling grow.
 
-This is README D17's CLOSE.  The other half of D17 — CLEAR, which empties the
+This is DESIGN D17's CLOSE.  The other half of D17 — CLEAR, which empties the
 pane but leaves it standing, so that you are now *in* an empty pane — is a
 separate command rather than a mode, because they are different intentions and
 a mode would make you remember which one you were in."
@@ -150,7 +150,7 @@ lose a window."
          (jump-cursor policy world landed))))))
 
 (defmethod key-unbound ((policy policy) world keysym)
-  "Typing in an empty pane spawns something there.  README D19.
+  "Typing in an empty pane spawns something there.  DESIGN D19.
 
 Returns the *name* of a command to run, or NIL — deliberately not running it,
 because policy may not depend on the runtime and the command registry lives

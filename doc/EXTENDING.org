@@ -71,7 +71,7 @@ typo.
 #+end_src
 
 Every one of these exists because the design reached a fork where both answers
-were defensible. README calls that P1 — "where a fork is situational rather
+were defensible. DESIGN calls that P1 — "where a fork is situational rather
 than principled, both options ship and configuration picks the default" — so
 these are not preferences somebody guessed at, they are the places the design
 declined to decide for you.

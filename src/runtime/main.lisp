@@ -15,7 +15,7 @@
 ;;; drains the whole message body into a separate buffer *before* invoking the
 ;;; handler.  So when the handler throws, the socket stream is already
 ;;; positioned at the start of the next message and no desynchronisation is
-;;; possible.  README calls this a five-line fix from a source read; it is
+;;; possible.  DESIGN calls this a five-line fix from a source read; it is
 ;;; five lines because of that property and not otherwise.
 
 (defun dispatch-events ()
@@ -188,6 +188,10 @@ Order matters and each step is deliberate:
            (request-manage)
            (logmsg :info "LatticeWM running on ~a"
                    (or (uiop:getenv "WAYLAND_DISPLAY") "?"))
+           ;; After the outputs exist and before the loop starts, so the very
+           ;; first frame carries it.  An empty screen with no hint on it is
+           ;; the one moment a new user cannot recover from unaided.
+           (maybe-show-welcome)
            (run-event-loop))
       (guarded "shutdown"
         (run-hooks :shutdown)
@@ -215,14 +219,6 @@ Order matters and each step is deliberate:
       (format t "~a~%  value:   ~s~%  default: ~s~%~{  ~a~%~}~%"
               variable value default
               (split-lines documentation)))))
-
-(defun split-lines (string)
-  "STRING split on newlines, for indenting a docstring."
-  (loop with start = 0
-        for position = (position #\Newline string :start start)
-        collect (subseq string start position)
-        while position
-        do (setf start (1+ position))))
 
 (defun print-commands ()
   "Print every command with its arguments and documentation."

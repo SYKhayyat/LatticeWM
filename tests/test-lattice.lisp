@@ -72,7 +72,7 @@
                       (c:leaf-window (c:child-at grid (l:cell -3 -2))))))))
 
 (test the-grid-is-sparse-and-holes-survive
-  ;; README D13: closing leaves a hole, and cells never move on their own.
+  ;; DESIGN D13: closing leaves a hole, and cells never move on their own.
   (let ((grid (grid-of)))
     (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
           (c:child-at grid (l:cell 5 0)) (leaf "b"))
@@ -114,7 +114,7 @@
                "the focused cell stayed visible at ladder step ~d" index))))
 
 (test zoom-does-not-touch-the-tree
-  ;; README D7: zoom is pure view control.  Stepping out and back returns to
+  ;; DESIGN D7: zoom is pure view control.  Stepping out and back returns to
   ;; exactly the previous state.
   (let* ((grid (grid-of))
          (before nil))
@@ -415,7 +415,7 @@ plane behind it — a workspace boundary is a wall and a cell boundary is not"))
 ;;; ================================================== spreadsheet geometry
 
 (test resizing-a-column-affects-every-row
-  ;; README D8.  A width belongs to a column and spans every row, which is what
+  ;; DESIGN D8.  A width belongs to a column and spans every row, which is what
   ;; lets cells be non-uniform without the lattice going ragged.
   (let* ((policy (pol))
          (grid (grid-of))

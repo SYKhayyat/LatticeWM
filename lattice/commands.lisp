@@ -57,7 +57,7 @@ window rule, and it fails with a confusing message about a stack."
 
 Pure view control.  Stepping out and back in returns to exactly the previous
 state, because zoom changes nothing about the layout — only how much of it you
-are looking at.  That is README D7's central ruling and the reason zoom feels
+are looking at.  That is DESIGN D7's central ruling and the reason zoom feels
 like a camera rather than a command.
 
 Note what it costs, because it is not free and cannot be made free: there is
@@ -133,7 +133,7 @@ failure mode a zooming interface has to have an answer for."
       (when focus (ensure-visible grid focus)))))
 
 ;;; ==================================================================
-;;; JUMPING — README D1's four layers of addressing
+;;; JUMPING — DESIGN D1's four layers of addressing
 ;;; ==================================================================
 
 (defun goto-cell (address &key (create t))
@@ -152,7 +152,7 @@ failure mode a zooming interface has to have an answer for."
 (r:defcommand goto (x y)
   "Jump to the cell at coordinate X, Y.  Negative coordinates are ordinary.
 
-README D1 layer 4.  Coordinates are displayed everywhere and typeable as a
+DESIGN D1 layer 4.  Coordinates are displayed everywhere and typeable as a
 jump target, but they are the escape hatch rather than the interface —
 relative motion is the overwhelming majority of real navigation, and durable
 names are the layer humans actually remember."
@@ -161,7 +161,7 @@ names are the layer humans actually remember."
 (r:defcommand name-cell (name)
   "Give the current cell a durable name, so it can be jumped to by it.
 
-README D1 layer 3.  `code', `mail', `scratch'.  Names, not numbers: numbers
+DESIGN D1 layer 3.  `code', `mail', `scratch'.  Names, not numbers: numbers
 are for the machine and for the escape hatch, and a name is what you actually
 remember three days later."
   (with-grid (grid)
@@ -181,7 +181,7 @@ remember three days later."
 (r:defcommand goto-next-occupied (direction)
   "Skip to the next cell in DIRECTION that actually holds something.
 
-The spreadsheet Ctrl+Arrow idiom.  README D3 makes this the *modified* motion
+The spreadsheet Ctrl+Arrow idiom.  DESIGN D3 makes this the *modified* motion
 and plain single-cell motion the default, because zoom-out is the primary
 orientation tool and keeping default motion distance-predictable preserves
 muscle memory.  This is one modifier away for when you are crossing a gap."
@@ -246,7 +246,7 @@ and the only one that never destroys structure."
 (r:defcommand resize-column (&optional (amount 1/10))
   "Widen the current column by AMOUNT, across every row.
 
-README D8: a width belongs to a *column* and spans every row, exactly like a
+DESIGN D8: a width belongs to a *column* and spans every row, exactly like a
 spreadsheet.  That is what lets cells be non-uniform without the lattice going
 ragged — freely-sized independent cells would destroy the alignment that makes
 integer coordinates describe anything real."
@@ -369,7 +369,7 @@ anything under src/ and no restart."
 
 Done as a PROP rather than a slot, because it is presentation state that the
 node has no business carrying permanently — which is precisely what PROPS is
-for, and precisely the case README D20 predicted an extension would need."
+for, and precisely the case DESIGN D20 predicted an extension would need."
   (let ((grid (current-grid)))
     (when grid
       (maphash (lambda (address node)

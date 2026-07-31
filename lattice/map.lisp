@@ -1,6 +1,6 @@
 ;;;; lattice/map.lisp --- The drawn map at deep zoom.
 ;;;;
-;;;; This answers the last open question in README, which had a full proposal
+;;;; This answers the last open question in DESIGN, which had a full proposal
 ;;;; on the table and was awaiting a ruling.  *The ruling is: implement it, and
 ;;;; the argument against it is answered rather than accepted.*
 ;;;;
@@ -13,13 +13,13 @@
 ;;;; twice per peek to check where something is costs more than the peek is
 ;;;; worth.
 ;;;;
-;;;; THE PROPOSAL, from README's open questions: "live windows out to a
+;;;; THE PROPOSAL, from DESIGN's open questions: "live windows out to a
 ;;;; configurable pixel threshold, then stop showing real windows and draw the
 ;;;; lattice ourselves — cell rectangles, coordinates, cell names, window
 ;;;; titles, app colours."  Its stated argument for is that the map is *free*:
 ;;;; nothing resizes to enter or leave it, so hold-to-peek is instant.
 ;;;;
-;;;; THE ARGUMENT AGAINST, and why it does not survive contact.  README says:
+;;;; THE ARGUMENT AGAINST, and why it does not survive contact.  DESIGN says:
 ;;;; "at deep zoom you are looking at a diagram of your desktop rather than your
 ;;;; desktop.  It is a mode, and the original thesis was that zoom is never a
 ;;;; mode."
@@ -46,7 +46,7 @@ Zoom out past this and the cells stop showing real windows and start showing a
 map of themselves: coordinate, name, and what is in them.  Zoom back in and the
 windows return, having never been resized.
 
-README's proposal suggested 600, on figures that predate exact-fit zoom and
+DESIGN's proposal suggested 600, on figures that predate exact-fit zoom and
 assume a 1x1 base layout.  320 is lower because in practice a 320-pixel-wide
 terminal is still *recognisable* — you can see which one is your editor — and
 recognisable is what a peek is for.  Below that it is coloured mush and the map

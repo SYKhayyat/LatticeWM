@@ -47,6 +47,32 @@
       (is (stringp documentation) "~a has no docstring" key)
       (is (not (eq default :unset)) "~a has no default" variable))))
 
+(test every-option-is-reachable-from-a-config-file
+  "A config file is read in LATTICEWM/USER, so an option whose symbol that
+package cannot see is not merely inconvenient — it fails silently.
+
+  (setf *terminal* \"alacritty\")
+
+in an init.lisp interns a *new* symbol in LATTICEWM/USER, sets that, and
+changes nothing whatsoever.  No error, no warning, and the starter config
+this program writes named *TERMINAL* on exactly that line.  Twenty-four of
+the thirty-one runtime options were in this state and every one of them was
+documented, registered and listed by --list-options, so nothing else in the
+build had any reason to complain.
+
+The check is symbol identity rather than accessibility: an option that is
+merely PRESENT in LATTICEWM/USER because something else interned it there is
+still the wrong symbol."
+  (dolist (row (p:all-options))
+    (destructuring-bind (key variable value default documentation) row
+      (declare (ignore key value default documentation))
+      (let* ((name (symbol-name variable))
+             (in-user (find-symbol name '#:latticewm/user)))
+        (is (eq in-user variable)
+            "~a is not reachable from a config file: LATTICEWM/USER sees ~
+             ~:[nothing by that name~;a different symbol~].  Export it from ~a."
+            variable in-user (package-name (symbol-package variable)))))))
+
 (test options-round-trip
   (let ((before (p:option :gaps)))
     (unwind-protect
@@ -78,7 +104,7 @@
 
 (defclass remembering-policy (p:conventional-policy) ()
   (:documentation
-   "Entry resolution with last-focus memory — the behaviour README D20
+   "Entry resolution with last-focus memory — the behaviour DESIGN D20
 deliberately did *not* ship, added from outside with no core edit.
 
 The state has nowhere to live except PROPS, which is exactly the case D20

@@ -24,12 +24,12 @@
 ;;;;   STACK   ordered, only one child visible.  This is *simultaneously* tabs,
 ;;;;           workspaces, and the "lattices one behind another" Z axis — they
 ;;;;           are the same object, so every verb works on all three for free.
-;;;;   LEAF    holds a window, or deliberately nothing (README D17: the empty
+;;;;   LEAF    holds a window, or deliberately nothing (DESIGN D17: the empty
 ;;;;           pane is first-class).
 ;;;;
 ;;;; A fourth — GRID, the sparse coordinate-addressed lattice with a viewport —
 ;;;; is deliberately *not* here.  It ships in the separate `lattice' system and
-;;;; must be expressible with zero edits to this file.  That is README D21's
+;;;; must be expressible with zero edits to this file.  That is DESIGN D21's
 ;;;; experiment, and this file's decomposition is what it tests.
 ;;;;
 ;;;; Why n-ary splits rather than binary: binary trees make three side-by-side
@@ -51,7 +51,7 @@ for persistence and for talking about a node from a REPL.")
        :documentation "Unique within the session.  Stable across tree surgery.")
    (props :initform '() :accessor props
           :documentation
-          "An extension property list.  README D20: every user-visible object
+          "An extension property list.  DESIGN D20: every user-visible object
 carries one from day one, so that an extension can hang per-node state without
 editing a DEFCLASS it does not own.  This is the Emacs answer — symbol plists,
 text properties, buffer-local variables — and without it 'extensible in Lisp'
@@ -90,8 +90,8 @@ and a new container kind that answers it is a first-class citizen."))
    "A place in the layout that holds one window, or nothing.
 
 An *empty* leaf is not a degenerate case to be cleaned up — it is how the user
-places slack (README D17).  You split a pane and leave one side empty, and the
-window occupies the rest.  Focus may rest on an empty leaf; that is README
+places slack (DESIGN D17).  You split a pane and leave one side empty, and the
+window occupies the rest.  Focus may rest on an empty leaf; that is DESIGN
 D18's whole point, and it is why CLEAR and CLOSE are two different verbs."))
 
 (defun make-leaf (&optional window)
@@ -152,7 +152,7 @@ it is simply the address to fill.  Returns CONTAINER."))
 For a dense container the remaining children close up and their addresses
 shift down; any path held elsewhere that pointed past ADDRESS is now stale.
 That is why every surgery function returns a repaired path rather than
-expecting callers to fix it themselves — see README D18's focus-repair rule."))
+expecting callers to fix it themselves — see DESIGN D18's focus-repair rule."))
 
 (defgeneric address-equal (container a b)
   (:documentation

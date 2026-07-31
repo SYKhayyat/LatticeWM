@@ -4,7 +4,7 @@
 ;;;; bottom of the screen that says where you are and what just happened.
 ;;;;
 ;;;; It exists because of a specific, stated risk rather than because status
-;;;; bars are nice.  README calls two-dimensional navigation "the single
+;;;; bars are nice.  DESIGN calls two-dimensional navigation "the single
 ;;;; biggest design risk" in the whole design and names three defences —
 ;;;; minimap, named cells, coordinate overlay — of which PLAN's cut list keeps
 ;;;; only the last.  A permanent line saying *where you are* is the cheapest

@@ -6,7 +6,7 @@
 ;;;;
 ;;;; WHY THE FILE IS SHAPED THIS WAY
 ;;;;
-;;;; README.org's §extensibility makes an admission that governs everything
+;;;; DESIGN.org's §extensibility makes an admission that governs everything
 ;;;; here: "CLOS means there is no hook set to guess wrong" is only true if the
 ;;;; code is written as fine-grained generics.  A two-hundred-line RELAYOUT
 ;;;; that inlines every decision has nothing to specialize; the only available
@@ -98,7 +98,7 @@ right answer is available and obvious."
 
 This is a DEFPARAMETER plus a registration, so that the extension-surface
 document can list every knob without anyone maintaining a second list of them.
-README.org's tier table calls tier 0 'edit a DEFPARAMETER, no restart, and the
+DESIGN.org's tier table calls tier 0 'edit a DEFPARAMETER, no restart, and the
 only tier available to a non-programmer' — so every P1 fork in the design must
 appear here rather than as a branch buried in a method."
   (check-type documentation string)
@@ -193,7 +193,7 @@ for.  GRAVITY decides where the shortfall goes."))
 Returns a RECT.  This is the involuntary case — a client that refused the
 proposed size.  The deliberate case, where a user wants a window to occupy
 less than its pane, is handled by splitting against an empty pane instead
-(README D17), which is why this only needs one sane answer rather than a
+(DESIGN D17), which is why this only needs one sane answer rather than a
 policy language."))
 
 (defgeneric gaps (policy container)
@@ -213,7 +213,7 @@ lattice cells than between splits within a cell."))
 
 Note this is also the only decoration an *empty focused pane* can have, and an
 empty pane that does not obviously have the cursor reads as a broken keyboard
-rather than as a place — README D18 lists that as an accepted cost with the
+rather than as a place — DESIGN D18 lists that as an accepted cost with the
 cursor being unmissable as the mitigation.  Do not make the focused colour
 subtle."))
 
@@ -327,7 +327,7 @@ maps nodes to their rectangles, or NIL; together they let a container answer
 *geometrically* — with the child that lines up with where you already are —
 rather than with a fixed index.  A method that does not care may ignore both.
 
-The shipped rule is README D20's: directional motion enters through the edge
+The shipped rule is DESIGN D20's: directional motion enters through the edge
 it crossed and lands on the child adjacent to that edge, and non-directional
 jumps land on the first child.  There is deliberately *no memory* of what was
 focused there before, and the reason is not laziness.  Suppose a cell holds a
@@ -359,7 +359,7 @@ one continuous space."))
    "Where should the cursor go after the node at REMOVED-PATH was taken out?
 
 SUGGESTED is what CORE:REPAIR-PATH proposed — the deepest surviving ancestor's
-first leaf — and returning it is the shipped behaviour.  It implements README
+first leaf — and returning it is the shipped behaviour.  It implements DESIGN
 D18's governing property: *nothing ever moves the viewport except the user*.
 Under a most-recently-used rule the next window can be anywhere on the plane,
 so closing something can teleport you across your desktop.
@@ -398,7 +398,7 @@ Returns (values PATH DISPOSITION), where DISPOSITION is
   :STACK   stack the new window onto the node at PATH as a tab,
   :FLOAT   do not tile it at all.
 
-README D14 rules that all three placement modes ship and configuration picks
+DESIGN D14 rules that all three placement modes ship and configuration picks
 the default; this generic plus the *SPAWN-MODE* option is that ruling.  The
 shipped default is 'split the focused pane', which is Emacs's and hyprland's
 behaviour and the one nobody has to be taught."))
@@ -430,7 +430,7 @@ persist and can be filled again."))
   (:documentation
    "What does moving the subtree at FROM onto an occupied TO mean?
 
-Returns :SPLIT, :SWAP or :STACK.  The shipped answer is :SPLIT — README's open
+Returns :SPLIT, :SWAP or :STACK.  The shipped answer is :SPLIT — DESIGN's open
 question notes that if move-onto-occupied swapped, the separate swap verb
 would be half redundant, and splitting is the only choice that never destroys
 structure.  Both other verbs remain separately bound."))
@@ -459,7 +459,7 @@ SPAWN-TARGET is the part you usually want to specialize instead."))
   (:documentation
    "WINDOW has gone away and was at PATH.  Repair the tree.
 
-The shipped behaviour is README D17's CLOSE: the pane goes with the window and
+The shipped behaviour is DESIGN D17's CLOSE: the pane goes with the window and
 its sibling grows to fill the space.  The other half of D17 — CLEAR, which
 empties the pane but leaves it standing — is a separate command rather than a
 mode, and configuration decides which one holds the primary binding."))
@@ -540,7 +540,7 @@ everything without unbinding anything."))
   (:documentation
    "An unbound key was pressed while the cursor rests on an empty pane.
 
-README D19: this is what gives the empty pane something to *be*.  The keypress
+DESIGN D19: this is what gives the empty pane something to *be*.  The keypress
 is run through a keysym-to-command table — `e` opens an editor there, `t` a
 terminal, `b` a browser — so that an empty pane is a spawn menu with no menu.
 

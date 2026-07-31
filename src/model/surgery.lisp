@@ -109,7 +109,7 @@ than once for the whole operation.
 NEW-FOCUS-PATH is where a cursor sitting at FOCUS-PATH should land.  If the
 focused node itself was what got removed, the result is REPAIR-PATH's answer:
 the deepest surviving ancestor's first leaf.  That is deliberately *not* 'the
-most recently used window' — README D18's governing payoff is that nothing
+most recently used window' — DESIGN D18's governing payoff is that nothing
 ever moves the viewport except the user, and MRU can be anywhere on the plane,
 so honouring it here would let a close teleport you across your desktop.
 Policy can still ask for MRU; see FOCUS-AFTER-REMOVE."

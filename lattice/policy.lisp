@@ -93,14 +93,14 @@ eight-pixel gap costs eight pixels of every window, four times over.")
 (p:define-option *skip-empty-cells* nil
   "Whether plain directional motion crosses empty cells in one step.
 
-NIL is README D3's ruling: plain motion moves exactly one cell whether or not
+NIL is DESIGN D3's ruling: plain motion moves exactly one cell whether or not
 that cell is occupied, and the modified motion skips.  Raw step is the default
 because zoom-out is the primary orientation tool, so motion does not need to
 defend against getting lost in empty space — and keeping the default motion
 distance-predictable preserves muscle memory.
 
 Turning this on gives the window model's entire *feel* without unwinding
-anything, which is README D18's stated escape hatch.")
+anything, which is DESIGN D18's stated escape hatch.")
 
 (p:define-option *coordinate-overlay* :zoomed-out
   "When cells show their coordinate.
@@ -109,7 +109,7 @@ anything, which is README D18's stated escape hatch.")
   :ZOOMED-OUT   whenever more than one cell is visible (the default)
   :NEVER        never
 
-README names two-dimensional navigation as the single biggest design risk and
+DESIGN names two-dimensional navigation as the single biggest design risk and
 lists three mitigations: a minimap, named cells, and this.  This is much the
 cheapest of the three and it is the one that ships.  Turning it off is
 supported and is a bad idea until the lattice is in your fingers.")
@@ -123,7 +123,7 @@ adjacent.  That is spatial memory support for the price of a colour, and it is
 the only orientation aid that survives at a zoom level where text would be
 unreadable.
 
-README names getting lost as the single biggest risk in the whole design —
+DESIGN names getting lost as the single biggest risk in the whole design —
 \"two dimensions is more than twice as hard to hold in your head as niri's
 one\" — and lists three defences: a minimap, named cells, and the coordinate
 overlay.  This is the cheapest useful form of the third.
@@ -198,7 +198,7 @@ there."
   "Record which cell a subtree is, so decoration can ask.
 
 On PROPS rather than a slot, because it is presentation state that a node has
-no business carrying permanently — which is exactly the case README D20
+no business carrying permanently — which is exactly the case DESIGN D20
 predicted an extension would need PROPS for."
   (when node
     (setf (c:prop node :lattice/address) address
@@ -309,13 +309,13 @@ merely brighter can lose to a bright application behind it.  Thickness cannot."
   "Move one cell, creating it if it does not exist yet.
 
 The plane is infinite, so 'the cell to the left' always exists in principle;
-arriving is what brings it into being.  README D3 rules that plain motion
+arriving is what brings it into being.  DESIGN D3 rules that plain motion
 moves exactly one cell whether or not it is occupied, and D18 rules that focus
 is a place — together those *require* that moving into empty space works, or
 both rulings have no referent.
 
 With *SKIP-EMPTY-CELLS*, motion crosses a run of empty cells in one press
-instead: the spreadsheet Ctrl+Arrow idiom, and README D3's modified motion."
+instead: the spreadsheet Ctrl+Arrow idiom, and DESIGN D3's modified motion."
   (let* ((dx (if (c:direction-horizontal-p direction)
                  (c:direction-sign direction) 0))
          ;; +Y is up, so :UP increases Y.  DIRECTION-SIGN says :UP is -1
@@ -356,7 +356,7 @@ supply the navigability a bound would have provided."
 ;;; THE VIEWPORT — zoom and pan, which never overlap
 ;;; ==================================================================
 ;;;
-;;; README D7, the central usability ruling: zoom, resize and pan are three
+;;; DESIGN D7, the central usability ruling: zoom, resize and pan are three
 ;;; separate commands answering three separate questions, and they never
 ;;; overlap.  Most tiling window managers feel muddy because widening a window
 ;;; also changes what is visible and the user cannot tell which thing they

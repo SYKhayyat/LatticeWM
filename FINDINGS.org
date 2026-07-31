@@ -4,7 +4,7 @@
 
 * Why this file exists
 
-README.org [[file:README.org::#d21][D21]] makes the project's central claim falsifiable, and
+DESIGN.org [[file:DESIGN.org::#d21][D21]] makes the project's central claim falsifiable, and
 names the deliverable:
 
 #+begin_quote
@@ -12,11 +12,11 @@ names the deliverable:
 down what was missing and why. /That list is the actual result of this
 project's central experiment/, whichever way it comes out — a short, mechanical
 list means the thesis held; a lattice that cannot be expressed without surgery
-means [[file:README.org::#extensibility][the honest claim]] was still too optimistic, and this document has to say
+means [[file:DESIGN.org::#extensibility][the honest claim]] was still too optimistic, and this document has to say
 so.
 #+end_quote
 
-And [[file:README.org::#d21][D21]] again, on the obligation:
+And [[file:DESIGN.org::#d21][D21]] again, on the obligation:
 
 #+begin_quote
 *Recorded consequence:* if step 4 turns out to require core surgery, /that is
@@ -124,7 +124,7 @@ silently obliged to *also* teach every other policy in the image about it —
 including policies they had never seen and could not modify — or their
 container would crash any policy but their own.
 
-That is the exact failure mode README's §extensibility warns about, arriving
+That is the exact failure mode DESIGN's §extensibility warns about, arriving
 from an unexpected direction:
 
 #+begin_quote
@@ -255,7 +255,7 @@ drawn correctly.
 Not a core edit — a *design* finding, and the most useful thing measured
 against the real compositor.
 
-[[file:README.org::#d19][README D19]] makes typing in an empty pane conditional on one unverified fact,
+[[file:DESIGN.org::#d19][DESIGN D19]] makes typing in an empty pane conditional on one unverified fact,
 and states the consequence of it going the wrong way:
 
 #+begin_quote
@@ -339,7 +339,7 @@ been made explicitly, and the fix was to make it.
 
 * Where the honest claim now stands
 
-README's §extensibility settled on a deliberately modest claim:
+DESIGN's §extensibility settled on a deliberately modest claim:
 
 #+begin_quote
 We are building a plugin API either way. In Common Lisp it costs zero days of

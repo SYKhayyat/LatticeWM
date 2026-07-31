@@ -4,14 +4,14 @@
 ;;;; the root's child 0, that node's child 2, that node's child 1.  The empty
 ;;;; path is the root itself.
 ;;;;
-;;;; Focus is a path, not a window (README D18).  It may rest on an empty leaf,
+;;;; Focus is a path, not a window (DESIGN D18).  It may rest on an empty leaf,
 ;;;; and that is the point: "move one cell left, whether or not anything is
 ;;;; there" and "you are now standing in an empty pane" are both commands with
 ;;;; a referent only under this model.  Wayland keyboard focus is *derived*
 ;;;; from the path and never stored — occupied leaf gets focus_window, empty
 ;;;; leaf gets clear_focus.
 ;;;;
-;;;; The cursor points into a tree that every verb mutates.  README D18 names
+;;;; The cursor points into a tree that every verb mutates.  DESIGN D18 names
 ;;;; the consequence and the fix: "After any tree surgery, focus lands on the
 ;;;; deepest surviving node along its previous path, then on that node's first
 ;;;; leaf.  This must be a single function that every verb calls.  Improvised
@@ -161,7 +161,7 @@ With WRAP, the last leaf's successor is the first leaf."
 ;;; ------------------------------------------------------- THE repair rule
 
 (defun repair-path (root path)
-  "The nearest still-valid place to PATH under ROOT.  README D18's one rule.
+  "The nearest still-valid place to PATH under ROOT.  DESIGN D18's one rule.
 
 Walk PATH as far as it still leads somewhere; from the deepest surviving node,
 descend to its first leaf.  The result is always a valid leaf path as long as

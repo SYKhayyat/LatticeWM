@@ -6,12 +6,12 @@
 ;;;; wl_surfaces so it can be positioned and ordered like a window, and gets
 ;;;; its own river_node_v1.
 ;;;;
-;;;; This is the wl_shm path, which README calls "the least-proven part of
+;;;; This is the wl_shm path, which DESIGN calls "the least-proven part of
 ;;;; wayflan" and the cut list removed for that reason.  It is here because
 ;;;; both of the things it buys are, in PLAN.org's own words, the defence
 ;;;; against the design's biggest stated risk:
 ;;;;
-;;;;   "README calls two-dimensional navigation 'the single biggest design
+;;;;   "DESIGN calls two-dimensional navigation 'the single biggest design
 ;;;;   risk' and names three mitigations: the minimap, named cells, and the
 ;;;;   coordinate overlay.  The cut list removes the first two.  *Removing all
 ;;;;   three would ship the ZUI get-lost failure mode with nothing standing

@@ -415,7 +415,7 @@ to the focused *window* and gives us only what we asked for.")
 (defun capture-wanted-p ()
   "Is anything currently waiting to read a key directly?
 
-Two things ever are: a prompt in the echo area, and README D19's empty pane.
+Two things ever are: a prompt in the echo area, and DESIGN D19's empty pane.
 They share the machinery because they are the same question — *should the next
 keypress belong to the window manager rather than to a window?* — and having
 two answers to one question is how they end up disagreeing."
@@ -477,7 +477,7 @@ because this runs on every manage sequence and there are ninety-eight of them."
 (defun spawn-for-empty-pane (character)
   "Run the command CHARACTER names, if the cursor is still on an empty pane.
 
-README D19: while the cursor rests on an empty pane, an unbound printable key
+DESIGN D19: while the cursor rests on an empty pane, an unbound printable key
 is looked up in a table -- e opens an editor, t a terminal -- so the empty pane
 is a spawn menu with no menu.
 

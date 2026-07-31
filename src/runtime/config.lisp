@@ -66,7 +66,7 @@ already wants.")
 VALUE is read as a Lisp object, so a number is a number, a string wants its
 quotes, and a colour is a list: (0.9 0.5 0.2 1.0).
 
-This is the tier-0 half of README's live-reconfiguration argument made
+This is the tier-0 half of DESIGN's live-reconfiguration argument made
 available without a REPL.  Nothing here is written to your init.lisp — put it
 there when you are sure, and until then the cost of being wrong is one more
 prompt."

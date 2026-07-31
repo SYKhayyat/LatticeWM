@@ -1,10 +1,3 @@
-This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
-More information about SBCL is available at <http://www.sbcl.org/>.
-
-SBCL is free software, provided as is, with absolutely no warranty.
-It is mostly in the public domain; some portions are provided under
-BSD-style licenses.  See the CREDITS and COPYING files in the
-distribution for more information.
 LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
 
 *ARGUMENT-NAMING-CONVENTION*
@@ -149,7 +142,7 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: (0.42 0.56 0.78 1.0)
   Border colour drawn around a focused empty pane.
   
-  Deliberately bright.  README D18 accepts, as a cost of focus being a place,
+  Deliberately bright.  DESIGN D18 accepts, as a cost of focus being a place,
   that "you can stand somewhere that typing does not reach", and names the
   mitigation: "the cursor being unmissable — that is not optional polish, it is
   what stops an empty pane reading as a broken keyboard."  A subtle colour here
@@ -165,7 +158,7 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
             (#\f . "files"))
   default: ((#\e . "editor") (#\t . "terminal") (#\b . "browser")
             (#\f . "files"))
-  README D19's keysym-to-command table for typing in an empty pane.
+  DESIGN D19's keysym-to-command table for typing in an empty pane.
   
   While the cursor rests on an empty pane, an unbound printable key is looked up
   here and the named command is run, so the empty pane is a spawn menu with no
@@ -347,7 +340,7 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
 *SPAWN-MODE*
   value:   :SPLIT
   default: :SPLIT
-  Where a new window goes.  README D14 rules that all three ship.
+  Where a new window goes.  DESIGN D14 rules that all three ship.
   
     :SPLIT       split the focused pane and put it beside — Emacs, hyprland.
     :FILL-FIRST  drop it in the nearest empty pane if there is one, else split.
@@ -378,4 +371,13 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   value:   (0.22 0.22 0.26 1.0)
   default: (0.22 0.22 0.26 1.0)
   Border colour of every pane that is not focused.
+
+*WELCOME-ON-FIRST-RUN*
+  value:   T
+  default: T
+  Show the welcome overlay the first time LatticeWM starts.
+  
+  Once only, and it writes a marker under $XDG_STATE_HOME so it never appears
+  again.  Set this to NIL to suppress it entirely; M-x welcome shows it on
+  demand either way.
 

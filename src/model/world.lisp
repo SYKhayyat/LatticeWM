@@ -71,7 +71,7 @@ initial guess."))
          :documentation "The layout tree.  Shipped as a STACK of workspaces.")
    (cursor :initarg :cursor :initform '() :accessor world-cursor
            :documentation
-           "The focus path (README D18).  A place, not a window.  Wayland
+           "The focus path (DESIGN D18).  A place, not a window.  Wayland
 keyboard focus is derived from it on every relayout and never stored.")
    (outputs :initform '() :accessor world-outputs
             :documentation "List of OUTPUT, in the order river reported them.")
@@ -104,7 +104,7 @@ layout\".")
 
 The default is deliberately the smallest thing that is already a usable window
 manager: one workspace holding one empty pane.  Starting up puts the cursor in
-that pane, where — per README D19 — typing a key spawns something."
+that pane, where — per DESIGN D19 — typing a key spawns something."
   (let* ((root (or root (make-stack (list (make-leaf)) 0)))
          (world (make-instance 'world :root root)))
     (setf (world-cursor world)

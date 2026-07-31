@@ -271,6 +271,25 @@ keybindings, the command registry, and the session loop.")
    #:*minibuffer-prompt-color* #:*minibuffer-completion-color*
    #:*minibuffer-caret-color* #:*history-length* #:history #:history-push
    #:summary-of #:wrap-text #:show-help-page #:keys-running #:warp-pointer
+   ;; welcome
+   #:welcome #:welcome-rows #:welcome-marker #:maybe-show-welcome
+   ;; The tier-0 options declared in this package.  Every one of these is a
+   ;; value the user is *told* to set — the starter init.lisp names
+   ;; *TERMINAL* explicitly — and a config file is read in LATTICEWM/USER,
+   ;; which inherits this package.  An unexported option is therefore not a
+   ;; missing convenience: (setf *terminal* "alacritty") in a config file
+   ;; interns a brand new symbol in LATTICEWM/USER and silently changes
+   ;; nothing at all, which is the worst of the three possible outcomes.
+   #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
+   #:*cursor-theme* #:*cursor-size*
+   #:*echo-height* #:*echo-background* #:*echo-foreground* #:*echo-accent*
+   #:*echo-divider* #:*echo-message-seconds*
+   #:*help-columns* #:*help-background* #:*help-key-color* #:*help-text-color*
+   #:*help-scale*
+   #:*minibuffer-candidates-shown*
+   #:*show-empty-panes* #:*empty-pane-hint* #:*empty-hint-color*
+   #:*empty-outline-color*
+   #:*overlay-buffer-idle* #:*welcome-on-first-run*
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state

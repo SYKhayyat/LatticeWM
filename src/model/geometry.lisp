@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Pure value types.  Nothing here knows what a window is.
 ;;;;
-;;;; Note on DEFSTRUCT: README.org rules DEFCLASS for core *state*, because a
+;;;; Note on DEFSTRUCT: DESIGN.org rules DEFCLASS for core *state*, because a
 ;;;; live image must be able to grow a slot on a lattice or a node without
 ;;;; invalidating existing instances.  A rectangle is not state — it is a value,
 ;;;; produced by the thousand during layout and never stored anywhere a user
@@ -18,7 +18,7 @@
   "An axis-aligned rectangle in compositor-logical pixels.
 
 X and Y are the top-left corner, in river's coordinate space, where +Y points
-down.  Lattice coordinates point +Y *up* (README D2) and are inverted exactly
+down.  Lattice coordinates point +Y *up* (DESIGN D2) and are inverted exactly
 once, at the boundary in the placement emitter.  Do not invert here."
   (x 0 :type fixnum)
   (y 0 :type fixnum)
@@ -150,7 +150,7 @@ scope is how the keymap is generated, rather than by enumerating commands.")
 
 Used by entry resolution: leaving a container rightwards means entering the
 next one through its *left* edge, which is what makes motion involutive —
-right then left returns you exactly where you started (README D20)."
+right then left returns you exactly where you started (DESIGN D20)."
   (ecase direction
     (:left :right) (:right :left) (:up :down) (:down :up)))
 

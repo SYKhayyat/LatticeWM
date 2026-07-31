@@ -68,14 +68,14 @@ reads as a broken keyboard rather than as a place.")
 (define-option *empty-pane-color* '(0.42 0.56 0.78 1.0)
   "Border colour drawn around a focused empty pane.
 
-Deliberately bright.  README D18 accepts, as a cost of focus being a place,
+Deliberately bright.  DESIGN D18 accepts, as a cost of focus being a place,
 that \"you can stand somewhere that typing does not reach\", and names the
 mitigation: \"the cursor being unmissable — that is not optional polish, it is
 what stops an empty pane reading as a broken keyboard.\"  A subtle colour here
 is not a taste choice, it is the failure the ruling warned about.")
 
 (define-option *spawn-mode* :split
-  "Where a new window goes.  README D14 rules that all three ship.
+  "Where a new window goes.  DESIGN D14 rules that all three ship.
 
   :SPLIT       split the focused pane and put it beside — Emacs, hyprland.
   :FILL-FIRST  drop it in the nearest empty pane if there is one, else split.
@@ -133,7 +133,7 @@ pickers and similar.")
 
 (define-option *empty-pane-keys*
   '((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
-  "README D19's keysym-to-command table for typing in an empty pane.
+  "DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up
 here and the named command is run, so the empty pane is a spawn menu with no
@@ -259,7 +259,7 @@ pane would overflow it by twice the border width."
 This is the *involuntary* case — a terminal that quantised to its cell size, a
 dialog that refuses to grow.  The deliberate case, where a user wants a window
 to take less than its pane, is served by splitting against an empty pane
-instead (README D17), which is why one sane answer suffices here rather than a
+instead (DESIGN D17), which is why one sane answer suffices here rather than a
 gravity policy language."
   (let ((w (min width (c:rect-w rect)))
         (h (min height (c:rect-h rect))))
@@ -399,7 +399,7 @@ Switching is its own verb, and that is what keeps a stack legible."
 Two rules, and they answer different questions:
 
   * *Along* the split's own axis — travelling right into a horizontal split —
-    entry is by edge: you arrive at the leftmost child.  README D20.  This is
+    entry is by edge: you arrive at the leftmost child.  DESIGN D20.  This is
     what guarantees every pane is reachable by directional motion, and it is
     why last-focus memory is not used here: with memory, a cell whose right
     pane was last focused would swallow a rightward move and the left pane
