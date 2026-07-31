@@ -66,6 +66,7 @@
        (:file "surface")
        (:file "echo")
        (:file "help")
+       (:file "cursor")
        ;; config comes before verbs because it declares the program defaults
        ;; the launcher commands use, and after keys because it installs the
        ;; default keymap.

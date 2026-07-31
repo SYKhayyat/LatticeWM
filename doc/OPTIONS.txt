@@ -97,10 +97,31 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: "emacs"
   The editor the `editor' command runs.
 
+*EMPTY-HINT-COLOR*
+  value:   (0.7 0.75 0.86 1.0)
+  default: (0.7 0.75 0.86 1.0)
+  Text colour of the hint inside the focused empty pane.
+
+*EMPTY-OUTLINE-COLOR*
+  value:   (0.3 0.32 0.4 0.55)
+  default: (0.3 0.32 0.4 0.55)
+  Outline colour of an unfocused empty pane.
+
 *EMPTY-PANE-COLOR*
-  value:   (0.3 0.3 0.36 1.0)
-  default: (0.3 0.3 0.36 1.0)
+  value:   (0.42 0.56 0.78 1.0)
+  default: (0.42 0.56 0.78 1.0)
   Border colour drawn around a focused empty pane.
+  
+  Deliberately bright.  README D18 accepts, as a cost of focus being a place,
+  that "you can stand somewhere that typing does not reach", and names the
+  mitigation: "the cursor being unmissable — that is not optional polish, it is
+  what stops an empty pane reading as a broken keyboard."  A subtle colour here
+  is not a taste choice, it is the failure the ruling warned about.
+
+*EMPTY-PANE-HINT*
+  value:   T
+  default: T
+  Show which keys open something, inside the focused empty pane.
 
 *EMPTY-PANE-KEYS*
   value:   ((#\e . "editor") (#\t . "terminal") (#\b . "browser")
@@ -233,6 +254,16 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   value:   0
   default: 0
   Pixels of empty space between the layout and the edge of the output.
+
+*SHOW-EMPTY-PANES*
+  value:   T
+  default: T
+  Draw an outline around empty panes, and the spawn hints inside the focused
+  one.
+  
+  Turning this off gives you a window manager where standing in an empty pane
+  looks exactly like a broken keyboard.  It is here because it is an option, not
+  because it is a good idea.
 
 *SMART-GAPS*
   value:   T

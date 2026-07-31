@@ -65,8 +65,14 @@ reads as a broken keyboard rather than as a place.")
 (define-option *unfocused-border-color* '(0.22 0.22 0.26 1.0)
   "Border colour of every pane that is not focused.")
 
-(define-option *empty-pane-color* '(0.30 0.30 0.36 1.0)
-  "Border colour drawn around a focused empty pane.")
+(define-option *empty-pane-color* '(0.42 0.56 0.78 1.0)
+  "Border colour drawn around a focused empty pane.
+
+Deliberately bright.  README D18 accepts, as a cost of focus being a place,
+that \"you can stand somewhere that typing does not reach\", and names the
+mitigation: \"the cursor being unmissable — that is not optional polish, it is
+what stops an empty pane reading as a broken keyboard.\"  A subtle colour here
+is not a taste choice, it is the failure the ruling warned about.")
 
 (define-option *spawn-mode* :split
   "Where a new window goes.  README D14 rules that all three ship.
