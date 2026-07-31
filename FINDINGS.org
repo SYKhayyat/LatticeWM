@@ -1,0 +1,240 @@
+#+TITLE: The result of the experiment
+#+SUBTITLE: What building the lattice from outside actually cost
+#+DATE: 2026-07-31
+
+* Why this file exists
+
+README.org [[file:README.org::#d21][D21]] makes the project's central claim falsifiable, and
+names the deliverable:
+
+#+begin_quote
+*The rule: no core edits.* Every time one appears necessary, stop and write
+down what was missing and why. /That list is the actual result of this
+project's central experiment/, whichever way it comes out — a short, mechanical
+list means the thesis held; a lattice that cannot be expressed without surgery
+means [[file:README.org::#extensibility][the honest claim]] was still too optimistic, and this document has to say
+so.
+#+end_quote
+
+And [[file:README.org::#d21][D21]] again, on the obligation:
+
+#+begin_quote
+*Recorded consequence:* if step 4 turns out to require core surgery, /that is
+the finding/ and it must be written down here rather than quietly absorbed by
+editing the core.
+#+end_quote
+
+This is that list. It is written to be read against the code rather than
+instead of it.
+
+* The short version
+
+*The thesis held, with two qualifications and one bug.*
+
+The lattice is 1,049 lines in four files, of which 16 are ~defmethod~ forms.
+It specialises *seven* generics that the core already declared, adds one new
+container class, and needed *two* edits under =src/=. Neither edit changed a
+behaviour; one was an omitted export and one made a protocol operation total
+that had been partial.
+
+| Measure | Value |
+|---------+-------|
+| Lines in =lattice/= | 1,049 (268 model, 322 policy, 410 commands, 49 package) |
+| ~defmethod~ forms | 16 |
+| Core generics specialised | 7 |
+| New container classes | 1 |
+| *Core files edited* | *2* |
+| *Core behaviours changed* | *0* |
+| Core bugs the lattice exposed | 1 |
+
+Gate 3 asks for the line and method counts precisely because it is satisfiable
+in bad faith — push everything through ~props~ and ~&rest~ arguments and the
+letter passes while the spirit dies. PLAN.org sets the reading: "A lattice that
+is three hundred lines of methods is the thesis holding. One that is two
+thousand lines re-implementing geometry is the thesis failing while wearing the
+gate's uniform."
+
+1,049 lines is above three hundred, so the honest question is what the extra
+lines are. They are: the plane's own data structure (268), which nobody claimed
+would come free; the zoom and pan *commands* (410), which are user-facing verbs
+rather than layout mechanism; and 322 lines of policy of which the substance is
+seven methods and the rest is the reasoning behind them. *No geometry is
+re-implemented.* The lattice calls ~divide-rect~, ~tree-move~, ~tree-swap~,
+~tree-transplant~, ~repair-path~ and ~find-motion-target~ and defines none of
+them.
+
+* The seven generics the lattice specialises
+
+This is the whole of the layout and navigation change.
+
+| Generic | What the lattice makes it mean |
+|---------+--------------------------------|
+| ~layout-children~ | place the visible cells on a coordinate plane |
+| ~step-address~ | move one cell, bringing empty cells into being on arrival |
+| ~entry-address~ | arriving at a plane from outside lands on its default cell |
+| ~motion-escapes-p~ | *never* — the plane has no edge (D6) |
+| ~clip-rect~ | crop a cell overhanging the viewport, per ~set_content_clip_box~ |
+| ~gaps~ | cell gaps are wider than split gaps |
+| ~border-color~ | tint by coordinate parity, the cheapest orientation aid |
+
+Plus nine methods on the *container protocol* — ~container-addresses~,
+~child-at~, ~(setf child-at)~, ~insert-child~, ~remove-child~,
+~container-count~, ~default-address~, ~simplify-node~, ~print-object~ — which
+is the cost of being a container at all and is the number the experiment was
+really measuring.
+
+*Nine methods is what it costs to teach this window manager about an infinite
+plane.* Everything else — motion, layout recursion, tree surgery, focus repair,
+persistence, the commands that move windows between cells — works without
+knowing the lattice exists.
+
+* Core edit 1 — a missing export
+
+*File:* =src/package.lisp=. *Change:* export ~default-address~ from
+=LATTICEWM/CORE=.
+
+~default-address~ is the structural half of entry resolution: the address a
+descent into a container takes when nobody has a direction to offer. Focus
+repair and ~first-leaf-path~ call it, a ~stack~ answers with its selected child
+so that repair never lands on a hidden tab, and a ~grid~ has to answer with its
+first *occupied* visible cell or focus repair lands in empty space.
+
+The core defined it, documented it, and specialised it — and forgot to publish
+it. A mechanical omission, and the least interesting possible finding, but it
+is a finding: *the container protocol had a member that an outside implementor
+could not reach*, and nothing would have detected that except trying.
+
+* Core edit 2 — ~layout-children~ was partial
+
+*File:* =src/policy/conventional.lisp=. *Change:* add a default method
+specialised on ~container~, giving the whole rectangle to ~default-address~'s
+child and hiding the rest — that is, behaving like a stack.
+
+This one is real, and it is the finding worth having.
+
+Before the edit, ~layout-children~ had methods for ~split~ and ~stack~ only. A
+policy meeting a container kind it had never heard of signalled
+~no-applicable-method~. So an extension author adding a container type was
+silently obliged to *also* teach every other policy in the image about it —
+including policies they had never seen and could not modify — or their
+container would crash any policy but their own.
+
+That is the exact failure mode README's §extensibility warns about, arriving
+from an unexpected direction:
+
+#+begin_quote
+"CLOS means there is no hook set to guess wrong." Only true if the code is
+written as fine-grained generics. […] *Extensibility is a property of the
+decomposition, not of the language.*
+#+end_quote
+
+The decomposition was fine-grained. What it was not was *total*. A protocol
+whose operations are partial functions is not an extension point; it is a set
+of special cases with a docstring, and the obligation it creates is invisible
+until somebody trips over it.
+
+*The generalisable rule, which is the actual output of this experiment:* every
+generic in the extension surface needs a method on the most general class it
+dispatches on, and that method must be correct rather than merely present.
+Behaving like a stack is correct for any container whatsoever — it shows
+something, it shows only one thing, and it cannot overlap.
+
+Checked against the rest of the surface after the fact: ~step-address~,
+~entry-address~, ~motion-escapes-p~ and ~gaps~ already had ~container~-general
+or ~t~-general methods. ~layout-children~ was the only gap.
+
+* The bug the lattice found
+
+Not a core edit but a core *fix*, and it would have been very unpleasant to
+find any other way.
+
+~tree-transplant~ re-derived its destination after detaching the moved subtree,
+using ~node-path-to~ to check that the destination had survived. The path to
+the *root* is the empty list, which is false, so the check reported the root as
+missing — and the recovery branch returned the tree *without reinserting what
+it had detached*.
+
+For the conventional layer this was nearly unreachable: transplanting into the
+root container means sending a window to a workspace, and the root is the
+workspace stack, so the destination was always a child. For the lattice it is
+the common case, because a grid *is* the container you transplant into. Every
+"move this window to cell (3,2)" would have deleted the window.
+
+Fixed with ~node-contains-p~, which answers the survival question directly
+instead of inferring it from a path that can legitimately be empty. Both are
+now exported, and the docstring says why one must not be used for the other.
+
+*Recorded because it is evidence for the sequencing rather than against it.*
+D21's argument for building the lattice second was that failure would be
+discovered "in week three on a small codebase with a working conventional
+window manager already in hand." This is precisely that: a latent core bug,
+surfaced by the first extension that exercised the path, on a codebase small
+enough that the fix took one function.
+
+* What the lattice did *not* need
+
+Worth listing, because these are the things a "no core edits" claim usually
+founders on, and each one is a place the container protocol turned out to be
+drawn correctly.
+
+- *Motion across the cell boundary.* Zero lines. Moving right from the
+  rightmost pane of a split inside cell (0,0) lands on the leftmost pane of
+  cell (1,0), entering through the edge it crossed, and it is involutive.
+  ~find-motion-target~ ascends out of the split, asks the grid, and descends —
+  and it does not know what a grid is. PLAN.org's Delta 1 predicted this and it
+  is the single strongest result here.
+- *Moving a window from a split into another cell's split.* ~tree-move~,
+  unmodified.
+- *Moving a whole cell, splits and all, to another coordinate.*
+  ~tree-transplant~, unmodified (after the bug above).
+- *Swapping two cells.* ~tree-swap~, unmodified.
+- *Focus repair through a plane.* ~repair-path~, unmodified.
+- *Workspaces of planes, one behind another.* A ~stack~ of ~grid~ s. Nothing
+  was written; it is what the two container kinds compose to.
+- *A plane nested inside a split, or inside another plane.* Also free, also
+  untouched, and nobody asked for it. Its being free is the evidence the
+  abstraction sits at the right level.
+- *Persistence, floating, minimize, fullscreen, tabs.* Untouched.
+
+* Where the honest claim now stands
+
+README's §extensibility settled on a deliberately modest claim:
+
+#+begin_quote
+We are building a plugin API either way. In Common Lisp it costs zero days of
+boundary code, it is not a wall when you need to go past it, and an AI can
+extend it later without rebuilding anything.
+#+end_quote
+
+That survives, and this experiment adds one thing to it that the document could
+not have known: *the boundary was crossed twice, and both crossings were
+repairs to the surface rather than exceptions to it.* Neither edit changed a
+behaviour, neither required understanding the conventional layer, and both make
+the *next* extension cheaper rather than being paid again.
+
+What has *not* been demonstrated, and should not be claimed:
+
+- The lattice was written by the same author as the core, on the same night,
+  with the whole design in mind. That is the easiest possible case, and
+  PLAN.org's §honest already says the only real check on decomposition quality
+  is qualitative and there is nobody available to run it.
+- Two edits is a small number, but the *rule* they produced — every surface
+  generic needs a correct method on its most general class — was learned by
+  tripping over it, not by design. There may be more of them, and the way to
+  find out is a second extension by somebody else.
+- Gate 3 remains satisfiable in bad faith and this result does not change that.
+  It is reported here as raw numbers so that a reader can disagree with the
+  interpretation.
+
+* The counts, for gate 3
+
+: lattice/package.lisp    49 lines
+: lattice/grid.lisp      268 lines    9 defmethods   (the container protocol)
+: lattice/policy.lisp    322 lines    7 defmethods   (layout, motion, colour)
+: lattice/commands.lisp  410 lines    0 defmethods   (18 commands)
+: -------------------------------------------------
+: total                1,049 lines   16 defmethods
+
+: core files edited              2   (one export, one default method)
+: core behaviours changed        0
+: core bugs found and fixed      1

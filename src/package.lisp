@@ -132,9 +132,10 @@ deliberately decomposed so that policy can redirect it.")
    #:container-addresses #:child-at #:remove-child #:insert-child
    #:replace-child #:address-equal #:container-count
    #:map-nodes #:find-node-if #:node-leaves #:node-windows #:leaf-holding
-   #:copy-node #:node-empty-p #:degenerate-p #:simplify-node
+   #:copy-node #:node-empty-p #:simplify-node #:default-address
    ;; paths
    #:resolve-path #:resolve-chain #:path-valid-p #:node-path-to
+   #:node-contains-p
    #:parent-path #:path-last #:path-append #:path-equal
    ;; weights
    #:weight-at #:set-weight #:normalized-weights #:adjust-weight

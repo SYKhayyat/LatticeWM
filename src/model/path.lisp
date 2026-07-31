@@ -67,6 +67,16 @@ has to remember to fix them and one missed case is an unfindable cycle."
       (unless node (return nil))
       (push node chain))))
 
+(defun node-contains-p (root target)
+  "True when TARGET is ROOT or lies beneath it.
+
+Distinct from NODE-PATH-TO because the path to ROOT itself is the empty list,
+which is indistinguishable from \"not found\" — so a survival check written on
+NODE-PATH-TO reports the root as missing.  Anything asking *whether* a node is
+still in the tree must use this."
+  (or (eq root target)
+      (and (node-path-to root target) t)))
+
 (defun path-valid-p (root path)
   "True when PATH leads to an existing node under ROOT."
   (and (resolve-path root path) t))

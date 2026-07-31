@@ -322,7 +322,13 @@ Returns (values NEW-ROOT NEW-PATH-OF-MOVED-SUBTREE)."
       ;; Re-find the target by identity, not by the path handed in: removing a
       ;; child renumbers its later siblings, so that path may now name a
       ;; different node.
-      (let ((target (and (node-path-to root target) target))
+      ;;
+      ;; NODE-CONTAINS-P rather than NODE-PATH-TO, because the path to the root
+      ;; *is* the empty list, which is false — so testing survival with
+      ;; NODE-PATH-TO reports the root as missing.  That was a real bug and it
+      ;; silently dropped a subtree whenever the destination was the root
+      ;; container, which for a lattice is every single cell move.
+      (let ((target (and (node-contains-p root target) target))
             (to-container-path (node-path-to root target)))
         (cond
           ((not (container-p target))

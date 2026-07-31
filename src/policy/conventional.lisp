@@ -150,6 +150,25 @@ level and on every monitor."
             (c:divide-rect rect (c:split-axis split) (c:weights split)
                            :gap (gaps policy split)))))
 
+(defmethod layout-children ((policy conventional-policy) (container c:container) rect)
+  "The fallback for a container kind this policy has never heard of.
+
+Give the whole rectangle to DEFAULT-ADDRESS's child and hide the rest — that
+is, behave like a stack, which is the only choice that is correct for *any*
+container: it shows something, it shows only one thing, and it cannot overlap.
+
+CORE EDIT, added while building the lattice.  It is one of exactly two the
+experiment required, and it is recorded in FINDINGS.org.  The finding is real:
+without it, LAYOUT-CHILDREN was a *partial* function on the container protocol,
+so a policy meeting a container type it did not know signalled NO-APPLICABLE-
+METHOD rather than degrading.  A protocol whose operations are partial is not
+an extension point, it is a set of special cases with a docstring — an
+extension author would have had to know, from nowhere, that adding a container
+kind obliges them to also teach every *other* policy about it."
+  (let ((address (c:default-address container)))
+    (when (c:child-at container address)
+      (list (cons address rect)))))
+
 (defmethod layout-children ((policy conventional-policy) (stack c:stack) rect)
   "The selected child gets everything; the rest are not laid out at all, and
 are therefore hidden."

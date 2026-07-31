@@ -1,0 +1,5 @@
+(require :asdf)
+(handler-bind ((warning #'muffle-warning)) (asdf:load-system "lattice/tests"))
+(multiple-value-bind (ok n) (funcall (read-from-string "lattice/tests:run-all"))
+  (format t "~&~%======== LATTICE TESTS ========~%~d check~:p, ~:[FAIL~;PASS~]~%" n ok)
+  (sb-ext:quit :unix-status (if ok 0 1)))
