@@ -29,7 +29,8 @@
     ((:file "package")
      (:file "grid")
      (:file "policy")
-     (:file "commands")))))
+     (:file "commands")
+     (:file "overlay")))))
 
 (defsystem "lattice/tests"
   :description "Tests for the lattice, and for its interoperation with splits."
