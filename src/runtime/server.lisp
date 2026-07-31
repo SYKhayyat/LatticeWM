@@ -45,6 +45,16 @@ from here?\" — and the answer must never depend on load order.")
           :documentation "our WINDOW -> its river_node_v1.")
    (outputs :initform (make-hash-table :test #'eq) :accessor server-outputs
             :documentation "river_output_v1 proxy -> our OUTPUT.")
+   (output-names :initform (make-hash-table :test #'eql)
+                 :accessor server-output-names
+                 :documentation
+                 "wl_output global id -> its name, like \"eDP-1\".
+
+river_output_v1 has no name event -- it has `wl_output', carrying the numeric
+id of the wl_output global -- so the human-readable name has to be fetched
+from wl_output itself, which has carried one since version 4.  This is the
+table those two halves meet in, because the two events race and either can
+arrive first.")
    (emitted :initform (make-hash-table :test #'equal) :accessor server-emitted
             :documentation
             "The last value we sent for each (WINDOW . PROPERTY), so that a

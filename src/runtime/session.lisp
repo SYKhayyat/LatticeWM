@@ -138,6 +138,20 @@ that."
              (setf (server-compositor server)
                    (wl:wl-registry.bind registry name 'wl:wl-compositor
                                         (min version 4))))
+            ((string= interface "wl_output")
+             ;; Bound only to be asked its name.  wl_output.name arrived in
+             ;; version 4; below that there is no name to be had and the
+             ;; output stays anonymous, which is degraded rather than broken.
+             (when (>= version 4)
+               (let ((id name)
+                     (proxy (wl:wl-registry.bind registry name 'wl:wl-output 4)))
+                 (push (lambda (event &rest arguments)
+                         (with-abandon
+                           (when (eq event :name)
+                             (setf (gethash id (server-output-names server))
+                                   (first arguments))
+                             (name-outputs))))
+                       (wl:wl-proxy-hooks proxy)))))
             ((string= interface "wl_shm")
              (setf (server-shm server)
                    (wl:wl-registry.bind registry name 'wl:wl-shm 1)))
@@ -172,6 +186,22 @@ that."
    (wl:wl-proxy-hooks (server-manager server)))
   server)
 
+(defun name-outputs ()
+  "Give every output the name of the wl_output it named, once both are known.
+
+Called from both sides because the two events race: river_output_v1.wl_output
+tells us *which* wl_output an output is, and wl_output.name tells us what that
+one is called, and neither is guaranteed to arrive first.  Doing the join here
+rather than in either handler means it does not matter."
+  (when *server*
+    (dolist (output (c:world-outputs *world*))
+      (let ((id (c:prop output :wl-output-id)))
+        (when id
+          (let ((name (gethash id (server-output-names *server*))))
+            (when (and name (not (equal name (c:output-name output))))
+              (setf (c:output-name output) name)
+              (logmsg :info "output ~a is ~a" id name))))))))
+
 (defun attach-output (proxy)
   "Register an output and follow its position and size."
   (let ((output (make-instance 'c:output :proxy proxy)))
@@ -181,7 +211,13 @@ that."
     (push (lambda (event &rest arguments)
             (with-abandon
               (case event
-                (:name (setf (c:output-name output) (first arguments)))
+                ;; NOT :name.  river_output_v1 has no such event -- the case
+                ;; that used to be here could never fire, so every output was
+                ;; anonymous, and the per-output workspace memory is keyed on
+                ;; the name.  It silently did nothing on every machine.
+                (:wl-output
+                 (setf (c:prop output :wl-output-id) (first arguments))
+                 (name-outputs))
                 (:position
                  (setf (c:rect-x (c:output-rect output)) (first arguments)
                        (c:rect-y (c:output-rect output)) (second arguments))
