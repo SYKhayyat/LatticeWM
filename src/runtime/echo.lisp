@@ -88,11 +88,8 @@ goes only to a log file nobody is reading."
                (< (- (get-universal-time) (cdr message)) *echo-message-seconds*))
       (car message))))
 
-(defun echo-segments (world)
-  "The pieces of the echo area, as a list of (TEXT . COLOR-KEYWORD).
-
-COLOR-KEYWORD is :ACCENT or :NORMAL.  Specialize ECHO-CONTENT to change this;
-this function is the default it calls."
+(defmethod p:echo-content ((policy p:policy) world)
+  "The shipped echo area: workspace, place, contents, counts, last message."
   (let* ((root (c:world-root world))
          (workspaces (c:world-workspaces world))
          (window (c:world-focus-window world))
@@ -153,8 +150,8 @@ this function is the default it calls."
              (accent (apply #'argb *echo-accent*))
              (divider (apply #'argb *echo-divider*))
              (segments (remove-if (lambda (segment) (zerop (length (car segment))))
-                                  (guarded "echo-segments"
-                                    (echo-segments world)))))
+                                  (guarded "echo-content"
+                                    (p:echo-content (p:current-policy) world)))))
         (loop for (text . kind) in segments
               for firstp = t then nil
               do ;; The separator goes *between* segments, which means before

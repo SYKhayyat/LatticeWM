@@ -259,6 +259,20 @@ second placement wins, and the whole layout silently collapses onto the last
 output while the model insists everything is fine.  That was the first
 implementation."))
 
+(defgeneric echo-content (policy world)
+  (:documentation
+   "What the echo area says, as a list of (TEXT . KIND).
+
+KIND is :ACCENT for the part that says where you are and :NORMAL for the rest.
+Segments are drawn left to right with separators between them; empty ones are
+dropped, so returning \"\" is how a segment says nothing this time.
+
+This is a policy decision and not a status-bar feature: what a window manager
+should tell you about depends entirely on what its layout model *is*.  The
+shipped answer names the workspace, the place, what is in it, and the counts.
+The lattice's answer would sensibly include the viewport; a policy with no
+workspaces should not mention them."))
+
 (defgeneric reserved-space (policy output)
   (:documentation
    "Pixels to keep clear on each edge of OUTPUT, as (TOP RIGHT BOTTOM LEFT).

@@ -195,6 +195,7 @@ You never edit this package.")
    #:gaps #:border-width #:border-color #:visible-p #:render-order
    #:clip-rect #:outer-rect #:reserved-space #:*reserve-hooks*
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
+   #:echo-content
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change
@@ -253,7 +254,7 @@ keybindings, the command registry, and the session loop.")
    #:spawn #:notify #:*log-level* #:logmsg #:*server*
    #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
-   #:text-width #:text-height #:*echo-area* #:*echo-scale* #:echo-segments
+   #:text-width #:text-height #:*echo-area* #:*echo-scale* #:*echo-position*
    #:current-message #:server-compositor #:server-shm
    #:*help-visible* #:help-entries #:binding-description #:truncate-text
    #:summary-of

@@ -117,8 +117,17 @@
 ;;; ---------------------------------------------------------------- gate 6
 
 (banner 6 "the runtime-to-policy line ratio")
-(flet ((count-lines (pattern)
-         (reduce #'+ (directory pattern) :key
+(flet ((count-lines (pattern &key (skip '()))
+         ;; Generated files are excluded and named.  The ratio is meant to
+         ;; measure *authored* runtime against authored policy; a vendored font
+         ;; table is neither, and counting 95 lines of hex as runtime would make
+         ;; the number say something it does not mean.  Excluding it is only
+         ;; honest if the exclusion is visible, so it is printed.
+         (reduce #'+ (remove-if (lambda (path)
+                                  (member (file-namestring path) skip
+                                          :test #'string=))
+                                (directory pattern))
+                 :key
                  (lambda (path)
                    (with-open-file (in path)
                      (loop for line = (read-line in nil) while line
@@ -126,7 +135,7 @@
                                       (char= #\; (char (string-left-trim " " line) 0)))
                              count t))))))
   (let* ((runtime (+ (count-lines "src/wire/*.lisp")
-                     (count-lines "src/runtime/*.lisp")))
+                     (count-lines "src/runtime/*.lisp" :skip '("font.lisp"))))
          (policy (+ (count-lines "src/model/*.lisp")
                     (count-lines "src/policy/*.lisp")
                     (count-lines "lattice/*.lisp")))
@@ -140,7 +149,8 @@
     ;; Not pass/fail.  A number, printed where it cannot be ignored.  Runtime
     ;; growing faster than policy is the earliest visible symptom of the
     ;; monolith failure mode, and it shows up weeks before anything else does.
-    (format t "  runtime (wire + runtime)~40t~d lines~%" runtime)
+    (format t "  runtime (wire + runtime)~40t~d lines  (font.lisp excluded: generated)~%"
+            runtime)
     (format t "  policy  (model + policy + lattice)~40t~d lines~%" policy)
     (format t "  ratio~40t~,2f~a~%" ratio
             (cond ((>= ratio 2.0) "   Emacs-shaped")
