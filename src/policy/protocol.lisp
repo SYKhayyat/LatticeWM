@@ -50,6 +50,9 @@
 
 ;;; ------------------------------------------------------ policy objects
 
+(defgeneric policy-name (policy)
+  (:documentation "A short human-readable name for POLICY, shown in status output."))
+
 (defclass policy ()
   ((name :initarg :name :initform "policy" :accessor policy-name)
    (props :initform '() :accessor policy-props
@@ -263,12 +266,15 @@ no second command, no discontinuity in the user's model.
 A STACK returns NIL for every spatial direction, deliberately: you do not
 arrive in another workspace by pressing Left."))
 
-(defgeneric entry-address (policy container direction)
+(defgeneric entry-address (policy container direction reference rects)
   (:documentation
    "Arriving at CONTAINER while travelling DIRECTION, which child do we land on?
 
 DIRECTION is NIL for a non-directional arrival — a jump to a name, a typed
-coordinate, a click.
+coordinate, a click.  REFERENCE is the rectangle being left, or NIL, and RECTS
+maps nodes to their rectangles, or NIL; together they let a container answer
+*geometrically* — with the child that lines up with where you already are —
+rather than with a fixed index.  A method that does not care may ignore both.
 
 The shipped rule is README D20's: directional motion enters through the edge
 it crossed and lands on the child adjacent to that edge, and non-directional
@@ -279,6 +285,12 @@ memory, pressing Right from the cell to its left drops you on the editor;
 press Right again and you leave.  *The terminal cannot be reached by rightward
 motion at all.*  Geometric entry is also involutive: Right then Left returns
 you exactly where you started.
+
+Along the container's own axis, entry is by *edge* and geometry does not enter
+into it: that is what guarantees every pane is reachable.  Across the axis,
+entry is geometric, so that Right-then-Left returns you exactly where you
+started.  Getting the second one wrong is the difference between a layout that
+feels like a place and one that feels like a menu.
 
 Memory is genuinely nicer for named jumps, and adding it is a method on this
 generic plus a value on the container's PROPS — which is what PROPS is for."))

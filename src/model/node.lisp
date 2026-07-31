@@ -168,14 +168,36 @@ lists in a GRID, and EQL is wrong for the second."))
   (:documentation
    "Return the node that should stand in NODE's place after surgery.
 
-A split left holding one child is not wrong, merely pointless, and leaving
-such nodes behind is how a tree slowly becomes unreadable — nine levels of
-nesting for three windows.  The default collapses those; a container that
-wants to survive as a singleton (a workspace stack with one workspace, say)
-returns itself.
+Three possible answers:
+
+  NODE itself   nothing to do — the overwhelmingly common case;
+  another node  NODE dissolves into it.  A split down to one child is not
+                wrong, merely pointless, and leaving such nodes behind is how
+                a tree becomes nine levels deep for three windows;
+  NIL           NODE should be *removed from its parent entirely*, which then
+                gets the same question asked of it.
+
+The NIL answer is what makes a whole nest unwind in one step: close the only
+window inside three levels of nesting and every level above it evaporates,
+rather than leaving a ladder of empty containers or — worse — an empty pane
+the user never asked for.  D17's empty pane is deliberate, and debris must not
+be able to impersonate it.
 
 Called by the surgery functions with :SIMPLIFY T, which is the default.  Pass
 :SIMPLIFY NIL when you are mid-operation and about to add a sibling back."))
+
+(defgeneric default-address (container)
+  (:documentation
+   "The address a structural descent into CONTAINER should take.
+
+*Structural*, not policy: this is what REPAIR-PATH and FIRST-LEAF-PATH use to
+find a valid place, so it must always answer with something real and must not
+consult a policy that might not be loaded.  A STACK answers with its selected
+child, because landing focus repair on a hidden tab would be a bug that looks
+like a haunting.
+
+Policy's ENTRY-ADDRESS is the richer question — it knows the direction you
+arrived from — and it is what ordinary navigation uses."))
 
 (defun container-p (x)
   "True when X is a container."
@@ -193,6 +215,9 @@ Called by the surgery functions with :SIMPLIFY T, which is the default.  Pass
 (defmethod simplify-node ((n node))
   "Most nodes stand for themselves."
   n)
+
+(defmethod default-address ((c container))
+  (first (container-addresses c)))
 
 ;;; ------------------------------------------------- sequential containers
 
@@ -286,9 +311,14 @@ a container kind an extension invented."))
     kid))
 
 (defmethod simplify-node ((s split))
-  "A split with one child is that child; a split with none is an empty leaf."
+  "A split with one child is that child; a split with none should be removed.
+
+Answering NIL rather than an empty leaf is what stops a closed window leaving
+a pane behind.  An empty pane is something the user asked for (D17); one that
+appears because a container ran out of children is debris wearing the same
+costume, and it would teach people to distrust the real ones."
   (case (length (children s))
-    (0 (make-leaf))
+    (0 nil)
     (1 (first (children s)))
     (t s)))
 
@@ -370,14 +400,22 @@ verb, which is what makes a stack legible."))
     (incf (stack-selected s))))
 
 (defmethod simplify-node ((s stack))
-  "A stack survives as a singleton.
+  "A stack survives, always, and regains an empty child if it loses its last.
 
 Unlike a split, a one-element stack is meaningful: it is a workspace list with
 one workspace, or a tab bar with one tab, and collapsing it would delete the
-user's ability to add a second."
-  (if (zerop (length (children s)))
-      (make-leaf)
-      s))
+user's ability to add a second.  And a workspace list with *no* workspaces is
+not a simpler state, it is a broken one — so closing the last window on the
+last workspace leaves you standing in an empty pane, which is exactly where
+you started and exactly where typing a key spawns something (D19)."
+  (when (zerop (length (children s)))
+    (setf (children s) (list (make-leaf))
+          (stack-selected s) 0))
+  s)
+
+(defmethod default-address ((s stack))
+  "The selected child.  Focus repair must never land on a hidden tab."
+  (stack-selected s))
 
 ;;; -------------------------------------------------------------- traversal
 

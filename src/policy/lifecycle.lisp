@@ -44,6 +44,11 @@ this."
                  (side (new-child-side policy target direction)))
              (c:tree-split-at root path node :axis axis :side side))))
       (setf (c:world-root world) new-root)
+      ;; The cursor may now be pointing at the split we just created rather
+      ;; than at a place, because the node it named grew children.  Repairing
+      ;; it here rather than at each call site is the same argument as D18's
+      ;; single focus-repair rule: one place, or fifteen subtly different ones.
+      (repair-cursor policy world)
       new-path)))
 
 (defmethod on-window-open ((policy conventional-policy) world (window c:window))
@@ -67,7 +72,7 @@ the runtime that no tiled path exists."
          (let* ((path (or (getf rule :path) path))
                 (leaf (c:make-leaf window))
                 (landed (place-node policy world leaf path disposition)))
-           (when (if (getf rule :focus)
+           (when (if (member :focus rule)
                      (getf rule :focus)
                      *focus-new-windows*)
              (jump-cursor policy world landed))
@@ -86,10 +91,7 @@ a mode would make you remember which one you were in."
       (return-from on-window-close (c:world-cursor world)))
     (multiple-value-bind (removed new-root suggested)
         (c:tree-remove-at root path
-                          :simplify (should-collapse-p
-                                     policy
-                                     (or (c:resolve-path root (c:parent-path path))
-                                         root))
+                          :simplify (lambda (node) (should-collapse-p policy node))
                           :focus-path (c:world-cursor world))
       (declare (ignore removed))
       (setf (c:world-root world) new-root)

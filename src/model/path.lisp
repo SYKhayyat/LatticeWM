@@ -91,14 +91,15 @@ It is O(tree), and the tree has tens of nodes, so the simplicity is free."
 (defun first-leaf-path (root &optional prefix)
   "The path to the first leaf at or under ROOT, prefixed by PREFIX.
 
-'First' means first in layout order, which for a split is leftmost or topmost
-and for a stack is the selected child — you do not land on a hidden tab."
+'First' is each container's DEFAULT-ADDRESS, which for a split is its leftmost
+or topmost child and for a stack is the *selected* one — focus repair must
+never land on a hidden tab, because a cursor you cannot see is indistinguishable
+from a broken keyboard."
   (cond ((not (container-p root)) prefix)
-        (t (let ((addresses (container-addresses root)))
-             (if (null addresses)
+        (t (let ((address (default-address root)))
+             (if (null address)
                  prefix
-                 (let* ((address (first addresses))
-                        (kid (child-at root address)))
+                 (let ((kid (child-at root address)))
                    (if kid
                        (first-leaf-path kid (path-append prefix address))
                        prefix)))))))

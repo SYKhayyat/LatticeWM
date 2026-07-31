@@ -125,7 +125,7 @@ deliberately decomposed so that policy can redirect it.")
    ;; nodes
    #:node #:props #:prop #:node-id #:node-label
    #:leaf #:leaf-window #:make-leaf #:leaf-empty-p
-   #:container #:children #:weights #:container-p
+   #:container #:children #:weights #:container-p #:sequential-container
    #:split #:split-axis #:make-split
    #:stack #:stack-selected #:make-stack
    ;; the container protocol
@@ -178,9 +178,16 @@ CONVENTIONAL-POLICY.  To change any of it, write a DEFMETHOD from outside.
 You never edit this package.")
   (:export
    ;; policy objects and tier-0 options
-   #:policy #:conventional-policy #:*policy* #:current-policy
+   #:policy #:conventional-policy #:*policy* #:current-policy #:policy-name
    #:define-option #:option #:option-documentation #:all-options
-   #:option-value #:option-default #:option-boundp
+   #:option-default #:option-boundp
+   ;; the tier-0 values themselves.  Every P1 fork in the design is here.
+   #:*gaps* #:*outer-gaps* #:*border-width*
+   #:*focused-border-color* #:*unfocused-border-color* #:*empty-pane-color*
+   #:*spawn-mode* #:*split-axis* #:*new-child-side*
+   #:*collapse-degenerate-splits* #:*move-into-occupied* #:*focus-after-close*
+   #:*float-dialogs* #:*focus-follows-mouse* #:*focus-new-windows*
+   #:*empty-pane-keys* #:*float-fraction* #:*smart-gaps*
    ;; --- layout ---------------------------------------------------------
    #:layout-children #:layout-node #:window-dimensions #:gravity
    #:gaps #:border-width #:border-color #:visible-p #:render-order

@@ -24,26 +24,47 @@
 
 (in-package #:latticewm/core)
 
-(defun %simplify-upwards (root path)
-  "Collapse degenerate containers from PATH's parent up to ROOT.
+(defun %simplify-upwards (root path &optional (allow-collapse t))
+  "Collapse degenerate containers from the node at PATH up to ROOT.
+
+ALLOW-COLLAPSE is T, NIL, or a predicate of one node.  It gates only the
+*dissolve into my one remaining child* case — i3 keeps such containers, Emacs
+does not, and that is a genuine preference.  It does not gate structural
+invariant repair: a container that answers NIL is always removed, and a
+container that quietly fixes itself up (a workspace stack regaining an empty
+workspace) always does, because those are not preferences but the difference
+between a valid tree and a broken one.
 
 Returns the possibly-new root.  Walks bottom-up because collapsing a child can
 make its parent degenerate in turn: close two of three windows in a nested
 split and the whole nest should unwind in one step, not leave a ladder of
-one-child splits behind."
+one-child splits behind.
+
+SIMPLIFY-NODE may answer NIL, meaning 'remove me from my parent entirely'.
+That is the case that makes the unwinding total rather than leaving an empty
+pane the user never asked for — see SIMPLIFY-NODE's docstring for why debris
+must not be able to impersonate D17's deliberate empty pane.  The root itself
+is never removed; if it simplifies to nothing it becomes an empty leaf, since
+something has to be there."
   (let ((chain (resolve-chain root path)))
-    (if (null chain)
-        root
-        ;; Walk from the deepest node upwards, replacing each with its
-        ;; simplification in *its* parent.
-        (loop for i from (1- (length chain)) downto 0
-              for node = (nth i chain)
-              for simpler = (simplify-node node)
-              do (cond ((eq simpler node))    ; nothing to do
-                       ((zerop i) (setf root simpler))
-                       (t (setf (child-at (nth (1- i) chain) (nth (1- i) path))
-                                simpler)))
-              finally (return root)))))
+    (when (null chain) (return-from %simplify-upwards root))
+    (loop for i from (1- (length chain)) downto 0
+          for node = (nth i chain)
+          for simpler = (let ((s (simplify-node node)))
+                          (if (and s (not (eq s node))
+                                   (not (if (functionp allow-collapse)
+                                            (funcall allow-collapse node)
+                                            allow-collapse)))
+                              node          ; the collapse was declined
+                              s))
+          do (cond
+               ((eq simpler node))          ; the common case: nothing to do
+               ((zerop i) (setf root (or simpler (make-leaf))))
+               (simpler
+                (setf (child-at (nth (1- i) chain) (nth (1- i) path)) simpler))
+               (t
+                (remove-child (nth (1- i) chain) (nth (1- i) path))))
+          finally (return root))))
 
 ;;; ----------------------------------------------------------------- insert
 
@@ -77,10 +98,13 @@ which is what a spawn wants."
 
 Returns (values REMOVED-NODE NEW-ROOT NEW-FOCUS-PATH).
 
-With SIMPLIFY (the default) any container left degenerate by the removal is
-collapsed — a split down to one child becomes that child.  Pass NIL when you
-are about to put something back and do not want the tree to unwind first;
-TREE-MOVE relies on that.
+SIMPLIFY is T, NIL, or a predicate of one node deciding whether *that*
+container may dissolve into its last child.  With T (the default) any container
+left degenerate by the removal is collapsed.  Pass NIL when you are about to
+put something back and do not want the tree to unwind first; TREE-MOVE relies
+on that.  Pass a predicate to honour a per-container preference — which is what
+the shipped policy does, so that SHOULD-COLLAPSE-P is consulted per node rather
+than once for the whole operation.
 
 NEW-FOCUS-PATH is where a cursor sitting at FOCUS-PATH should land.  If the
 focused node itself was what got removed, the result is REPAIR-PATH's answer:
@@ -105,7 +129,7 @@ Policy can still ask for MRU; see FOCUS-AFTER-REMOVE."
       (setf focused nil))
     (let ((removed (remove-child parent address)))
       (when simplify
-        (setf root (%simplify-upwards root parent-path)))
+        (setf root (%simplify-upwards root parent-path simplify)))
       (values removed
               root
               (or (and focused (node-path-to root focused))
@@ -216,52 +240,64 @@ after reinsertion, because collapsing the source container first can shift the
 destination path out from under us — the classic bug in this operation."
   (when (or (null from) (path-equal from to))
     (return-from tree-move (values root from)))
-  (when (node-path-to (resolve-path root from) (resolve-path root to))
-    (error "Refusing to move ~s into ~s, which it contains." from to))
-  (let* ((moving (resolve-path root from))
-         (destination (resolve-path root to)))
+  (let ((moving (resolve-path root from))
+        (destination (resolve-path root to)))
     (unless moving
       (return-from tree-move (values root (repair-path root from))))
-    (cond
-      ;; Swap needs no removal at all.
-      ((and destination (eq join :swap))
-       (multiple-value-bind (new-root) (tree-swap root from to)
-         (values new-root (node-path-to new-root moving))))
-      (t
-       ;; Detach without simplifying, so TO stays meaningful.
-       (multiple-value-bind (removed after-remove) (tree-remove-at root from :simplify nil)
-         (declare (ignore removed))
-         (setf root after-remove)
-         (let* ((destination (resolve-path root to)))
-           (cond
-             ;; Vanished while we were detaching: put it back at a sane place.
-             ((null destination)
-              (setf root (%simplify-upwards root (parent-path from)))
-              (values root (or (node-path-to root moving)
-                               (repair-path root from))))
-             ;; An empty pane simply becomes the thing.
-             ((and (typep destination 'leaf) (leaf-empty-p destination))
-              (setf root (tree-replace-at root to moving))
-              (setf root (%simplify-upwards root (parent-path from)))
-              (values root (or (node-path-to root moving) (repair-path root to))))
-             ;; Otherwise join, per JOIN.
-             (t
-              (let ((new-path
-                      (ecase join
-                        (:split
-                         (multiple-value-bind (r p)
-                             (tree-split-at root to moving :axis axis :side side)
-                           (setf root r) p))
-                        (:stack
-                         (let ((stack (make-stack (if (eq side :after)
-                                                      (list destination moving)
-                                                      (list moving destination))
-                                                  (if (eq side :after) 1 0))))
-                           (setf root (tree-replace-at root to stack))
-                           (path-append to (if (eq side :after) 1 0)))))))
-                (setf root (%simplify-upwards root (parent-path from)))
-                (values root (or (node-path-to root moving)
-                                 (repair-path root new-path))))))))))))
+    (when (and destination (node-path-to moving destination))
+      (error "Refusing to move ~s into ~s, which it contains." from to))
+    (when (null destination)
+      (return-from tree-move (values root (repair-path root from))))
+    ;; Swap needs no detachment at all.
+    (when (eq join :swap)
+      (multiple-value-bind (new-root) (tree-swap root from to)
+        (return-from tree-move
+          (values new-root (or (node-path-to new-root moving)
+                               (repair-path new-root to))))))
+    ;; Detach without simplifying.  Simplification is deferred until after
+    ;; reinsertion because collapsing the source container first can shift the
+    ;; destination out from under us — the classic bug in this operation.
+    ;;
+    ;; Note that TO is re-derived from the destination *node* rather than
+    ;; reused: removing a child renumbers every later sibling, so the literal
+    ;; path the caller handed in may now name something else entirely.  That
+    ;; was the other classic bug, and it silently deleted the window being
+    ;; moved rather than misplacing it.
+    (multiple-value-bind (removed after-remove) (tree-remove-at root from
+                                                                :simplify nil)
+      (declare (ignore removed))
+      (setf root after-remove)
+      (let* ((to (node-path-to root destination))
+             (source-parent (parent-path from)))
+        (cond
+          ;; The destination did not survive the detachment.  Put the subtree
+          ;; back rather than dropping it on the floor.
+          ((null to)
+           (setf root (tree-replace-at root (repair-path root from) moving))
+           (values root (or (node-path-to root moving) (repair-path root from))))
+          ;; An empty pane simply becomes the thing.
+          ((and (typep destination 'leaf) (leaf-empty-p destination))
+           (setf root (tree-replace-at root to moving))
+           (setf root (%simplify-upwards root source-parent))
+           (values root (or (node-path-to root moving) (repair-path root to))))
+          (t
+           (let ((landed
+                   (ecase join
+                     (:split
+                      (multiple-value-bind (r p)
+                          (tree-split-at root to moving :axis axis :side side)
+                        (setf root r) p))
+                     (:stack
+                      (let ((stack (make-stack
+                                    (if (eq side :after)
+                                        (list destination moving)
+                                        (list moving destination))
+                                    (if (eq side :after) 1 0))))
+                        (setf root (tree-replace-at root to stack))
+                        (path-append to (if (eq side :after) 1 0)))))))
+             (setf root (%simplify-upwards root source-parent))
+             (values root (or (node-path-to root moving)
+                              (repair-path root landed))))))))))
 
 ;;; -------------------------------------------------------------- transplant
 
@@ -283,7 +319,11 @@ Returns (values NEW-ROOT NEW-PATH-OF-MOVED-SUBTREE)."
     (multiple-value-bind (removed after-remove) (tree-remove-at root from :simplify nil)
       (declare (ignore removed))
       (setf root after-remove)
-      (let ((target (resolve-path root to-container-path)))
+      ;; Re-find the target by identity, not by the path handed in: removing a
+      ;; child renumbers its later siblings, so that path may now name a
+      ;; different node.
+      (let ((target (and (node-path-to root target) target))
+            (to-container-path (node-path-to root target)))
         (cond
           ((not (container-p target))
            (setf root (%simplify-upwards root (parent-path from)))

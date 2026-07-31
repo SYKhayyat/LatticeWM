@@ -170,6 +170,7 @@ package, keeps the original arity, consults CHECK-SEQUENCE, and forwards."
 ;;; The aliases keep the wrapped request's real arity too, for the same reason
 ;;; the wrappers do: a wrong-arity call must stay a compile-time error.
 
+(eval-when (:compile-toplevel :execute)
 (defmacro alias (name target &optional documentation)
   "Define NAME as a readable name for the wrapped request TARGET.
 
@@ -183,7 +184,7 @@ compilation environment, so asking it would fail."
                      collect (intern (format nil "A~d" i) '#:latticewm/wire))))
     `(defun ,name ,args
        ,(or documentation (format nil "See ~a." target))
-       (,target ,@args))))
+       (,target ,@args)))))
 
 (progn
   ;; window manager

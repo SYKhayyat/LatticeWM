@@ -290,23 +290,36 @@ Switching is its own verb, and that is what keeps a stack legible."
   (declare (ignore address direction))
   nil)
 
-(defmethod entry-address ((policy conventional-policy) (split c:split) direction)
-  "Enter through the edge you crossed (README D20).
+(defmethod entry-address ((policy conventional-policy) (split c:split)
+                          direction reference rects)
+  "Enter through the edge you crossed, at the height you were already at.
 
-Travelling right into a split means arriving at its *leftmost* child; that is
-what makes motion involutive — right then left returns you exactly where you
-started — and what stops a pane being unreachable by directional motion."
+Two rules, and they answer different questions:
+
+  * *Along* the split's own axis — travelling right into a horizontal split —
+    entry is by edge: you arrive at the leftmost child.  README D20.  This is
+    what guarantees every pane is reachable by directional motion, and it is
+    why last-focus memory is not used here: with memory, a cell whose right
+    pane was last focused would swallow a rightward move and the left pane
+    could never be reached at all.
+
+  * *Across* the axis — travelling right into a vertical split — entry is
+    geometric: you arrive at the child that lines up with the pane you left.
+    This is what makes Right-then-Left return you exactly where you started."
   (let ((n (c:container-count split)))
     (cond ((zerop n) nil)
-          ((null direction) 0)
-          ((not (eq (c:direction-axis direction) (c:split-axis split))) 0)
-          ((plusp (c:direction-sign direction)) 0)
-          (t (1- n)))))
+          ((and direction (eq (c:direction-axis direction) (c:split-axis split)))
+           (if (plusp (c:direction-sign direction)) 0 (1- n)))
+          ((and direction reference rects)
+           (or (best-aligned-address split reference rects (c:split-axis split))
+               0))
+          (t 0))))
 
-(defmethod entry-address ((policy conventional-policy) (stack c:stack) direction)
+(defmethod entry-address ((policy conventional-policy) (stack c:stack)
+                          direction reference rects)
   "Entering a stack always lands on the visible child.  Directional motion
 does not reveal a hidden tab."
-  (declare (ignore direction))
+  (declare (ignore direction reference rects))
   (stack-visible-address policy stack))
 
 (defmethod motion-escapes-p ((policy conventional-policy) container direction)
@@ -401,10 +414,17 @@ putting the next thing there is the only reading that respects the gesture."
       ((and leaf (c:leaf-empty-p leaf)) (values path :fill))
       ((eq *spawn-mode* :stack) (values path :stack))
       ((eq *spawn-mode* :fill-first)
-       (let ((empty (find-if (lambda (p)
-                               (let ((l (c:resolve-path (c:world-root world) p)))
-                                 (and (typep l 'c:leaf) (c:leaf-empty-p l))))
-                             (c:leaf-paths (c:current-workspace world)))))
+       ;; LEAF-PATHS of the workspace are relative to the workspace, so they
+       ;; must be resolved against it and only then rebased onto the world.
+       ;; Resolving a workspace-relative path against the world root is the
+       ;; kind of mistake that silently does nothing, which is worse than
+       ;; crashing.
+       (let* ((workspace (c:current-workspace world))
+              (empty (find-if (lambda (candidate)
+                                (let ((node (c:resolve-path workspace candidate)))
+                                  (and (typep node 'c:leaf)
+                                       (c:leaf-empty-p node))))
+                              (c:leaf-paths workspace))))
          (if empty
              (values (append (c:workspace-path world) empty) :fill)
              (values path :split))))
