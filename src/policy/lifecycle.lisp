@@ -51,7 +51,7 @@ this."
       (repair-cursor policy world)
       new-path)))
 
-(defmethod on-window-open ((policy conventional-policy) world (window c:window))
+(defmethod on-window-open ((policy policy) world (window c:window))
   "Place a newly appeared window and, by default, focus it.
 
 The float decision comes first and short-circuits everything: a floated window
@@ -78,7 +78,7 @@ the runtime that no tiled path exists."
              (jump-cursor policy world landed))
            landed))))))
 
-(defmethod on-window-close ((policy conventional-policy) world (window c:window)
+(defmethod on-window-close ((policy policy) world (window c:window)
                             path)
   "Take the window's pane out with it, and let its sibling grow.
 
@@ -98,7 +98,7 @@ a mode would make you remember which one you were in."
       (let ((landed (focus-after-remove policy world path suggested)))
         (setf (c:world-cursor world) (c:repair-path new-root landed))))))
 
-(defmethod on-minimize ((policy conventional-policy) world (window c:window))
+(defmethod on-minimize ((policy policy) world (window c:window))
   "Take the window out of the tree entirely and put it on the scratchpad.
 
 The stated requirement, honoured literally: *minimized windows leave the
@@ -123,7 +123,7 @@ where it was if that place still exists."
     (pushnew window (c:world-scratchpad world))
     window))
 
-(defmethod on-restore ((policy conventional-policy) world (window c:window))
+(defmethod on-restore ((policy policy) world (window c:window))
   "Bring a window back from the scratchpad.
 
 To the slot it was minimized from when that slot still exists, and to the
@@ -149,7 +149,7 @@ lose a window."
                                      :fill :split))))
          (jump-cursor policy world landed))))))
 
-(defmethod key-unbound ((policy conventional-policy) world keysym)
+(defmethod key-unbound ((policy policy) world keysym)
   "Typing in an empty pane spawns something there.  README D19.
 
 Returns the *name* of a command to run, or NIL — deliberately not running it,

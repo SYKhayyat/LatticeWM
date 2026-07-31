@@ -87,5 +87,6 @@ without a compositor — which is the whole model."
      (:file "test-tree")
      (:file "test-motion")
      (:file "test-lifecycle")
-     (:file "test-surface"))))
+     (:file "test-surface")
+     (:file "test-examples"))))
   :perform (test-op (o c) (symbol-call :latticewm/tests :run-all)))

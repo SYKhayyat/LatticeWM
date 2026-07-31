@@ -33,9 +33,14 @@ instead of it.
 
 The lattice is 1,049 lines in four files, of which 16 are ~defmethod~ forms.
 It specialises *seven* generics that the core already declared, adds one new
-container class, and needed *two* edits under =src/=. Neither edit changed a
-behaviour; one was an omitted export and one made a protocol operation total
-that had been partial.
+container class, and needed *two* edits under =src/=. Neither changed a behaviour; one was an
+omitted export and one made a protocol operation total that had been partial.
+
+A *third* core edit came later, from writing the worked examples rather than
+from the lattice, and it is the most important of the three — see
+[[#edit-3][core edit 3]]. All three are the same species: the extension surface
+was correct for the author and incomplete for a stranger, in ways that only
+being a stranger revealed.
 
 | Measure | Value |
 |---------+-------|
@@ -43,9 +48,9 @@ that had been partial.
 | ~defmethod~ forms | 16 |
 | Core generics specialised | 7 |
 | New container classes | 1 |
-| *Core files edited* | *2* |
+| *Core files edited* | *3* (two for the lattice, one for the examples) |
 | *Core behaviours changed* | *0* |
-| Core bugs the lattice exposed | 1 |
+| Core bugs exposed by extending | 1 |
 
 Gate 3 asks for the line and method counts precisely because it is satisfiable
 in bad faith — push everything through ~props~ and ~&rest~ arguments and the
@@ -143,6 +148,55 @@ Checked against the rest of the surface after the fact: ~step-address~,
 ~entry-address~, ~motion-escapes-p~ and ~gaps~ already had ~container~-general
 or ~t~-general methods. ~layout-children~ was the only gap.
 
+* Core edit 3 — the shipped defaults were on the class users specialise
+
+*File:* =src/policy/conventional.lisp= and =src/policy/lifecycle.lisp=.
+*Change:* every default method moved from ~conventional-policy~ to ~policy~,
+its superclass.  ~conventional-policy~ now has no methods at all.
+
+*Found by writing the worked examples and running them*, which is the argument
+for shipping examples as tests rather than as prose.
+
+The failure is invisible until somebody writes the obvious thing:
+
+#+begin_src lisp
+(defmethod gaps ((policy conventional-policy) container) 8)
+#+end_src
+
+That does not *extend* the shipped method, it *replaces* it — same generic,
+same specialisers — and any ~call-next-method~ inside it signals
+~no-next-method~.  Two of the four examples hit this immediately, and the error
+message is about CLOS rather than about the mistake.
+
+This is the most serious of the three, for a reason PLAN.org states directly:
+
+#+begin_quote
+The code a cheap model needs to write here is
+~(defmethod place ((p my-policy) node rect) …)~.  Small, formulaic, three
+worked examples beside it, verified live at a REPL before it is committed.
+That is the easiest possible target.
+#+end_quote
+
+That is only true if the formula *works*.  "Do what you were going to do, plus
+this" is overwhelmingly the common shape of a real extension, and it needs
+~call-next-method~, and ~call-next-method~ needs the shipped behaviour to live
+on a strictly more general class than the one the user names.
+
+*The generalisable rule:* the class a user is told to specialise on must never
+be the class the defaults are defined on.  Ship a concrete subclass with no
+methods, and put every default on its parent.  Cost: one class.  Benefit: the
+obvious thing works, and the surface no longer requires understanding CLOS
+method combination before it can be used at all.
+
+*Recorded consequence, and it is uncomfortable:* the extension surface passed
+gate 2, passed 416 unit tests, and ran a real window manager for three hours
+while being unusable in its single most common mode.  No gate here could have
+caught it.  What caught it was writing four extensions the way a stranger would
+and running them, which is exactly the qualitative check PLAN.org §honest says
+"there is nobody available to run".  There is a lesson in that about which
+kinds of verification are worth the time, and it is not the one I would have
+predicted.
+
 * The bug the lattice found
 
 Not a core edit but a core *fix*, and it would have been very unpleasant to
@@ -235,6 +289,7 @@ What has *not* been demonstrated, and should not be claimed:
 : -------------------------------------------------
 : total                1,049 lines   16 defmethods
 
-: core files edited              2   (one export, one default method)
+: core files edited              3   (one export, one default method,
+:                                    one class-hierarchy correction)
 : core behaviours changed        0
 : core bugs found and fixed      1

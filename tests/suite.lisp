@@ -28,7 +28,8 @@
   "Run every suite and return T when they all pass.
 
 Called by `make test' and by ASDF's TEST-OP."
-  (let ((results (run 'model)))
+  (let ((results (append (run 'model)
+                         (run (find-symbol "EXAMPLES" "LATTICEWM/TESTS/EXAMPLES")))))
     (explain! results)
     (values (results-status results) (length results))))
 

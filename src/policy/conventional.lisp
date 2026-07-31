@@ -21,7 +21,25 @@
 
 The shipped default, and the base class the lattice extends rather than
 replaces — so that everything below stays true unless the lattice explicitly
-says otherwise."))
+says otherwise.
+
+NOTE WHAT THIS CLASS DOES *NOT* HAVE: methods.  Every default below is
+specialised on POLICY, the base class, and this subclass deliberately adds
+nothing.  The reason is the difference between an extension surface that works
+and one that only looks like it does.
+
+If the defaults lived here, then a user writing the obvious thing —
+
+    (defmethod gaps ((policy conventional-policy) container) 8)
+
+would *replace* the shipped method rather than extend it, and CALL-NEXT-METHOD
+inside it would signal NO-NEXT-METHOD.  Every worked example in this project
+uses CALL-NEXT-METHOD, because 'do what you were going to do, plus this' is
+overwhelmingly the common case; so the class a user names must be strictly more
+specific than the class the defaults are on.
+
+This was found by writing the examples and running them, which is the argument
+for shipping examples as tests.  See FINDINGS.org."))
 
 ;;; ==================================================================
 ;;; TIER 0 — the values.  Every P1 fork in the design appears here.
@@ -128,16 +146,16 @@ default, typing `ls` at an empty pane opens a terminal showing `s`.")
 ;;; LAYOUT
 ;;; ==================================================================
 
-(defmethod gaps ((policy conventional-policy) container)
+(defmethod gaps ((policy policy) container)
   (declare (ignore container))
   *gaps*)
 
-(defmethod gaps ((policy conventional-policy) (container c:stack))
+(defmethod gaps ((policy policy) (container c:stack))
   "Tabs share one rectangle, so a gap between them would be a gap between a
 thing and itself."
   0)
 
-(defmethod layout-children ((policy conventional-policy) (split c:split) rect)
+(defmethod layout-children ((policy policy) (split c:split) rect)
   "Divide RECT along the split's axis in proportion to its weights.
 
 The whole of the split layout model is this one call.  Weights are relative,
@@ -150,7 +168,7 @@ level and on every monitor."
             (c:divide-rect rect (c:split-axis split) (c:weights split)
                            :gap (gaps policy split)))))
 
-(defmethod layout-children ((policy conventional-policy) (container c:container) rect)
+(defmethod layout-children ((policy policy) (container c:container) rect)
   "The fallback for a container kind this policy has never heard of.
 
 Give the whole rectangle to DEFAULT-ADDRESS's child and hide the rest — that
@@ -169,17 +187,17 @@ kind obliges them to also teach every *other* policy about it."
     (when (c:child-at container address)
       (list (cons address rect)))))
 
-(defmethod layout-children ((policy conventional-policy) (stack c:stack) rect)
+(defmethod layout-children ((policy policy) (stack c:stack) rect)
   "The selected child gets everything; the rest are not laid out at all, and
 are therefore hidden."
   (let ((address (stack-visible-address policy stack)))
     (when (c:child-at stack address)
       (list (cons address rect)))))
 
-(defmethod stack-visible-address ((policy conventional-policy) (stack c:stack))
+(defmethod stack-visible-address ((policy policy) (stack c:stack))
   (c:stack-selected stack))
 
-(defmethod layout-node ((policy conventional-policy) node rect)
+(defmethod layout-node ((policy policy) node rect)
   "Walk NODE, assigning rectangles, and return every placement.
 
 Returns a list of (NODE PATH RECT VISIBLE-P), parents before children.  Note
@@ -216,11 +234,11 @@ this is how offscreen windows end up drawn on top of your desktop."
       (walk node '() rect t))
     (nreverse out)))
 
-(defmethod visible-p ((policy conventional-policy) node)
+(defmethod visible-p ((policy policy) node)
   (declare (ignore node))
   t)
 
-(defmethod window-dimensions ((policy conventional-policy) (leaf c:leaf) rect)
+(defmethod window-dimensions ((policy policy) (leaf c:leaf) rect)
   "Propose the pane's size, less the border on each side.
 
 River draws borders *around* the content rectangle, so a window given the full
@@ -229,7 +247,7 @@ pane would overflow it by twice the border width."
     (values (max 1 (- (c:rect-w rect) inset))
             (max 1 (- (c:rect-h rect) inset)))))
 
-(defmethod gravity ((policy conventional-policy) (leaf c:leaf) rect width height)
+(defmethod gravity ((policy policy) (leaf c:leaf) rect width height)
   "Centre a window that came back smaller than the pane it was given.
 
 This is the *involuntary* case — a terminal that quantised to its cell size, a
@@ -243,18 +261,18 @@ gravity policy language."
                  (+ (c:rect-y rect) (floor (- (c:rect-h rect) h) 2))
                  w h)))
 
-(defmethod border-width ((policy conventional-policy) node focusedp)
+(defmethod border-width ((policy policy) node focusedp)
   (declare (ignore node focusedp))
   *border-width*)
 
-(defmethod border-color ((policy conventional-policy) node focusedp)
+(defmethod border-color ((policy policy) node focusedp)
   (let ((color (cond ((and focusedp (typep node 'c:leaf) (c:leaf-empty-p node))
                       *empty-pane-color*)
                      (focusedp *focused-border-color*)
                      (t *unfocused-border-color*))))
     (values-list color)))
 
-(defmethod clip-rect ((policy conventional-policy) node rect)
+(defmethod clip-rect ((policy policy) node rect)
   "Nothing overhangs in the conventional layer, so nothing is clipped.
 
 The lattice overrides this, and it is where river's set_content_clip_box earns
@@ -264,10 +282,10 @@ window sliced in half."
   (declare (ignore node rect))
   nil)
 
-(defmethod outer-rect ((policy conventional-policy) (output c:output))
+(defmethod outer-rect ((policy policy) (output c:output))
   (c:rect-inset (c:output-rect output) *outer-gaps*))
 
-(defmethod render-order ((policy conventional-policy) placements)
+(defmethod render-order ((policy policy) placements)
   "Tiled nodes in layout order, then floats, then anything marked as overlay.
 
 River says the initial position of a node in the render list is *undefined*,
@@ -286,7 +304,7 @@ so every node must be ordered explicitly or overlapping windows flicker."
 ;;; MOTION
 ;;; ==================================================================
 
-(defmethod step-address ((policy conventional-policy) (split c:split)
+(defmethod step-address ((policy policy) (split c:split)
                          address direction)
   "Within a split, motion works only along the split's own axis.
 
@@ -300,7 +318,7 @@ window managers get wrong on the first try."
       (when (and (<= 0 next) (< next (c:container-count split)))
         next))))
 
-(defmethod step-address ((policy conventional-policy) (stack c:stack)
+(defmethod step-address ((policy policy) (stack c:stack)
                          address direction)
   "A stack answers no spatial direction.
 
@@ -309,7 +327,7 @@ Switching is its own verb, and that is what keeps a stack legible."
   (declare (ignore address direction))
   nil)
 
-(defmethod entry-address ((policy conventional-policy) (split c:split)
+(defmethod entry-address ((policy policy) (split c:split)
                           direction reference rects)
   "Enter through the edge you crossed, at the height you were already at.
 
@@ -334,18 +352,18 @@ Two rules, and they answer different questions:
                0))
           (t 0))))
 
-(defmethod entry-address ((policy conventional-policy) (stack c:stack)
+(defmethod entry-address ((policy policy) (stack c:stack)
                           direction reference rects)
   "Entering a stack always lands on the visible child.  Directional motion
 does not reveal a hidden tab."
   (declare (ignore direction reference rects))
   (stack-visible-address policy stack))
 
-(defmethod motion-escapes-p ((policy conventional-policy) container direction)
+(defmethod motion-escapes-p ((policy policy) container direction)
   (declare (ignore container direction))
   t)
 
-(defmethod focus-after-remove ((policy conventional-policy) world removed-path
+(defmethod focus-after-remove ((policy policy) world removed-path
                                suggested)
   (declare (ignore removed-path))
   (ecase *focus-after-close*
@@ -363,7 +381,7 @@ is exactly the kind of state an *option* wants and the core does not."
                         (c:leaf-holding (c:world-root world) window))
         when leaf return (c:node-path-to (c:world-root world) leaf)))
 
-(defmethod on-focus-change ((policy conventional-policy) world old new)
+(defmethod on-focus-change ((policy policy) world old new)
   "Record the window we are leaving, so that :MRU has something to consult."
   (declare (ignore old))
   (let ((window (c:world-window-at world new)))
@@ -373,7 +391,7 @@ is exactly the kind of state an *option* wants and the core does not."
                                  :count 1)))))
   nil)
 
-(defmethod pointer-focus ((policy conventional-policy) world x y)
+(defmethod pointer-focus ((policy policy) world x y)
   "The deepest visible leaf whose rectangle contains the pointer."
   (let ((best nil))
     (dolist (placement (c:prop world :last-placements) best)
@@ -385,7 +403,7 @@ is exactly the kind of state an *option* wants and the core does not."
 ;;; STRUCTURE
 ;;; ==================================================================
 
-(defmethod split-axis-for ((policy conventional-policy) node rect)
+(defmethod split-axis-for ((policy policy) node rect)
   "Cut along the longer side, so panes tend towards square."
   (declare (ignore node))
   (ecase *split-axis*
@@ -393,34 +411,34 @@ is exactly the kind of state an *option* wants and the core does not."
     (:horizontal :horizontal)
     (:vertical :vertical)))
 
-(defmethod new-child-side ((policy conventional-policy) node direction)
+(defmethod new-child-side ((policy policy) node direction)
   (declare (ignore node))
   (cond ((null direction) *new-child-side*)
         ((member direction '(:right :down)) :after)
         (t :before)))
 
-(defmethod should-collapse-p ((policy conventional-policy) (split c:split))
+(defmethod should-collapse-p ((policy policy) (split c:split))
   *collapse-degenerate-splits*)
 
-(defmethod should-collapse-p ((policy conventional-policy) (stack c:stack))
+(defmethod should-collapse-p ((policy policy) (stack c:stack))
   "A one-workspace workspace list is a thing you are about to add to, not
 debris."
   nil)
 
-(defmethod should-collapse-p ((policy conventional-policy) container)
+(defmethod should-collapse-p ((policy policy) container)
   (declare (ignore container))
   t)
 
-(defmethod move-into-occupied ((policy conventional-policy) world from to)
+(defmethod move-into-occupied ((policy policy) world from to)
   (declare (ignore world from to))
   *move-into-occupied*)
 
-(defmethod insertion-weight ((policy conventional-policy) (split c:split) address)
+(defmethod insertion-weight ((policy policy) (split c:split) address)
   (declare (ignore address))
   (let ((ws (c:weights split)))
     (if ws (/ (reduce #'+ ws) (length ws)) 1)))
 
-(defmethod spawn-target ((policy conventional-policy) world window)
+(defmethod spawn-target ((policy policy) world window)
   "Split the focused pane, unless it is empty, in which case fill it.
 
 Filling an empty pane rather than splitting it is not a special case bolted
@@ -453,7 +471,7 @@ putting the next thing there is the only reading that respects the gesture."
 ;;; WINDOW LIFECYCLE
 ;;; ==================================================================
 
-(defmethod should-float-p ((policy conventional-policy) (window c:window))
+(defmethod should-float-p ((policy policy) (window c:window))
   "Anything with a parent floats; everything else tiles.
 
 River's spec says a window with a parent 'might be a dialog, file picker, or
@@ -464,7 +482,7 @@ fixed-size hint is the second signal, and it catches the rest."
       (multiple-value-bind (w h) (c:window-preferred-size window)
         (and w h t))))
 
-(defmethod default-float-rect ((policy conventional-policy) (window c:window)
+(defmethod default-float-rect ((policy policy) (window c:window)
                                (output c:output))
   "Honour the window's own preferred size when it pinned one, centred;
 otherwise take a fraction of the output."
@@ -476,7 +494,7 @@ otherwise take a fraction of the output."
                      (+ (c:rect-y area) (floor (- (c:rect-h area) h) 2))
                      w h)))))
 
-(defmethod window-capabilities ((policy conventional-policy) (window c:window))
+(defmethod window-capabilities ((policy policy) (window c:window))
   "Declare all four.  We honour all four, and fullscreen is free.
 
 Returns a list of keywords drawn from :WINDOW-MENU, :MAXIMIZE, :FULLSCREEN and
@@ -486,18 +504,18 @@ capability you do not honour produces a button that does nothing."
   (declare (ignore window))
   (list :window-menu :maximize :fullscreen :minimize))
 
-(defmethod decoration-mode ((policy conventional-policy) (window c:window))
+(defmethod decoration-mode ((policy policy) (window c:window))
   "Server-side, which under river means our borders and no client titlebar."
   (declare (ignore window))
   :ssd)
 
-(defmethod window-rule-for ((policy conventional-policy) (window c:window))
+(defmethod window-rule-for ((policy policy) (window c:window))
   (declare (ignore window))
   nil)
 
-(defmethod container-label ((policy conventional-policy) container)
+(defmethod container-label ((policy policy) container)
   (c:node-label container))
 
-(defmethod on-key ((policy conventional-policy) world key)
+(defmethod on-key ((policy policy) world key)
   (declare (ignore world key))
   nil)
