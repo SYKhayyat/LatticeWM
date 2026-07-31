@@ -140,10 +140,40 @@ and the instrumentation was the reason."
         why (length (all-windows)) (world-cursor *world*)
         (let ((node (world-node-at *world*)))
           (and node (prop node :lattice/address))))
+  (let ((v (current-viewport))) (when v (note "STATE   viewport ~a" v)))
   (note "STATE   the status line reads: ~{~a~^ | ~}"
         (remove "" (mapcar #'car (ignore-errors
                                   (echo-content (current-policy) *world*)))
                 :test #'equal)))
+
+
+;;; ------------------------------------------------------- the viewport
+
+(defvar *last-viewport* nil)
+
+(defun current-viewport ()
+  "The lattice viewport as a string, or NIL when the lattice is not loaded."
+  (ignore-errors
+   (let* ((workspace (world-node-at *world* '(0)))
+          (slot (find-symbol "VIEWPORT" "LATTICE")))
+     (when (and workspace slot (slot-exists-p workspace slot))
+       (princ-to-string (slot-value workspace slot))))))
+
+(defun note-viewport ()
+  "Record the viewport, but only when it has actually changed.
+
+THIS WAS THE LINE MISSING FROM THE LAST RECORDING.  Twelve presses of Super+-
+appear in it as twelve identical KEY lines and nothing else, so the report
+could not answer the only question that mattered -- whether zooming did
+anything.  It did: the viewport goes 1x1 to 6x4 over six presses.  A key that
+works and leaves no trace is indistinguishable, in a log, from one that does
+not."
+  (let ((now (current-viewport)))
+    (when (and now (not (equal now *last-viewport*)))
+      (setf *last-viewport* now)
+      (note "ZOOM    ~a" now))))
+
+(add-hook :layout-changed 'note-viewport)
 
 ;;; --------------------------------------------------------------- wiring
 
