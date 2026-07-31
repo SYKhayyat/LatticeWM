@@ -72,9 +72,27 @@ most confusing thing a keymap can do."
       ;; The help overlay is dismissed by anything, including the key that
       ;; opened it.  A help screen you have to remember how to close is a help
       ;; screen that has failed at its one job.
-      ((and *help-visible* (not (reading-p))
-            (progn (setf *help-visible* nil) (mark-dirty) t))
-       t)
+      ;;
+      ;; But dismissing is not the same as *consuming*.  This used to return T
+      ;; here, so the keystroke that took the overlay down did nothing else --
+      ;; and on a first run the overlay is the welcome screen, which means the
+      ;; first deliberate keypress of somebody's first session was swallowed.
+      ;; The report was "the first super return did not open term", and they
+      ;; were right: it closed the welcome screen instead, with nothing to say
+      ;; that was what had happened.  A window manager that ignores your first
+      ;; instruction is broken at the only moment first impressions are formed.
+      ;;
+      ;; So: dismiss, then let the key do its job as well.  The one exception
+      ;; is the key bound to HELP itself, which toggles -- dismissing and then
+      ;; toggling would put the overlay straight back up, so Super+/ would
+      ;; refuse to close what Super+/ opened.
+      ((and *help-visible* (not (reading-p)))
+       (setf *help-visible* nil)
+       (mark-dirty)
+       (let ((target (lookup-key *keymap* key)))
+         (if (and (consp target) (equal (first target) "help"))
+             t
+             (progn (run-key-target target) t))))
       ;; Inside a chord.
       (*pending-keymap*
        (let ((target (lookup-key *pending-keymap* key))

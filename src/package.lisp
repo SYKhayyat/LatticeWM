@@ -243,7 +243,7 @@ You never edit this package.")
    #:keymap-keys
    #:all-bound-keys
    #:bindable-keys
-   #:*shift-map* #:shifted-character
+   #:*shift-map* #:shifted-character #:*warn-on-rebinding*
    ;; hooks: noticing that something happened
    #:*hooks*
    #:*hook-documentation*

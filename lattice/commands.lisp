@@ -402,7 +402,15 @@ panes, because motion never knew the difference."
                    (list "move-cell" direction))))
       (r:define-key keymap (format nil "~ag" mod) '("pan-to-cursor"))
       (r:define-key keymap (format nil "~at" shift) '("tidy"))
-      (r:define-key keymap (format nil "~aslash" mod) '("lattice-status"))
+      ;; NOT Super+/.  That is HELP -- the one key that finds every other key,
+      ;; the key the status-line hint points at, and the key a lost user is
+      ;; told to press.  Taking it meant enabling the lattice silently removed
+      ;; the way out of not knowing anything, and the hint became a lie.
+      ;; lattice-status goes in the question submap beside the other "tell me
+      ;; about this" commands, where it belongs.
+      (let ((help-map (r:lookup-key keymap (r:kbd (format nil "~aquestion" shift)))))
+        (when (typep help-map 'r:keymap)
+          (r:define-key help-map "l" '("lattice-status"))))
       (r:rebind-keys)
       keymap)))
 

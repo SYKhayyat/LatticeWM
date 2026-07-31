@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-53 generics, 59 options.  Generated from the running image.
+53 generics, 60 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -1250,6 +1250,22 @@ Per-role control is one method rather than one option -- see FONT-FOR.
 *unfocused-border-color*
   now: (0.22 0.22 0.26 1.0)
   Border colour of every pane that is not focused.
+
+*warn-on-rebinding*
+  now: T
+  Say so when DEFINE-KEY replaces a binding with a *different* command.
+
+Rebinding is the point of a keymap and is not worth mentioning.  Silently
+taking a key that already meant something else is different, and it is how an
+extension removes a feature nobody knows it removed.
+
+The lattice did exactly that: enabling it rebound Super+/ from `help' to
+`lattice-status', so loading an optional extension quietly deleted the one
+key that finds every other key -- while the status line went on advising
+people to press it.  Nothing said anything, because nothing was watching.
+
+Re-binding a key to the same command is silent, so reloading a config file
+says nothing.
 
 *warn-on-undeclared-hooks*
   now: T

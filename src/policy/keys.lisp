@@ -265,6 +265,21 @@ Declared here rather than in help.lisp because the key handler consults it and
 loads first, and a special variable whose meaning depends on load order is a
 bug waiting for a rainy day.")
 
+(define-option *warn-on-rebinding* t
+  "Say so when DEFINE-KEY replaces a binding with a *different* command.
+
+Rebinding is the point of a keymap and is not worth mentioning.  Silently
+taking a key that already meant something else is different, and it is how an
+extension removes a feature nobody knows it removed.
+
+The lattice did exactly that: enabling it rebound Super+/ from `help\' to
+`lattice-status\', so loading an optional extension quietly deleted the one
+key that finds every other key -- while the status line went on advising
+people to press it.  Nothing said anything, because nothing was watching.
+
+Re-binding a key to the same command is silent, so reloading a config file
+says nothing.")
+
 (defun define-key (keymap spec target)
   "Bind SPEC in KEYMAP to TARGET.
 
@@ -278,7 +293,12 @@ TARGET is one of
 A command is named as a *string* rather than passed as a function so that
 redefining the command later takes effect without rebinding the key, which is
 the whole point of having a registry."
-  (let ((key (kbd spec)))
+  (let* ((key (kbd spec))
+         (existing (gethash key (keymap-entries keymap))))
+    (when (and *warn-on-rebinding* target existing
+               (not (equal existing target)))
+      (logmsg :warn "~a was ~s and is now ~s"
+              (key-to-string key) existing target))
     (if (null target)
         (remhash key (keymap-entries keymap))
         (setf (gethash key (keymap-entries keymap)) target))

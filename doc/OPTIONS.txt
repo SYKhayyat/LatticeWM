@@ -494,6 +494,23 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: (0.22 0.22 0.26 1.0)
   Border colour of every pane that is not focused.
 
+*WARN-ON-REBINDING*
+  value:   T
+  default: T
+  Say so when DEFINE-KEY replaces a binding with a *different* command.
+  
+  Rebinding is the point of a keymap and is not worth mentioning.  Silently
+  taking a key that already meant something else is different, and it is how an
+  extension removes a feature nobody knows it removed.
+  
+  The lattice did exactly that: enabling it rebound Super+/ from `help' to
+  `lattice-status', so loading an optional extension quietly deleted the one
+  key that finds every other key -- while the status line went on advising
+  people to press it.  Nothing said anything, because nothing was watching.
+  
+  Re-binding a key to the same command is silent, so reloading a config file
+  says nothing.
+
 *WARN-ON-UNDECLARED-HOOKS*
   value:   T
   default: T
