@@ -72,7 +72,8 @@ the new empty pane, where — per D19 — typing a key spawns something."
                                             (p:node-rect *world* node)))))
       (multiple-value-bind (root landed)
           (c:tree-split-at (c:world-root *world*) path (c:make-leaf)
-                           :axis axis :side side)
+                           :axis axis :side side
+                           :join-p (p:split-join-predicate (policy)))
         (setf (c:world-root *world*) root)
         (p:jump-cursor (policy) *world* landed)))))
 
@@ -201,8 +202,7 @@ on every monitor, and needs to know nothing about pixels."
       (loop for depth from (length path) downto 1
             for container = (c:resolve-path root (subseq path 0 (1- depth)))
             for address = (nth (1- depth) path)
-            when (and (typep container 'c:split)
-                      (eq (c:split-axis container) axis))
+            when (eq (p:container-axis (policy) container) axis)
               do (let* ((last (1- (c:container-count container)))
                         ;; At the far edge there is no neighbour on that side,
                         ;; so the transfer has to go the other way to mean
@@ -222,18 +222,14 @@ the command people reach for after ten minutes of resizing."
     (let* ((root (c:world-root *world*))
            (path (current-path))
            (parent (c:resolve-path root (c:parent-path path))))
-      (when (typep parent 'c:split)
-        (setf (c:weights parent)
-              (make-list (c:container-count parent) :initial-element 1))))))
+      (p:equalize-container (policy) parent))))
 
 (defcommand equalize-all ()
   "Give every pane in the whole workspace an equal share."
   (with-relayout
-    (c:map-nodes (lambda (node)
-                   (when (typep node 'c:split)
-                     (setf (c:weights node)
-                           (make-list (c:container-count node) :initial-element 1))))
-                 (c:current-workspace *world*))))
+    (let ((policy (policy)))
+      (c:map-nodes (lambda (node) (p:equalize-container policy node))
+                   (c:current-workspace *world*)))))
 
 ;;; ============================================================== tabbing
 
@@ -248,16 +244,16 @@ works on one works on the other."
            (path (current-path))
            (parent (c:resolve-path root (c:parent-path path)))
            (address (c:path-last path)))
-      (when (and (typep parent 'c:split) (> (c:container-count parent) 1))
-        (let* ((other (if (< (1+ address) (c:container-count parent))
-                          (1+ address) (1- address)))
-               (a (c:child-at parent (min address other)))
-               (b (c:child-at parent (max address other)))
-               (stack (c:make-stack (list a b) 0)))
-          (c:remove-child parent (max address other))
-          (setf (c:child-at parent (min address other)) stack)
-          (p:jump-cursor (policy) *world*
-                         (c:node-path-to root stack)))))))
+      (multiple-value-bind (keep remove)
+          (p:tab-siblings (policy) parent address)
+        (when keep
+          (let* ((a (c:child-at parent keep))
+                 (b (c:child-at parent remove))
+                 (stack (c:make-stack (list a b) 0)))
+            (c:remove-child parent remove)
+            (setf (c:child-at parent keep) stack)
+            (p:jump-cursor (policy) *world*
+                           (c:node-path-to root stack))))))))
 
 (defcommand tab-next (&optional (step 1))
   "Show the next tab of the nearest enclosing stack.

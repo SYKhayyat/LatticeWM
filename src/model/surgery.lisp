@@ -158,8 +158,18 @@ empty list — is legal and returns NODE as the new root."
 
 ;;; ------------------------------------------------------------------ split
 
+(defun default-split-join-p (parent axis)
+  "The shipped rule for whether a fresh split joins PARENT instead of nesting.
+
+This file is pure — no policy, no globals — so the decision arrives as a
+function rather than as a generic, the same way %SIMPLIFY-UPWARDS takes
+ALLOW-COLLAPSE rather than calling SHOULD-COLLAPSE-P.  The runtime passes one
+derived from JOIN-EXISTING-SPLIT-P; this is what everything else gets."
+  (and (typep parent 'split) (eq (split-axis parent) axis)))
+
 (defun tree-split-at (root path new-node
-                      &key (axis :horizontal) (side :after) weights)
+                      &key (axis :horizontal) (side :after) weights
+                           (join-p #'default-split-join-p))
   "Replace the node at PATH with a split holding it and NEW-NODE.
 
 AXIS is :HORIZONTAL (side by side) or :VERTICAL (stacked).  SIDE is :AFTER —
@@ -177,7 +187,7 @@ Returns (values NEW-ROOT PATH-OF-NEW-NODE)."
       (error "Cannot split at ~s: nothing is there." path))
     ;; Case 1: the *parent* is already a split along this axis — join it.
     (let ((parent (and path (resolve-path root (parent-path path)))))
-      (when (and (typep parent 'split) (eq (split-axis parent) axis))
+      (when (funcall join-p parent axis)
         (let* ((address (path-last path))
                (target (if (eq side :after) (1+ address) address)))
           (insert-child parent target new-node)
@@ -219,7 +229,8 @@ Returns (values NEW-ROOT NEW-FOCUS-PATH)."
 
 ;;; ------------------------------------------------------------------- move
 
-(defun tree-move (root from to &key (axis :horizontal) (side :after) (join :split))
+(defun tree-move (root from to &key (axis :horizontal) (side :after) (join :split)
+                                    (join-p #'default-split-join-p))
   "Move the subtree at FROM so that it lands at TO.
 
 TO may name
@@ -285,7 +296,8 @@ destination path out from under us — the classic bug in this operation."
                    (ecase join
                      (:split
                       (multiple-value-bind (r p)
-                          (tree-split-at root to moving :axis axis :side side)
+                          (tree-split-at root to moving :axis axis :side side
+                                                        :join-p join-p)
                         (setf root r) p))
                      (:stack
                       (let ((stack (make-stack

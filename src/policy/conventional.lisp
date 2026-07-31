@@ -503,6 +503,61 @@ debris."
   (let ((ws (c:weights split)))
     (if ws (/ (reduce #'+ ws) (length ws)) 1)))
 
+;;; ------------------------------------------- the split mechanism as policy
+;;;
+;;; These four replace the (TYPEP x 'SPLIT) tests that used to sit inline in
+;;; RESIZE, EQUALIZE, EQUALIZE-ALL, TAB and TREE-SPLIT-AT.  Each fallback is
+;;; specialized on T rather than on CONTAINER, deliberately: the callers walk
+;;; up parent chains and hand in NIL at the top, and a protocol that signals
+;;; NO-APPLICABLE-METHOD at the root is a protocol with a trap in it.  This is
+;;; the same lesson LAYOUT-CHILDREN's fallback records above — a partial
+;;; operation is not an extension point.
+
+(defmethod container-axis ((policy policy) container)
+  (declare (ignore container))
+  nil)
+
+(defmethod container-axis ((policy policy) (split c:split))
+  (c:split-axis split))
+
+(defmethod equalize-container ((policy policy) container)
+  (declare (ignore container))
+  nil)
+
+(defmethod equalize-container ((policy policy) (split c:split))
+  (setf (c:weights split)
+        (make-list (c:container-count split) :initial-element 1))
+  t)
+
+(defmethod tab-siblings ((policy policy) container address)
+  (declare (ignore container address))
+  nil)
+
+(defmethod tab-siblings ((policy policy) (split c:split) address)
+  "This child and its next sibling — or its previous one, at the end of a row.
+
+The INTEGERP guard is not paranoia.  A split addresses its children by index,
+but the container protocol does not require that of every kind: the lattice
+addresses by coordinate, and (1+ '(2 . 3)) is an error rather than a wrong
+answer.  Guarding here means a policy that inherits this method for some other
+kind declines instead of breaking."
+  (let ((count (c:container-count split)))
+    (when (and (integerp address) (> count 1) (< -1 address count))
+      (let ((other (if (< (1+ address) count) (1+ address) (1- address))))
+        (values (min address other) (max address other))))))
+
+(defmethod join-existing-split-p ((policy policy) container axis)
+  (eq (container-axis policy container) axis))
+
+(defun split-join-predicate (&optional (policy (current-policy)))
+  "POLICY's JOIN-EXISTING-SPLIT-P, as the predicate TREE-SPLIT-AT wants.
+
+src/model/ is pure and must not reach for a policy, so the decision crosses
+that line as a closure rather than as a call.  This is the one place the two
+representations meet, which is the point: without it every caller would build
+the same lambda and one of them would eventually build a different one."
+  (lambda (parent axis) (join-existing-split-p policy parent axis)))
+
 (defmethod spawn-target ((policy policy) world window)
   "Split the focused pane, unless it is empty, in which case fill it.
 

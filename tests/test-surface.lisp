@@ -35,10 +35,28 @@
   ;; that cannot see which command it is talking about cannot be corrected per
   ;; command.
   ;;
-  ;; What would make this wrong is generics arriving one per feature.  If the
-  ;; count passes forty-five, read the last five before raising it again.
+  ;; Forty-five to sixty is the third move, and it is a different *kind* of
+  ;; move from the first two, so it is worth being explicit about why it is
+  ;; not the failure this test exists to catch.
+  ;;
+  ;; The first two were the surface growing as features arrived.  This one is
+  ;; existing behaviour crossing the line from runtime to policy without any
+  ;; new feature at all: four generics because the split mechanism was five
+  ;; inline (TYPEP x 'SPLIT) tests that no method could override, and the rest
+  ;; because the drawing layer was a second implementation of "decisions the
+  ;; author happened to make" living in src/runtime/ where nobody could reach
+  ;; them.  Every one of them replaces something that was already a decision;
+  ;; none of them adds a knob that did not exist as a hardcoded answer.
+  ;;
+  ;; That is the ruling in PLAN §log3 and it is the whole point of gate 6: the
+  ;; ratio moves by code crossing the line, not by the line moving.
+  ;;
+  ;; What would still make this wrong is generics arriving one per feature.
+  ;; The test to apply before raising it a fourth time: for each of the last
+  ;; five, name the hardcoded answer it replaced.  If you cannot, it is
+  ;; ceremony and the number should come down instead.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 45) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 60) "the extension surface has ~d generics" n)))
 
 (test every-option-is-documented-and-has-a-default
   (dolist (row (p:all-options))
@@ -218,6 +236,81 @@ not have to reimplement"))
       (declare (ignore removed))
       (is (equal "c" (app-at new-root focus))
           "focus followed the node through a container the core cannot name"))))
+
+;;; --------------------------------------- the split mechanism, as policy
+
+(defmethod p:container-axis ((policy p:conventional-policy) (r ring))
+  "A ring divides its rectangle along the horizontal, exactly as a split does.
+
+Answering this one question is the whole of what it takes to join the split
+mechanism: RESIZE finds it while walking up for an ancestor along the axis,
+and TREE-SPLIT-AT joins it rather than nesting inside it."
+  :horizontal)
+
+(defvar *ring-equalized* nil)
+
+(defmethod p:equalize-container ((policy p:conventional-policy) (r ring))
+  "What evening out means for a ring is the ring's business.  The verb does
+not need to know, which is the difference between a generic and a TYPEP."
+  (setf *ring-equalized* t))
+
+(test the-split-mechanism-needs-no-core
+  "Five places used to ask (TYPEP x 'SPLIT), and a TYPEP cannot be specialized.
+
+The consequence was specific rather than theoretical: a container kind from
+outside the core that divides space in exactly the way a split does was
+invisible to RESIZE, EQUALIZE, EQUALIZE-ALL and TAB, and TREE-SPLIT-AT would
+never join it — so splitting three times inside one built a ladder of nested
+two-child containers instead of one row of four, with no method anywhere able
+to say otherwise.
+
+All five are generics now, and this asserts that answering them from outside
+src/ is sufficient."
+  (let* ((policy (policy))
+         (r (make-instance 'ring :children (list (leaf-with "a")
+                                                 (leaf-with "b"))))
+         (root (c:make-stack (list r))))
+    ;; The question the four verbs ask.
+    (is (eq :horizontal (p:container-axis policy r))
+        "a kind the core cannot name declares its axis")
+    (is (null (p:container-axis policy (c:make-stack (list (leaf-with "x")))))
+        "a stack divides nothing and says so")
+    (is (null (p:container-axis policy nil))
+        "and so does the top of a parent chain, so no caller needs a guard")
+    ;; EQUALIZE and EQUALIZE-ALL, which map over every node including leaves.
+    (let ((*ring-equalized* nil))
+      (is (p:equalize-container policy r))
+      (is (not (null *ring-equalized*))
+          "the verb dispatched rather than testing a type"))
+    (is (null (p:equalize-container policy (leaf-with "z")))
+        "a leaf declines instead of signalling NO-APPLICABLE-METHOD")
+    ;; TAB declines by default rather than doing something wrong.
+    (is (null (p:tab-siblings policy r 0))
+        "no shipped answer for a kind nobody has taught it about")
+    (is (equal '(0 1) (multiple-value-list
+                       (p:tab-siblings policy
+                                       (c:make-split :horizontal
+                                                     (list (leaf-with "a")
+                                                           (leaf-with "b")))
+                                       0)))
+        "and the shipped rule still folds a pair of siblings")
+    ;; The surgery half: TREE-SPLIT-AT joins the ring instead of nesting.
+    (is (funcall (p:split-join-predicate policy) r :horizontal))
+    (is (not (funcall (p:split-join-predicate policy) r :vertical))
+        "and declines on the axis it does not divide")
+    (multiple-value-bind (new-root path)
+        (c:tree-split-at root '(0 1) (leaf-with "c")
+                         :axis :horizontal
+                         :join-p (p:split-join-predicate policy))
+      (declare (ignore path))
+      (let ((joined (c:resolve-path new-root '(0))))
+        (is (typep joined 'ring) "it joined the ring rather than nesting")
+        (is (= 3 (c:container-count joined))
+            "one row of three, not a ring holding a two-child split")))
+    ;; And the default predicate, which src/model/ uses when nobody passes one,
+    ;; still refuses — purity preserved, behaviour unchanged for the core.
+    (is (not (c:default-split-join-p r :horizontal))
+        "the pure default knows only SPLIT, which is why the policy one exists")))
 
 ;;; ------------------------------------------------------------ live surgery
 

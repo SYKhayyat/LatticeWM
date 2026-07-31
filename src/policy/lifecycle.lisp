@@ -42,7 +42,8 @@ this."
           (t
            (let ((axis (split-axis-for policy target (node-rect world target)))
                  (side (new-child-side policy target direction)))
-             (c:tree-split-at root path node :axis axis :side side))))
+             (c:tree-split-at root path node :axis axis :side side
+                                             :join-p (split-join-predicate policy)))))
       (setf (c:world-root world) new-root)
       ;; The cursor may now be pointing at the split we just created rather
       ;; than at a place, because the node it named grew children.  Repairing

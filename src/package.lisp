@@ -142,6 +142,7 @@ deliberately decomposed so that policy can redirect it.")
    ;; surgery: pure functions on a root, returning (values root path)
    #:tree-insert-at #:tree-remove-at #:tree-replace-at
    #:tree-split-at #:tree-swap #:tree-move #:tree-transplant
+   #:default-split-join-p
    #:repair-path #:first-leaf-path #:last-leaf-path #:leaf-paths
    #:next-leaf-path #:previous-leaf-path
    ;; windows.  The class is model state; the runtime fills it from protocol
@@ -205,6 +206,9 @@ You never edit this package.")
    ;; --- structure ------------------------------------------------------
    #:spawn-target #:split-axis-for #:new-child-side #:should-collapse-p
    #:move-into-occupied #:insertion-weight
+   ;; the split mechanism, as policy rather than as a TYPEP
+   #:container-axis #:equalize-container #:tab-siblings
+   #:join-existing-split-p #:split-join-predicate
    ;; --- window lifecycle -----------------------------------------------
    #:on-window-open #:on-window-close #:should-float-p #:on-minimize
    #:on-restore #:window-capabilities #:decoration-mode

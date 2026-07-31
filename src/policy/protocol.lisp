@@ -443,6 +443,52 @@ The default is the mean of the existing weights, so inserting into an even
 split keeps it even and inserting into a lopsided one does not hand the
 newcomer a surprising share."))
 
+(defgeneric container-axis (policy container)
+  (:documentation
+   "The axis CONTAINER divides space along: :HORIZONTAL, :VERTICAL, or NIL.
+
+NIL is the honest answer for anything that does not divide space — a stack
+gives every child the whole rectangle, a leaf has no children — and it is also
+the answer for NIL itself, so a caller walking up past the root need not guard.
+
+This generic exists because four verbs used to ask (TYPEP CONTAINER 'SPLIT)
+directly, and a TYPEP is not an extension point.  A container kind from
+outside the core that divides space in exactly the way a split does was
+invisible to RESIZE, EQUALIZE, EQUALIZE-ALL and TAB, and no method anywhere
+could say otherwise.  Answer this and all four work."))
+
+(defgeneric equalize-container (policy container)
+  (:documentation
+   "Give every child of CONTAINER an equal share of it.  True if anything moved.
+
+The shipped answer evens out a split's weights and does nothing to anything
+else, because a stack's children already have equal shares — every one of them
+the whole rectangle — and there is nothing to even out."))
+
+(defgeneric tab-siblings (policy container address)
+  (:documentation
+   "Which two children of CONTAINER should TAB fold into one stack?
+
+Returns (VALUES KEEP REMOVE): the address the new stack takes, and the address
+it empties.  NIL means there is no pair to fold here, and TAB does nothing.
+
+The shipped rule is 'this child and the next one, or the previous one when
+this is the last', which is what makes TAB do the obvious thing at either end
+of a row rather than refusing at one of them."))
+
+(defgeneric join-existing-split-p (policy container axis)
+  (:documentation
+   "Should a fresh split along AXIS join CONTAINER rather than nest inside it?
+
+This is what stops three windows placed side by side from becoming a lopsided
+nest of two-child splits — press the same key three times and you get one
+split of four, the way Emacs and i3 behave.
+
+The shipped rule is yes exactly when CONTAINER already divides along AXIS.
+Answering NIL always gives hyprland's dwindle, where every split nests inside
+the last; DESIGN's note that binary remains reachable as policy is this
+method plus SPLIT-AXIS-FOR."))
+
 ;;; ==================================================================
 ;;; WINDOW LIFECYCLE
 ;;; ==================================================================
