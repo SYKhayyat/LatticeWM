@@ -49,5 +49,7 @@ motion runs straight through the cell boundary as though it were not there.")
    #:enable #:disable #:install-lattice-keys #:install-vocabulary
    #:*overlay-scale* #:*overlay-background* #:*overlay-foreground*
    #:*overlay-min-cell* #:cell-label #:draw-coordinate-overlay
+   #:*map-threshold* #:*map-background* #:*map-cell-color* #:*map-empty-color*
+   #:*map-text-color* #:map-mode-p #:draw-map
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell #:tag-cell-parity))

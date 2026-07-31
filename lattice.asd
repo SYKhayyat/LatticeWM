@@ -30,6 +30,7 @@
      (:file "grid")
      (:file "policy")
      (:file "commands")
+     (:file "map")
      (:file "overlay")))))
 
 (defsystem "lattice/tests"

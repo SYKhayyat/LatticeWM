@@ -1809,8 +1809,23 @@ through now.
 
 *** Lattice layer — parked until week 3, deliberately
 
-- [ ] *Does zoom stay live all the way out, or become a drawn map?* /Full proposal on
-      the table, awaiting a ruling./ Forced by the no-scaling finding (gotcha 6): every
+- [X] *Does zoom stay live all the way out, or become a drawn map?* *RULED AND
+      BUILT, 2026-07-31: the drawn map ships.* See =lattice/map.lisp=, which
+      states the argument, and =doc/drawn-map.png=.
+
+      The proposal below was adopted, with the threshold lowered from ~600px to
+      320 — a 320-pixel terminal is still *recognisable*, and recognisable is
+      what a peek is for. The counter-argument ("it is a mode, and the thesis
+      was that zoom is never a mode") was answered rather than accepted: what
+      the thesis objects to is an overview you *enter and leave with a
+      command*, because then there are two states and you must know which one
+      you are in. Here one control does one thing continuously and the
+      rendering changes at a threshold, the way a map changes from streets to
+      roads. You never enter it and cannot get stuck in it.
+
+      The decisive point is the one the proposal already made: the alternative
+      is not "no mode", it is cells too small to read *and* reflowed twice for
+      the privilege. /Original proposal retained below./ Forced by the no-scaling finding (gotcha 6): every
       zoom step genuinely resizes every window. At k=3 on 1080p a cell is 640×360 —
       small but real. At k=4 it is 480×270 and nothing is readable.
 

@@ -41,9 +41,14 @@ are, which is the point at which an orientation aid becomes clutter.")
 (defvar *overlay* nil)
 (defvar *overlay-dirty* '() "Rectangles drawn last time, to be cleared.")
 
-(defun overlay-wanted-p (grid)
-  "Should the coordinate overlay be drawn at all right now?"
+(defun overlay-wanted-p (grid rect)
+  "Should the coordinate overlay be drawn at all right now?
+
+Not when the drawn map is up: the map labels its own cells, and two overlays
+labelling the same cell put the coordinate on it twice, in two places, which
+looks like a rendering fault rather than emphasis."
   (and grid
+       (not (map-mode-p grid rect))
        (ecase *coordinate-overlay*
          (:never nil)
          (:always t)
@@ -69,7 +74,7 @@ coordinate is still one keystroke away in the echo area."
          (policy (p:current-policy)))
     (unless (and output (typep policy 'lattice-policy))
       (return-from draw-coordinate-overlay nil))
-    (unless (overlay-wanted-p grid)
+    (unless (overlay-wanted-p grid (p:outer-rect policy output))
       (when *overlay* (r:overlay-hide *overlay*))
       (setf *overlay-dirty* '())
       (return-from draw-coordinate-overlay nil))
