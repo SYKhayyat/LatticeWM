@@ -16,7 +16,16 @@
 (require :asdf)
 (require :sb-introspect)
 
-(defparameter *system* (or (second sb-ext:*posix-argv*) "latticewm"))
+(defparameter *systems*
+  (or (rest (rest sb-ext:*posix-argv*)) '("latticewm" "lattice"))
+  "Every system gate 1 compiles.
+
+THE LATTICE WAS NOT ON THIS LIST AND SHOULD ALWAYS HAVE BEEN.  Gate 3 checks
+that it touches no core, textually.  Gate 4 loads the core *without* it, on
+purpose.  Nothing anywhere compiled it -- so a rename in the core broke
+lattice/map.lisp, and seven gates and 779 checks passed over a shipped feature
+that would not load.  It was found by a user's config file failing at startup,
+which is the worst place to find it.")
 (defparameter *real* '())
 (defparameter *redefinitions* 0)
 
@@ -69,7 +78,7 @@ would take every dependency back."
 (let ((*error-output* (make-broadcast-stream *error-output* *unit-output*)))
   (with-compilation-unit (:override t)
     (handler-bind ((warning (lambda (c) (record c) (muffle-warning c))))
-      (handler-case (asdf:load-system *system*)
+      (handler-case (dolist (system *systems*) (asdf:load-system system))
         (error (e)
           (format t "~&~%======== BUILD FAILED ========~%~a~%" e)
           (sb-ext:quit :unix-status 1))))))

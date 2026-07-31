@@ -455,6 +455,7 @@ question about a blank."
       (setf (server-dirty *server*) nil)
       (relayout))
     (emit-window-management-state)
+    (emit-pending-closes)
     (emit-dimension-work)
     (apply-keyboard-focus)
     (arm-capture))))

@@ -440,7 +440,12 @@ keybindings, the command registry, and the session loop.")
    ;; nothing at all, which is the worst of the three possible outcomes.
    #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
    #:*manage-warn-seconds* #:*manage-timeout-seconds*
+   ;; hooks, imported from POLICY above and re-exported so that
+   ;; `r:add-hook' keeps resolving -- the lattice uses it.
+   #:add-hook #:remove-hook #:run-hooks #:*hooks* #:defhook
+   #:all-hooks #:*hook-documentation* #:*warn-on-undeclared-hooks*
    ;; state
+   #:close-window-later
    #:save-state #:load-state #:state-file))
 
 (defpackage #:latticewm/user

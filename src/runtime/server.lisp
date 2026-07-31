@@ -74,6 +74,13 @@ when the keymap changes — only when river next lets us.")
                        "Window-management work computed during layout and
 waiting for the next manage sequence, since propose_dimensions is illegal in a
 render sequence.")
+   (pending-closes :initform '() :accessor server-pending-closes
+                   :documentation
+                   "Windows asked to close, waiting for the next manage
+sequence.  river_window_v1.close is window-management state and a command runs
+from a key binding, which is *outside* any sequence -- so closing a window
+straight from the verb reached the sequence discipline and was refused, every
+time, on every machine.")
    (version :initform 0 :accessor server-version
             :documentation "The river_window_manager_v1 version river offered."))
   (:documentation

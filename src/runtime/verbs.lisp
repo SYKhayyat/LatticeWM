@@ -85,7 +85,7 @@ other half."
   (with-relayout
     (let ((window (focused-window)))
       (if window
-          (guarded "close" (w:window-close (c:window-proxy window)))
+          (close-window-later window)
           ;; An empty pane has nothing to close, so closing it means removing
           ;; the pane — which is what the user meant.
           (remove-pane)))))
@@ -104,7 +104,7 @@ The window itself is closed; what survives is the place."
         (let ((window (c:leaf-window leaf)))
           (setf (c:leaf-window leaf) nil)
           (when window
-            (guarded "close" (w:window-close (c:window-proxy window)))))))))
+            (close-window-later window)))))))
 
 (defcommand remove-pane ()
   "Remove the focused pane entirely, whether or not it holds anything."
@@ -640,4 +640,4 @@ that fixes it, and this is the verb that sets it."
     (when float
       (let ((window (c:float-window float)))
         (when (c:window-proxy window)
-          (guarded "close" (w:window-close (c:window-proxy window))))))))
+          (close-window-later window))))))

@@ -193,6 +193,31 @@ that turns into.  Diffed, so the common case sends nothing."
                 (progn (w:window-exit-fullscreen proxy)
                        (w:window-inform-not-fullscreen proxy)))))))))
 
+(defun close-window-later (window)
+  "Ask river to close WINDOW at the next manage sequence.
+
+Not now, because now is almost never legal.  river_window_v1.close is
+window-management state, and every caller is a command running from a key
+binding -- which is outside any sequence.  Sending it there is a
+SEQUENCE-VIOLATION, which GUARDED turns into a log line and a window that does
+not close.
+
+That is what Super+q did on every machine from the first day: seven refusals
+in the log of the first bare-metal session that pressed it, and nothing on
+screen to say why."
+  (when (and *server* window (c:window-proxy window))
+    (pushnew window (server-pending-closes *server*))
+    (request-manage)
+    t))
+
+(defun emit-pending-closes ()
+  "Drain the windows waiting to be closed.  Manage sequence only."
+  (let ((work (server-pending-closes *server*)))
+    (setf (server-pending-closes *server*) '())
+    (dolist (window work)
+      (when (c:window-proxy window)
+        (guarded "close" (w:window-close (c:window-proxy window)))))))
+
 (defun emit-dimension-work ()
   "Drain the pending propose_dimensions work.  Manage sequence only."
   (let ((work (server-pending-dimensions *server*)))

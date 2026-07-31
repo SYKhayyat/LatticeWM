@@ -9,6 +9,24 @@
 
 ;;; --------------------------------------------------------- dispatching
 
+(defmacro reporting-sequence-violations (&body body)
+  "Run BODY, and say out loud if it used a request the sequence forbade.
+
+A SEQUENCE-VIOLATION is always a bug in this program and never something a
+user did.  It was nevertheless invisible: GUARDED turned it into a log line on
+a stderr nobody reads, so Super+q refused to close a window seven times in a
+row and the screen said nothing at all.
+
+Twenty-nine requests are manage-sequence-only and every command runs outside a
+sequence, so this is a mistake that can be made again.  The echo area is where
+this program tells you things; a violation belongs there."
+  `(handler-bind ((w:sequence-violation
+                    (lambda (condition)
+                      (notify "~a needs a manage sequence -- this is a bug"
+                              (w:sequence-violation-request condition))
+                      (p:logmsg :error "sequence violation: ~a" condition))))
+     ,@body))
+
 (defun run-key-target (target)
   "Invoke whatever a key was bound to.
 
@@ -29,14 +47,17 @@ do for `go to workspace' and an impossible one for `describe this key'."
             ;; keystroke late is worse than none.
             (mark-dirty)
             t)
-    (function (guarded "key binding" (funcall target)) t)
-    (cons (let ((command (find-command (first target))))
+    (function (reporting-sequence-violations
+                (guarded "key binding" (funcall target)))
+              t)
+    (cons (reporting-sequence-violations
+            (let ((command (find-command (first target))))
             (if (and command
                      (null (rest target))
                      (some (lambda (argument) (eq :required (third argument)))
                            (command-arguments command)))
                 (call-interactively command)
-                (apply #'run-command (first target) (rest target))))
+                (apply #'run-command (first target) (rest target)))))
           t)
     (string (run-key-target (list target)))))
 
