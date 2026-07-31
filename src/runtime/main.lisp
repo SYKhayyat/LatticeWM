@@ -23,10 +23,7 @@
   (handler-case
       (progn
         (loop while (wl:wl-display-listen (server-display *server*))
-              do (handler-case (wl:wl-display-dispatch-event (server-display *server*))
-                   (wl:wl-message-error (condition)
-                     ;; An event for an object we already destroyed.  Ordinary.
-                     (logmsg :debug "stale event ignored: ~a" condition))))
+              do (dispatch-one-event (server-display *server*)))
         t)
     (end-of-file () (logmsg :info "compositor closed the connection") nil)
     (wl:wl-server-error (condition)
@@ -163,7 +160,7 @@ Order matters and each step is deliberate:
          (progn
            (bind-globals *server*)
            (attach-manager-hooks *server*)
-           (wl:wl-display-roundtrip display)
+           (safe-roundtrip display)
            (apply-cursor-theme)
            (when restore (load-state))
            (mark-dirty)

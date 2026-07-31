@@ -44,6 +44,7 @@ motion runs straight through the cell boundary as though it were not there.")
    #:lattice-policy
    #:*zoom-mode* #:*zoom-ladder* #:*cell-width* #:*cell-height* #:*cell-gap*
    #:*skip-empty-cells* #:*coordinate-overlay* #:*lattice-border-parity*
+   #:*coordinate-tint* #:coordinate-hue #:tag-cell
    ;; using it
    #:enable #:disable #:install-lattice-keys #:install-vocabulary
    #:current-grid #:current-cell #:grid-path #:cell-path

@@ -24,47 +24,87 @@
 
 (defvar *save-timer* nil)
 
+(defparameter +state-version+ 2
+  "The layout file format version.
+
+Bumped when the shape changes.  LOAD-STATE refuses anything else rather than
+guessing, because a half-understood layout file is worse than none: it puts
+windows somewhere plausible and wrong, which is much harder to notice than an
+empty desktop.")
+
 (defun serialize-node (node)
   "NODE as a readable s-expression.
 
 Windows become their river identifier, which is the only part of a window that
-means anything across a restart."
+means anything across a restart.
+
+*Every field is named.*  The first version of this wrote
+
+    (:split :horizontal (1 1) (:leaf …) (:leaf …))
+
+— weights positionally, children after — and read it back by asking which
+elements were conses.  The weights *are* a cons, so they came back as a child,
+and every restart grew a spurious empty pane at the front of every split.  The
+tree was subtly wrong in a way that looked like a layout bug rather than a
+parsing one.  Naming the fields costs eight characters and makes that class of
+mistake unavailable."
   (typecase node
     (c:leaf
-     (let ((window (c:leaf-window node)))
-       (list :leaf (and window (c:window-identifier window))
-             :label (c:node-label node))))
+     (list :leaf :window (let ((window (c:leaf-window node)))
+                           (and window (c:window-identifier window)))
+                 :label (c:node-label node)))
     (c:split
-     (list* :split (c:split-axis node) (c:weights node)
-            (mapcar #'serialize-node (c:children node))))
+     (list :split :axis (c:split-axis node)
+                  :weights (copy-list (c:weights node))
+                  :children (mapcar #'serialize-node (c:children node))))
     (c:stack
-     (list* :stack (c:stack-selected node)
-            (mapcar #'serialize-node (c:children node))))
+     (list :stack :selected (c:stack-selected node)
+                  :children (mapcar #'serialize-node (c:children node))))
     (t
-     ;; A container kind we do not know — an extension's.  Record enough that
-     ;; reloading degrades to an empty pane rather than signalling, and say so
-     ;; in the file so a human reading it understands what happened.
-     (list :unknown (string (type-of node))))))
+     ;; A container kind we do not know — an extension's.  Record what it was
+     ;; and what was in it, so that a reload degrades to the contents rather
+     ;; than losing them, and so a human reading the file can see what
+     ;; happened.
+     (list :unknown :type (string (type-of node))
+                    :children (when (c:container-p node)
+                                (loop for address in (c:container-addresses node)
+                                      for child = (c:child-at node address)
+                                      when child collect (serialize-node child)))))))
 
 (defun deserialize-node (form index)
   "Rebuild a node from FORM, looking windows up in INDEX by identifier."
-  (case (first form)
-    (:leaf
-     (destructuring-bind (identifier &key label) (rest form)
-       (let ((leaf (c:make-leaf (and identifier (gethash identifier index)))))
-         (setf (c:node-label leaf) label)
-         leaf)))
-    (:split
-     (destructuring-bind (axis &rest rest) (rest form)
-       (let* ((children (remove-if-not #'consp rest))
-              (weights (remove-if #'consp rest)))
-         (c:make-split axis (mapcar (lambda (f) (deserialize-node f index)) children)
-                       (and weights (subseq weights 0 (length children)))))))
-    (:stack
-     (destructuring-bind (selected &rest children) (rest form)
-       (c:make-stack (mapcar (lambda (f) (deserialize-node f index)) children)
-                     selected)))
-    (t (c:make-leaf))))
+  (unless (consp form) (return-from deserialize-node (c:make-leaf)))
+  (let ((plist (rest form)))
+    (flet ((kids ()
+             (mapcar (lambda (child) (deserialize-node child index))
+                     (getf plist :children))))
+      (case (first form)
+        (:leaf
+         (let* ((identifier (getf plist :window))
+                (leaf (c:make-leaf (and identifier (gethash identifier index)))))
+           (setf (c:node-label leaf) (getf plist :label))
+           leaf))
+        (:split
+         (let ((children (kids)))
+           (if children
+               (c:make-split (or (getf plist :axis) :horizontal) children
+                             (let ((weights (getf plist :weights)))
+                               (when (= (length weights) (length children))
+                                 weights)))
+               (c:make-leaf))))
+        (:stack
+         (let ((children (kids)))
+           (if children
+               (c:make-stack children (or (getf plist :selected) 0))
+               (c:make-stack (list (c:make-leaf)) 0))))
+        ;; A container an extension owned and that is not loaded now.  Keep the
+        ;; windows; lose only the arrangement.
+        (:unknown
+         (let ((children (kids)))
+           (cond ((null children) (c:make-leaf))
+                 ((null (rest children)) (first children))
+                 (t (c:make-split :horizontal children)))))
+        (t (c:make-leaf))))))
 
 (defun save-state (&optional (path (state-file)))
   "Write the layout out.  Never signals; a failure to save is not fatal."
@@ -76,7 +116,7 @@ means anything across a restart."
         (format out ";;;; LatticeWM saved layout.  Written automatically.~%~
                      ;;;; Keyed on river window identifiers, which survive a~%~
                      ;;;; window manager restart but not a reboot.~%~%")
-        (write (list :version 1
+        (write (list :version +state-version+
                      :cursor (c:world-cursor *world*)
                      :root (serialize-node (c:world-root *world*)))
                :stream out)
@@ -96,8 +136,9 @@ be."
     (let ((form (with-open-file (in path)
                   (let ((*package* (find-package :keyword)))
                     (read in nil nil)))))
-      (unless (and (consp form) (eql 1 (getf form :version)))
-        (logmsg :warn "ignoring ~a: not a version 1 state file" path)
+      (unless (and (consp form) (eql +state-version+ (getf form :version)))
+        (logmsg :warn "ignoring ~a: version ~s, expected ~d"
+                path (and (consp form) (getf form :version)) +state-version+)
         (return-from load-state nil))
       (let ((index (make-hash-table :test #'equal)))
         (dolist (window (all-windows))

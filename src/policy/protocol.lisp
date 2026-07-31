@@ -240,6 +240,17 @@ in half.  Free, from the compositor.
 Returns NIL in the conventional layer, where nothing ever overhangs.  The
 lattice is what makes it earn its keep."))
 
+(defgeneric reserved-space (policy output)
+  (:documentation
+   "Pixels to keep clear on each edge of OUTPUT, as (TOP RIGHT BOTTOM LEFT).
+
+This is how a status bar, a dock or the echo area takes its strip without
+every layout having to know it exists.  The shipped answer reserves the echo
+area's height at the bottom and nothing else.
+
+Return all zeroes to let windows use the whole output — the echo area is drawn
+above them, so it still works, it just overlaps."))
+
 (defgeneric outer-rect (policy output)
   (:documentation
    "The rectangle the layout tree may use on OUTPUT.

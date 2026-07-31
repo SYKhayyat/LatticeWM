@@ -193,7 +193,7 @@ You never edit this package.")
    ;; --- layout ---------------------------------------------------------
    #:layout-children #:layout-node #:window-dimensions #:gravity
    #:gaps #:border-width #:border-color #:visible-p #:render-order
-   #:clip-rect #:outer-rect
+   #:clip-rect #:outer-rect #:reserved-space #:*reserve-hooks*
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change
@@ -250,6 +250,10 @@ keybindings, the command registry, and the session loop.")
    ;; the loop
    #:start #:quit #:relayout #:mark-dirty #:compute-layout
    #:spawn #:notify #:*log-level* #:logmsg #:*server*
+   #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
+   #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
+   #:text-width #:text-height #:*echo-area* #:*echo-scale* #:echo-segments
+   #:current-message #:server-compositor #:server-shm
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state

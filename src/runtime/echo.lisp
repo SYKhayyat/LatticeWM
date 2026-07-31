@@ -1,0 +1,196 @@
+;;;; runtime/echo.lisp --- The echo area.
+;;;;
+;;;; Emacs's minibuffer, minus the reading-from-it part: a strip along the
+;;;; bottom of the screen that says where you are and what just happened.
+;;;;
+;;;; It exists because of a specific, stated risk rather than because status
+;;;; bars are nice.  README calls two-dimensional navigation "the single
+;;;; biggest design risk" in the whole design and names three defences —
+;;;; minimap, named cells, coordinate overlay — of which PLAN's cut list keeps
+;;;; only the last.  A permanent line saying *where you are* is the cheapest
+;;;; possible form of that, and unlike a per-cell overlay it costs one surface
+;;;; and stays readable at any zoom level, because it does not shrink with the
+;;;; cells.
+;;;;
+;;;; It is also the obvious place for everything a window manager currently has
+;;;; no way to tell you: that a command failed, that a submap is armed, that
+;;;; you are standing in an empty pane and can press `t'.
+;;;;
+;;;; Content is a policy decision, so it is a generic — see ECHO-SEGMENTS.
+;;;; What is here is the mechanism and a default worth keeping.
+
+(in-package #:latticewm/runtime)
+
+(p:define-option *echo-area* t
+  "Show a status line along the bottom of the screen.
+
+It reports where the cursor is, what is on this workspace, and the last
+message.  Turn it off if you want the screen entirely to yourself; you will
+lose the only permanent indication of which cell you are in.")
+
+(p:define-option *echo-height* 24
+  "Height of the echo area in pixels.")
+
+(p:define-option *echo-scale* 1
+  "Integer scale factor for echo-area text.
+
+1 is the font's own size — sixteen pixels tall, which is an ordinary status
+bar.  2 is for a HiDPI display, where it is again ordinary rather than large.
+There is no half step, deliberately: a bitmap font scaled by anything but a
+whole number is a smear, and a bitmap font scaled by a whole number is crisp
+at any size.")
+
+(p:define-option *echo-position* :bottom
+  "Which edge the echo area sits on: :BOTTOM or :TOP.
+
+Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
+for two situations: running nested inside another desktop whose panel is along
+the bottom, and any setup where something else already owns that edge.")
+
+(p:define-option *echo-background* '(0.09 0.09 0.12 0.92)
+  "Echo area background, as (R G B A).  Slightly translucent by default so it
+reads as an overlay rather than as a window.")
+
+(p:define-option *echo-foreground* '(0.75 0.78 0.85 1.0)
+  "Echo area text colour.")
+
+(p:define-option *echo-accent* '(0.40 0.65 1.00 1.0)
+  "Colour for the part of the echo area that says where you are.")
+
+(p:define-option *echo-divider* '(0.28 0.28 0.34 1.0)
+  "Colour of the separators between echo-area segments.
+
+Dim on purpose: a separator is punctuation, and punctuation you notice is
+punctuation that is too loud.")
+
+(p:define-option *echo-message-seconds* 6
+  "How long a message stays in the echo area before it is dropped.")
+
+(defvar *echo-overlay* nil)
+(defvar *echo-message* nil "A cons of text and the time it was posted.")
+
+(defun notify (format &rest arguments)
+  "Say something in the echo area, and log it.
+
+The window manager's only way to talk to you.  Use it for anything a user
+would want to know and cannot otherwise see — which is most of what currently
+goes only to a log file nobody is reading."
+  (let ((text (apply #'format nil format arguments)))
+    (setf *echo-message* (cons text (get-universal-time)))
+    (logmsg :info "~a" text)
+    (mark-dirty)
+    text))
+
+(defun current-message ()
+  "The message to show, or NIL once it has aged out."
+  (let ((message *echo-message*))
+    (when (and message
+               (< (- (get-universal-time) (cdr message)) *echo-message-seconds*))
+      (car message))))
+
+(defun echo-segments (world)
+  "The pieces of the echo area, as a list of (TEXT . COLOR-KEYWORD).
+
+COLOR-KEYWORD is :ACCENT or :NORMAL.  Specialize ECHO-CONTENT to change this;
+this function is the default it calls."
+  (let* ((root (c:world-root world))
+         (workspaces (c:world-workspaces world))
+         (window (c:world-focus-window world))
+         (leaf (c:world-leaf-at world))
+         (segments '()))
+    (when workspaces
+      (push (cons (format nil "[~d/~d]" (1+ (c:stack-selected workspaces))
+                          (c:container-count workspaces))
+                  :normal)
+            segments))
+    ;; Where the cursor is, in whatever terms the layout makes available.  The
+    ;; lattice puts a coordinate on the node; without it, the path is the
+    ;; honest answer and is still better than nothing.
+    (let* ((node (c:world-node-at world))
+           (place (or (and node (c:prop node :lattice/address)
+                           (format nil "~d,~d"
+                                   (car (c:prop node :lattice/address))
+                                   (cdr (c:prop node :lattice/address))))
+                      (format nil "~{~a~^.~}" (c:world-cursor world)))))
+      (push (cons place :accent) segments))
+    (push (cons (cond ((null leaf) "")
+                      ((c:leaf-empty-p leaf)
+                       (format nil "empty -- ~{~a~^ ~} to open"
+                               (mapcar (lambda (entry) (string (car entry)))
+                                       p:*empty-pane-keys*)))
+                      (window (or (c:window-app-id window) "?"))
+                      (t ""))
+                :normal)
+          segments)
+    (let ((count (length (c:node-windows root)))
+          (scratch (length (c:world-scratchpad world)))
+          (floats (length (c:world-floats world))))
+      (push (cons (format nil "~d window~:p~@[ ~d float~:p~]~@[ ~d hidden~]"
+                          count (and (plusp floats) floats)
+                          (and (plusp scratch) scratch))
+                  :normal)
+            segments))
+    (let ((message (current-message)))
+      (when message (push (cons message :accent) segments)))
+    (nreverse segments)))
+
+(defun draw-echo-area (world output)
+  "Draw and place the echo area along the bottom of OUTPUT."
+  (unless (and *echo-area* *server* output)
+    (when *echo-overlay* (overlay-hide *echo-overlay*))
+    (return-from draw-echo-area nil))
+  (unless *echo-overlay*
+    (setf *echo-overlay* (make-instance 'overlay :name "echo")))
+  (let* ((area (c:output-rect output))
+         (height (max (+ 6 (text-height :scale *echo-scale*)) *echo-height*))
+         (width (c:rect-w area))
+         (canvas (ensure-overlay *echo-overlay* width height)))
+    (when canvas
+      (canvas-fill canvas (apply #'argb *echo-background*))
+      (let* ((pen 8)
+             (baseline (floor (- height (text-height :scale *echo-scale*)) 2))
+             (normal (apply #'argb *echo-foreground*))
+             (accent (apply #'argb *echo-accent*))
+             (divider (apply #'argb *echo-divider*))
+             (segments (remove-if (lambda (segment) (zerop (length (car segment))))
+                                  (guarded "echo-segments"
+                                    (echo-segments world)))))
+        (loop for (text . kind) in segments
+              for firstp = t then nil
+              do ;; The separator goes *between* segments, which means before
+                 ;; every one but the first.  Putting it after each instead
+                 ;; leaves a dangling bar at the end of the line, which looks
+                 ;; like something failed to render.
+                 (unless firstp
+                   (incf pen (* 4 *echo-scale*))
+                   (incf pen (canvas-text canvas pen baseline "|" divider
+                                          :scale *echo-scale*))
+                   (incf pen (* 4 *echo-scale*)))
+                 (incf pen (canvas-text canvas pen baseline text
+                                        (if (eq kind :accent) accent normal)
+                                        :scale *echo-scale*))))
+      (overlay-commit *echo-overlay*
+                      :rect (c:make-rect (c:rect-x area)
+                                         (if (eq *echo-position* :top)
+                                             (c:rect-y area)
+                                             (- (c:rect-bottom area) height))
+                                         width height))
+      height)))
+
+(defun echo-reserved-height (output)
+  "How much of OUTPUT the echo area is using, so the layout can avoid it."
+  (declare (ignore output))
+  (if (and *echo-area* *server*)
+      (max (+ 6 (text-height :scale *echo-scale*)) *echo-height*)
+      0))
+
+(defun echo-reserved-edges (output)
+  "The echo area's reservation as (TOP RIGHT BOTTOM LEFT)."
+  (let ((height (echo-reserved-height output)))
+    (if (eq *echo-position* :top)
+        (list height 0 0 0)
+        (list 0 0 height 0))))
+
+;; Take the echo area's strip out of the layout, so windows sit above it
+;; rather than under it.
+(pushnew (lambda (output) (echo-reserved-edges output)) p:*reserve-hooks*)

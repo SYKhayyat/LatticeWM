@@ -283,7 +283,17 @@ window sliced in half."
   nil)
 
 (defmethod outer-rect ((policy policy) (output c:output))
-  (c:rect-inset (c:output-rect output) *outer-gaps*))
+  "The rectangle the tree may use, less the gaps and anything reserved.
+
+RESERVED-SPACE is where a status bar takes its strip out, so that windows are
+laid out around it rather than under it.  Everything downstream honours the
+result without knowing why it is that shape."
+  (let ((rect (c:rect-inset (c:output-rect output) *outer-gaps*)))
+    (destructuring-bind (top right bottom left) (reserved-space policy output)
+      (c:make-rect (+ (c:rect-x rect) left)
+                   (+ (c:rect-y rect) top)
+                   (max 1 (- (c:rect-w rect) left right))
+                   (max 1 (- (c:rect-h rect) top bottom))))))
 
 (defmethod render-order ((policy policy) placements)
   "Tiled nodes in layout order, then floats, then anything marked as overlay.
@@ -519,3 +529,29 @@ capability you do not honour produces a button that does nothing."
 (defmethod on-key ((policy policy) world key)
   (declare (ignore world key))
   nil)
+
+(defvar *reserve-hooks* '()
+  "Functions of an output, each returning (TOP RIGHT BOTTOM LEFT) pixels to
+keep clear.
+
+The runtime pushes the echo area's reservation onto this at load time, and a
+status bar or dock would push its own.  A list rather than a generic because
+reservations *accumulate* — two bars should each get their strip, and the
+second should not have to know about the first — and accumulation is a hook's
+shape, not a method's.")
+
+(defun run-reserve-hooks (output)
+  "The total reservation for OUTPUT, as (TOP RIGHT BOTTOM LEFT)."
+  (let ((total (list 0 0 0 0)))
+    (dolist (hook *reserve-hooks* total)
+      (let ((edges (ignore-errors (funcall hook output))))
+        (when (and (listp edges) (= 4 (length edges)))
+          (setf total (mapcar #'+ total edges)))))))
+
+(defmethod reserved-space ((policy policy) (output c:output))
+  "Whatever the reserve hooks ask for, and nothing else.
+
+Consults the runtime through a hook rather than calling it directly, because
+policy may not depend on the runtime — the echo area is a runtime thing and
+this is the seam between them."
+  (run-reserve-hooks output))

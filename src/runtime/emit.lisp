@@ -70,6 +70,15 @@ shows.  With a single output — which is every laptop — it is one call."
                        (p:layout-node policy root
                                       (p:outer-rect policy output)))))))
 
+(defun draw-overlays ()
+  "Draw everything we render ourselves, and place it above the windows.
+
+Runs at the end of a render sequence: an overlay is a wl_surface of ours
+positioned by a river node, so it is rendering state like any other."
+  (dolist (output (all-outputs))
+    (guarded "echo area" (draw-echo-area *world* output)))
+  (guarded "overlays" (run-hooks :draw-overlays)))
+
 (defun index-placements (placements)
   "A node-to-rect hash, cached on the world for motion and pointer hit tests."
   (let ((table (make-hash-table :test #'eq)))
@@ -111,6 +120,7 @@ should err towards calling it rather than reasoning about whether they must."
     (setf (server-pending-dimensions *server*)
           (collect-dimension-work policy placements))
     (emit-rendering-state policy (or ordered placements))
+    (draw-overlays)
     (run-hooks :layout-changed)
     placements))
 

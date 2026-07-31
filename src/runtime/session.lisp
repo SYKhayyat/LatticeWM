@@ -60,6 +60,49 @@ we generated bindings from."))
 
 ;;; ------------------------------------------------------------ connecting
 
+(defun dispatch-one-event (display)
+  "Dispatch a single event, surviving anything wrong with it.
+
+Two things go wrong here in normal operation and neither should be fatal:
+
+  * an event for an object we already destroyed — the race libwayland has
+    zombie proxies for and wayflan does not;
+  * an enum value we do not know.  wl_shm advertises every pixel format the
+    GPU supports as DRM fourcc codes, and a binding generated from a protocol
+    XML knows only the handful the XML names.  *This killed the window manager
+    on startup the first time an shm global was bound*, from an event nobody
+    reads, about formats nobody asked for.
+
+The general rule they share: a compositor newer than our bindings must be able
+to say things we do not understand without taking the session down.  Skipping
+one event is always safe, because wayflan drains the whole message body into a
+separate buffer before invoking any handler — so the stream is already at the
+next message when this returns."
+  (handler-case (wl:wl-display-dispatch-event display)
+    (wl:wl-message-error (condition)
+      (logmsg :debug "stale event ignored: ~a" condition))
+    (wl:wl-server-error (condition) (error condition))
+    (end-of-file (condition) (error condition))
+    (error (condition)
+      (logmsg :debug "undecodable event ignored: ~a" condition))))
+
+(defun safe-roundtrip (display)
+  "WL-DISPLAY-ROUNDTRIP, tolerating events we cannot decode.
+
+The roundtrip in BIND-GLOBALS dispatches everything the compositor volunteers
+about the globals we just bound — including wl_shm's list of every pixel
+format the GPU supports, which a generated binding does not know.  Doing this
+by hand rather than calling the library's roundtrip is the price of surviving
+that."
+  (let ((done nil))
+    (let ((callback (wl:wl-display.sync display)))
+      (push (lambda (event &rest arguments)
+              (declare (ignore arguments))
+              (when (eq event :done) (setf done t)))
+            (wl:wl-proxy-hooks callback))
+      (loop until done
+            do (dispatch-one-event display)))))
+
 (defun bind-globals (server)
   "Bind the river globals we need, refusing to start on a version mismatch."
   (let ((display (server-display server))
@@ -70,7 +113,7 @@ we generated bindings from."))
               (:global (name interface version)
                (push (list name interface version) found)))
             (wl:wl-proxy-hooks registry))
-      (wl:wl-display-roundtrip display)
+      (safe-roundtrip display)
       (dolist (entry (nreverse found))
         (destructuring-bind (name interface version) entry
           (cond
@@ -91,6 +134,13 @@ we generated bindings from."))
                  (logmsg :warn "river_xkb_bindings_v1 is version ~d, we want ~d; ~
                                 keybindings disabled"
                          version +xkb-bindings-version+)))
+            ((string= interface "wl_compositor")
+             (setf (server-compositor server)
+                   (wl:wl-registry.bind registry name 'wl:wl-compositor
+                                        (min version 4))))
+            ((string= interface "wl_shm")
+             (setf (server-shm server)
+                   (wl:wl-registry.bind registry name 'wl:wl-shm 1)))
             ((string= interface "river_layer_shell_v1")
              (setf (server-layer-shell server)
                    (wl:wl-registry.bind registry name

@@ -256,3 +256,59 @@ method."))
                                              (list tiled '(0) nil t)))))
       (is (eq tiled (first (first ordered))))
       (is (eq floated (first (second ordered)))))))
+
+;;; ------------------------------------------------------------ persistence
+
+(test the-layout-round-trips-through-the-state-file
+  ;; The first version of the format wrote weights positionally and read them
+  ;; back by asking which elements were conses.  Weights *are* a cons, so every
+  ;; restart grew a spurious empty pane at the front of every split — a tree
+  ;; that was subtly wrong in a way that looked like a layout bug.
+  (let* ((world (fresh-world))
+         (pol (policy)))
+    (dolist (app '("a" "b" "c"))
+      (p:on-window-open pol world (win app)))
+    ;; Give each window an identifier, as river would.
+    (loop for window in (c:node-windows (c:world-root world))
+          for i from 0
+          do (setf (c:window-identifier window) (format nil "id~d" i)))
+    ;; Make the tree non-trivial: a nested split with uneven weights.
+    (let ((split (c:resolve-path (c:world-root world) '(0))))
+      (setf (c:weights split) '(3 1 2)))
+    (let* ((before (shape (c:world-root world)))
+           (weights (copy-list (c:weights (c:resolve-path (c:world-root world) '(0)))))
+           (form (funcall (read-from-string "latticewm/runtime::serialize-node")
+                          (c:world-root world)))
+           (index (let ((table (make-hash-table :test #'equal)))
+                    (dolist (window (c:node-windows (c:world-root world)) table)
+                      (setf (gethash (c:window-identifier window) table) window))))
+           (after (funcall (read-from-string "latticewm/runtime::deserialize-node")
+                           form index)))
+      (is (equal before (shape after))
+          "the tree came back identical, with no phantom panes")
+      (is (equal weights (c:weights (c:resolve-path after '(0))))
+          "and the weights survived, so a restart does not re-equalize"))))
+
+(test the-state-file-is-readable-and-self-describing
+  (let* ((world (fresh-world)) (pol (policy)))
+    (p:on-window-open pol world (win "a"))
+    (let ((form (funcall (read-from-string "latticewm/runtime::serialize-node")
+                         (c:world-root world))))
+      (is (eq :stack (first form)))
+      (is (member :children form) "fields are named, not positional")
+      ;; And it must survive a print/read cycle, since that is what the file is.
+      (let ((*package* (find-package :keyword)))
+        (is (equal form (read-from-string (prin1-to-string form))))))))
+
+(test an-unknown-container-degrades-to-its-contents
+  ;; A layout saved with an extension loaded, reloaded without it.  The
+  ;; arrangement is lost; the windows must not be.
+  (let* ((index (make-hash-table :test #'equal))
+         (a (win "a")) (b (win "b")))
+    (setf (gethash "ia" index) a (gethash "ib" index) b)
+    (let ((node (funcall (read-from-string "latticewm/runtime::deserialize-node")
+                         '(:unknown :type "GRID"
+                           :children ((:leaf :window "ia") (:leaf :window "ib")))
+                         index)))
+      (is (equal '("a" "b") (mapcar #'c:window-app-id (c:node-windows node)))
+          "both windows survived a container kind that is no longer loaded"))))

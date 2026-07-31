@@ -74,12 +74,21 @@ goes to 4x4-ish rather than to something that makes cells portrait.")
 (p:define-option *cell-height* 540
   "Pixel height of one cell under :FIXED zoom.")
 
-(p:define-option *cell-gap* 8
-  "Pixels between adjacent cells.
+(p:define-option *cell-gap* 0
+  "Pixels of empty space between adjacent cells, on top of their borders.
 
-Larger than the gap between splits *inside* a cell by default, because the
-cell boundary is the more important one to see: it is where the coordinate
-changes.")
+Zero by default, and the reasoning is worth stating because the obvious choice
+is wrong.  A cell boundary is *already* two borders meeting — one from each
+cell — so at the shipped border width it is a clean four-pixel divider before
+any gap is added.  A gap of eight then makes it twelve pixels of black, which
+reads as a *column of nothing between the windows* rather than as an edge.
+
+The cell boundary does need to be more legible than a split boundary inside a
+cell, since it is where the coordinate changes.  That is what the parity tint
+is for — see *LATTICE-BORDER-PARITY* — and a colour costs no screen.
+
+Set it to 4 or 8 if you want the airy look.  It is not free: on a 2x2 view an
+eight-pixel gap costs eight pixels of every window, four times over.")
 
 (p:define-option *skip-empty-cells* nil
   "Whether plain directional motion crosses empty cells in one step.
@@ -105,13 +114,29 @@ lists three mitigations: a minimap, named cells, and this.  This is much the
 cheapest of the three and it is the one that ships.  Turning it off is
 supported and is a bad idea until the lattice is in your fingers.")
 
-(p:define-option *lattice-border-parity* t
+(p:define-option *coordinate-tint* 0.55
+  "How strongly a cell's border colour encodes its coordinate, 0.0 to 1.0.
+
+Every cell gets a *stable* border hue derived from its (x, y).  Cell (3,-2)
+looks the same colour every time you visit it, forever, and its neighbours look
+adjacent.  That is spatial memory support for the price of a colour, and it is
+the only orientation aid that survives at a zoom level where text would be
+unreadable.
+
+README names getting lost as the single biggest risk in the whole design —
+\"two dimensions is more than twice as hard to hold in your head as niri's
+one\" — and lists three defences: a minimap, named cells, and the coordinate
+overlay.  This is the cheapest useful form of the third.
+
+0.0 turns it off and gives every cell the same neutral border.  Above about
+0.7 it starts to look like a toy.")
+
+(p:define-option *lattice-border-parity* nil
   "Tint cell borders by coordinate parity, like a chessboard.
 
-The degenerate, zero-cost form of the coordinate overlay: even and odd cells
-differ slightly, so you can see at a glance whether a move actually moved.
-Costs nothing — it is a colour — and it is the only orientation aid that
-survives at any zoom level, including one where text would be unreadable.")
+Superseded by *COORDINATE-TINT*, which distinguishes every cell rather than
+only alternate ones, and kept because a chessboard is genuinely easier to read
+at a glance if all you want to know is whether a move happened.")
 
 ;;; ==================================================================
 ;;; LAYOUT
@@ -169,6 +194,23 @@ there."
                       (c:make-rect (c:rect-x rect) (+ (c:rect-y rect) offset)
                                    (c:rect-w rect) size)))))
 
+(defun tag-cell (node address)
+  "Record which cell a subtree is, so decoration can ask.
+
+On PROPS rather than a slot, because it is presentation state that a node has
+no business carrying permanently — which is exactly the case README D20
+predicted an extension would need PROPS for."
+  (when node
+    (setf (c:prop node :lattice/address) address
+          (c:prop node :lattice/parity) (evenp (+ (cell-x address)
+                                                  (cell-y address))))
+    ;; The cell's whole subtree answers for the cell, so a split *inside* a
+    ;; cell borders in the cell's colour rather than reverting to neutral.
+    (when (c:container-p node)
+      (dolist (child-address (c:container-addresses node))
+        (tag-cell (c:child-at node child-address) address))))
+  node)
+
 (defmethod p:layout-children ((policy lattice-policy) (grid grid) rect)
   "Place the visible cells; everything else is not laid out and is hidden.
 
@@ -176,8 +218,10 @@ Cells outside the viewport are deliberately omitted rather than positioned
 offscreen.  The conventional layout driver walks the omitted addresses anyway
 and marks them invisible, so their windows get river's hide — which is not
 optional, since newly created windows are shown unless explicitly hidden."
-  (remove-if-not (lambda (entry) (c:child-at grid (car entry)))
-                 (cell-rects policy grid rect)))
+  (let ((placed (remove-if-not (lambda (entry) (c:child-at grid (car entry)))
+                               (cell-rects policy grid rect))))
+    (dolist (entry placed placed)
+      (tag-cell (c:child-at grid (car entry)) (car entry)))))
 
 (defmethod p:clip-rect ((policy lattice-policy) node rect)
   "Crop a cell that hangs over the viewport edge.
@@ -196,16 +240,66 @@ expected to cost a week of bad approximation."
 (defmethod p:gaps ((policy lattice-policy) (grid grid))
   *cell-gap*)
 
-(defmethod p:border-color ((policy lattice-policy) node focusedp)
-  "The conventional colours, tinted by cell parity when that is turned on.
+(defun coordinate-hue (address)
+  "A stable hue in [0,1) for a cell address.
 
-Chessboard tinting is the cheapest possible orientation aid and the only one
-that survives at a zoom level where text would be unreadable."
+Adjacent columns are adjacent hues and adjacent rows are a smaller step, so
+neighbours look related and a cell three columns away looks clearly different.
+The multipliers are chosen to walk the wheel without repeating inside any
+viewport anybody will actually use: x steps by about a seventh of the circle,
+y by about a fifth of that again."
+  (mod (+ (* (cell-x address) 0.14) (* (cell-y address) 0.31)) 1.0))
+
+(defun hsv-to-rgb (h s v)
+  "Convert hue, saturation and value in [0,1] to (values R G B) in [0,1]."
+  (let* ((i (floor (* h 6)))
+         (f (- (* h 6) i))
+         (p (* v (- 1 s)))
+         (q (* v (- 1 (* s f))))
+         (t* (* v (- 1 (* s (- 1 f))))))
+    (ecase (mod i 6)
+      (0 (values v t* p)) (1 (values q v p)) (2 (values p v t*))
+      (3 (values p q v)) (4 (values t* p v)) (5 (values v p q)))))
+
+(defmethod p:border-color ((policy lattice-policy) node focusedp)
+  "Neutral, tinted toward the cell's own colour.
+
+The tint is applied to *both* the focused and unfocused colour, and that is
+deliberate: if only unfocused cells were coloured then the cell you are in —
+the one you most need to identify — would be the one with no identity.  Focus
+still reads instantly because it is much brighter, not because it is the only
+coloured thing."
   (multiple-value-bind (r g b a) (call-next-method)
-    (let ((parity (c:prop node :lattice/parity)))
-      (if (and *lattice-border-parity* parity (not focusedp))
-          (values (* r 1.35) (* g 1.15) (min 1.0 (* b 1.35)) a)
-          (values r g b a)))))
+    (let ((address (c:prop node :lattice/address)))
+      (cond
+        ((or (null address) (<= *coordinate-tint* 0.0))
+         (if (and *lattice-border-parity* (c:prop node :lattice/parity)
+                  (not focusedp))
+             (values (* r 1.35) (* g 1.15) (min 1.0 (* b 1.35)) a)
+             (values r g b a)))
+        (t
+         ;; The focused cell is *bright*; the rest are tinted greys.  Both
+         ;; carry the cell's hue, so you can always tell which cell you are in
+         ;; — but if the unfocused ones are also saturated then everything
+         ;; looks highlighted and nothing does, which is what the first
+         ;; attempt at this looked like.
+         (multiple-value-bind (hr hg hb)
+             (hsv-to-rgb (coordinate-hue address)
+                         (if focusedp 0.45 0.55)
+                         (if focusedp 1.0 0.30))
+           (let ((mix (* *coordinate-tint* (if focusedp 0.55 1.0))))
+             (values (+ (* r (- 1 mix)) (* hr mix))
+                     (+ (* g (- 1 mix)) (* hg mix))
+                     (+ (* b (- 1 mix)) (* hb mix))
+                     a))))))))
+
+(defmethod p:border-width ((policy lattice-policy) node focusedp)
+  "A thicker border on the focused cell.
+
+Colour alone is not enough at a glance across a 3x2 view, and a border that is
+merely brighter can lose to a bright application behind it.  Thickness cannot."
+  (let ((base (call-next-method)))
+    (if (and focusedp (c:prop node :lattice/address)) (+ base 2) base)))
 
 ;;; ==================================================================
 ;;; MOTION — the one that makes the whole thing feel like a place

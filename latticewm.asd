@@ -62,6 +62,9 @@
        (:file "server")
        (:file "commands")
        (:file "keys")
+       (:file "font")
+       (:file "surface")
+       (:file "echo")
        ;; config comes before verbs because it declares the program defaults
        ;; the launcher commands use, and after keys because it installs the
        ;; default keymap.

@@ -33,6 +33,10 @@ from here?\" — and the answer must never depend on load order.")
    (bindings :initform nil :accessor server-bindings
              :documentation "river_xkb_bindings_v1, or NIL if unavailable.")
    (layer-shell :initform nil :accessor server-layer-shell)
+   (compositor :initform nil :accessor server-compositor
+               :documentation "wl_compositor, for surfaces of our own.")
+   (shm :initform nil :accessor server-shm
+        :documentation "wl_shm, for the pixels we draw ourselves.")
    (seats :initform '() :accessor server-seats
           :documentation "List of SEAT.")
    (windows :initform (make-hash-table :test #'eq) :accessor server-windows
