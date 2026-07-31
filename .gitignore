@@ -1,0 +1,4 @@
+*.fasl
+/latticewm
+/result
+/build/
