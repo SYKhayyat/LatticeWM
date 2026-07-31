@@ -1,27 +1,25 @@
-;;;; tools/hardware-check.lisp --- Answer the three questions that need hands.
-;;;;
-;;;; PLAN §log2 has carried three open items since the first session, and all
-;;;; three are open for the same reason: they are facts about what river and
-;;;; libinput actually do with a real keyboard on a real display, and every
-;;;; session so far ran nested and was driven through the SWANK bridge.
-;;;;
-;;;;   1. Does river report Shift in the modifier set for a shifted keysym, or
-;;;;      mask it out?  Both bindings exist so one fires either way, but which
-;;;;      one has never been observed.
-;;;;   2. Does ate_unbound_key fire when the seat has no keyboard focus?  D19's
-;;;;      machinery is written and bound and has never been seen to run.
-;;;;   3. Does multi-monitor work?  It is written and has only ever met one
-;;;;      nested output.
+;;;; tools/hardware-check.lisp --- Record a whole session, so nobody has to
+;;;; remember what they did.
 ;;;;
 ;;;; Load it from ~/.config/latticewm/init.lisp -- there is deliberately no
 ;;;; --config flag, so this is a LOAD line rather than an argument:
 ;;;;
 ;;;;   (load "/home/you/LatticeWM/tools/hardware-check.lisp")
 ;;;;
-;;;; Then press the keys it asks for and quit.  Every answer is appended to
-;;;; ~/latticewm-hardware.txt as it happens, so the whole thing is one pass on
-;;;; the tty rather than a conversation across a VT switch, and a crash keeps
-;;;; whatever was learned before it.
+;;;; Then use the window manager normally and quit.  Everything lands in
+;;;; ~/latticewm-hardware.txt as it happens.
+;;;;
+;;;; WHY IT RECORDS SO MUCH.  The first sessions were debugged by the user
+;;;; describing what they saw -- "the first super return did not open term",
+;;;; "i could never type", "closing did not work".  Every one of those was
+;;;; accurate and every one cost a round trip, because the report held the
+;;;; answers to three prepared questions and nothing else.  The failures were
+;;;; always in the part nobody had thought to instrument.
+;;;;
+;;;; So this records the session rather than a checklist: every key that fired
+;;;; and what it was bound to, every window, every focus move, the machine it
+;;;; ran on, and the state at the end.  Written line by line as things happen,
+;;;; because the most interesting way for a session to end is badly.
 ;;;;
 ;;;; It records rather than concludes.  Every line is what was observed.
 
@@ -30,100 +28,162 @@
 (defparameter *report* (merge-pathnames "latticewm-hardware.txt"
                                         (user-homedir-pathname)))
 
-(defun note (format &rest arguments)
-  "Append one observation to the report, immediately.
+(defvar *started* (get-internal-real-time))
 
-Immediately, and not buffered, because the most interesting way for this to
-end is the window manager dying — and a report that is lost precisely when
-something goes wrong is worse than no report."
+(defun note (format &rest arguments)
+  "Append one observation, timestamped, immediately and unbuffered.
+
+Unbuffered because a report lost precisely when something goes wrong is worse
+than no report.  Timestamped because \"the *first* Super+Return did nothing\"
+is a claim about order, and order is the one thing a pile of lines cannot
+recover afterwards."
   (with-open-file (out *report* :direction :output
                                 :if-exists :append
                                 :if-does-not-exist :create)
+    (format out "~6,1f  " (/ (float (- (get-internal-real-time) *started*))
+                             internal-time-units-per-second))
     (apply #'format out format arguments)
     (terpri out)))
 
-;;; ------------------------------------------------------------- question 1
-;;;
-;;; Every printable keysym is bound twice, bare and with Shift, because river
-;;; matches on keysym AND modifiers and xkb produces `parenleft' for Shift+9
-;;; with Shift possibly still in the set.  This records which of the two
-;;; actually fired.
-
-(defvar *seen-shifted* '())
+;;; ------------------------------------------------------------ every key
 
 (defmethod on-key ((policy conventional-policy) world key)
+  "Record every bound key, and what the keymap says it does.
+
+This is the line that was missing for three sessions.  ON-KEY sees the key
+*after* river matched a binding, so the record says both what was pressed and
+what it resolved to -- which is how \"the first Super+Return did not open
+term\" becomes either `KEY Super+Return -> (\"terminal\")' or, as it turned
+out, the same line with a note that an overlay swallowed it."
   (declare (ignore world))
-  (let* ((keysym (car key))
-         (modifiers (cdr key))
-         (name (keysym-name keysym)))
-    ;; The interesting keys are the ones that only exist as a shifted glyph.
-    (when (member name '("parenleft" "parenright" "colon" "question"
-                         "underscore" "plus" "asciitilde" "at")
-                  :test #'string-equal)
-      (pushnew (list name modifiers) *seen-shifted* :test #'equal)
-      (note "SHIFT   keysym=~a modifiers=~s  -> river ~:[MASKS SHIFT OUT~;REPORTS SHIFT~]"
-            name modifiers (member :shift modifiers))))
+  (note "KEY     ~a~@[  -> ~s~]~@[  ~a~]"
+        (key-to-string key)
+        (lookup-key *keymap* key)
+        (cond (*pending-keymap* "(second key of a chord)")
+              ((reading-p) "(at a prompt)")
+              (*help-visible* "(an overlay was up; this key also dismissed it)")))
   nil)
 
-;;; ------------------------------------------------------------- question 2
-;;;
-;;; D19: an unbound key pressed while the cursor rests on an empty pane spawns
-;;; something.  It rests on ate_unbound_key firing when the seat has no
-;;; keyboard focus, which is exactly the state an empty pane puts it in.
-
 (defmethod key-unbound ((policy conventional-policy) world keysym)
-  ;; KEYSYM arrives as a *character* for anything printable -- HANDLE-UNBOUND-KEY
-  ;; passes (or character keysym) -- and the first version of this called
-  ;; KEYSYM-NAME on it, which wants an integer.  The method therefore signalled,
-  ;; GUARDED swallowed it, and the empty pane stopped spawning: pressing `t'
-  ;; did nothing, and the instrumentation was the reason.
-  (note "UNBOUND ate_unbound_key FIRED, key=~s -- D19 works on bare metal"
-        keysym)
+  "An unbound key reached us, which only happens on an empty pane.
+
+KEYSYM arrives as a *character* for anything printable -- HANDLE-UNBOUND-KEY
+passes (or character keysym) -- and the first version of this called
+KEYSYM-NAME on it, which wants an integer.  The method signalled, GUARDED
+swallowed it, and the empty pane stopped spawning: pressing `t' did nothing,
+and the instrumentation was the reason."
+  (note "UNBOUND ~s on an empty pane -- ate_unbound_key works" keysym)
   (call-next-method))
 
-;;; ------------------------------------------------------------- question 3
+;;; --------------------------------------------------------- what happened
 
-(defun record-outputs ()
-  "Every output river gave us, with its geometry and workspace."
-  (let ((outputs (all-outputs)))
-    (note "OUTPUTS ~d output~:p" (length outputs))
-    (dolist (output outputs)
-      (let ((r (output-rect output)))
-        (note "OUTPUT  name=~a  ~dx~d at (~d,~d)  workspace=~a"
-              (output-name output) (rect-w r) (rect-h r) (rect-x r) (rect-y r)
-              (prop output :workspace))))))
+(defun note-window-opened (window)
+  (note "WINDOW  opened ~s at ~s~@[  cell ~s~]"
+        (or (window-app-id window) "?")
+        (world-cursor *world*)
+        (let ((node (world-node-at *world*)))
+          (and node (prop node :lattice/address)))))
 
-;;; ------------------------------------------------------------- the preamble
+(defun note-window-closed (window)
+  (note "WINDOW  closed ~s -- ~d left"
+        (or (window-app-id window) "?") (length (all-windows))))
 
-(add-hook :startup 'hardware-check-banner)
+(defun note-focus (old new)
+  ;; Focus repair re-announces the path it was already on; recording those
+  ;; buries the moves that matter.
+  (unless (equal old new)
+    (note "FOCUS   ~s -> ~s~@[  cell ~s~]~:[~;  (empty pane)~]"
+        old new
+        (let ((node (world-node-at *world*)))
+          (and node (prop node :lattice/address)))
+        (latticewm/runtime::cursor-on-empty-pane-p))))
 
-(defun hardware-check-banner ()
-  (note "~%======== LatticeWM hardware check ========")
-  (note "river   ~a" (or (uiop:getenv "WAYLAND_DISPLAY") "bare metal, no parent"))
-  (note "session ~a" (or (uiop:getenv "XDG_SESSION_TYPE") "?"))
-  (note "font    ~a ~dx~d" (font-name *default-font*)
-        (font-width *default-font*) (font-height *default-font*)))
+(defun note-workspace (index) (note "WKSPACE now ~a" index))
 
-;;; Outputs are not bound yet at :STARTUP, so ask once the first layout runs.
-;;; :LAYOUT-CHANGED, not :RELAYOUT -- the latter is not a hook this system
-;;; runs, which is the kind of thing that is free to discover here and
-;;; expensive to discover on a tty with no editor.
-(add-hook :layout-changed 'record-outputs-once)
+(add-hook :window-opened 'note-window-opened)
+(add-hook :window-closed 'note-window-closed)
+(add-hook :focus-changed 'note-focus)
+(add-hook :workspace-changed 'note-workspace)
 
-(defvar *outputs-recorded* nil)
+;;; ------------------------------------------------- the machine it ran on
 
-(defun record-outputs-once ()
-  (unless *outputs-recorded*
-    (setf *outputs-recorded* t)
-    (ignore-errors (record-outputs))))
+(defun note-environment ()
+  (note "~%======== LatticeWM session ========")
+  (note "ENV     display=~a  session=~a"
+        (or (uiop:getenv "WAYLAND_DISPLAY") "?")
+        (or (uiop:getenv "XDG_SESSION_TYPE") "?"))
+  (note "ENV     font=~a ~dx~d  lattice=~:[absent~;loaded~]"
+        (font-name *default-font*)
+        (font-width *default-font*) (font-height *default-font*)
+        (find-package "LATTICE"))
+  (note "ENV     ~d keys registered, ~d commands, ~d generics"
+        (length (bindable-keys)) (length (all-commands))
+        (length (policy-generics)))
+  ;; The keys most likely to be the question, resolved rather than assumed --
+  ;; this is what would have shown, instantly, that the lattice had taken
+  ;; Super+/ away from `help'.
+  (dolist (spec '("Super+Return" "Super+d" "Super+q" "Super+slash"
+                  "Super+minus" "Shift+Super+question" "Super+semicolon"))
+    (note "BINDING ~22a -> ~s" spec
+          (ignore-errors (lookup-key *keymap* (kbd spec))))))
+
+(defun note-outputs ()
+  (dolist (output (all-outputs))
+    (let ((r (output-rect output)))
+      (note "OUTPUT  ~a  ~dx~d at (~d,~d)  workspace=~a"
+            (or (output-name output) "(name not arrived yet)")
+            (rect-w r) (rect-h r) (rect-x r) (rect-y r)
+            (prop output :workspace)))))
+
+(defun note-state (why)
+  (note "STATE   ~a: ~d window~:p, cursor ~s~@[, cell ~s~]"
+        why (length (all-windows)) (world-cursor *world*)
+        (let ((node (world-node-at *world*)))
+          (and node (prop node :lattice/address))))
+  (note "STATE   the status line reads: ~{~a~^ | ~}"
+        (remove "" (mapcar #'car (ignore-errors
+                                  (echo-content (current-policy) *world*)))
+                :test #'equal)))
+
+;;; --------------------------------------------------------------- wiring
+
+;; NOT :startup.  ADD-HOOK puts new functions at the *front*, and this file is
+;; loaded after the config's own hooks, so a :startup recording would run
+;; before them -- before the lattice installs its keys.  The first version did
+;; exactly that and reported "Super+minus -> NIL" and 87 keys, both of which
+;; were true at the moment it looked and useless by the time anything happened.
+;; The first layout is after every startup hook has run.
+
+(defvar *outputs-noted* nil)
+
+(defun note-outputs-once ()
+  ;; :LAYOUT-CHANGED, not :RELAYOUT.  The latter is not a hook this system
+  ;; runs -- the first draft of this file hung its recording on it and would
+  ;; have reported nothing at all.  ADD-HOOK says so out loud now.
+  (unless *outputs-noted*
+    (setf *outputs-noted* t)
+    (ignore-errors (note-environment))
+    (ignore-errors (note-outputs))
+    (ignore-errors (note-state "first layout"))))
+
+(add-hook :layout-changed 'note-outputs-once)
+
+(defun note-shutdown ()
+  (ignore-errors (note-outputs))
+  (ignore-errors (note-state "at exit"))
+  (note "======== end ========~%"))
+
+(add-hook :shutdown 'note-shutdown)
 
 (defcommand hardware-report ()
-  "Write what has been observed so far, and say where.
+  "Write everything known right now, and say where the file is.
 
-Bound to Super+F12 below.  Run it before quitting if you want to be certain
-the file is complete, though every line is written as it happens."
-  (note "SUMMARY shifted keysyms observed: ~s" *seen-shifted*)
-  (ignore-errors (record-outputs))
-  (notify "hardware report: ~a" *report*))
+Bound to Super+F12.  You should not need it -- the session records itself and
+the shutdown hook writes the ending -- but it is here for the case where the
+window manager does not get to exit cleanly."
+  (ignore-errors (note-environment))
+  (ignore-errors (note-outputs))
+  (ignore-errors (note-state "asked"))
+  (notify "wrote ~a" *report*))
 
 (define-key *keymap* "Super+F12" '("hardware-report"))

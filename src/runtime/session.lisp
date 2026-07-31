@@ -438,6 +438,24 @@ finishes should ever meet it; it is a backstop, not a budget.")
 (defmacro with-watchdog ((label) &body body)
   `(call-with-watchdog ,label (lambda () ,@body)))
 
+(defvar *shutdown-run* nil
+  "True once the shutdown sequence has been done.  See RUN-SHUTDOWN-ONCE.")
+
+(defun run-shutdown-once ()
+  "Run the :SHUTDOWN hooks and save the layout, at most once per session.
+
+QUIT and RESTART-WM each did both directly, and START's UNWIND-PROTECT does
+them again on the way out -- so every exit ran every shutdown hook twice and
+saved the layout twice.  Harmless for the shipped hooks, which is why nobody
+noticed; not harmless for a hook that flushes a file, posts a notification or
+closes a connection, which is exactly what a shutdown hook is for.
+
+Found by a session recorder writing its ending block twice."
+  (unless *shutdown-run*
+    (setf *shutdown-run* t)
+    (run-hooks :shutdown)
+    (save-state)))
+
 (defun run-manage-sequence ()
   "Everything that is only legal in a manage sequence.
 

@@ -480,8 +480,7 @@ would be worse than saying so."
 
 (defcommand quit ()
   "Exit the session.  This logs you out."
-  (run-hooks :shutdown)
-  (save-state)
+  (run-shutdown-once)
   (when (server-manager *server*)
     (guarded "exit_session" (w:wm-exit-session (server-manager *server*))))
   (setf (server-running *server*) nil))
@@ -492,8 +491,7 @@ would be worse than saying so."
 River keeps running, and so does every application; the window manager is an
 ordinary Wayland client.  Relaunch it and the layout comes back, because
 persistence is keyed on river's stable window identifiers."
-  (run-hooks :shutdown)
-  (save-state)
+  (run-shutdown-once)
   (setf (server-running *server*) nil))
 
 (defcommand describe-key (spec)

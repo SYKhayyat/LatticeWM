@@ -223,6 +223,31 @@ optional, since newly created windows are shown unless explicitly hidden."
     (dolist (entry placed placed)
       (tag-cell (c:child-at grid (car entry)) (car entry)))))
 
+(defmethod p:keys-hint ((policy lattice-policy) world)
+  "Add the two facts about cells that nothing else can teach.
+
+The core hint says how to open, split, move and close.  Loading the lattice
+changes what \"move\" means -- walking off the edge of a cell carries you into
+the next one, which is how a cell comes to exist -- and adds the only way to
+*see* that there are cells at all.
+
+Neither is discoverable, and the first one is unusually hard: it works by
+*not* existing.  There is no new-cell command, no mode and no boundary to
+cross deliberately, which is the design's whole claim -- \"motion runs straight
+through the cell boundary as though it were not there\".  Something that works
+by not existing cannot be found by looking for it, and the report from the
+first person to use it was exactly that: \"how do i make a new window in
+lattice?\".
+
+This method is also the smallest honest demonstration of the extension
+surface: a loaded extension changing what the status line teaches, in four
+lines, with no edit to anything under src/."
+  (let ((core (call-next-method)))
+    (when core
+      (let ((mod (string-capitalize (string p:*modifier*))))
+        (format nil "~a  |  past a cell edge = next cell  ~a+- zoom out"
+                core mod)))))
+
 (defmethod p:clip-rect ((policy lattice-policy) node rect)
   "Crop a cell that hangs over the viewport edge.
 

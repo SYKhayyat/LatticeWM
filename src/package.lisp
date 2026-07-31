@@ -445,7 +445,7 @@ keybindings, the command registry, and the session loop.")
    #:add-hook #:remove-hook #:run-hooks #:*hooks* #:defhook
    #:all-hooks #:*hook-documentation* #:*warn-on-undeclared-hooks*
    ;; state
-   #:close-window-later
+   #:close-window-later #:run-shutdown-once
    #:save-state #:load-state #:state-file))
 
 (defpackage #:latticewm/user

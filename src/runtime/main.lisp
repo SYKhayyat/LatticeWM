@@ -193,9 +193,7 @@ Order matters and each step is deliberate:
            ;; the one moment a new user cannot recover from unaided.
            (maybe-show-welcome)
            (run-event-loop))
-      (guarded "shutdown"
-        (run-hooks :shutdown)
-        (save-state))
+      (guarded "shutdown" (run-shutdown-once))
       (ignore-errors (wl:wl-display-disconnect display))
       (setf *server* nil)
       (logmsg :info "LatticeWM stopped"))))
