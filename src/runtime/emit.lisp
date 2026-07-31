@@ -86,6 +86,20 @@ call more than once — the diff makes a redundant call nearly free — so calle
 should err towards calling it rather than reasoning about whether they must."
   (unless (and *server* *world*)
     (return-from relayout nil))
+  ;; Called from outside any protocol sequence — which is what happens when you
+  ;; evaluate (relayout) at a SWANK REPL, and is the single most likely thing
+  ;; for anyone extending this to type.  Emitting here would violate the
+  ;; sequence discipline on every request; instead, ask river for a manage
+  ;; sequence and do the work when it arrives.
+  ;;
+  ;; This is what makes (setf *gaps* 8) (relayout) work from a REPL, which is
+  ;; the whole live-development story and would otherwise have been a trap with
+  ;; a good error message in it.
+  (when (null w:*sequence*)
+    (when force (clrhash (server-emitted *server*)))
+    (mark-dirty)
+    (request-manage)
+    (return-from relayout :deferred))
   (when force
     (clrhash (server-emitted *server*)))
   (let* ((policy (p:current-policy))

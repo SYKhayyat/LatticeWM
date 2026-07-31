@@ -487,3 +487,89 @@ persistence is keyed on river's stable window identifiers."
          (target (lookup-key *keymap* key)))
     (format t "~&~a: ~:[unbound~;~:*~s~]~%" (key-to-string key) target)
     target))
+
+;;; ==================================================================
+;;; FLOATS THAT BELONG TO A PANE
+;;; ==================================================================
+
+(defcommand anchor-float (&optional (path (current-path)))
+  "Pin the focused floating window to the pane at PATH.
+
+An anchored float travels with the pane it belongs to: it moves when the pane
+moves, hides when the pane hides, and is clipped by the pane's clip box.  That
+is what \"a floating window inside a window\" means here — a picture-in-picture,
+a preview, a terminal that follows its editor across the plane.
+
+Costs one slot on the float.  The alternative — floats pinned to the output —
+is still the default, because most floats are dialogs and a dialog belongs to
+the screen rather than to a pane."
+  (with-relayout
+    (let* ((window (current-window))
+           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+      (cond
+        ((null float)
+         (logmsg :warn "anchor-float: the focused window is not floating")
+         nil)
+        (t
+         (let ((anchor (c:resolve-path (c:world-root *world*) path)))
+           (setf (c:float-anchor float) anchor)
+           ;; Re-express the float's rectangle relative to its new anchor, so
+           ;; that anchoring does not make it jump.
+           (let ((base (and anchor (gethash anchor (c:prop *world* :rect-index))))
+                 (rect (c:float-rect float)))
+             (when base
+               (setf (c:float-rect float)
+                     (c:make-rect (- (c:rect-x rect) (c:rect-x base))
+                                  (- (c:rect-y rect) (c:rect-y base))
+                                  (c:rect-w rect) (c:rect-h rect)))))
+           (logmsg :info "float anchored to ~s" path)
+           anchor))))))
+
+(defcommand unanchor-float ()
+  "Pin the focused floating window to the output instead of to a pane."
+  (with-relayout
+    (let* ((window (current-window))
+           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+      (when (and float (c:float-anchor float))
+        (let ((base (gethash (c:float-anchor float) (c:prop *world* :rect-index)))
+              (rect (c:float-rect float)))
+          (when base
+            (setf (c:float-rect float)
+                  (c:make-rect (+ (c:rect-x rect) (c:rect-x base))
+                               (+ (c:rect-y rect) (c:rect-y base))
+                               (c:rect-w rect) (c:rect-h rect)))))
+        (setf (c:float-anchor float) nil)
+        t))))
+
+(defcommand move-float (direction &optional (pixels 40))
+  "Nudge the focused floating window DIRECTION.
+
+Floats are positioned by hand, which is the point of floating them; this is
+the keyboard half of that."
+  (with-relayout
+    (let* ((window (current-window))
+           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+      (when float
+        (let ((rect (c:float-rect float))
+              (dx (if (c:direction-horizontal-p direction)
+                      (* pixels (c:direction-sign direction)) 0))
+              (dy (if (c:direction-vertical-p direction)
+                      (* pixels (c:direction-sign direction)) 0)))
+          (setf (c:float-rect float)
+                (c:make-rect (+ (c:rect-x rect) dx) (+ (c:rect-y rect) dy)
+                             (c:rect-w rect) (c:rect-h rect))))))))
+
+(defcommand resize-float (direction &optional (pixels 40))
+  "Grow or shrink the focused floating window DIRECTION."
+  (with-relayout
+    (let* ((window (current-window))
+           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+      (when float
+        (let* ((rect (c:float-rect float))
+               (sign (c:direction-sign direction))
+               (dw (if (c:direction-horizontal-p direction) (* pixels sign) 0))
+               (dh (if (c:direction-vertical-p direction) (* pixels sign) 0)))
+          (setf (c:float-rect float)
+                (c:make-rect (c:rect-x rect) (c:rect-y rect)
+                             (max 100 (+ (c:rect-w rect) dw))
+                             (max 60 (+ (c:rect-h rect) dh)))))))))

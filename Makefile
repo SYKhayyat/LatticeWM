@@ -16,7 +16,7 @@ PREFIX      ?= $(HOME)/.local
 REGISTRY    := CL_SOURCE_REGISTRY="$(WAYFLAN_SRC)//:$(CURDIR)//"
 RUN         := $(REGISTRY) $(LISP) --non-interactive
 
-.PHONY: all build gates test image run run-bare surface config install clean help
+.PHONY: all build gates test image release bench run run-bare surface config install clean help
 
 all: build gates test
 
@@ -33,8 +33,17 @@ test:
 # the compiler, so SWANK connects and DEFMETHOD still works at runtime.  This
 # is StumpWM's shipping model and it is proven.
 image:
+	@LATTICEWM_COMPRESS=0 $(RUN) --load tools/image.lisp
+	@ls -lh latticewm
+
+# The shipping image: zstd-compressed, 13 MB against 190, for ~350 ms of
+# one-time startup.
+release:
 	@$(RUN) --load tools/image.lisp
 	@ls -lh latticewm
+
+bench:
+	@$(RUN) --load tools/bench.lisp
 
 # River is a wlroots compositor and wlroots has a Wayland backend, so river
 # runs *inside* the session you are already in, in a window.  That is the whole

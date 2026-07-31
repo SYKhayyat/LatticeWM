@@ -37,14 +37,88 @@
       (logmsg :info "connection lost: ~a" condition)
       nil)))
 
+(defun display-fd (display)
+  "The file descriptor behind DISPLAY's socket, or NIL.
+
+Reaches into wayflan for it, which is the one place we do.  The alternative is
+a busy loop, and the reason is worth stating: WL-DISPLAY-LISTEN is a
+*non-blocking* poll — it answers 'is a message available' and returns
+immediately either way — so a loop built on it alone spins a core at 100%.
+That is not a performance nicety in a window manager: it is a laptop that runs
+hot and flat while apparently sitting idle.
+
+If a future wayflan renames these internals this returns NIL, and WAIT-FOR-WORK
+falls back to sleeping, which is correct and merely less responsive."
+  (ignore-errors
+   (let ((socket (funcall (or (find-symbol "%WL-DISPLAY-SOCKET"
+                                           "XYZ.SHUNTER.WAYFLAN.CLIENT")
+                              (return-from display-fd nil))
+                          display)))
+     (slot-value socket (find-symbol "%FD" "XYZ.SHUNTER.WAYFLAN.WIRE")))))
+
+(defvar *poll-interval* 30
+  "Seconds to wait before waking up with nothing to do.
+
+Should never actually elapse: the loop wakes on compositor input and on the
+wakeup interrupt below.  It exists only so that a bug in either cannot wedge
+the window manager permanently, and 30 seconds is long enough that the cost of
+it existing is nil — two wakeups a minute.")
+
+(defvar *wm-thread* nil
+  "The thread running the event loop, so other threads can wake it.")
+
+(defvar *woken* nil
+  "Set by the wakeup interrupt.  Only ever read to decide whether to log.")
+
+(defun wake-event-loop ()
+  "Wake the event loop now.  Safe to call from any thread.
+
+Interrupts the window manager thread, which is blocked in select; the
+interruption sets a flag and returns, and the loop then drains its queue *at
+its own safe point* rather than wherever it happened to be.  That distinction
+matters — the wayflan client is single-threaded, so running real work inside an
+interrupt could land in the middle of marshalling a request.
+
+Two designs were tried before this one.  Polling every 100 ms cost about one
+percent of a core forever, which on a laptop is measurable battery spent doing
+nothing.  A self-pipe registered with SERVE-ALL-EVENTS spun a *whole* core,
+because the compositor socket stays readable between the moment select reports
+it and the moment wayflan drains its own buffer, so the multiplexer returned
+instantly, over and over.  An interrupt has neither problem: it is delivered
+once, exactly when there is something to deliver."
+  (let ((thread *wm-thread*))
+    (when (and thread (sb-thread:thread-alive-p thread))
+      (ignore-errors
+       (sb-thread:interrupt-thread thread (lambda () (setf *woken* t)))))))
+
+(defun wait-for-work (fd)
+  "Block until the compositor speaks, or another thread wakes us.
+
+Zero wakeups while nothing is happening, which is the whole point.  The
+timeout is a backstop against a bug in the above, not a polling interval."
+  (handler-case
+      (if fd
+          (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
+          (sleep 0.05))
+    ;; EINTR from the wakeup interrupt arrives here and is the normal path.
+    (error () nil)
+    (sb-sys:interactive-interrupt () nil)))
+
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."
-  (loop while (server-running *server*)
-        do (with-abandon
-             (drain-wm-queue)
-             (unless (dispatch-events)
-               (setf (server-running *server*) nil))
-             (save-state-if-needed))))
+  (setf *wm-thread* sb-thread:*current-thread*)
+  (let ((fd (display-fd (server-display *server*))))
+    (unless fd
+      (logmsg :warn "could not find the display fd; falling back to polling"))
+    (loop while (server-running *server*)
+          do (with-abandon
+               (drain-wm-queue)
+               (unless (dispatch-events)
+                 (setf (server-running *server*) nil))
+               (save-state-if-needed)
+               (when (server-running *server*)
+                 (wait-for-work fd))))
+    (setf *wm-thread* nil)))
 
 ;;; ---------------------------------------------------------------- startup
 

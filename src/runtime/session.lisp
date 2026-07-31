@@ -337,7 +337,10 @@ The wayflan client is single-threaded — this is StumpWM's pattern, and it is
 the reason a REPL cannot simply call protocol functions directly."
   (bt:with-lock-held (*wm-thread-lock*)
     (push thunk *wm-thread-queue*))
-  (request-manage)
+  ;; Wake the loop rather than touching the socket from this thread: the
+  ;; wayflan client is single-threaded, so writing a request from here would
+  ;; race with whatever the window manager thread is marshalling.
+  (wake-event-loop)
   t)
 
 (defmacro in-wm (&body body)

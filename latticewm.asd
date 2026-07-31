@@ -16,7 +16,7 @@
   :version "0.1.0"
   :defsystem-depends-on ("wayflan-client")
   :depends-on ("wayflan-client" "alexandria" "closer-mop" "bordeaux-threads"
-               (:require "sb-introspect"))
+               (:require "sb-introspect") (:require "sb-posix"))
   :serial t
   :components
   ((:module "src"

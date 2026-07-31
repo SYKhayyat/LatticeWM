@@ -1,0 +1,179 @@
+#!/usr/bin/env -S sbcl --script
+;;;; tools/wmeval --- Evaluate a form inside the running window manager.
+;;;;
+;;;; PLAN.org Phase 4 calls this a shipped artifact rather than an assumption,
+;;;; and says why:
+;;;;
+;;;;   "The entire cheap-AI argument in §extensibility-real rests on a model
+;;;;   being able to eval into the live image.  Without this tool that argument
+;;;;   describes a capability nobody can reach, and the language decision
+;;;;   quietly stops paying for itself.  With it, the loop advantage becomes
+;;;;   real for the exact agent that will be doing the extending after August."
+;;;;
+;;;; The claim it makes real is the feedback loop, which §extensibility-real
+;;;; identifies as the largest single factor in whether a weaker model can
+;;;; maintain this: it converts "reason correctly on the first attempt" into
+;;;; "try, observe, correct".  Weak models are bad at the first and decent at
+;;;; the second, so it is not a marginal gain, it is a change of task.
+;;;;
+;;;; Usage:
+;;;;
+;;;;   wmeval '(length (all-windows))'
+;;;;   wmeval '(setf *gaps* 8)' '(relayout :force t)'
+;;;;   echo '(world-cursor *world*)' | wmeval
+;;;;   wmeval --surface            what can I change?
+;;;;   wmeval --state              where is everything right now?
+;;;;
+;;;; Forms are read in LATTICEWM/USER, so no package prefixes are needed.
+;;;;
+;;;; It speaks SWANK's wire protocol directly rather than requiring Emacs: a
+;;;; six-digit hex length followed by an s-expression.  That is about forty
+;;;; lines, and it means this works from a shell script, from CI, and from any
+;;;; agent that can run a command.
+
+(require :sb-bsd-sockets)
+
+(defparameter *port* 4005)
+(defparameter *host* #(127 0 0 1))
+
+(define-condition wm-not-running (error) ()
+  (:report (lambda (c stream)
+             (declare (ignore c))
+             (format stream "~
+Nothing is listening on port ~d.~%~%~
+The window manager is either not running, or was started with~%~
+--swank-port 0.  Start it with:~%~%~
+  river -c 'latticewm'~%" *port*))))
+
+(defun connect ()
+  (let ((socket (make-instance 'sb-bsd-sockets:inet-socket
+                               :type :stream :protocol :tcp)))
+    (handler-case (sb-bsd-sockets:socket-connect socket *host* *port*)
+      (error () (error 'wm-not-running)))
+    (sb-bsd-sockets:socket-make-stream socket :input t :output t
+                                              :element-type 'character
+                                              :external-format :utf-8)))
+
+(defun send-text (stream text)
+  "Write TEXT in SWANK's framing: six hex digits of length, then the form.
+
+Sent as text rather than as a form, because the request names SWANK:
+symbols and this script runs in an image where SWANK is not loaded — reading
+the form here would fail on a package that only exists at the other end."
+  (format stream "~6,'0x~a" (length text) text)
+  (force-output stream))
+
+(defun read-message (stream)
+  "Read one SWANK message.
+
+Returns the parsed form, :UNREADABLE for a message this image cannot read, or
+NIL at end of stream.  The three have to be distinguishable, because SWANK
+opens by sending (:new-features …) — a list naming packages like CFFI-FEATURES
+that exist in the window manager and not here.  Treating that as end-of-stream
+made the client hang up before its own answer arrived, which looked exactly
+like the bridge not working."
+  (let ((header (make-string 6)))
+    (if (/= 6 (read-sequence header stream))
+        nil
+        (let* ((length (parse-integer header :radix 16 :junk-allowed t))
+               (body (and length (make-string length))))
+          (cond
+            ((null length) nil)
+            (t (read-sequence body stream)
+               (with-standard-io-syntax
+                 (let ((*package* (find-package :keyword))
+                       (*read-eval* nil))
+                   (handler-case (read-from-string body)
+                     (error () :unreadable))))))))))
+
+(defun evaluate (source)
+  "Evaluate SOURCE inside the running window manager and print the result."
+  (let ((stream (connect)))
+    (unwind-protect
+         (progn
+           ;; :listener-eval rather than :eval so that the value is printed the
+           ;; way a REPL would print it, and so that errors come back as text
+           ;; rather than dropping the connection.
+           (send-text stream
+                      (format nil "(:emacs-rex (swank:eval-and-grab-output ~s) ~s t 1)"
+                              (format nil "(progn ~a)" source)
+                              "LATTICEWM/USER"))
+           (loop for message = (read-message stream)
+                 while message
+                 do (when (and (consp message) (eq (first message) :return))
+                      (let* ((result (second message))
+                             (status (first result)))
+                        (cond
+                          ((eq status :ok)
+                           (destructuring-bind (output value) (second result)
+                             (when (plusp (length output))
+                               (write-string output))
+                             (format t "~&~a~%" value))
+                           (return 0))
+                          (t
+                           (format *error-output* "~&~a~%" (second result))
+                           (return 1)))))
+                 finally (return 1)))
+      (ignore-errors (close stream)))))
+
+(defparameter *canned*
+  '(("--surface" . "(print-extension-surface)")
+    ("--state" . "(progn (format t \"~&cursor ~s~%windows ~d~%floats ~d~%scratchpad ~d~%policy ~a~%\"
+                          (world-cursor *world*) (length (all-windows))
+                          (length (world-floats *world*))
+                          (length (world-scratchpad *world*))
+                          (policy-name *policy*)) :ok)")
+    ("--commands" . "(print-commands)")
+    ("--options" . "(print-options)")
+    ("--keys" . "(print-keymap)")
+    ("--tree" . "(labels ((walk (n d)
+                            (format t \"~&~v@t~a~@[ ~a~]~%\" (* 2 d) (type-of n)
+                                    (let ((w (and (typep n 'leaf) (leaf-window n))))
+                                      (and w (window-app-id w))))
+                            (when (container-p n)
+                              (dolist (a (container-addresses n))
+                                (let ((k (child-at n a))) (when k (walk k (1+ d))))))))
+                    (walk (world-root *world*) 0)) :ok)"))
+  "Shorthands for the questions people actually ask.")
+
+(let ((arguments (rest sb-ext:*posix-argv*)))
+  (cond
+    ((or (null arguments) (member "--help" arguments :test #'string=))
+     (if (and (null arguments) (not (interactive-stream-p *standard-input*)))
+         ;; Piped input: read the whole of stdin as the form.
+         (sb-ext:quit :unix-status
+                      (evaluate (with-output-to-string (out)
+                                  (loop for line = (read-line *standard-input* nil)
+                                        while line do (write-line line out)))))
+         (progn
+           (format t "~&usage: wmeval FORM...~%~%~
+                      Evaluate forms inside the running LatticeWM.~%~%~
+                      ~2t--surface    every generic you can specialize~%~
+                      ~2t--state      cursor, window and float counts~%~
+                      ~2t--tree       the layout tree~%~
+                      ~2t--commands   every command~%~
+                      ~2t--options    every configuration value~%~
+                      ~2t--keys       every binding~%~
+                      ~2t--port N     connect to port N (default ~d)~%~%~
+                      Forms are read in LATTICEWM/USER, so:~%~%~
+                      ~2twmeval '(setf *gaps* 8)' '(relayout :force t)'~%"
+                   *port*)
+           (sb-ext:quit :unix-status 0))))
+    (t
+     (let ((position (position "--port" arguments :test #'string=)))
+       (when position
+         (setf *port* (parse-integer (nth (1+ position) arguments)))
+         (setf arguments (append (subseq arguments 0 position)
+                                 (subseq arguments (+ position 2))))))
+     (handler-case
+         (sb-ext:quit
+          :unix-status
+          (evaluate (format nil "~{~a~^ ~}"
+                            (mapcar (lambda (argument)
+                                      (or (cdr (assoc argument *canned*
+                                                      :test #'string=))
+                                          argument))
+                                    arguments))))
+       (wm-not-running (condition)
+         (format *error-output* "~&~a~%" condition)
+         (sb-ext:quit :unix-status 2))))))

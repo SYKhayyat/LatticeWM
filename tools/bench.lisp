@@ -1,0 +1,46 @@
+;;;; tools/bench.lisp --- How fast is the model, with no compositor involved?
+(require :asdf)
+(handler-bind ((warning #'muffle-warning)) (asdf:load-system "lattice"))
+(in-package #:latticewm/user)
+
+(defun make-big-world (n)
+  (let ((world (make-world))
+        (policy (make-instance 'conventional-policy)))
+    (setf *policy* policy)
+    (dotimes (i n) (on-window-open policy world
+                                   (make-instance 'window :app-id "bench")))
+    world))
+
+(defmacro timing (label n &body body)
+  `(let ((start (get-internal-real-time)))
+     (dotimes (i ,n) ,@body)
+     (let ((ms (/ (- (get-internal-real-time) start)
+                  internal-time-units-per-second 0.001)))
+       (format t "~&~a~40t~8,3f ms total  ~8,4f ms each~%" ,label ms (/ ms ,n)))))
+
+(dolist (n '(10 50 200))
+  (format t "~&~%=== ~d windows ===~%" n)
+  (let* ((world (make-big-world n))
+         (policy *policy*)
+         (root (world-root world))
+         (rect (make-rect 0 0 1920 1080)))
+    (timing "layout-node" 1000 (layout-node policy root rect))
+    (let ((rects (latticewm/policy::motion-rects policy root)))
+      (timing "find-motion-target (cached rects)" 1000
+        (find-motion-target policy root (world-cursor world) :right :rects rects)))
+    (timing "move-cursor" 1000 (move-cursor policy world :right))
+    (timing "leaf-paths" 1000 (leaf-paths root))
+    (timing "repair-path" 1000 (repair-path root (world-cursor world)))))
+
+(format t "~&~%=== lattice, 100 cells, 4 visible ===~%")
+(let* ((grid (lattice:make-grid :cols 2 :rows 2))
+       (policy (make-instance 'lattice:lattice-policy))
+       (rect (make-rect 0 0 1920 1080)))
+  (dotimes (x 10)
+    (dotimes (y 10)
+      (setf (child-at grid (lattice:cell x y))
+            (make-leaf (make-instance 'window :app-id "c")))))
+  (timing "layout-node (grid)" 1000 (layout-node policy grid rect))
+  (timing "container-addresses" 1000 (container-addresses grid)))
+
+(format t "~&~%heap in use: ~,1f MB~%" (/ (sb-kernel:dynamic-usage) 1048576.0))
