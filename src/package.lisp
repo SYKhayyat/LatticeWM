@@ -99,8 +99,7 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:+edges-none+ #:+edge-top+ #:+edge-bottom+ #:+edge-left+ #:+edge-right+
    #:+edges-all+
    #:+cap-window-menu+ #:+cap-maximize+ #:+cap-fullscreen+ #:+cap-minimize+
-   #:+caps-all+ #:+protocol-modifier-bits+ #:+modifier-order+
-   #:modifier-mask #:modifier-names #:color-component))
+   #:+caps-all+ #:+protocol-modifier-bits+ #:color-component))
 
 (defpackage #:latticewm/core
   (:use #:cl)
@@ -227,6 +226,34 @@ You never edit this package.")
    #:summary-of #:truncate-text #:wrap-text #:split-lines #:split-words #:substitute-arguments
    ;; the five values people change on their first day
    #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
+   ;; keysyms, key specs and keymaps.  The keymap is the most
+   ;; user-edited object in the system; dispatching it is the runtime's.
+   #:keysym-named
+   #:keysym-name
+   #:parse-key
+   #:kbd
+   #:key-to-string
+   #:keymap
+   #:make-keymap
+   #:keymap-entries
+   #:keymap-parent
+   #:keymap-name
+   #:define-key
+   #:lookup-key
+   #:keymap-keys
+   #:all-bound-keys
+   #:*keymap*
+   #:*pending-keymap*
+   #:*help-visible*
+   #:modifier-mask
+   #:modifier-names
+   #:*modifier-aliases*
+   #:+modifier-order+
+   #:+named-keysyms+
+   #:*echo-message*
+   #:current-message
+   #:keymap-choices
+   #:pending-keymap-segments
    ;; appearance: the widget layer's decisions, moved out of src/runtime/
    #:font #:font-p #:make-font #:font-name #:font-width #:font-height
    #:font-first-code #:font-glyphs #:font-stride
@@ -297,6 +324,30 @@ You never edit this package.")
    #:*log-stream*
    #:+log-levels+
    #:substitute-arguments
+   #:keysym-named
+   #:keysym-name
+   #:parse-key
+   #:kbd
+   #:key-to-string
+   #:keymap
+   #:make-keymap
+   #:keymap-entries
+   #:keymap-parent
+   #:keymap-name
+   #:define-key
+   #:lookup-key
+   #:keymap-keys
+   #:all-bound-keys
+   #:*keymap*
+   #:*pending-keymap*
+   #:*help-visible*
+   #:modifier-mask
+   #:modifier-names
+   #:*modifier-aliases*
+   #:+modifier-order+
+   #:+named-keysyms+
+   #:*echo-message* #:current-message #:keymap-choices
+   #:pending-keymap-segments
    #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
    #:summary-of #:truncate-text #:wrap-text #:split-lines #:split-words)
   (:local-nicknames (#:c #:latticewm/core)
@@ -341,7 +392,7 @@ keybindings, the command registry, and the session loop.")
    #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
    #:text-width #:text-height
-   #:current-message #:server-compositor #:server-shm
+   #:server-compositor #:server-shm
    #:*help-visible* #:help-entries #:binding-description #:truncate-text
    #:read-string #:reading-p #:end-prompt #:prompt-segments #:echo-segments #:history #:history-push
    #:summary-of #:wrap-text #:show-help-page #:keys-running #:warp-pointer

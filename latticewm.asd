@@ -53,7 +53,8 @@
        (:file "lifecycle")
        (:file "surface")
        (:file "appearance")
-       (:file "commands")))
+       (:file "commands")
+       (:file "keys")))
      (:module "wire"
       :serial t
       :components

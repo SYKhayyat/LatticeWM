@@ -1372,3 +1372,92 @@ argument, not the ceiling.
   keymap is the single most user-edited object in the system and the shipped
   keymap is its content rather than its machinery. Under this session's ruling
   that is a strong candidate; the two references are the thing to look at.
+
+* Sixth session — 2026-07-31: the keymap and the status line cross
+:PROPERTIES:
+:CUSTOM_ID: log6
+:END:
+
+[[#log5][§log5]] listed =echo.lisp='s content and =keys.lisp= as the two things still on
+the wrong side. Both moved, under a sharpened form of the same ruling:
+
+#+begin_quote
+If you do not have a really good reason why a behaviour cannot be changed, it
+should be able to be.
+#+end_quote
+
+** The keymap was never protocol, and neither was the modifier vocabulary
+
+=keys.lisp= had two protocol references in three hundred lines, and they
+turned out not to be protocol at all:
+
+: (w:modifier-mask keywords)      ; (:super :shift) -> canonical keyword list
+: (w:modifier-names (cdr key))    ; the reverse, for display
+
+Both are pure keyword-list transformations. Neither reads or writes a byte.
+They lived in ~src/wire/~ because river's binding requests take the canonical
+names — and *nothing in wire ever called them*, which is the tell.
+
+The thing underneath is ~*modifier-aliases*~, which decides that ~super~,
+~mod4~, ~logo~, ~win~ and ~s~ all mean one key. That is not a protocol fact.
+It is a judgement about what people will type, and somebody who wants ~:h~ on
+hyper should not have to be told no. It is a tier-0 option now.
+
+With the vocabulary lifted, =keys.lisp= splits cleanly at a seam that was
+already drawn in the file as a banner comment:
+
+- ~src/policy/keys.lisp~ — keysyms, key specs, the keymap tree, ~define-key~,
+  ~lookup-key~. *The keymap is data*, and the most user-edited object in the
+  system.
+- ~src/runtime/keys.lisp~ — ~run-key-target~ and ~handle-key~, which reach
+  ~mark-dirty~ and ~notify~ and therefore the server. 92 lines.
+
+** The subtler half of the same mistake
+
+~echo-content~ has been a generic in =protocol.lisp= since the first day, with
+a docstring saying the status line's content is a decision. Its only method
+lived in =src/runtime/echo.lisp=.
+
+*So the decision was overridable in principle and on the wrong side of the
+line in fact.* That is worth naming as its own failure mode, because it is
+invisible to every check the project has: gate 2 sees a documented generic,
+the surface document lists it, and a reader would conclude the thing is
+policy. Only the file it is written in says otherwise, and only gate 6 counts
+files.
+
+A ~define-option~ in the runtime is the loud version of this and was fixed in
+[[#log3][§log3]]. A ~defmethod~ on a policy generic, written in the runtime, is the quiet
+version.
+
+~echo-content~, ~keymap-choices~ (which-key) and ~pending-keymap-segments~ are
+in ~policy/appearance.lisp~ now. ~echo-segments~ stays in the runtime, and
+that one is a real seam rather than a leftover: it chooses between "a prompt
+is up" and "ask the policy", and whether the minibuffer is currently reading
+is not a decision anybody wants to override.
+
+** Gate 6
+
+: 1.20 -> 0.82 -> 0.80 -> 0.86 -> 1.01 -> 1.12 (keymap) -> 1.17 (status line)
+
+: gate 6  runtime 3,718 / policy 4,337 = 1.17   healthy
+
+Six hundred lines of margin rather than forty-three, which is the difference
+between a number that has crossed and a number that will stay crossed.
+
+Nothing has been excluded to get here. Every line of ~psf.lisp~, ~surface.lisp~,
+~emit.lisp~ and ~windows.lisp~ is still counted as runtime, because that is
+what they are.
+
+** Open
+
+- The three keyboard items, unchanged since [[#log2][§log2]] and still the only work that
+  needs a human: the shift-modifier question, ~ate_unbound_key~ under
+  ~clear_focus~, and bare-metal river. They are now the *only* open items that
+  are not a matter of taste.
+- =help.lisp='s remaining composition — ~help-entries~, ~binding-description~,
+  ~command-help-rows~ — is plain functions rather than generics. They are
+  reachable, since redefining a function in a live image is what this system
+  is for, but the ruling above says a decision should be *specializable* and
+  these are not yet.
+- ~welcome-rows~ has the same shape, and it is thirteen lines I wrote in
+  [[#log3][§log3]] without applying the ruling to my own work.

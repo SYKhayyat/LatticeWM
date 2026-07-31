@@ -283,6 +283,25 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   :SUPER is the only one that does not collide with something an application
   already wants.
 
+*MODIFIER-ALIASES*
+  value:   ((:SHIFT . :SHIFT) (:CTRL . :CTRL) (:CONTROL . :CTRL) (:C . :CTRL)
+            (:ALT . :MOD1) (:MOD1 . :MOD1) (:META . :MOD1) (:M . :MOD1)
+            (:MOD3 . :MOD3) (:SUPER . :MOD4) (:MOD4 . :MOD4) (:LOGO . :MOD4)
+            (:WIN . :MOD4) (:S . :MOD4) (:HYPER . :MOD5) (:MOD5 . :MOD5))
+  default: ((:SHIFT . :SHIFT) (:CTRL . :CTRL) (:CONTROL . :CTRL) (:C . :CTRL)
+            (:ALT . :MOD1) (:MOD1 . :MOD1) (:META . :MOD1) (:M . :MOD1)
+            (:MOD3 . :MOD3) (:SUPER . :MOD4) (:MOD4 . :MOD4) (:LOGO . :MOD4)
+            (:WIN . :MOD4) (:S . :MOD4) (:HYPER . :MOD5) (:MOD5 . :MOD5))
+  What people type, mapped to what the protocol calls it.
+  
+  Both `super' and `mod4' work, and so do `C-' and `ctrl', because muscle memory
+  differs and refusing one of them is a pointless fight to pick.
+  
+  Add your own spellings rather than learning ours.  This is a tier-0 value, so
+  a config file can do it without a method:
+  
+      (push '(:h . :mod5) *modifier-aliases*)
+
 *MOTION-REFERENCE-RECT*
   value:   (0 0 1920 1080)
   default: (0 0 1920 1080)

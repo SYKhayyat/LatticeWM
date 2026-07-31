@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-47 generics, 53 options.  Generated from the running image.
+47 generics, 54 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -161,7 +161,7 @@ The lattice's answer would sensibly include the viewport; a policy with no
 workspaces should not mention them.
 
   methods:
-    (policy t)                          ; echo.lisp
+    (policy t)                          ; appearance.lisp
 
 ----------------------------------------------------------------------------
 entry-address (latticewm/policy:policy latticewm/policy::container
@@ -981,6 +981,21 @@ the wrong half.
 
 :SUPER is the only one that does not collide with something an application
 already wants.
+
+*modifier-aliases*
+  now: ((:SHIFT . :SHIFT) (:CTRL . :CTRL) (:CONTROL . :CTRL) (:C . :CTRL)
+        (:ALT . :MOD1) (:MOD1 . :MOD1) (:META . :MOD1) (:M . :MOD1)
+        (:MOD3 . :MOD3) (:SUPER . :MOD4) (:MOD4 . :MOD4) (:LOGO . :MOD4)
+        (:WIN . :MOD4) (:S . :MOD4) (:HYPER . :MOD5) (:MOD5 . :MOD5))
+  What people type, mapped to what the protocol calls it.
+
+Both `super' and `mod4' work, and so do `C-' and `ctrl', because muscle memory
+differs and refusing one of them is a pointless fight to pick.
+
+Add your own spellings rather than learning ours.  This is a tier-0 value, so
+a config file can do it without a method:
+
+    (push '(:h . :mod5) *modifier-aliases*)
 
 *motion-reference-rect*
   now: (0 0 1920 1080)

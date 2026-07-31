@@ -411,3 +411,122 @@ is the difference between a reference and a help screen."
                                       (string-downcase (princ-to-string argument))
                                       (subseq result (+ position (length name)))))))))
     result))
+
+;;; ==================================================================
+;;; WHAT THE STATUS LINE SAYS
+;;; ==================================================================
+;;;
+;;; ECHO-CONTENT was declared a generic in protocol.lisp from the first day,
+;;; with a docstring explaining that the content of the status line is a
+;;; decision.  Its only method then lived in src/runtime/echo.lisp, next to
+;;; the blitter -- so the decision was overridable in principle and sat on the
+;;; wrong side of the line in fact, which is the more subtle half of the same
+;;; mistake as a DEFINE-OPTION in the runtime.
+;;;
+;;; This is Emacs's `mode-line-format\' and it should be read that way: the
+;;; single most-customised variable in that system, and the reason a status
+;;; line is a thing people make their own rather than a thing they tolerate.
+;;;
+;;; What stays in the runtime is ECHO-SEGMENTS, which chooses between "a
+;;; prompt is up" and "ask the policy" -- and that genuinely is runtime state,
+;;; because whether the minibuffer is reading is not a decision anybody wants
+;;; to override.
+
+(defvar *echo-message* nil "A cons of text and the time it was posted.")
+
+(defun current-message ()
+  "The message to show, or NIL once it has aged out."
+  (let ((message *echo-message*))
+    (when (and message
+               (< (- (get-universal-time) (cdr message)) *echo-message-seconds*))
+      (car message))))
+
+(defmethod echo-content ((policy policy) world)
+  "The shipped echo area: workspace, place, contents, counts, last message."
+  (let* ((root (c:world-root world))
+         (workspaces (c:world-workspaces world))
+         (window (c:world-focus-window world))
+         (leaf (c:world-leaf-at world))
+         (segments '()))
+    (when workspaces
+      (push (cons (format nil "[~d/~d]" (1+ (c:stack-selected workspaces))
+                          (c:container-count workspaces))
+                  :normal)
+            segments))
+    ;; Where the cursor is, in whatever terms the layout makes available.  The
+    ;; lattice puts a coordinate on the node; without it, the path is the
+    ;; honest answer and is still better than nothing.
+    (let* ((node (c:world-node-at world))
+           (place (or (and node (c:prop node :lattice/address)
+                           (format nil "~d,~d"
+                                   (car (c:prop node :lattice/address))
+                                   (cdr (c:prop node :lattice/address))))
+                      (format nil "~{~a~^.~}" (c:world-cursor world)))))
+      (push (cons place :accent) segments))
+    (push (cons (cond ((null leaf) "")
+                      ((c:leaf-empty-p leaf)
+                       (format nil "empty -- ~{~a~^ ~} to open"
+                               (mapcar (lambda (entry) (string (car entry)))
+                                       *empty-pane-keys*)))
+                      (window (or (c:window-app-id window) "?"))
+                      (t ""))
+                :normal)
+          segments)
+    (let ((count (length (c:node-windows root)))
+          (scratch (length (c:world-scratchpad world)))
+          (floats (length (c:world-floats world))))
+      (push (cons (format nil "~d window~:p~@[ ~d float~:p~]~@[ ~d hidden~]"
+                          count (and (plusp floats) floats)
+                          (and (plusp scratch) scratch))
+                  :normal)
+            segments))
+    (let ((message (current-message)))
+      (when message (push (cons message :accent) segments)))
+    (nreverse segments)))
+
+(defun keymap-choices (keymap)
+  "KEYMAP's bindings as (KEYS . DESCRIPTION), merged the way the help screen
+merges them: two keys that do the same thing are one choice with two keys on
+it, not two choices."
+  (let ((by-description '()))
+    (loop for (key . target) in (keymap-keys keymap)
+          for description = (binding-description target)
+          for entry = (assoc description by-description :test #'string=)
+          do (if entry
+                 (setf (cdr entry) (append (cdr entry) (list (keysym-name (car key)))))
+                 (push (cons description (list (keysym-name (car key))))
+                       by-description)))
+    (mapcar (lambda (entry)
+              (cons (format nil "~{~a~^/~}" (rest entry)) (first entry)))
+            (nreverse by-description))))
+
+(defun pending-keymap-segments (&optional (columns 120))
+  "What an armed chord offers, as echo-area segments, inside COLUMNS.
+
+which-key, in a window manager: the moment you press the first key of a chord
+the echo area lists what the second key can be, built from the live submap and
+each command's own docstring.  A chord you have to remember is a chord you will
+not use, and the only reason Emacs's C-x map is usable by anybody is that
+somebody eventually wrote this.
+
+The budget is arithmetic rather than clipping.  Letting the compositor cut the
+line at the screen edge is what it did first, and the last choice on the line
+then read as a word that had lost its ending — which is worse than not
+offering it, because it looks like a bug rather than like a list that goes on."
+  (let* ((keymap *pending-keymap*)
+         (label (format nil "~a-" (or (keymap-name keymap) "prefix")))
+         (choices (keymap-choices keymap))
+         (room (- columns (length label) 4))
+         (shown '()))
+    (loop for (keys . description) in choices
+          ;; Each choice is at least its keys plus a word of explanation; if
+          ;; even that does not fit, everything after it is `+n more'.
+          for text = (format nil "~a ~a" keys (truncate-text description 26))
+          while (> room (+ (length text) 8))
+          do (push (cons text :normal) shown)
+             (decf room (+ (length text) 3)))
+    (let ((left (- (length choices) (length shown))))
+      (cons (cons label :prompt)
+            (nreverse (if (plusp left)
+                          (cons (cons (format nil "+~d more" left) :dim) shown)
+                          shown))))))

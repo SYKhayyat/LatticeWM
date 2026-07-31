@@ -327,44 +327,6 @@ is also what DESIGN D19's typing-in-an-empty-pane rests on.")
 capslock and numlock — are deliberately not in the protocol, because a locked
 modifier in a binding makes no sense.")
 
-(defparameter *modifier-aliases*
-  '((:shift . :shift)
-    (:ctrl . :ctrl) (:control . :ctrl) (:c . :ctrl)
-    (:alt . :mod1) (:mod1 . :mod1) (:meta . :mod1) (:m . :mod1)
-    (:mod3 . :mod3)
-    (:super . :mod4) (:mod4 . :mod4) (:logo . :mod4) (:win . :mod4)
-    (:s . :mod4)
-    (:hyper . :mod5) (:mod5 . :mod5))
-  "What people type, mapped to what the protocol calls it.
-
-Both `super' and `mod4' work, and so do `C-' and `ctrl', because muscle memory
-differs and refusing one of them is a pointless fight to pick.")
-
-(defparameter +modifier-order+ '(:shift :ctrl :mod1 :mod3 :mod4 :mod5)
-  "Canonical order, so that (:super :shift) and (:shift :super) are the same
-key as far as EQUAL is concerned — which matters, because keys are hash keys.")
-
-(defun modifier-mask (modifiers)
-  "The canonical keyword list for MODIFIERS.
-
-MODIFIERS is a list of the names people type — (:super :shift), (:ctrl) — and
-the result is what river's generated bindings want, in a fixed order so that
-two spellings of the same chord are EQUAL."
-  (let ((canonical '()))
-    (dolist (modifier modifiers)
-      (let ((mapped (cdr (assoc modifier *modifier-aliases*))))
-        (unless mapped
-          (error "Unknown modifier ~s.  Known: ~{~(~a~)~^ ~}"
-                 modifier (remove-duplicates (mapcar #'car *modifier-aliases*))))
-        (pushnew mapped canonical)))
-    (remove-if-not (lambda (m) (member m canonical)) +modifier-order+)))
-
-(defun modifier-names (modifiers)
-  "MODIFIERS rendered the way a person would write them."
-  (mapcar (lambda (m)
-            (case m (:mod4 :super) (:mod1 :alt) (t m)))
-          (remove-if-not (lambda (m) (member m modifiers)) +modifier-order+)))
-
 (defun color-component (value)
   "Convert a 0.0-to-1.0 colour component to the 32-bit unsigned value river
 wants.
