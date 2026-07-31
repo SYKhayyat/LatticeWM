@@ -194,6 +194,7 @@ You never edit this package.")
    #:layout-children #:layout-node #:window-dimensions #:gravity
    #:gaps #:border-width #:border-color #:visible-p #:render-order
    #:clip-rect #:outer-rect #:reserved-space #:*reserve-hooks*
+   #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change

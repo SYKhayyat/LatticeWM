@@ -197,7 +197,12 @@ that."
                  (mark-dirty))
                 (t nil))))
           (wl:wl-proxy-hooks proxy))
-    (logmsg :info "output appeared: ~s" output)
+    ;; A new monitor brings its own workspace, or it mirrors the first one and
+    ;; looks broken.
+    (guarded "workspaces for outputs" (p:ensure-workspaces-for-outputs *world*))
+    (mark-dirty)
+    (logmsg :info "output appeared: ~s (workspace ~a)"
+            output (c:prop output :workspace))
     output))
 
 (defun attach-seat (proxy)

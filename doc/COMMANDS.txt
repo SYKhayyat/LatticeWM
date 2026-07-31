@@ -31,6 +31,9 @@ LatticeWM commands.
   The sibling grows to fill the space.  README D17's CLOSE; see CLEAR for the
   other half.
 
+(close-float)
+  Close the focused floating window.
+
 (describe-key spec)
   Print what SPEC is bound to.
 
@@ -57,6 +60,19 @@ LatticeWM commands.
   the cell next door, entering through the edge you crossed.  Bumping the edge of
   the world does nothing, and that is not an error.
 
+(focus-float &optional (step 1))
+  Move keyboard focus to the next floating window, or back to the tree.
+  
+  Cycling past the last float returns focus to the cursor, so one key both enters
+  and leaves the float layer and there is no mode to be stuck in.
+  
+  This command exists because focus is a *place in the tree* (D18) and a float is
+  deliberately not in the tree.  That is the right model — it is what makes
+  'move one cell left whether or not anything is there' mean something — but it
+  leaves floats with no way to be focused at all, and a floating window you
+  cannot type into is not a floating window.  WORLD-FOCUSED-FLOAT is the one slot
+  that fixes it, and this is the verb that sets it.
+
 (focus-next)
   Move the cursor to the next pane in layout order, wrapping.
 
@@ -65,6 +81,9 @@ LatticeWM commands.
 
 (focus-previous)
   Move the cursor to the previous pane in layout order, wrapping.
+
+(focus-tiled)
+  Take keyboard focus off any floating window and give it back to the cursor.
 
 (minimize)
   Take the focused window out of the tiling tree entirely.
@@ -109,6 +128,9 @@ LatticeWM commands.
 
 (quit)
   Exit the session.  This logs you out.
+
+(raise-float)
+  Put the focused floating window on top of the other floats.
 
 (reload-config)
   Re-read the configuration file.

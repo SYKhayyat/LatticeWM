@@ -311,13 +311,20 @@ Workspaces are a stack at the root of the tree, so this is the same operation
 as switching a tab — and 'infinite workspaces' costs nothing, because a stack
 grows."
   (with-relayout
-    (let ((stack (workspace-stack)))
+    (let ((stack (workspace-stack))
+          (output (current-output)))
       (when stack
         (loop while (<= (c:container-count stack) index)
               do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
+        ;; The *output* changes workspace, not the world.  With one monitor
+        ;; these are the same statement; with two they are emphatically not,
+        ;; and treating them as the same is how a second monitor ends up
+        ;; mirroring the first.
+        (when output (setf (c:prop output :workspace) index))
         (setf (c:stack-selected stack) index)
         (p:jump-cursor (policy) *world* (list index))
-        (run-hooks :workspace-changed index)))))
+        (run-hooks :workspace-changed index)
+        (notify "workspace ~d" (1+ index))))))
 
 (defcommand next-workspace (&optional (step 1))
   "Switch to the next workspace, wrapping."

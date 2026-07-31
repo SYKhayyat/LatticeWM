@@ -29,6 +29,69 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: NIL
   The xcursor theme name, or NIL to leave the compositor's default alone.
 
+*ECHO-ACCENT*
+  value:   (0.4 0.65 1.0 1.0)
+  default: (0.4 0.65 1.0 1.0)
+  Colour for the part of the echo area that says where you are.
+
+*ECHO-AREA*
+  value:   T
+  default: T
+  Show a status line along the bottom of the screen.
+  
+  It reports where the cursor is, what is on this workspace, and the last
+  message.  Turn it off if you want the screen entirely to yourself; you will
+  lose the only permanent indication of which cell you are in.
+
+*ECHO-BACKGROUND*
+  value:   (0.09 0.09 0.12 0.92)
+  default: (0.09 0.09 0.12 0.92)
+  Echo area background, as (R G B A).  Slightly translucent by default so it
+  reads as an overlay rather than as a window.
+
+*ECHO-DIVIDER*
+  value:   (0.28 0.28 0.34 1.0)
+  default: (0.28 0.28 0.34 1.0)
+  Colour of the separators between echo-area segments.
+  
+  Dim on purpose: a separator is punctuation, and punctuation you notice is
+  punctuation that is too loud.
+
+*ECHO-FOREGROUND*
+  value:   (0.75 0.78 0.85 1.0)
+  default: (0.75 0.78 0.85 1.0)
+  Echo area text colour.
+
+*ECHO-HEIGHT*
+  value:   24
+  default: 24
+  Height of the echo area in pixels.
+
+*ECHO-MESSAGE-SECONDS*
+  value:   6
+  default: 6
+  How long a message stays in the echo area before it is dropped.
+
+*ECHO-POSITION*
+  value:   :BOTTOM
+  default: :BOTTOM
+  Which edge the echo area sits on: :BOTTOM or :TOP.
+  
+  Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
+  for two situations: running nested inside another desktop whose panel is along
+  the bottom, and any setup where something else already owns that edge.
+
+*ECHO-SCALE*
+  value:   1
+  default: 1
+  Integer scale factor for echo-area text.
+  
+  1 is the font's own size — sixteen pixels tall, which is an ordinary status
+  bar.  2 is for a HiDPI display, where it is again ordinary rather than large.
+  There is no half step, deliberately: a bitmap font scaled by anything but a
+  whole number is a smear, and a bitmap font scaled by a whole number is crisp
+  at any size.
+
 *EDITOR*
   value:   "emacs"
   default: "emacs"

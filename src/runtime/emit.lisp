@@ -60,15 +60,26 @@ shows.  With a single output — which is every laptop — it is one call."
   (let* ((policy (p:current-policy))
          (outputs (all-outputs))
          (root (c:world-root *world*)))
-    (if (null outputs)
-        ;; No outputs yet: lay out over a nominal rectangle so that the tree is
-        ;; in a consistent state.  Nothing is drawn, because nothing is
-        ;; connected.
-        (guarded "layout" (p:layout-node policy root (c:make-rect 0 0 1920 1080)))
-        (loop for output in outputs
-              append (guarded "layout"
-                       (p:layout-node policy root
-                                      (p:outer-rect policy output)))))))
+    (cond
+      ;; No outputs yet: lay out over a nominal rectangle so the tree is in a
+      ;; consistent state.  Nothing is drawn, because nothing is connected.
+      ((null outputs)
+       (guarded "layout" (p:layout-node policy root (c:make-rect 0 0 1920 1080))))
+      (t
+       (let ((placed '()))
+         (dolist (output outputs (nreverse placed))
+           (multiple-value-bind (node prefix)
+               (guarded "output-content" (p:output-content policy *world* output))
+             (when node
+               ;; Paths come back relative to NODE; rebase them onto the root so
+               ;; that a placement is addressable globally and the cursor can be
+               ;; compared against it.
+               (dolist (placement (guarded "layout"
+                                    (p:layout-node policy node
+                                                   (p:outer-rect policy output))))
+                 (destructuring-bind (child path rect visible) placement
+                   (push (list child (append prefix path) rect visible)
+                         placed)))))))))))
 
 (defun draw-overlays ()
   "Draw everything we render ourselves, and place it above the windows.

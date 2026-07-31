@@ -282,6 +282,55 @@ window sliced in half."
   (declare (ignore node rect))
   nil)
 
+(defmethod output-content ((policy policy) world (output c:output))
+  "Each output shows its own workspace.
+
+The index lives on the output's PROPS rather than in a slot, because which
+workspace a monitor is showing is exactly the kind of state that should not
+require a core class to grow a field — and because an extension that wants a
+different rule needs somewhere to put its own answer."
+  (let ((stack (c:world-workspaces world)))
+    (if (null stack)
+        (values (c:world-root world) '())
+        (let* ((index (or (c:prop output :workspace)
+                          (setf (c:prop output :workspace)
+                                (default-workspace-for world output))))
+               (index (max 0 (min index (1- (c:container-count stack))))))
+          (values (c:child-at stack index) (list index))))))
+
+(defun default-workspace-for (world output)
+  "The workspace an output shows before anybody has said otherwise.
+
+Its own position in the output list, so a fresh two-monitor session shows
+workspaces 1 and 2 rather than the same workspace twice.
+
+The clamp is against the *current* number of workspaces, so plugging in a
+second monitor before there is a second workspace shows workspace 1 on both
+until one exists.  ENSURE-WORKSPACES-FOR-OUTPUTS makes sure one does."
+  (let ((position (position output (c:world-outputs world)))
+        (stack (c:world-workspaces world)))
+    (if (null stack)
+        0
+        (min (or position 0) (max 0 (1- (c:container-count stack)))))))
+
+(defun ensure-workspaces-for-outputs (world)
+  "Grow the workspace list so every output can have one of its own.
+
+Called when an output appears.  Without it, a second monitor arrives, finds
+only one workspace, and mirrors the first — which looks like a bug in the
+layout rather than an absence of workspaces."
+  (let ((stack (c:world-workspaces world))
+        (wanted (length (c:world-outputs world))))
+    (when stack
+      (loop while (< (c:container-count stack) wanted)
+            do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
+      (loop for output in (c:world-outputs world)
+            for index from 0
+            do (unless (c:prop output :workspace)
+                 (setf (c:prop output :workspace)
+                       (min index (1- (c:container-count stack))))))
+      stack)))
+
 (defmethod outer-rect ((policy policy) (output c:output))
   "The rectangle the tree may use, less the gaps and anything reserved.
 

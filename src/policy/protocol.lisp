@@ -240,6 +240,25 @@ in half.  Free, from the compositor.
 Returns NIL in the conventional layer, where nothing ever overhangs.  The
 lattice is what makes it earn its keep."))
 
+(defgeneric output-content (policy world output)
+  (:documentation
+   "Which part of the model does OUTPUT show?
+
+Returns (values NODE PATH): the subtree to lay out on that output, and its
+path from the root so that placements can be addressed globally.
+
+PLAN.org's fiat rules multi-monitor as \"one model, one viewport per output\",
+and this generic is that ruling.  The shipped answer gives each output its own
+*workspace* — output 0 shows whichever workspace it was last switched to,
+output 1 its own — which is i3's and sway's behaviour and the one nobody has to
+be taught.
+
+Returning the same node for two outputs is a mistake with a specific and
+confusing symptom, so it is worth naming: every window gets placed twice, the
+second placement wins, and the whole layout silently collapses onto the last
+output while the model insists everything is fine.  That was the first
+implementation."))
+
 (defgeneric reserved-space (policy output)
   (:documentation
    "Pixels to keep clear on each edge of OUTPUT, as (TOP RIGHT BOTTOM LEFT).

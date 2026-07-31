@@ -1,7 +1,7 @@
 
 ============================================================================
 LatticeWM extension surface
-37 generics, 26 options.  Generated from the running image.
+39 generics, 35 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -374,6 +374,30 @@ downstream honours it without knowing why.
     (policy output)                     ; conventional.lisp
 
 ----------------------------------------------------------------------------
+output-content (latticewm/policy:policy latticewm/policy::world
+                latticewm/policy::output)
+----------------------------------------------------------------------------
+Which part of the model does OUTPUT show?
+
+Returns (values NODE PATH): the subtree to lay out on that output, and its
+path from the root so that placements can be addressed globally.
+
+PLAN.org's fiat rules multi-monitor as "one model, one viewport per output",
+and this generic is that ruling.  The shipped answer gives each output its own
+*workspace* — output 0 shows whichever workspace it was last switched to,
+output 1 its own — which is i3's and sway's behaviour and the one nobody has to
+be taught.
+
+Returning the same node for two outputs is a mistake with a specific and
+confusing symptom, so it is worth naming: every window gets placed twice, the
+second placement wins, and the whole layout silently collapses onto the last
+output while the model insists everything is fine.  That was the first
+implementation.
+
+  methods:
+    (policy t output)                   ; conventional.lisp
+
+----------------------------------------------------------------------------
 pointer-focus (latticewm/policy:policy latticewm/policy::world
                latticewm/policy::x latticewm/policy::y)
 ----------------------------------------------------------------------------
@@ -405,6 +429,21 @@ overlays.
 
   methods:
     (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
+reserved-space (latticewm/policy:policy latticewm/policy::output)
+----------------------------------------------------------------------------
+Pixels to keep clear on each edge of OUTPUT, as (TOP RIGHT BOTTOM LEFT).
+
+This is how a status bar, a dock or the echo area takes its strip without
+every layout having to know it exists.  The shipped answer reserves the echo
+area's height at the bottom and nothing else.
+
+Return all zeroes to let windows use the whole output — the echo area is drawn
+above them, so it still works, it just overlaps.
+
+  methods:
+    (policy output)                     ; conventional.lisp
 
 ----------------------------------------------------------------------------
 should-collapse-p (latticewm/policy:policy latticewm/policy::container)
@@ -579,6 +618,60 @@ emptied container persists and can be filled again.
 *cursor-theme*
   now: NIL
   The xcursor theme name, or NIL to leave the compositor's default alone.
+
+*echo-accent*
+  now: (0.4 0.65 1.0 1.0)
+  Colour for the part of the echo area that says where you are.
+
+*echo-area*
+  now: T
+  Show a status line along the bottom of the screen.
+
+It reports where the cursor is, what is on this workspace, and the last
+message.  Turn it off if you want the screen entirely to yourself; you will
+lose the only permanent indication of which cell you are in.
+
+*echo-background*
+  now: (0.09 0.09 0.12 0.92)
+  Echo area background, as (R G B A).  Slightly translucent by default so it
+reads as an overlay rather than as a window.
+
+*echo-divider*
+  now: (0.28 0.28 0.34 1.0)
+  Colour of the separators between echo-area segments.
+
+Dim on purpose: a separator is punctuation, and punctuation you notice is
+punctuation that is too loud.
+
+*echo-foreground*
+  now: (0.75 0.78 0.85 1.0)
+  Echo area text colour.
+
+*echo-height*
+  now: 24
+  Height of the echo area in pixels.
+
+*echo-message-seconds*
+  now: 6
+  How long a message stays in the echo area before it is dropped.
+
+*echo-position*
+  now: :BOTTOM
+  Which edge the echo area sits on: :BOTTOM or :TOP.
+
+Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
+for two situations: running nested inside another desktop whose panel is along
+the bottom, and any setup where something else already owns that edge.
+
+*echo-scale*
+  now: 1
+  Integer scale factor for echo-area text.
+
+1 is the font's own size — sixteen pixels tall, which is an ordinary status
+bar.  2 is for a HiDPI display, where it is again ordinary rather than large.
+There is no half step, deliberately: a bitmap font scaled by anything but a
+whole number is a smear, and a bitmap font scaled by a whole number is crisp
+at any size.
 
 *editor*
   now: "emacs"
