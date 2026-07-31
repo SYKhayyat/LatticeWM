@@ -48,6 +48,8 @@
        ;; behind, so it has to exist before the first one is written.
        (:file "log")
        (:file "protocol")
+       ;; hooks needs DEFINE-OPTION from protocol and GUARDED from log.
+       (:file "hooks")
        (:file "conventional")
        (:file "motion")
        (:file "lifecycle")
@@ -65,8 +67,7 @@
      (:module "runtime"
       :serial t
       :components
-      ((:file "hooks")
-       (:file "server")
+      ((:file "server")
        (:file "keys")
        (:file "font")
        (:file "psf")

@@ -157,6 +157,66 @@
                   ((>= ratio 1.0) "   healthy")
                   (t "   <-- watch this: runtime is outgrowing policy")))))
 
+;;; ---------------------------------------------------------------- gate 7
+
+(banner 7 "every declared hook is run, and every run hook is declared")
+;; THE BUG THIS EXISTS FOR IS THE ONE NOTHING ELSE CAN SEE.
+;;
+;; :FOCUS-CHANGED was declared, documented "For status bars", and listed in
+;; the generated extension surface -- and no line anywhere ran it.  A status
+;; bar attached to it would simply never have updated, and every check this
+;; project has would have kept passing: gate 2 sees a documented hook, the
+;; surface document lists it, the tests never fire it.
+;;
+;; The mirror image is just as quiet.  A RUN-HOOKS on a name nobody declared
+;; is a seam nobody can find, because the extension surface is built from the
+;; declarations.
+;;
+;; Both directions are one grep against the source, which is the whole reason
+;; to have the gate: it is cheap enough that not having it was never a
+;; decision, only an oversight.
+(flet ((hook-keys (pattern)
+         ;; Scan the source rather than the image.  RUN-HOOKS calls are not
+         ;; reachable by introspection -- they are call sites, not data.
+         (let ((found '()))
+           (dolist (path (append (directory "src/**/*.lisp")
+                                 (directory "lattice/*.lisp"))
+                         found)
+             (with-open-file (in path)
+               (loop for line = (read-line in nil) while line
+                     do (let ((at 0))
+                          (loop for hit = (search pattern line :start2 at)
+                                while hit
+                                do (let* ((start (+ hit (length pattern)))
+                                          (end (or (position-if-not
+                                                    (lambda (c)
+                                                      (or (alpha-char-p c)
+                                                          (char= c #\-)))
+                                                    line :start start)
+                                                   (length line))))
+                                     (when (> end start)
+                                       (pushnew (subseq line start end) found
+                                                :test #'string=))
+                                     (setf at (max end (1+ hit)))))))))))
+       (declared ()
+         (mapcar (lambda (row) (string-downcase (symbol-name (first row))))
+                 (call "latticewm/policy:all-hooks"))))
+  (let* ((run (hook-keys "run-hooks :"))
+         (declared (declared))
+         (dead (set-difference declared run :test #'string=))
+         (undeclared (set-difference run declared :test #'string=)))
+    (format t "  ~d declared, ~d run~%" (length declared) (length run))
+    (when dead
+      (fail 7 "declared but never run: ~{:~a~^ ~} -- ~
+               nothing will ever call a function added to ~:[them~;it~]"
+            dead (= 1 (length dead))))
+    (when undeclared
+      (fail 7 "run but never declared: ~{:~a~^ ~} -- ~
+               a seam nobody can find, because the surface lists declarations"
+            undeclared))
+    (unless (or dead undeclared)
+      (format t "  every hook is both declared and run~%"))))
+
 ;;; ---------------------------------------------------------------- verdict
 
 (format t "~&~%~76,,,'=<~>~%")

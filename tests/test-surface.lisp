@@ -394,6 +394,35 @@ ter-d28n is fourteen, so the cap refused every size above the smallest."
       (is (= 24 (p:font-text-height big)))
       (is (= 120 (p:font-text-width big "hello" :scale 2))))))
 
+;;; ------------------------------------------------------------- hooks
+
+(test a-hook-nobody-runs-is-caught-when-you-attach-to-it
+  "ADD-HOOK on an undeclared name is the easiest way to write a line of
+configuration that does nothing at all, silently, forever.
+
+It happened while writing this project's own hardware check: the output
+recording was hung on :RELAYOUT, which is not a hook this system runs.  The
+config loaded, the function was never called, and the report came back empty
+with no indication why.  On a tty with no editor that costs the trip.
+
+Gate 7 catches the core's side of this -- a hook declared and never run, or
+run and never declared.  Neither can see a *user's* config file, which is
+where the mistake is most likely, so ADD-HOOK checks too."
+  (is (eq t (nth-value 1 (gethash :startup p:*hook-documentation*)))
+      "the shipped hooks are declared")
+  (is (eq nil (nth-value 1 (gethash :relayout p:*hook-documentation*)))
+      ":relayout is exactly the plausible-looking name that is not a hook")
+  ;; It warns rather than refuses: an extension may run hooks of its own.
+  (let ((warned nil))
+    (handler-bind ((warning (lambda (c) (declare (ignore c)) (setf warned t))))
+      (p:add-hook :relayout 'identity))
+    (p:remove-hook :relayout 'identity))
+  ;; And the check is a hash lookup, so it is free where it runs.
+  (let ((p:*warn-on-undeclared-hooks* nil))
+    (is (eq 'identity (p:add-hook :still-not-a-hook 'identity))
+        "with the option off it is silent and still works")
+    (p:remove-hook :still-not-a-hook 'identity)))
+
 ;;; ------------------------------------------------------ shifted keys
 
 (test shift-produces-the-shifted-glyph

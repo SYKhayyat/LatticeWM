@@ -165,6 +165,7 @@ condition."
               ;; wrong until you type.
               (c:world-focused-float world) nil)
         (ignore-errors (on-focus-change policy world old target))
+        (run-hooks :focus-changed old target)
         target))))
 
 (defun jump-cursor (policy world path)
@@ -181,6 +182,7 @@ than an edge — DESIGN D20's second rule."
       (setf (c:world-cursor world) target
             (c:world-focused-float world) nil)
       (ignore-errors (on-focus-change policy world old target))
+      (run-hooks :focus-changed old target)
       target)))
 
 (defun repair-cursor (policy world &optional (was (c:world-cursor world)))
@@ -195,5 +197,6 @@ this; it is REPAIR-PATH plus the focus-change hook."
          (old (c:world-cursor world)))
     (setf (c:world-cursor world) target)
     (unless (c:path-equal old target)
-      (ignore-errors (on-focus-change policy world old target)))
+      (ignore-errors (on-focus-change policy world old target))
+      (run-hooks :focus-changed old target))
     target))

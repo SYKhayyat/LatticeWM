@@ -244,6 +244,15 @@ You never edit this package.")
    #:all-bound-keys
    #:bindable-keys
    #:*shift-map* #:shifted-character
+   ;; hooks: noticing that something happened
+   #:*hooks*
+   #:*hook-documentation*
+   #:defhook
+   #:add-hook
+   #:remove-hook
+   #:run-hooks
+   #:all-hooks
+   #:*warn-on-undeclared-hooks*
    #:*keymap*
    #:*pending-keymap*
    #:*help-visible*
@@ -333,6 +342,14 @@ You never edit this package.")
    #:*log-stream*
    #:+log-levels+
    #:substitute-arguments
+   #:*hooks*
+   #:*hook-documentation*
+   #:defhook
+   #:add-hook
+   #:remove-hook
+   #:run-hooks
+   #:all-hooks
+   #:*warn-on-undeclared-hooks*
    #:keysym-named
    #:keysym-name
    #:parse-key
@@ -423,8 +440,6 @@ keybindings, the command registry, and the session loop.")
    ;; nothing at all, which is the worst of the three possible outcomes.
    #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
    #:*manage-warn-seconds* #:*manage-timeout-seconds*
-   ;; hooks
-   #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state
    #:save-state #:load-state #:state-file))
 

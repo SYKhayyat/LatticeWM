@@ -255,6 +255,60 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: 100
   How many past entries each minibuffer history ring keeps.
 
+*KEYS-HINT*
+  value:   T
+  default: T
+  Keep a one-line reminder of the essential keys in the status line, until
+  the keymap has been opened at least once.
+  
+  WHY THIS EXISTS, IN THE WORDS OF THE FIRST PERSON TO USE IT COLD: "i have no
+  clue how to close windows or how to pick which splits".
+  
+  Everything needed was already there -- the welcome overlay lists these keys,
+  Super+/ draws the whole keymap, and the empty pane already says `e t b to
+  open'.  None of it helped, for a reason worth writing down: the welcome
+  overlay is dismissed by *any* key, so the first keystroke of an impatient
+  person removes it before it has been read, and every other affordance is
+  behind a key you have to already know.
+  
+  A status line is the one place that cannot be dismissed by accident.  So the
+  essentials live there until Super+/ has been pressed once, at which point the
+  hint has done its job and goes away by itself rather than nagging forever.
+
+*MANAGE-TIMEOUT-SECONDS*
+  value:   5
+  default: 5
+  Abandon a manage sequence that has run this long.  NIL to never abandon.
+  
+  THE FAILURE THIS EXISTS FOR IS THE WORST ONE THIS PROGRAM HAS.  River waits
+  for manage_finish before processing any further input, so a policy method that
+  loops forever does not hang the window manager -- it hangs *the desktop*, with
+  no keyboard, no mouse and no way back except a tty.  GUARDED catches a method
+  that signals and WITH-ABANDON catches an event that breaks; neither catches a
+  method that simply never returns.
+  
+  The cost is real and worth stating.  Abandoning unwinds through whatever was
+  mid-flight, and if that was a request being marshalled the connection can end
+  up out of step, which river answers by closing it.  So this trades `frozen
+  until you reboot' for `probably fine, possibly the session ends' -- a bad
+  trade in general and a good one here, because the first outcome has no
+  recovery and the second drops you back at a login screen.
+  
+  WITH-MANAGE-SEQUENCE's UNWIND-PROTECT still sends manage_finish on the way
+  out, so the sequence itself is closed properly however the body ends.
+  
+  Five seconds is deliberately far beyond any legitimate relayout.  Nothing that
+  finishes should ever meet it; it is a backstop, not a budget.
+
+*MANAGE-WARN-SECONDS*
+  value:   0.25
+  default: 0.25
+  Log a warning when a manage sequence takes longer than this.  NIL to stop.
+  
+  A number rather than a failure, in the shape of gate 6: the point is that a
+  slow relayout is *visible* rather than that it is fatal.  A quarter second is
+  about four frames, which is where a person starts to feel it.
+
 *MINIBUFFER-CANDIDATES-SHOWN*
   value:   6
   default: 6
@@ -341,6 +395,39 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   
   Set to NIL if you would rather have the allocation happen once.
 
+*SHIFT-MAP*
+  value:   ((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
+            (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
+            (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
+            (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
+            (#\` . #\~))
+  default: ((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
+            (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
+            (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
+            (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
+            (#\` . #\~))
+  What a key produces when Shift is held, for keys that are not letters.
+  
+  *This exists because river sends the unshifted keysym.*  The design assumed
+  the opposite -- that xkb would produce `parenleft' for Shift+9 and river would
+  pass it through with Shift still in the modifier set -- and bound every
+  printable keysym twice, bare and shifted, on that reasoning.  Measured against
+  a real keyboard on bare metal, what arrives for Shift+9 is keysym `9' with
+  Shift set, so the prompt inserted a nine.  Typing (+ 1 2) into M-: produced
+  `9= 1 20', which is a symbol called 9= and an unbound-variable error.
+  
+  Letters need no entry: CHAR-UPCASE is right for every alphabet SBCL knows,
+  and it is the fallback.
+  
+  *This table is US-layout and there is no way for it not to be.*  River does
+  the xkb work and does not tell us the shifted keysym, so the shifted glyph
+  cannot be derived -- it has to be declared.  Which is exactly why this is a
+  tier-0 option rather than a constant: on a German or Dvorak layout the shipped
+  answer is wrong, and being wrong in a value somebody can edit is a different
+  kind of wrong from being wrong in a function nobody can reach.
+  
+      (setf *shift-map* (append '((#8 . #() (#9 . #))) *shift-map*))
+
 *SHOW-EMPTY-PANES*
   value:   T
   default: T
@@ -406,6 +493,25 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   value:   (0.22 0.22 0.26 1.0)
   default: (0.22 0.22 0.26 1.0)
   Border colour of every pane that is not focused.
+
+*WARN-ON-UNDECLARED-HOOKS*
+  value:   T
+  default: T
+  Complain when ADD-HOOK is given a name no DEFHOOK declared.
+  
+  An undeclared hook is not an error -- ADD-HOOK works on any name, and an
+  extension is entitled to invent its own and run it itself.  It is, however,
+  the single easiest way to write a line of configuration that does nothing at
+  all, silently, forever.
+  
+  That happened while writing the hardware check for this project: it hung its
+  output recording on :RELAYOUT, which is not a hook this system runs.  The
+  config loaded, the function was never called, and the report was empty with no
+  indication why.  On a tty, with no editor, that costs the trip.
+  
+  The check is a hash lookup on a path taken a handful of times at startup, so
+  it is free in any sense that matters.  Set this to NIL if you run your own
+  hooks and would rather not hear about it.
 
 *WELCOME-ON-FIRST-RUN*
   value:   T

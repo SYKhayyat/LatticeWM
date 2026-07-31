@@ -1,4 +1,4 @@
-;;;; runtime/hooks.lisp --- Named hook lists.
+;;;; policy/hooks.lisp --- Named hook lists.
 ;;;;
 ;;;; Hooks and the policy generics answer different questions, and confusing
 ;;;; them produces a bad design in both directions.
@@ -13,7 +13,7 @@
 ;;;; program.  Use a method when you want to change a decision.  If you find
 ;;;; yourself wanting a hook's return value, you wanted a method.
 
-(in-package #:latticewm/runtime)
+(in-package #:latticewm/policy)
 
 (defvar *hooks* (make-hash-table :test #'eq)
   "NAME -> (list of functions), most recently added first.")
@@ -35,6 +35,23 @@ finds it."
             (setf (gethash ,name *hooks*) '()))
           ,name))
 
+(define-option *warn-on-undeclared-hooks* t
+  "Complain when ADD-HOOK is given a name no DEFHOOK declared.
+
+An undeclared hook is not an error -- ADD-HOOK works on any name, and an
+extension is entitled to invent its own and run it itself.  It is, however,
+the single easiest way to write a line of configuration that does nothing at
+all, silently, forever.
+
+That happened while writing the hardware check for this project: it hung its
+output recording on :RELAYOUT, which is not a hook this system runs.  The
+config loaded, the function was never called, and the report was empty with no
+indication why.  On a tty, with no editor, that costs the trip.
+
+The check is a hash lookup on a path taken a handful of times at startup, so
+it is free in any sense that matters.  Set this to NIL if you run your own
+hooks and would rather not hear about it.")
+
 (defun add-hook (name function &key append)
   "Add FUNCTION to hook NAME, at the front unless APPEND.
 
@@ -49,6 +66,11 @@ A symbol has neither problem.  It is looked up when the hook runs, so
 redefinition takes effect, and a second ADD-HOOK of the same symbol replaces
 rather than accumulates.  An anonymous lambda has the same trouble as #' and no
 way out of it, so give it a name first."
+  (when (and *warn-on-undeclared-hooks*
+             (not (nth-value 1 (gethash name *hook-documentation*))))
+    (logmsg :warn "~s is not a declared hook, so nothing will ever run it.~%~
+                   Declared hooks are: ~{~s~^ ~}"
+            name (mapcar #'first (all-hooks))))
   (let ((existing (remove function (gethash name *hooks*))))
     (setf (gethash name *hooks*)
           (if append (append existing (list function)) (cons function existing))))
