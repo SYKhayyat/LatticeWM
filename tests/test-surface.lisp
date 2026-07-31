@@ -394,6 +394,55 @@ ter-d28n is fourteen, so the cap refused every size above the smallest."
       (is (= 24 (p:font-text-height big)))
       (is (= 120 (p:font-text-width big "hello" :scale 2))))))
 
+;;; ------------------------------------- how the system describes itself
+
+(test the-composition-path-runs-end-to-end
+  "Every screen the window manager uses to explain itself, exercised once.
+
+This exists because none of it was covered, and the gap cost a real bug: a
+function moved from LATTICEWM/RUNTIME to LATTICEWM/POLICY and one caller was
+left behind naming a symbol in the package it had left.  KEYMAP-CHOICES then
+called an undefined function, so *pressing a chord prefix would have errored*
+-- and gate 1 passed, gate 2 passed, and 727 checks passed, because nothing
+ever called it.
+
+The lesson is narrow and worth keeping: a test that constructs the object is
+not the same as a test that renders it.  These five are the rendering."
+  (let* ((policy (policy))
+         (m (p:make-keymap :name "test")))
+    (p:define-key m "a" '("help"))
+    (p:define-key m "b" '("quit"))
+    ;; which-key, which is what actually broke.
+    (let ((choices (p:keymap-choices policy m)))
+      (is (= 2 (length choices)))
+      (is (equal "a" (car (first choices))))
+      (is (plusp (length (cdr (first choices))))
+          "and it found the command's docstring, not just its name"))
+    (let ((segments (let ((p:*pending-keymap* m))
+                      (p:pending-keymap-segments policy 120))))
+      (is (<= 2 (length segments)) "a prompt segment and one row per choice"))
+    ;; A binding describes itself with its arguments substituted in.
+    (let ((description (p:binding-description policy '("focus" :left))))
+      (is (search "left" description)
+          "the argument reached the docstring: ~s" description)
+      (is (not (search "DIRECTION" description))
+          "and the placeholder did not survive: ~s" description)
+      (is (not (find (code-char 8212) description))
+          "a summary cut at a dash does not keep the dash: ~s" description))
+    ;; describe-command, and where-is.
+    (let ((rows (p:command-help-rows policy (p:find-command "focus"))))
+      (is (plusp (length rows)))
+      (is (every (lambda (row) (and (consp row) (stringp (cdr row)))) rows)))
+    ;; The welcome screen, derived rather than written down.
+    (let ((rows (p:welcome-rows policy)))
+      (is (<= 10 (length rows) 20) "about a dozen, ending with how to quit")
+      (is (some (lambda (row) (search "Escape" (car row))) rows)
+          "and the way out is on it"))
+    ;; The full keymap screen, over a keymap that actually has bindings.
+    (let ((entries (p:help-entries policy m)))
+      (is (= 2 (length entries)))
+      (is (every (lambda (e) (and (stringp (car e)) (stringp (cdr e)))) entries)))))
+
 ;;; ------------------------------------------------------------ live surgery
 
 (test redefining-a-method-takes-effect-immediately

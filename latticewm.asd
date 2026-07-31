@@ -52,9 +52,11 @@
        (:file "motion")
        (:file "lifecycle")
        (:file "surface")
-       (:file "appearance")
        (:file "commands")
-       (:file "keys")))
+       ;; keys before appearance: the status-line and which-key
+       ;; composition reads *PENDING-KEYMAP* and the keymap tree.
+       (:file "keys")
+       (:file "appearance")))
      (:module "wire"
       :serial t
       :components

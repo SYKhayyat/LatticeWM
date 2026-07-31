@@ -41,7 +41,7 @@ Three sources, in the order that decides which one wins when more than one has
 something to say: a prompt owns the line outright, an armed chord is the next
 most urgent thing, and otherwise the status line is the policy's to fill."
   (cond ((reading-p) (prompt-segments))
-        (*pending-keymap* (pending-keymap-segments columns))
+        (*pending-keymap* (p:pending-keymap-segments (p:current-policy) columns))
         (t (guarded "echo-content" (p:echo-content (p:current-policy) world)))))
 
 (defun draw-echo-area (world output)

@@ -21,54 +21,6 @@
 
 (defvar *help-overlay* nil)
 
-(defun binding-description (target)
-  "A short description of what a key does.
-
-Prefers the command's own docstring — its first line, which is written to be
-exactly this — over the command name, because the name is usually the least
-informative thing available."
-  (etypecase target
-    (null "")
-    (keymap (format nil "+ ~a..." (or (keymap-name target) "prefix")))
-    (function "a function")
-    (string (binding-description (list target)))
-    (cons
-     (let* ((command (find-command (first target)))
-            (text (summary-of (and command (command-documentation command))))
-            (arguments (remove-if #'keywordp (rest target)
-                                  :key (lambda (x) (and (keywordp x) x)))))
-       (declare (ignore arguments))
-       (cond
-         ((null command) (format nil "~{~(~a~)~^ ~}" target))
-         ((null text) (format nil "~{~(~a~)~^ ~}" target))
-         (t (substitute-arguments text command (rest target))))))))
-
-(defun help-entries (&optional (keymap *keymap*))
-  "Every binding as (KEYS . DESCRIPTION), sorted for reading.
-
-Bindings that do the same thing are merged onto one row, because the shipped
-keymap deliberately binds both the vi letters and the arrow keys — the arrows
-are what somebody uses on their first day and the letters are what they use on
-their hundredth — and listing each twice would make the help screen twice as
-long while saying nothing extra.
-
-Sorted by *what the key does* rather than by the key, so the four directions of
-one verb end up together and the screen reads as a set of verbs rather than as
-an alphabet."
-  (let ((by-description (make-hash-table :test #'equal))
-        (order '()))
-    (dolist (row (keymap-keys keymap))
-      (destructuring-bind (key . target) row
-        (let ((description (binding-description target)))
-          (unless (gethash description by-description) (push description order))
-          (push (key-to-string key) (gethash description by-description)))))
-    (sort (loop for description in order
-                collect (cons (format nil "~{~a~^ / ~}"
-                                      (sort (gethash description by-description)
-                                            #'< :key #'length))
-                              description))
-          #'string< :key #'cdr)))
-
 (defun draw-help-overlay ()
   "Draw the keymap, or hide it."
   (let ((output (first (all-outputs))))
@@ -81,7 +33,7 @@ an alphabet."
            (canvas (ensure-overlay *help-overlay* (c:rect-w area) (c:rect-h area))))
       (when canvas
         (let* ((customp (consp *help-visible*))
-               (entries (if customp (cdr *help-visible*) (help-entries)))
+               (entries (if customp (cdr *help-visible*) (p:help-entries (policy) p:*keymap*)))
                (line (+ 4 (text-height :scale p:*help-scale*)))
                (title-top 16)
                (top (+ title-top (* 2 line)))
@@ -167,54 +119,11 @@ anything you bound yourself and cannot go out of date.  Any key dismisses it."
   (mark-dirty)
   *help-visible*)
 
-(defun keys-running (name)
-  "Every key bound to the command called NAME, as a printable string.
-
-Emacs's `where-is', folded into describe-command because the question `what
-does this do' and the question `how do I do it without typing its name' are
-asked at the same moment."
-  (let ((keys (loop for (key . target) in (all-bound-keys)
-                    when (and (consp target)
-                              (stringp (first target))
-                              (string-equal name (first target)))
-                      collect (key-to-string key))))
-    (when keys (format nil "~{~a~^, ~}" (sort keys #'string<)))))
-
 (defun show-help-page (title rows)
   "Put TITLE and ROWS on the help overlay.  Any key takes it down again."
   (setf *help-visible* (cons title rows))
   (mark-dirty)
   t)
-
-(defun command-help-rows (command)
-  "COMMAND's documentation, its arguments and its keys, as overlay rows."
-  (let ((rows '())
-        (keys (keys-running (command-name command))))
-    (push (cons "" (format nil "(~a~{ ~(~a~)~})" (command-name command)
-                           (command-lambda-list command)))
-          rows)
-    (push (cons "" "") rows)
-    (dolist (line (wrap-text (or (command-documentation command) "Undocumented.")
-                             78))
-      (push (cons "" line) rows))
-    (let ((arguments (remove nil (command-arguments command) :key #'second)))
-      (when arguments
-        (push (cons "" "") rows)
-        (dolist (argument arguments)
-          (destructuring-bind (symbol type kind) argument
-            (let ((argument-type (argument-type type)))
-              (push (cons "" (format nil "  ~(~a~) (~(~a~)~@[, ~(~a~)~])~@[ -- ~a~]"
-                                     symbol type
-                                     (unless (eq kind :required) kind)
-                                     (and argument-type
-                                          (argument-type-documentation argument-type))))
-                    rows))))))
-    (push (cons "" "") rows)
-    (push (cons "" (if keys
-                       (format nil "Bound to ~a." keys)
-                       "Not bound to any key -- reach it with M-x."))
-          rows)
-    (nreverse rows)))
 
 (defcommand describe-command (name)
   "Show a command's documentation, its arguments and the keys that run it.
@@ -225,7 +134,7 @@ paragraphs rather than as labels: this is where they are read."
   (let ((command (find-command name)))
     (if command
         (show-help-page (format nil "M-x ~a" (command-name command))
-                        (command-help-rows command))
+                        (p:command-help-rows (policy) command))
         (notify "no such command: ~a" name))))
 
 (defcommand describe-option (name)

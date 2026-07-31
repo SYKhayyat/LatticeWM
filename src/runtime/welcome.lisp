@@ -35,53 +35,13 @@ Deleting it makes the overlay appear once more."
                    (or (uiop:getenv-absolute-directory "XDG_STATE_HOME")
                        (merge-pathnames ".local/state/" (user-homedir-pathname)))))
 
-(defun welcome-rows ()
-  "The important keys, as overlay rows.
-
-Deliberately about a dozen entries.  The full keymap is one key away and is a
-*reference*; this is the smaller thing a reference cannot be — the six or so
-facts somebody needs before they can use the machine at all, ending with how
-to get out.
-
-Both halves are derived: the key names from *MODIFIER*, so rebinding it moves
-every row, and the descriptions from each command's own docstring, so they
-cannot drift from what the command actually does."
-  (let ((mod (string-capitalize (string *modifier*))))
-    (flet ((row (keys command &optional text)
-             (let ((found (find-command command)))
-               (cons keys (or text
-                              (summary-of (and found
-                                               (command-documentation found)))
-                              command)))))
-      (list
-       (row (format nil "~a+Return" mod) "terminal")
-       (row (format nil "~a+d / ~a+s" mod mod) "split"
-            "Split the focused pane, side by side or stacked")
-       (row (format nil "~a+h j k l" mod) "focus"
-            "Move focus -- the arrow keys do this too")
-       (row (format nil "~a+q" mod) "close")
-       (row (format nil "~a+1 ... ~a+0" mod mod) "workspace"
-            "Go to a workspace")
-       (row (format nil "~a+Space" mod) "toggle-float")
-       (cons "" "")
-       (row (format nil "~a+/" mod) "help"
-            "Every key binding, with what it does")
-       (row (format nil "~a+x" mod) "run-command-by-name"
-            "Run any command by name")
-       (row (format nil "Shift+~a+?" mod) "describe-key"
-            "Ask about a key, a command or a setting")
-       (row (format nil "~a+;" mod) "eval-expression"
-            "Evaluate a Lisp form inside the running window manager")
-       (cons "" "")
-       (row (format nil "Shift+~a+Escape" mod) "quit")))))
-
 (defcommand welcome ()
   "Show the handful of keys worth knowing before anything else.
 
 This is what appears by itself the first time LatticeWM runs.  Super+/ is the
 complete keymap; this is the short version, and it ends with how to quit
 because a window manager you cannot leave is a frightening thing to try."
-  (show-help-page "Welcome to LatticeWM" (welcome-rows)))
+  (show-help-page "Welcome to LatticeWM" (p:welcome-rows (p:current-policy))))
 
 (defun maybe-show-welcome ()
   "Show the welcome overlay if this is the first run.  Never signals.

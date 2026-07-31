@@ -489,6 +489,57 @@ Answering NIL always gives hyprland's dwindle, where every split nests inside
 the last; DESIGN's note that binary remains reachable as policy is this
 method plus SPLIT-AXIS-FOR."))
 
+
+(defgeneric binding-description (policy target)
+  (:documentation
+   "A short description of what a key does, for a help or which-key screen.
+
+TARGET is what the key is bound to: a command form, a keymap for a chord, or
+NIL.  The shipped answer prefers the command's own docstring over its name,
+because the name is usually the least informative thing available, and
+substitutes the binding's actual arguments into it -- so a key bound to
+\"focus :left\" reads \"Move the cursor one pane left\" rather than \"...one
+pane DIRECTION\"."))
+
+(defgeneric help-entries (policy keymap)
+  (:documentation
+   "Every binding in KEYMAP as (KEYS . DESCRIPTION), sorted for reading.
+
+The shipped answer merges bindings that do the same thing onto one row -- the
+keymap binds both the vi letters and the arrows deliberately, and listing each
+twice would double the screen while saying nothing -- and sorts by *what the
+key does* rather than by the key, so the four directions of one verb end up
+together and the screen reads as a set of verbs rather than as an alphabet.
+
+Both of those are taste.  Somebody who wants a plain alphabetical reference
+writes one method."))
+
+(defgeneric keys-running (policy name)
+  (:documentation
+   "Every key bound to the command called NAME, as a printable string, or NIL.
+
+Emacs's `where-is', folded into describe-command because \"what does this do\"
+and \"how do I do it without typing its name\" are asked at the same moment."))
+
+(defgeneric command-help-rows (policy command)
+  (:documentation
+   "COMMAND's documentation, arguments and keys, as rows for the help overlay.
+
+This is what Super+? c draws.  The shipped answer is the signature, the whole
+docstring wrapped, each argument with its type, and where it is bound."))
+
+(defgeneric welcome-rows (policy)
+  (:documentation
+   "The handful of keys a new user is shown on the very first start.
+
+Deliberately about a dozen entries, ending with how to quit.  The full keymap
+is one key away and is a *reference*; this is the smaller thing a reference
+cannot be.
+
+Both halves are derived rather than written down -- the key names from
+*MODIFIER*, the descriptions from each command's own docstring -- so a
+rebinding moves the welcome screen with it."))
+
 ;;; ==================================================================
 ;;; WINDOW LIFECYCLE
 ;;; ==================================================================

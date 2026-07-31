@@ -329,7 +329,13 @@ full stop or dash keeps the sentence and drops the essay."
            (stops (remove nil (list (position #\. line)
                                     (search " -- " line)
                                     (position (code-char 8212) line))))
-           (stop (when stops (reduce #'min stops))))
+           (stop (when stops (reduce #'min stops)))
+           ;; Keep a full stop, drop a dash.  A sentence ends with its full
+           ;; stop and reads wrong without one; a dash is the *start* of the
+           ;; clause being cut, and keeping it leaves "Move the cursor one
+           ;; pane left —" trailing off mid-thought on every help screen.
+           (stop (when stop
+                   (if (char= #\. (char line stop)) stop (1- stop)))))
       (if stop
           (string-right-trim " " (subseq line 0 (min (1+ stop) (length line))))
           line))))
@@ -484,13 +490,13 @@ is the difference between a reference and a help screen."
       (when message (push (cons message :accent) segments)))
     (nreverse segments)))
 
-(defun keymap-choices (keymap)
+(defun keymap-choices (policy keymap)
   "KEYMAP's bindings as (KEYS . DESCRIPTION), merged the way the help screen
 merges them: two keys that do the same thing are one choice with two keys on
 it, not two choices."
   (let ((by-description '()))
     (loop for (key . target) in (keymap-keys keymap)
-          for description = (binding-description target)
+          for description = (binding-description policy target)
           for entry = (assoc description by-description :test #'string=)
           do (if entry
                  (setf (cdr entry) (append (cdr entry) (list (keysym-name (car key)))))
@@ -500,7 +506,7 @@ it, not two choices."
               (cons (format nil "~{~a~^/~}" (rest entry)) (first entry)))
             (nreverse by-description))))
 
-(defun pending-keymap-segments (&optional (columns 120))
+(defun pending-keymap-segments (policy &optional (columns 120))
   "What an armed chord offers, as echo-area segments, inside COLUMNS.
 
 which-key, in a window manager: the moment you press the first key of a chord
@@ -515,7 +521,7 @@ then read as a word that had lost its ending — which is worse than not
 offering it, because it looks like a bug rather than like a list that goes on."
   (let* ((keymap *pending-keymap*)
          (label (format nil "~a-" (or (keymap-name keymap) "prefix")))
-         (choices (keymap-choices keymap))
+         (choices (keymap-choices policy keymap))
          (room (- columns (length label) 4))
          (shown '()))
     (loop for (keys . description) in choices
@@ -530,3 +536,154 @@ offering it, because it looks like a bug rather than like a list that goes on."
             (nreverse (if (plusp left)
                           (cons (cons (format nil "+~d more" left) :dim) shown)
                           shown))))))
+
+;;; ==================================================================
+;;; HOW THE SYSTEM DESCRIBES ITSELF
+;;; ==================================================================
+;;;
+;;; These five turn the live keymap and the live command registry into rows of
+;;; text: which bindings are worth showing, how a binding describes itself,
+;;; what a describe-command screen contains, and which dozen keys a new user
+;;; sees first.
+;;;
+;;; They were plain functions in src/runtime/, and the ruling that moved
+;;; everything else applies to them exactly: a decision should be
+;;; *specializable*, not merely redefinable.  Redefining a function in a live
+;;; image works and is half the point of the language, but it replaces the
+;;; shipped answer rather than extending it -- there is no CALL-NEXT-METHOD on
+;;; a DEFUN, so "the usual list, plus mine" has to become "a copy of the usual
+;;; list, plus mine", which is the thing that goes stale.
+;;;
+;;; WELCOME-ROWS is the one worth being embarrassed about: it was written two
+;;; sessions after the ruling and still shipped as a DEFUN.
+
+(defmethod binding-description ((policy policy) target)
+  "A short description of what a key does.
+
+Prefers the command's own docstring — its first line, which is written to be
+exactly this — over the command name, because the name is usually the least
+informative thing available."
+  (etypecase target
+    (null "")
+    (keymap (format nil "+ ~a..." (or (keymap-name target) "prefix")))
+    (function "a function")
+    (string (binding-description policy (list target)))
+    (cons
+     (let* ((command (find-command (first target)))
+            (text (summary-of (and command (command-documentation command))))
+            (arguments (remove-if #'keywordp (rest target)
+                                  :key (lambda (x) (and (keywordp x) x)))))
+       (declare (ignore arguments))
+       (cond
+         ((null command) (format nil "~{~(~a~)~^ ~}" target))
+         ((null text) (format nil "~{~(~a~)~^ ~}" target))
+         (t (substitute-arguments text command (rest target))))))))
+
+(defmethod help-entries ((policy policy) keymap)
+  "Every binding as (KEYS . DESCRIPTION), sorted for reading.
+
+Bindings that do the same thing are merged onto one row, because the shipped
+keymap deliberately binds both the vi letters and the arrow keys — the arrows
+are what somebody uses on their first day and the letters are what they use on
+their hundredth — and listing each twice would make the help screen twice as
+long while saying nothing extra.
+
+Sorted by *what the key does* rather than by the key, so the four directions of
+one verb end up together and the screen reads as a set of verbs rather than as
+an alphabet."
+  (let ((by-description (make-hash-table :test #'equal))
+        (order '()))
+    (dolist (row (keymap-keys keymap))
+      (destructuring-bind (key . target) row
+        (let ((description (binding-description policy target)))
+          (unless (gethash description by-description) (push description order))
+          (push (key-to-string key) (gethash description by-description)))))
+    (sort (loop for description in order
+                collect (cons (format nil "~{~a~^ / ~}"
+                                      (sort (gethash description by-description)
+                                            #'< :key #'length))
+                              description))
+          #'string< :key #'cdr)))
+
+(defmethod keys-running ((policy policy) name)
+  "Every key bound to the command called NAME, as a printable string.
+
+Emacs's `where-is', folded into describe-command because the question `what
+does this do' and the question `how do I do it without typing its name' are
+asked at the same moment."
+  (let ((keys (loop for (key . target) in (all-bound-keys)
+                    when (and (consp target)
+                              (stringp (first target))
+                              (string-equal name (first target)))
+                      collect (key-to-string key))))
+    (when keys (format nil "~{~a~^, ~}" (sort keys #'string<)))))
+
+(defmethod command-help-rows ((policy policy) command)
+  "COMMAND's documentation, its arguments and its keys, as overlay rows."
+  (let ((rows '())
+        (keys (keys-running policy (command-name command))))
+    (push (cons "" (format nil "(~a~{ ~(~a~)~})" (command-name command)
+                           (command-lambda-list command)))
+          rows)
+    (push (cons "" "") rows)
+    (dolist (line (wrap-text (or (command-documentation command) "Undocumented.")
+                             78))
+      (push (cons "" line) rows))
+    (let ((arguments (remove nil (command-arguments command) :key #'second)))
+      (when arguments
+        (push (cons "" "") rows)
+        (dolist (argument arguments)
+          (destructuring-bind (symbol type kind) argument
+            (let ((argument-type (argument-type type)))
+              (push (cons "" (format nil "  ~(~a~) (~(~a~)~@[, ~(~a~)~])~@[ -- ~a~]"
+                                     symbol type
+                                     (unless (eq kind :required) kind)
+                                     (and argument-type
+                                          (argument-type-documentation argument-type))))
+                    rows))))))
+    (push (cons "" "") rows)
+    (push (cons "" (if keys
+                       (format nil "Bound to ~a." keys)
+                       "Not bound to any key -- reach it with M-x."))
+          rows)
+    (nreverse rows)))
+
+(defmethod welcome-rows ((policy policy))
+  "The important keys, as overlay rows.
+
+Deliberately about a dozen entries.  The full keymap is one key away and is a
+*reference*; this is the smaller thing a reference cannot be — the six or so
+facts somebody needs before they can use the machine at all, ending with how
+to get out.
+
+Both halves are derived: the key names from *MODIFIER*, so rebinding it moves
+every row, and the descriptions from each command's own docstring, so they
+cannot drift from what the command actually does."
+  (let ((mod (string-capitalize (string *modifier*))))
+    (flet ((row (keys command &optional text)
+             (let ((found (find-command command)))
+               (cons keys (or text
+                              (summary-of (and found
+                                               (command-documentation found)))
+                              command)))))
+      (list
+       (row (format nil "~a+Return" mod) "terminal")
+       (row (format nil "~a+d / ~a+s" mod mod) "split"
+            "Split the focused pane, side by side or stacked")
+       (row (format nil "~a+h j k l" mod) "focus"
+            "Move focus -- the arrow keys do this too")
+       (row (format nil "~a+q" mod) "close")
+       (row (format nil "~a+1 ... ~a+0" mod mod) "workspace"
+            "Go to a workspace")
+       (row (format nil "~a+Space" mod) "toggle-float")
+       (cons "" "")
+       (row (format nil "~a+/" mod) "help"
+            "Every key binding, with what it does")
+       (row (format nil "~a+x" mod) "run-command-by-name"
+            "Run any command by name")
+       (row (format nil "Shift+~a+?" mod) "describe-key"
+            "Ask about a key, a command or a setting")
+       (row (format nil "~a+;" mod) "eval-expression"
+            "Evaluate a Lisp form inside the running window manager")
+       (cons "" "")
+       (row (format nil "Shift+~a+Escape" mod) "quit")))))

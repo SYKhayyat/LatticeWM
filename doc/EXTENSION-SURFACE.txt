@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-47 generics, 54 options.  Generated from the running image.
+52 generics, 54 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -29,6 +29,21 @@ offering to prompt for a tree path.
 
   methods:
     (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+binding-description (latticewm/policy:policy latticewm/policy::target)
+----------------------------------------------------------------------------
+A short description of what a key does, for a help or which-key screen.
+
+TARGET is what the key is bound to: a command form, a keymap for a chord, or
+NIL.  The shipped answer prefers the command's own docstring over its name,
+because the name is usually the least informative thing available, and
+substitutes the binding's actual arguments into it -- so a key bound to
+"focus :left" reads "Move the cursor one pane left" rather than "...one
+pane DIRECTION".
+
+  methods:
+    (policy t)                          ; appearance.lisp
 
 ----------------------------------------------------------------------------
 border-color (latticewm/policy:policy latticewm/policy::node
@@ -71,6 +86,17 @@ lattice is what makes it earn its keep.
 
   methods:
     (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+command-help-rows (latticewm/policy:policy latticewm/policy:command)
+----------------------------------------------------------------------------
+COMMAND's documentation, arguments and keys, as rows for the help overlay.
+
+This is what Super+? c draws.  The shipped answer is the signature, the whole
+docstring wrapped, each argument with its type, and where it is bound.
+
+  methods:
+    (policy t)                          ; appearance.lisp
 
 ----------------------------------------------------------------------------
 complete-candidates (latticewm/policy:policy latticewm/policy::input
@@ -284,6 +310,23 @@ policy language.
     (policy leaf t t t)                 ; conventional.lisp
 
 ----------------------------------------------------------------------------
+help-entries (latticewm/policy:policy latticewm/policy:keymap)
+----------------------------------------------------------------------------
+Every binding in KEYMAP as (KEYS . DESCRIPTION), sorted for reading.
+
+The shipped answer merges bindings that do the same thing onto one row -- the
+keymap binds both the vi letters and the arrows deliberately, and listing each
+twice would double the screen while saying nothing -- and sorts by *what the
+key does* rather than by the key, so the four directions of one verb end up
+together and the screen reads as a set of verbs rather than as an alphabet.
+
+Both of those are taste.  Somebody who wants a plain alphabetical reference
+writes one method.
+
+  methods:
+    (policy t)                          ; appearance.lisp
+
+----------------------------------------------------------------------------
 insertion-weight (latticewm/policy:policy latticewm/policy::split
                   latticewm/policy::address)
 ----------------------------------------------------------------------------
@@ -333,6 +376,17 @@ content, and nothing is lost.
 
   methods:
     (policy t t)                        ; lifecycle.lisp
+
+----------------------------------------------------------------------------
+keys-running (latticewm/policy:policy latticewm/policy::name)
+----------------------------------------------------------------------------
+Every key bound to the command called NAME, as a printable string, or NIL.
+
+Emacs's `where-is', folded into describe-command because "what does this do"
+and "how do I do it without typing its name" are asked at the same moment.
+
+  methods:
+    (policy t)                          ; appearance.lisp
 
 ----------------------------------------------------------------------------
 layout-children (latticewm/policy:policy latticewm/policy::container
@@ -702,6 +756,22 @@ must be hidden deliberately.
 
   methods:
     (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
+welcome-rows (latticewm/policy:policy)
+----------------------------------------------------------------------------
+The handful of keys a new user is shown on the very first start.
+
+Deliberately about a dozen entries, ending with how to quit.  The full keymap
+is one key away and is a *reference*; this is the smaller thing a reference
+cannot be.
+
+Both halves are derived rather than written down -- the key names from
+*MODIFIER*, the descriptions from each command's own docstring -- so a
+rebinding moves the welcome screen with it.
+
+  methods:
+    (policy)                            ; appearance.lisp
 
 ----------------------------------------------------------------------------
 window-capabilities (latticewm/policy:policy latticewm/policy::window)

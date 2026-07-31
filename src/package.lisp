@@ -254,6 +254,12 @@ You never edit this package.")
    #:current-message
    #:keymap-choices
    #:pending-keymap-segments
+   ;; how the system describes itself, as generics rather than defuns
+   #:binding-description
+   #:help-entries
+   #:keys-running
+   #:command-help-rows
+   #:welcome-rows
    ;; appearance: the widget layer's decisions, moved out of src/runtime/
    #:font #:font-p #:make-font #:font-name #:font-width #:font-height
    #:font-first-code #:font-glyphs #:font-stride
@@ -348,6 +354,11 @@ You never edit this package.")
    #:+named-keysyms+
    #:*echo-message* #:current-message #:keymap-choices
    #:pending-keymap-segments
+   #:binding-description
+   #:help-entries
+   #:keys-running
+   #:command-help-rows
+   #:welcome-rows
    #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
    #:summary-of #:truncate-text #:wrap-text #:split-lines #:split-words)
   (:local-nicknames (#:c #:latticewm/core)

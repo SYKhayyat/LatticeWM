@@ -506,7 +506,7 @@ SPEC is written the way a binding is: Super+Return, Ctrl+Super+h, C-x."
                                          (return-from describe-key nil))))
          (target (lookup-key *keymap* key)))
     (notify "~a: ~a" (key-to-string key)
-            (if target (binding-description target) "unbound"))
+            (if target (p:binding-description (policy) target) "unbound"))
     target))
 
 ;;; ==================================================================
