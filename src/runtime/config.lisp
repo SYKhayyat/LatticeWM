@@ -97,12 +97,15 @@ wins."
     (define-key keymap (format nil "~abracketright" mod) '("tab-next"))
     (define-key keymap (format nil "~abracketleft" mod) '("tab-previous"))
     ;; --- workspaces.  Generated, and the send-to variant comes free. -------
-    (loop for index from 0 below 10
-          for key = (format nil "~d" (mod (1+ index) 10))
+    ;; Workspaces are one-based, so the key and the number on it agree.  Super+1
+    ;; is workspace 1; Super+0 is workspace 10, which is the convention every
+    ;; tiling window manager uses and nobody has ever had to be told.
+    (loop for number from 1 to 10
+          for key = (format nil "~d" (mod number 10))
           do (define-key keymap (format nil "~a~a" mod key)
-               (list "workspace" index))
+               (list "workspace" number))
              (define-key keymap (format nil "~a~a" shift key)
-               (list "send-to-workspace" index)))
+               (list "send-to-workspace" number)))
     (define-key keymap (format nil "~an" mod) '("new-workspace"))
     (define-key keymap (format nil "~apagedown" mod) '("next-workspace"))
     (define-key keymap (format nil "~apageup" mod) '("previous-workspace"))
@@ -110,6 +113,8 @@ wins."
     (define-key keymap (format nil "~ab" mod) '("browser"))
     (define-key keymap (format nil "~ao" mod) '("editor"))
     ;; --- the window manager itself ---------------------------------------
+    (define-key keymap (format nil "~aslash" mod) '("help"))
+    (define-key keymap (format nil "~aquestion" shift) '("help"))
     (define-key keymap (format nil "~ac" shift) '("reload-config"))
     (define-key keymap (format nil "~ar" shift) '("restart-wm"))
     (define-key keymap (format nil "~aescape" shift) '("quit"))

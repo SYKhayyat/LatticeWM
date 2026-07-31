@@ -304,15 +304,21 @@ NEXT-WORKSPACE, which is this command aimed at the root."
   "The workspace container, or NIL if the root is not one."
   (c:world-workspaces *world*))
 
-(defcommand workspace (index)
-  "Switch to workspace INDEX, creating it and any before it if needed.
+(defcommand workspace (number)
+  "Switch to workspace NUMBER, creating it and any before it if needed.
+
+*Workspaces are numbered from one*, because that is what is written on the key
+you press to reach them and what everybody says out loud.  The index into the
+stack is one less, and that conversion happens here rather than leaking into
+the keymap, the help screen and every conversation about the thing.
 
 Workspaces are a stack at the root of the tree, so this is the same operation
 as switching a tab — and 'infinite workspaces' costs nothing, because a stack
 grows."
   (with-relayout
     (let ((stack (workspace-stack))
-          (output (current-output)))
+          (output (current-output))
+          (index (max 0 (1- number))))
       (when stack
         (loop while (<= (c:container-count stack) index)
               do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
@@ -331,8 +337,8 @@ grows."
   (with-relayout
     (let ((stack (workspace-stack)))
       (when stack
-        (workspace (mod (+ (c:stack-selected stack) step)
-                        (max 1 (c:container-count stack))))))))
+        (workspace (1+ (mod (+ (c:stack-selected stack) step)
+                            (max 1 (c:container-count stack)))))))))
 
 (defcommand previous-workspace ()
   "Switch to the previous workspace, wrapping."
@@ -347,16 +353,18 @@ grows."
           (c:insert-child stack index (c:make-leaf))
           (setf (c:stack-selected stack) index)
           (p:jump-cursor (policy) *world* (list index))
-          (run-hooks :workspace-changed index))))))
+          (run-hooks :workspace-changed index)
+          (notify "workspace ~d" (1+ index)))))))
 
-(defcommand send-to-workspace (index &key (follow nil))
-  "Move the focused pane to workspace INDEX.
+(defcommand send-to-workspace (number &key (follow nil))
+  "Move the focused pane to workspace NUMBER, counting from one.
 
 This is TREE-TRANSPLANT and nothing else — because a workspace is a container
 and a pane is a subtree, 'send to workspace' needed no code of its own."
   (with-relayout
     (let ((stack (workspace-stack))
-          (from (current-path)))
+          (from (current-path))
+          (index (max 0 (1- number))))
       (when (and stack (> (length from) 1))
         (loop while (<= (c:container-count stack) index)
               do (c:insert-child stack (c:container-count stack) (c:make-leaf)))

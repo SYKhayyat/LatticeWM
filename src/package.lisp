@@ -255,6 +255,7 @@ keybindings, the command registry, and the session loop.")
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
    #:text-width #:text-height #:*echo-area* #:*echo-scale* #:echo-segments
    #:current-message #:server-compositor #:server-shm
+   #:*help-visible* #:help-entries #:binding-description
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state

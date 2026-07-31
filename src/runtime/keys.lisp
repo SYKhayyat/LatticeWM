@@ -165,6 +165,13 @@ Rebind anything from a configuration file:
 (defvar *pending-keymap* nil
   "The submap we are inside, or NIL.  Set by a chord's first key.")
 
+(defvar *help-visible* nil
+  "Whether the help overlay is up.
+
+Declared here rather than in help.lisp because the key handler consults it and
+loads first, and a special variable whose meaning depends on load order is a
+bug waiting for a rainy day.")
+
 (defun define-key (keymap spec target)
   "Bind SPEC in KEYMAP to TARGET.
 
@@ -235,6 +242,10 @@ because a half-entered chord that silently ran a global binding is the single
 most confusing thing a keymap can do."
   (let ((policy (p:current-policy)))
     (cond
+      ;; The help overlay is dismissed by anything, including the key that
+      ;; opened it.  A help screen you have to remember how to close is a help
+      ;; screen that has failed at its one job.
+      ((and *help-visible* (progn (setf *help-visible* nil) (mark-dirty) t)) t)
       ;; Inside a chord.
       (*pending-keymap*
        (let ((target (lookup-key *pending-keymap* key)))

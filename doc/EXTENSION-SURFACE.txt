@@ -1,7 +1,7 @@
 
 ============================================================================
 LatticeWM extension surface
-39 generics, 35 options.  Generated from the running image.
+39 generics, 40 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -737,6 +737,30 @@ reads as a broken keyboard rather than as a place.
   now: 0
   Pixels of empty space between adjacent panes.  0 is a clean grid; 4 to 8
 gives the airy look, at the cost of that much screen.
+
+*help-background*
+  now: (0.07 0.07 0.1 0.94)
+  Help overlay background, as (R G B A).
+
+*help-columns*
+  now: 2
+  How many columns of bindings the help overlay uses.
+
+Two, not three.  Three fits more rows and truncates almost every description,
+and a help screen where you can read the keys but not what they do has kept
+the wrong half.
+
+*help-key-color*
+  now: (0.45 0.7 1.0 1.0)
+  Colour of the key in the help overlay.
+
+*help-scale*
+  now: 1
+  Integer scale factor for help-overlay text.
+
+*help-text-color*
+  now: (0.78 0.8 0.86 1.0)
+  Colour of the description in the help overlay.
 
 *modifier*
   now: :SUPER

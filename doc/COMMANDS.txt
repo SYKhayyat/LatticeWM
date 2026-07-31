@@ -34,6 +34,9 @@ LatticeWM commands.
 (close-float)
   Close the focused floating window.
 
+(describe-command name)
+  Print a command's full documentation to the echo area and the log.
+
 (describe-key spec)
   Print what SPEC is bound to.
 
@@ -84,6 +87,12 @@ LatticeWM commands.
 
 (focus-tiled)
   Take keyboard focus off any floating window and give it back to the cursor.
+
+(help)
+  Show every key binding on screen, with what it does.
+  
+  Built from the live keymap and each command's own docstring, so it includes
+  anything you bound yourself and cannot go out of date.  Any key dismisses it.
 
 (minimize)
   Take the focused window out of the tiling tree entirely.
@@ -169,8 +178,8 @@ LatticeWM commands.
   To the slot it was minimized from if that slot still exists, and to the cursor
   otherwise.
 
-(send-to-workspace index &key (follow nil))
-  Move the focused pane to workspace INDEX.
+(send-to-workspace number &key (follow nil))
+  Move the focused pane to workspace NUMBER, counting from one.
   
   This is TREE-TRANSPLANT and nothing else — because a workspace is a container
   and a pane is a subtree, 'send to workspace' needed no code of its own.
@@ -239,8 +248,13 @@ LatticeWM commands.
 (untab)
   Dissolve the nearest enclosing stack back into a split.
 
-(workspace index)
-  Switch to workspace INDEX, creating it and any before it if needed.
+(workspace number)
+  Switch to workspace NUMBER, creating it and any before it if needed.
+  
+  *Workspaces are numbered from one*, because that is what is written on the key
+  you press to reach them and what everybody says out loud.  The index into the
+  stack is one less, and that conversion happens here rather than leaking into
+  the keymap, the help screen and every conversation about the thing.
   
   Workspaces are a stack at the root of the tree, so this is the same operation
   as switching a tab — and 'infinite workspaces' costs nothing, because a stack
