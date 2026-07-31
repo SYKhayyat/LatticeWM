@@ -24,6 +24,57 @@ Declared here, before anything that consults it, because the whole point is
 that code all over the runtime can ask \"am I allowed to write to the socket
 from here?\" — and the answer must never depend on load order.")
 
+
+;;; ------------------------------------------------- declared event handlers
+;;;
+;;; A handler for an event that does not exist is invisible to everything.
+;;; ATTACH-OUTPUT listened for a :NAME event from river_output_v1 for the whole
+;;; life of the project; the interface has no such event, so the clause could
+;;; never fire, every output was anonymous, and the per-output workspace memory
+;;; was keyed on NIL.  Gate 1 sees a well-formed CASE clause.  Gate 5 counts
+;;; codegen against the XML but says nothing about which events we *listen*
+;;; for.  The tests pass because they construct state rather than receive it.
+;;;
+;;; The fix is to make the handler say which interface it is for, so a gate can
+;;; check the two against each other.  ON-EVENTS is that, and it costs one line
+;;; per handler.
+
+(defvar *handled-events* (make-hash-table :test #'equal)
+  "Interface name -> the list of event keywords some handler CASEs on.")
+
+(defun declare-handled-events (interface events)
+  "Record that a handler for INTERFACE handles EVENTS.  Gate 8 checks them."
+  (setf (gethash interface *handled-events*)
+        (union events (gethash interface *handled-events*)))
+  interface)
+
+(defun all-handled-events ()
+  "Every (INTERFACE . EVENTS) pair, sorted, for the gate."
+  (let ((out '()))
+    (maphash (lambda (interface events) (push (cons interface events) out))
+             *handled-events*)
+    (sort out #'string< :key #'car)))
+
+(defmacro on-events ((proxy interface) &body clauses)
+  "Attach an event handler to PROXY, declaring it handles INTERFACE's events.
+
+The declaration is derived from the CASE clauses themselves rather than
+written beside them, so the two cannot drift -- which is the whole point, as
+drift is exactly what a hand-maintained list of handled events would produce."
+  ;; LOAD-TIME-VALUE, not a plain call: the macro is used inside function
+  ;; bodies, so a plain call would only register when a proxy actually
+  ;; attaches -- which never happens in the image a build gate runs in.  The
+  ;; gate would then check nothing and say every one of nothing was fine.
+  `(progn
+     (load-time-value
+      (declare-handled-events ,interface
+                              ',(remove t (mapcar #'first clauses)))
+      t)
+     (push (lambda (event &rest arguments)
+             (declare (ignorable arguments))
+             (with-abandon (case event ,@clauses)))
+           (wl:wl-proxy-hooks ,proxy))))
+
 (defclass server ()
   ((display :initarg :display :accessor server-display
             :documentation "The wl_display.")
@@ -92,7 +143,6 @@ time, on every machine.")
                   :documentation "river_xkb_bindings_seat_v1.")
    (bound-keys :initform (make-hash-table :test #'equal) :accessor seat-bound-keys
                :documentation "(KEYSYM . MODIFIERS) -> river_xkb_binding_v1.")
-   (modifiers :initform 0 :accessor seat-modifiers)
    (pointer-x :initform 0 :accessor seat-pointer-x)
    (pointer-y :initform 0 :accessor seat-pointer-y)
    (focused :initform nil :accessor seat-focused

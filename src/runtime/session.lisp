@@ -170,10 +170,7 @@ that."
 
 (defun attach-manager-hooks (server)
   "Listen to the window manager global: the whole protocol arrives here."
-  (push
-   (lambda (event &rest arguments)
-     (with-abandon
-       (case event
+  (on-events ((server-manager server) "river_window_manager_v1")
          (:window (attach-window (first arguments)))
          (:output (attach-output (first arguments)))
          (:seat (attach-seat (first arguments)))
@@ -182,8 +179,7 @@ that."
          (:session-locked (setf (c:prop *world* :locked) t))
          (:session-unlocked (setf (c:prop *world* :locked) nil))
          (:finished (setf (server-running server) nil))
-         (t (logmsg :debug "manager event ~s ~s" event arguments)))))
-   (wl:wl-proxy-hooks (server-manager server)))
+         (t (logmsg :debug "manager event ~s ~s" event arguments)))
   server)
 
 (defun name-outputs ()
@@ -208,9 +204,7 @@ rather than in either handler means it does not matter."
     (setf (gethash proxy (server-outputs *server*)) output)
     (setf (c:world-outputs *world*)
           (append (c:world-outputs *world*) (list output)))
-    (push (lambda (event &rest arguments)
-            (with-abandon
-              (case event
+    (on-events (proxy "river_output_v1")
                 ;; NOT :name.  river_output_v1 has no such event -- the case
                 ;; that used to be here could never fire, so every output was
                 ;; anonymous, and the per-output workspace memory is keyed on
@@ -231,8 +225,7 @@ rather than in either handler means it does not matter."
                  (setf (c:world-outputs *world*)
                        (remove output (c:world-outputs *world*)))
                  (mark-dirty))
-                (t nil))))
-          (wl:wl-proxy-hooks proxy))
+                (t nil))
     ;; A new monitor brings its own workspace, or it mirrors the first one and
     ;; looks broken.
     (guarded "workspaces for outputs" (p:ensure-workspaces-for-outputs *world*))
@@ -245,9 +238,7 @@ rather than in either handler means it does not matter."
   "Register a seat, and give it its keyboard bindings."
   (let ((seat (make-instance 'seat :proxy proxy)))
     (push seat (server-seats *server*))
-    (push (lambda (event &rest arguments)
-            (with-abandon
-              (case event
+    (on-events (proxy "river_seat_v1")
                 (:pointer-position
                  (setf (seat-pointer-x seat) (first arguments)
                        (seat-pointer-y seat) (second arguments))
@@ -255,18 +246,20 @@ rather than in either handler means it does not matter."
                  ;; start a manage sequence, so focus-follows-mouse cannot be
                  ;; driven from here without asking for one.
                  (when p:*focus-follows-mouse* (pointer-moved seat)))
-                (:modifiers (setf (seat-modifiers seat) (first arguments)))
-                (t nil))))
-          (wl:wl-proxy-hooks proxy))
+                ;; There was a (:MODIFIERS ...) clause here.  river_seat_v1
+                ;; has no such event -- the real one is modifiers_update on
+                ;; river_xkb_bindings_seat_v1, and it needs a modifiers_watch
+                ;; request to opt in, which nothing sends.  So it never fired,
+                ;; SEAT-MODIFIERS was never written, and nothing read it
+                ;; either.  Removed rather than wired up: inventing the feature
+                ;; would be answering a gate instead of listening to it.
+                (t nil))
     (when (server-bindings *server*)
       (setf (seat-bindings-seat seat)
             (w:bindings-get-seat (server-bindings *server*) proxy))
-      (push (lambda (event &rest arguments)
-              (with-abandon
-                (case event
-                  (:ate-unbound-key (handle-unbound-key (first arguments)))
-                  (t nil))))
-            (wl:wl-proxy-hooks (seat-bindings-seat seat)))
+      (on-events ((seat-bindings-seat seat) "river_xkb_bindings_seat_v1")
+        (:ate-unbound-key (handle-unbound-key (first arguments)))
+        (t nil))
       ;; Registration itself is fine here, but ENABLE is window-management
       ;; state and is therefore manage-sequence-only.  A seat arrives during
       ;; the initial roundtrip, when no sequence is in progress, so the work is
@@ -308,12 +301,17 @@ window-management state."
             (when binding
               (setf (gethash key (seat-bound-keys seat)) binding)
               (push (let ((key key))
-                      (lambda (event &rest arguments)
-                        (declare (ignore arguments))
-                        (with-abandon
-                          (case event
-                            (:pressed (when (handle-key key) (after-command)))
-                            (t nil)))))
+                      (progn
+                        (load-time-value
+                         (declare-handled-events "river_xkb_binding_v1"
+                                                 '(:pressed))
+                         t)
+                        (lambda (event &rest arguments)
+                          (declare (ignore arguments))
+                          (with-abandon
+                            (case event
+                              (:pressed (when (handle-key key) (after-command)))
+                              (t nil))))))
                     (wl:wl-proxy-hooks binding))
               (guarded "enable binding" (w:binding-enable binding)))))))
     (logmsg :info "~d key~:p bound" (hash-table-count (seat-bound-keys seat)))))

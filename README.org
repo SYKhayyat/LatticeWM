@@ -236,9 +236,16 @@ reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
 * Status
 
-Working, and used. Not yet announced. Multi-monitor and a few protocol corners
-have been exercised nested but not on bare metal — see [[file:PLAN.org::#log2][PLAN.org §log2]] for the
-current list of what is verified and what is merely written.
+Working, and used on bare metal. Not yet announced.
+
+Verified on real hardware: keybindings including shifted keys, the minibuffer,
+spawning, closing, splits, floating, the empty-pane spawn, persistence, and
+the lattice — walking cell to cell across an infinite plane, carrying windows
+between cells, and zooming out to a grid.
+
+*Multi-monitor is the exception.* It is written and has never been executed
+against a second display. [[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of what is
+verified and what is merely written.
 
 * License
 

@@ -217,6 +217,67 @@
     (unless (or dead undeclared)
       (format t "  every hook is both declared and run~%"))))
 
+;;; ---------------------------------------------------------------- gate 8
+
+(banner 8 "every event we handle exists on the interface we handle it for")
+;; ATTACH-OUTPUT listened for a :NAME event from river_output_v1 for the whole
+;; life of the project.  The interface has four events and that is not one of
+;; them, so the clause could never fire -- every output was anonymous, and the
+;; per-output workspace memory is keyed on the name, so a shipped feature did
+;; nothing on every machine.
+;;
+;; Nothing could see it.  Gate 1 sees a well-formed CASE clause.  Gate 5 counts
+;; codegen against the XML but says nothing about which events we *listen* for.
+;; The tests pass because they construct state rather than receive it.  It was
+;; found by reading the protocol by hand, months later, chasing something else.
+;;
+;; ON-EVENTS makes each handler name its interface, and derives the event list
+;; from the CASE clauses themselves so the two cannot drift.  This checks that
+;; list against the vendored XML -- the same XML gate 5 pins.
+(flet ((events-of (interface)
+         ;; Keywordised the way wayflan does it: underscores to dashes.
+         (let ((found '()))
+           (dolist (file (directory "src/protocol/*.xml") found)
+             (with-open-file (in file)
+               (let ((text (make-string (file-length in))))
+                 (read-sequence text in)
+                 (let* ((head (search (format nil "<interface name=\"~a\"" interface)
+                                      text)))
+                   (when head
+                     (let ((tail (search "</interface>" text :start2 head)))
+                       (loop with at = head
+                             for hit = (search "<event name=\"" text
+                                               :start2 at :end2 tail)
+                             while hit
+                             do (let* ((start (+ hit 13))
+                                       (end (position #\" text :start start)))
+                                  (push (intern (string-upcase
+                                                 (substitute #\- #\_
+                                                             (subseq text start end)))
+                                                :keyword)
+                                        found)
+                                  (setf at end))))))))))))
+  (let ((checked 0) (bad '()))
+    (dolist (entry (call "latticewm/runtime:all-handled-events"))
+      (destructuring-bind (interface . handled) entry
+        (let ((real (events-of interface)))
+          (cond
+            ((null real)
+             (push (format nil "~a is not an interface in the pinned XML" interface)
+                   bad))
+            (t
+             (dolist (event handled)
+               (incf checked)
+               (unless (member event real)
+                 (push (format nil "~a has no ~s event (it has ~{~s~^ ~})"
+                               interface event real)
+                       bad))))))))
+    (format t "  ~d event handler~:p across ~d interface~:p~%"
+            checked (length (call "latticewm/runtime:all-handled-events")))
+    (if bad
+        (fail 8 "~{~%    ~a~}" (reverse bad))
+        (format t "  every one of them exists~%"))))
+
 ;;; ---------------------------------------------------------------- verdict
 
 (format t "~&~%~76,,,'=<~>~%")

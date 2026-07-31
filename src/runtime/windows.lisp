@@ -36,6 +36,15 @@ Everything here is bookkeeping: record what river tells us and mark the layout
 dirty.  No placement decisions are made in an event handler, because an event
 handler runs at an arbitrary point in the protocol and has no idea which
 sequence it is in."
+  ;; Declared rather than wrapped in ON-EVENTS: this one *returns* the handler
+  ;; instead of pushing it, so the macro's shape does not fit.  The declaration
+  ;; is what gate 8 checks, and it has to be kept beside the CASE by hand --
+  ;; which is exactly the drift the macro exists to prevent, so it is the one
+  ;; place in the system where that risk is real.
+  (load-time-value
+   (declare-handled-events "river_window_v1"
+    '(:app-id :title :identifier :parent :dimensions :dimensions-hint :decoration-hint :closed :fullscreen-requested :exit-fullscreen-requested :minimize-requested :maximize-requested :unmaximize-requested))
+   t)
   (lambda (event &rest arguments)
     (with-abandon
       (case event

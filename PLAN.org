@@ -1461,3 +1461,111 @@ what they are.
   these are not yet.
 - ~welcome-rows~ has the same shape, and it is thirteen lines I wrote in
   [[#log3][§log3]] without applying the ruling to my own work.
+
+* Seventh session — 2026-07-31: bare metal, and the three questions close
+:PROPERTIES:
+:CUSTOM_ID: log7
+:END:
+
+[[#log2][§log2]] opened three questions that could only be answered by a human at a
+keyboard on a real display. All three are now closed, and closing them cost
+five sessions of a different kind: not "does the protocol do what we assumed"
+but "does any of this work when somebody who did not write it sits down."
+
+** The three, answered
+
+- *Does river report Shift in the modifier set for a shifted keysym?* No. It
+  sends the *unshifted* keysym with Shift set. The design assumed the
+  opposite, in a comment explaining that binding by mask rather than by layout
+  is what makes it work on Dvorak, and bound every printable keysym twice on
+  that reasoning. Typing ~(+ 1 2)~ into M-: produced ~9= 1 20~. *SHIFT-MAP* is
+  a tier-0 option because the shifted glyph cannot be derived, only declared,
+  and a declared US layout is wrong on a German one.
+- *Does ~ate_unbound_key~ fire when the seat has no keyboard focus?* Yes.
+  ~UNBOUND #\e on an empty pane~, twice, on bare metal. D19 works.
+- *Bare metal.* It runs. ~output 56 is eDP-1~, 1366x768, wlroots on the DRM
+  backend with the iris driver.
+
+*And the lattice works on a real display.* A recorded session walks from cell
+(0,0) to (2,0), opens an editor there with a single keypress, walks left
+through (0,0) into (-1,0) and on to (-15,0), carries a window across cells and
+into a split, zooms out from 1x1 to a 6x4 viewport, and the person driving it
+saw a grid. That is DESIGN's central claim -- an infinite plane of cells,
+motion running straight through the boundaries -- doing what it says, on
+hardware, driven by hands rather than by the SWANK bridge.
+
+** What five sessions of hands actually found
+
+Nothing in the protocol. Every assumption about river that the spike and the
+design got wrong was already found by [[#log2][§log2]]. What bare metal found was ten
+bugs of a kind no gate had a shape for, and they have one thing in common:
+*every one of them was code that could not work, in a system where 779 checks
+and seven gates passed.*
+
+| A submap registered its second keys globally | seven letters silently vanished; typing ~ls~ gave ~l~ |
+| ~river_window_v1.close~ sent outside a manage sequence | Super+q refused, seven times, in silence |
+| A ~:name~ event that river_output_v1 does not have | every output anonymous; per-output workspaces keyed on NIL |
+| ~POLICY-GENERICS~ ignoring ~POLICY-GENERIC-P~ | ten slot readers became extension surface |
+| ~:focus-changed~ declared and never run | a status bar hook that could not fire |
+| The welcome overlay consuming the key that dismissed it | the first deliberate keypress of a first session did nothing |
+| The lattice rebinding Super+/ away from ~help~ | loading an extension deleted the way out of not knowing anything |
+| ~quit~ and the unwind-protect both running shutdown | every exit ran every shutdown hook twice |
+| ~add-hook :relayout~ in this project's own tooling | a hook nobody runs, so the recorder recorded nothing |
+| The lattice not compiled by the build at all | a rename broke it and seven gates stayed green |
+
+The last one is the worst and the most instructive. ~tools/build.lisp~ loaded
+~latticewm~ and not ~lattice~; gate 3 checks the lattice *textually*; gate 4
+loads the core deliberately *without* it. So the shipped, advertised, headline
+feature was never compiled by anything, and it was found by a user's
+configuration file failing at startup.
+
+** The gates that came out of it
+
+Four, and each one exists because something got through:
+
+- *Gate 1 learned to fail.* It only ever saw warnings from files that
+  recompiled, so an incremental build hid everything in cached fasls -- and a
+  clean build could never be green because four warnings arrive from a
+  dependency. Warnings are judged by whether the file is ours now, ~.deps~
+  excluded, and undefined references are captured from the compilation unit's
+  printed summary rather than a condition nothing signals. A clean build is
+  the normal way to run it.
+- *Gate 7:* every declared hook is run, every run hook is declared.
+- *~*warn-on-undeclared-hooks*~:* the runtime half, because gate 7 cannot see
+  a user's config file and that is where the mistake is most likely.
+- *~*warn-on-rebinding*~:* say when a binding replaces a *different* command.
+  It found a second collision the same minute it was written -- the lattice
+  also takes Ctrl+Super+hjkl from resize.
+
+** What actually made the difference
+
+Not the gates. *A session recorder.*
+
+Four sessions were debugged by the user describing what they saw, and every
+description was accurate and every one cost a round trip, because the report
+answered three prepared questions and nothing else. The failures were always
+in the part nobody had thought to instrument.
+
+~tools/hardware-check.lisp~ now records the session rather than a checklist:
+every bound key *and what it resolved to*, every window, every real focus
+move, the viewport, the resolved bindings for the keys most likely to be the
+question, and the status line as it actually reads. Writing it found three
+bugs in itself and one in the window manager, and the run after that answered
+a question nobody had asked yet.
+
+The single most useful line in it is ~BINDING Super+slash -> ("help")~. Had
+that existed two sessions earlier it would have shown the lattice stealing the
+help key instantly, instead of costing two rounds of "i dont know how to see a
+lattice".
+
+** Open
+
+- *Multi-monitor.* Still one output, every time. It is the last thing in this
+  project that is written and has never been executed.
+- *The event gate.* Gate 7's sibling -- every event we handle exists on its
+  interface -- would have caught the ~:name~ bug directly. It needs each of
+  the six handler sites to declare its interface, which is a macro refactor
+  and was held off while the build was being tested by hand.
+- The ~cell~ column in the recorder is unreliable during ~move~: it reported
+  ~cell (0 . 0)~ while the cursor was at ~(-4 . 0)~. Probably the hook reading
+  before the layout settles rather than a real bug, and unverified either way.
