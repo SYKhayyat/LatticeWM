@@ -206,10 +206,24 @@ refused to start because it could not draw a label would be a bad trade."
           (w:node-place-top (overlay-node overlay))))
       (setf (overlay-visible-p overlay) t))))
 
+(p:define-option *overlay-buffer-idle* t
+  "Release an overlay's pixel buffer while it is hidden.
+
+A full-screen ARGB buffer is about four megabytes, and the help screen and the
+drawn map are each hidden almost all of the time.  Keeping their buffers costs
+eight megabytes of resident memory to save one allocation on a keypress, which
+is the wrong way round.
+
+Set to NIL if you would rather have the allocation happen once.")
+
 (defun overlay-hide (overlay)
-  "Stop showing OVERLAY, without destroying its buffer."
+  "Stop showing OVERLAY, and release its buffer unless told otherwise."
   (when (and (overlay-surface overlay) (overlay-visible-p overlay))
     (setf (overlay-visible-p overlay) nil)
     (guarded "overlay hide"
       (wl:wl-surface.attach (overlay-surface overlay) nil 0 0)
-      (wl:wl-surface.commit (overlay-surface overlay)))))
+      (wl:wl-surface.commit (overlay-surface overlay))))
+  (when (and *overlay-buffer-idle* (overlay-canvas overlay))
+    (destroy-canvas (overlay-canvas overlay))
+    (setf (overlay-canvas overlay) nil))
+  nil)

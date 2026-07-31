@@ -61,8 +61,19 @@ wakeup interrupt below.  It exists only so that a bug in either cannot wedge
 the window manager permanently, and 30 seconds is long enough that the cost of
 it existing is nil — two wakeups a minute.")
 
-(defvar *woken* nil
-  "Set by the wakeup interrupt.  Only ever read to decide whether to log.")
+(defvar *wakeup-pending* nil
+  "True between asking the loop to wake and it waking.
+
+*This is not an optimisation.*  SB-THREAD:INTERRUPT-THREAD queues an
+interruption, and SBCL refuses to nest more than eight — so a script that
+called RELAYOUT thirty times in a row killed the window manager outright with
+\"maximum interrupt nesting depth (8) exceeded\".  Any loop from a REPL would
+have done it.
+
+One pending wakeup is as good as thirty, because the loop drains its whole
+queue when it wakes, so coalescing costs nothing and removes the failure.")
+
+(defvar *wakeup-lock* (bt:make-lock "latticewm-wakeup"))
 
 (defun wake-event-loop ()
   "Wake the event loop now.  Safe to call from any thread.
@@ -80,13 +91,16 @@ because the compositor socket stays readable between the moment select reports
 it and the moment wayflan drains its own buffer, so the multiplexer returned
 instantly, over and over.  An interrupt has neither problem: it is delivered
 once, exactly when there is something to deliver."
-  (let ((thread *wm-thread*))
-    (when (and thread (sb-thread:thread-alive-p thread))
+  (let ((thread *wm-thread*)
+        (send nil))
+    (bt:with-lock-held (*wakeup-lock*)
+      (unless *wakeup-pending*
+        (setf *wakeup-pending* t send t)))
+    (when (and send thread (sb-thread:thread-alive-p thread))
       (ignore-errors
        (sb-thread:interrupt-thread
         thread
         (lambda ()
-          (setf *woken* t)
           ;; THROW, not just a flag.  SB-SYS:WAIT-UNTIL-FD-USABLE restarts
           ;; itself on EINTR, so an interruption that merely sets a variable
           ;; is delivered and then *the wait resumes for its full timeout*.
@@ -99,8 +113,12 @@ once, exactly when there is something to deliver."
           ;;
           ;; IGNORE-ERRORS because the interrupt can land while the loop is
           ;; outside the CATCH, in which case there is nothing to unwind to
-          ;; and the flag alone is the correct outcome.
-          (ignore-errors (throw 'wake nil))))))))
+          ;; and clearing the flag is the whole of what was needed.
+          (ignore-errors (throw 'wake nil))))))
+    (unless send
+      ;; Somebody has already asked and the loop has not got there yet.  It
+      ;; will drain the queue when it does, so this call is complete.
+      nil)))
 
 (defun wait-for-work (fd)
   "Block until the compositor speaks, or another thread wakes us.
@@ -113,7 +131,10 @@ timeout is a backstop against a bug in the above, not a polling interval."
             (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
             (sleep 0.05))
       (error () nil)
-      (sb-sys:interactive-interrupt () nil))))
+      (sb-sys:interactive-interrupt () nil)))
+  ;; Whatever woke us, the queue is about to be drained, so the next caller
+  ;; should send a fresh interrupt.
+  (bt:with-lock-held (*wakeup-lock*) (setf *wakeup-pending* nil)))
 
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."
