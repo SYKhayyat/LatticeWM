@@ -1,0 +1,148 @@
+;;;; model/world.lisp --- The whole managed state, in one object.
+;;;;
+;;;; A WORLD is the layout tree, the cursor, the outputs, the floats and the
+;;;; scratchpad.  It is a single object rather than a pile of globals so that
+;;;; it can be copied for a test, serialised for persistence, and — the reason
+;;;; that actually matters — so that a REPL can hold two of them and compare.
+;;;;
+;;;; The shipped shape of the tree is
+;;;;
+;;;;     world root  =  STACK                 ; the workspace list
+;;;;                    ├── workspace 0       ; a SPLIT, a LEAF, or (with the
+;;;;                    ├── workspace 1       ;   lattice loaded) a GRID
+;;;;                    └── workspace 2
+;;;;
+;;;; and nothing depends on that shape.  Workspaces are a stack because a stack
+;;;; is "an ordered set of alternatives of which one is current", which is what
+;;;; a workspace list is; making them the same object means every verb that
+;;;; moves a subtree into a container already moves a window to a workspace.
+;;;; "Infinite workspaces of lattices one behind another" is this stack with
+;;;; grids in it.
+
+(in-package #:latticewm/core)
+
+;;; ---------------------------------------------------------------- outputs
+
+(defclass output ()
+  ((proxy :initarg :proxy :initform nil :accessor output-proxy)
+   (name :initarg :name :initform nil :accessor output-name)
+   (rect :initarg :rect :initform (make-rect 0 0 1920 1080) :accessor output-rect
+         :documentation
+         "Position and size in the compositor's logical coordinate space.
+River reports both, so a multi-monitor arrangement is described entirely in
+one space and needs no per-output translation.")
+   (scale :initarg :scale :initform 1 :accessor output-scale)
+   (props :initform '() :accessor props))
+  (:documentation "A monitor, as river describes it."))
+
+(defmethod print-object ((o output) stream)
+  (print-unreadable-object (o stream :type t :identity nil)
+    (format stream "~a ~dx~d+~d+~d" (or (output-name o) "?")
+            (rect-w (output-rect o)) (rect-h (output-rect o))
+            (rect-x (output-rect o)) (rect-y (output-rect o)))))
+
+;;; ----------------------------------------------------------------- floats
+
+(defclass floating-window ()
+  ((window :initarg :window :accessor float-window)
+   (rect :initarg :rect :initform (make-rect 0 0 640 480) :accessor float-rect)
+   (anchor :initarg :anchor :initform nil :accessor float-anchor
+           :documentation
+           "The node this float is pinned to, or NIL for one pinned to the
+output.  An anchored float travels with its node — it moves when the node
+moves, hides when the node hides, and is clipped by the node's clip box.  That
+is what \"a floating window inside a window\" means here, and it costs one
+slot.")
+   (node :initform nil :accessor float-node
+         :documentation "The river node, cached by the runtime.")
+   (props :initform '() :accessor props))
+  (:documentation
+   "A window that is positioned by hand rather than tiled.
+
+Floating is per window and chosen, never inferred and forced: the requirement
+is that windows can be *picked out* to float rather than floating being a
+property the window manager decides for you.  SHOULD-FLOAT-P only supplies the
+initial guess."))
+
+;;; ------------------------------------------------------------------ world
+
+(defclass world ()
+  ((root :initarg :root :accessor world-root
+         :documentation "The layout tree.  Shipped as a STACK of workspaces.")
+   (cursor :initarg :cursor :initform '() :accessor world-cursor
+           :documentation
+           "The focus path (README D18).  A place, not a window.  Wayland
+keyboard focus is derived from it on every relayout and never stored.")
+   (outputs :initform '() :accessor world-outputs
+            :documentation "List of OUTPUT, in the order river reported them.")
+   (floats :initform '() :accessor world-floats
+           :documentation "List of FLOATING-WINDOW, bottom to top.")
+   (scratchpad :initform '() :accessor world-scratchpad
+               :documentation
+               "Minimized windows, most recent first.  They are genuinely out
+of the tree — the remaining windows retile without them — which is the stated
+requirement: minimize is not \"hide it somewhere\", it is \"take it out of the
+layout\".")
+   (props :initform '() :accessor props))
+  (:documentation
+   "Everything the window manager is managing."))
+
+(defun make-world (&key root (cursor nil cursor-supplied))
+  "A world holding ROOT, defaulting to a single empty workspace.
+
+The default is deliberately the smallest thing that is already a usable window
+manager: one workspace holding one empty pane.  Starting up puts the cursor in
+that pane, where — per README D19 — typing a key spawns something."
+  (let* ((root (or root (make-stack (list (make-leaf)) 0)))
+         (world (make-instance 'world :root root)))
+    (setf (world-cursor world)
+          (if cursor-supplied cursor (first-leaf-path root)))
+    world))
+
+(defmethod print-object ((w world) stream)
+  (print-unreadable-object (w stream :type t :identity nil)
+    (format stream "~d window~:p, cursor ~s"
+            (length (node-windows (world-root w))) (world-cursor w))))
+
+;;; ------------------------------------------------------- world accessors
+
+(defun world-node-at (world &optional (path (world-cursor world)))
+  "The node at PATH, defaulting to the cursor's."
+  (resolve-path (world-root world) path))
+
+(defun world-leaf-at (world &optional (path (world-cursor world)))
+  "The leaf at PATH, or NIL when PATH does not name a leaf."
+  (let ((node (world-node-at world path)))
+    (when (typep node 'leaf) node)))
+
+(defun world-window-at (world &optional (path (world-cursor world)))
+  "The window held at PATH, or NIL — including when the pane is deliberately
+empty, which is an ordinary state and not an error."
+  (let ((leaf (world-leaf-at world path)))
+    (when leaf (leaf-window leaf))))
+
+(defun world-focus-window (world)
+  "The window the cursor is on, or NIL when it rests on an empty pane."
+  (world-window-at world))
+
+(defun world-workspaces (world)
+  "The workspace container, if the root is one, else NIL.
+
+Nothing in the core requires the root to be a stack of workspaces; this is a
+convenience for the commands that assume the shipped shape, and every one of
+them tolerates NIL."
+  (let ((root (world-root world)))
+    (when (typep root 'stack) root)))
+
+(defun workspace-path (world)
+  "The path of the current workspace — the first element of the cursor, as a
+one-element path — or the empty path when the root is not a workspace stack."
+  (if (world-workspaces world)
+      (list (or (first (world-cursor world))
+                (stack-selected (world-root world))))
+      '()))
+
+(defun current-workspace (world)
+  "The node of the workspace the cursor is in, or the root."
+  (or (resolve-path (world-root world) (workspace-path world))
+      (world-root world)))
