@@ -1,0 +1,303 @@
+#+TITLE: Extending LatticeWM
+#+SUBTITLE: The only document you need, and the reason there is only one
+#+OPTIONS: toc:2 num:nil
+
+* The shape of the whole thing
+
+Three layers, and you can stop reading after whichever one answers your
+question.
+
+| Tier | You write | Restart? | Example |
+|------+-----------+----------+---------|
+| *0* | a value | no | ~(setf *gaps* 8)~ |
+| *1* | a method | no | ~(defmethod gaps ((p conventional-policy) c) 8)~ |
+| *2* | a method plus state on ~props~ | no | remember which pane a cell was in |
+| *3* | a new container or policy class | no | the whole lattice |
+
+Nothing above needs a restart, a rebuild, or a plugin manifest. Everything can
+be evaluated into the *running* window manager and takes effect on the next
+frame.
+
+* Ask the running window manager
+
+Before reading anything, ask it. It knows more about itself than this file
+does, and it cannot be out of date.
+
+#+begin_src sh
+wmeval --surface     # every generic you can specialize, with its contract
+wmeval --options     # every value, with its default and what it does
+wmeval --commands    # every command
+wmeval --keys        # every binding
+wmeval --tree        # the layout right now
+wmeval --state       # cursor, window count, active policy
+#+end_src
+
+And from inside, ~describe~ works on everything:
+
+#+begin_src lisp
+(describe 'should-float-p)
+(describe 'tree-move)
+#+end_src
+
+The docstrings are the specification. They were written to be read this way,
+and several of them explain *why* a decision went the way it did — which is
+usually the thing you actually need before overriding it.
+
+* Where the configuration lives
+
+=~/.config/latticewm/init.lisp=, plain Common Lisp, read in the
+=LATTICEWM/USER= package — which inherits the model, the policy surface and the
+runtime, so nothing needs a prefix.
+
+#+begin_src sh
+latticewm --write-config     # writes a commented starter file
+#+end_src
+
+An error in it is logged and startup continues. A window manager that refuses
+to run because of a typo in its configuration leaves you with no way to fix the
+typo.
+
+* Tier 0 — values
+
+#+begin_src lisp
+(setf *gaps* 6)
+(setf *border-width* 2)
+(setf *focused-border-color* '(0.9 0.5 0.2 1.0))
+(setf *terminal* "alacritty")
+(setf *spawn-mode* :split)          ; :split | :fill-first | :stack
+(setf *split-axis* :longer)         ; :longer | :horizontal | :vertical
+(setf *focus-after-close* :stay)    ; :stay | :mru | :next
+(setf *focus-follows-mouse* t)
+#+end_src
+
+Every one of these exists because the design reached a fork where both answers
+were defensible. README calls that P1 — "where a fork is situational rather
+than principled, both options ship and configuration picks the default" — so
+these are not preferences somebody guessed at, they are the places the design
+declined to decide for you.
+
+~wmeval --options~ lists all of them with their reasoning.
+
+* Tier 1 — methods
+
+The whole of it:
+
+#+begin_src lisp
+(defmethod GENERIC ((policy conventional-policy) ARGS...)
+  ...)
+#+end_src
+
+Three rules, and the third is the one that bites:
+
+1. *Specialize on ~conventional-policy~*, not on ~policy~. The shipped defaults
+   are on ~policy~; yours must be more specific or it replaces rather than
+   extends them.
+2. *Use ~call-next-method~* when you mean "the usual thing, plus this". It is
+   the common case.
+3. *Do not reimplement the caller.* If you find yourself copying a shipped
+   method in order to change three lines of it, the thing you want to change is
+   probably its own generic. Look for it in ~wmeval --surface~ first.
+
+** A worked one
+
+Float two applications that get tiling wrong:
+
+#+begin_src lisp
+(defmethod should-float-p ((policy conventional-policy) (win window))
+  (or (call-next-method)
+      (member (window-app-id win) '("pavucontrol" "blueman-manager")
+              :test #'equal)))
+#+end_src
+
+Paste it into a REPL and the *next* window obeys it. Nothing restarted.
+
+** The generics worth knowing about first
+
+| Generic | Question |
+|---------+----------|
+| ~layout-children~ | how does this container divide its rectangle? |
+| ~step-address~ | where does motion go from here? |
+| ~entry-address~ | arriving at a container, which child? |
+| ~spawn-target~ | where does a new window land? |
+| ~should-float-p~ | does this window float? |
+| ~on-window-close~ | what happens to the pane when the window goes? |
+| ~focus-after-remove~ | where does the cursor go after a close? |
+| ~border-color~ / ~border-width~ / ~gaps~ | how it looks |
+| ~key-unbound~ | typing in an empty pane |
+
+There are 37 in all. ~wmeval --surface~ prints every one with its contract and
+with the methods that currently answer it — including yours, which is how you
+check that your file was actually loaded.
+
+* Tier 2 — methods that need to remember something
+
+Every node carries a ~props~ plist. Use it rather than adding a slot, because
+adding a slot to a class you do not own is a fork.
+
+#+begin_src lisp
+(setf (prop node :my-extension/last-focused) 2)
+(prop node :my-extension/last-focused)
+#+end_src
+
+Namespace your keys with a prefix. Two extensions using ~:last~ is a bug
+neither author can see.
+
+* Tier 3 — new layout models
+
+This is where the design stops being a window manager with settings and starts
+being a substrate, and it is smaller than it sounds.
+
+** A new arrangement: one method
+
+=examples/03-master-stack.lisp= is dwm's layout — one large pane, everything
+else stacked beside it — in one ~layout-children~ method and one
+~step-address~ method. The tree is untouched; only the answer to "where do
+these children go" changed. Switch back and every window is where you left it.
+
+** A new *kind* of container: about sixty lines
+
+=examples/04-scrolling-columns.lisp= is niri and PaperWM: an infinite
+horizontal strip that scrolls sideways. It subclasses
+~sequential-container~ — which supplies addressing, insertion and removal — and
+answers three questions: how it is drawn, how motion crosses it, and where you
+land arriving at it.
+
+*Read that file before reading =lattice/=.* It is the same shape at a tenth of
+the size, and the lattice is only larger because a plane has more data in it
+than a strip does.
+
+** What you get for free
+
+The point of the container protocol is what you do *not* have to write. A new
+container kind inherits, without being told:
+
+- directional motion, including motion that crosses in and out of it;
+- focus repair after any surgery anywhere in the tree;
+- ~move~, ~swap~, ~pull~, ~send-to-workspace~ and every other structural verb;
+- persistence, floating, minimize, fullscreen, tabs;
+- being nestable inside any other container, including itself.
+
+* The lattice
+
+An infinite two-dimensional plane of cells, each holding a split tree. It is a
+separate system, and loading it is opt-in:
+
+#+begin_src lisp
+(asdf:load-system "lattice")
+(lattice:enable :cols 2 :rows 2)
+#+end_src
+
+Your existing workspaces become planes with everything you had in cell (0,0),
+and nothing is lost. ~(lattice:disable)~ goes back.
+
+- Coordinates are integers, origin (0,0), *+Y is up*. This is deliberate and
+  is not Wayland's convention; the lattice is a map and maps read that way.
+- *Zoom is the choice of how many cells are visible* — 1, 2, 4, 6, 8 — which is
+  the novel part. Zoom is normally a mode you enter and leave; here it is a
+  continuous layout control.
+- Motion runs straight through the cell boundary. Moving right from the
+  rightmost pane of a cell lands on the leftmost pane of the cell to its right.
+  There is no mode and no second command.
+
+Read =FINDINGS.org= for what building it cost, which is the most useful thing
+this project has to say about its own design.
+
+* Hooks, when you only want to notice
+
+A generic decides *what happens*; one answer wins and the return value matters.
+A hook notices *that something happened*; every function runs and nobody is in
+charge. If you want a hook's return value, you wanted a method.
+
+#+begin_src lisp
+(add-hook :window-opened (lambda (win) (log-it (window-app-id win))))
+#+end_src
+
+~:startup :shutdown :window-opened :window-closed :focus-changed
+:layout-changed :workspace-changed~.
+
+* Keys
+
+A binding names a command as a *string*, so redefining the command later takes
+effect without rebinding the key.
+
+#+begin_src lisp
+(define-key *keymap* "Super+Return" '("terminal"))
+(define-key *keymap* "Super+Shift+q" '("close"))
+
+;; A chord.  River's ensure_next_key_eaten makes submaps exit cleanly on a key
+;; they do not bind, so this behaves the way it does in Emacs.
+(let ((window-map (make-keymap :name "window")))
+  (define-key window-map "h" '("focus" :left))
+  (define-key window-map "l" '("focus" :right))
+  (define-key *keymap* "Super+w" window-map))
+#+end_src
+
+Both ~Super+x~ and ~C-x~ spellings parse. Punctuation needs its X11 name —
+~bracketright~, ~comma~, ~minus~ — because ~Super++~ cannot be parsed.
+
+New commands are ordinary functions with a docstring:
+
+#+begin_src lisp
+(defcommand center-window ()
+  "Float the focused window and put it in the middle of the screen."
+  (toggle-float)
+  (relayout))
+#+end_src
+
+* The development loop
+
+This is the part the language was chosen for, so it is worth doing properly.
+
+1. Start the window manager. SWANK is listening on port 4005.
+2. Connect: ~M-x slime-connect~ from Emacs, or use ~wmeval~ from a shell.
+3. Evaluate. Watch. Correct. Evaluate again.
+
+#+begin_src sh
+wmeval '(setf *gaps* 20)' '(relayout)'
+wmeval '(defmethod border-width ((p conventional-policy) node focused)
+          (if focused 6 1))' '(relayout :force t)'
+#+end_src
+
+Two things to know:
+
+- ~relayout~ is safe from any thread. Called outside a protocol sequence it
+  defers to the next one rather than emitting illegally.
+- Anything else that touches the compositor should go through ~in-wm~, because
+  the Wayland client is single-threaded. Redefining a method never needs it.
+
+*And the discipline that comes with it:* anything you redefine live and do not
+write back into your config is gone at the next restart. The REPL is a
+workflow, not a free feature.
+
+* When something goes wrong
+
+A bad method logs and the window manager keeps running. That is the whole point
+of the condition system here: an unhandled error in a compiled window manager
+unwinds and takes your session with it, and here the socket is still open, the
+tree is intact, and you can fix the function from inside the desktop it is
+misplacing windows in.
+
+#+begin_src sh
+wmeval --state          # what does it think is going on?
+wmeval --tree           # what is the layout actually?
+latticewm --log-level debug
+#+end_src
+
+If you see ~SEQUENCE-VIOLATION~, you have called a protocol request from the
+wrong context. The message names the request and what it needed. It is a
+*continuable* error, so at a REPL you can send it anyway and see what river
+does — which is how two of the bugs in this project's history were diagnosed.
+
+* The rules the core will not let you break
+
+Recorded so you do not spend an afternoon trying.
+
+- *The manage/render discipline.* Protocol law. The wire layer enforces it and
+  the enforcement is correct.
+- *Scaling.* There is no scaling primitive anywhere in river's protocol — no
+  scale, no transform, no matrix. "Zoom out" cannot mean "draw the same windows
+  smaller"; it can only mean "give every window smaller dimensions". Everything
+  about how zoom works follows from this and none of it is a choice.
+- *Focus is a place, not a window.* Structural. Everything downstream assumes a
+  cursor into the tree exists. Every behaviour you would want from the
+  window-model is reachable as policy on top of this one; the reverse is not.

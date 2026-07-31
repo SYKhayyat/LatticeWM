@@ -1,0 +1,712 @@
+
+============================================================================
+LatticeWM extension surface
+37 generics, 26 options.  Generated from the running image.
+============================================================================
+
+Every generic below takes a POLICY as its first argument.  To change one,
+write a method; it takes effect the moment you evaluate it.
+
+(defmethod gaps ((policy conventional-policy) container) 8)
+
+----------------------------------------------------------------------------
+border-color (latticewm/policy:policy latticewm/policy::node
+              latticewm/policy::focusedp)
+----------------------------------------------------------------------------
+The border colour for NODE, as (values R G B A), each 0.0 to 1.0.
+
+Note this is also the only decoration an *empty focused pane* can have, and an
+empty pane that does not obviously have the cursor reads as a broken keyboard
+rather than as a place — README D18 lists that as an accepted cost with the
+cursor being unmissable as the mitigation.  Do not make the focused colour
+subtle.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+border-width (latticewm/policy:policy latticewm/policy::node
+              latticewm/policy::focusedp)
+----------------------------------------------------------------------------
+Border thickness in pixels for NODE, drawn by the compositor.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+clip-rect (latticewm/policy:policy latticewm/policy::node
+           latticewm/policy::rect)
+----------------------------------------------------------------------------
+The region of NODE's content that should be visible, or NIL for all of it.
+
+Returns a RECT in the same space as RECT.  This is river's
+set_content_clip_box, and it is the best thing in the protocol: a cell
+half-scrolled off the viewport edge is cropped *and its border is redrawn at
+the crop edge*, so it reads as a cleanly cut cell rather than a window sliced
+in half.  Free, from the compositor.
+
+Returns NIL in the conventional layer, where nothing ever overhangs.  The
+lattice is what makes it earn its keep.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+container-label (latticewm/policy:policy latticewm/policy::container)
+----------------------------------------------------------------------------
+A short human-readable name for CONTAINER, or NIL.
+
+Used by the status output, by jump-to-name, and by the lattice's coordinate
+overlay.  Defaults to the node's LABEL slot when one was set.
+
+  methods:
+    (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
+decoration-mode (latticewm/policy:policy latticewm/policy::window)
+----------------------------------------------------------------------------
+:CSD or :SSD — who draws WINDOW's decorations?
+
+The default asks for server-side, which under river means our borders and no
+client titlebar, and falls back to whatever the client insists on.
+
+  methods:
+    (policy window)                     ; conventional.lisp
+
+----------------------------------------------------------------------------
+default-float-rect (latticewm/policy:policy latticewm/policy::window
+                    latticewm/policy::output)
+----------------------------------------------------------------------------
+The rectangle a newly floated WINDOW should occupy on OUTPUT.
+
+The default honours the window's own preferred size when it has one, centred,
+and otherwise takes a fraction of the output.
+
+  methods:
+    (policy window output)              ; conventional.lisp
+
+----------------------------------------------------------------------------
+entry-address (latticewm/policy:policy latticewm/policy::container
+               latticewm/policy::direction latticewm/policy::reference
+               latticewm/policy::rects)
+----------------------------------------------------------------------------
+Arriving at CONTAINER while travelling DIRECTION, which child do we land on?
+
+DIRECTION is NIL for a non-directional arrival — a jump to a name, a typed
+coordinate, a click.  REFERENCE is the rectangle being left, or NIL, and RECTS
+maps nodes to their rectangles, or NIL; together they let a container answer
+*geometrically* — with the child that lines up with where you already are —
+rather than with a fixed index.  A method that does not care may ignore both.
+
+The shipped rule is README D20's: directional motion enters through the edge
+it crossed and lands on the child adjacent to that edge, and non-directional
+jumps land on the first child.  There is deliberately *no memory* of what was
+focused there before, and the reason is not laziness.  Suppose a cell holds a
+terminal left and an editor right and the editor was last focused.  With
+memory, pressing Right from the cell to its left drops you on the editor;
+press Right again and you leave.  *The terminal cannot be reached by rightward
+motion at all.*  Geometric entry is also involutive: Right then Left returns
+you exactly where you started.
+
+Along the container's own axis, entry is by *edge* and geometry does not enter
+into it: that is what guarantees every pane is reachable.  Across the axis,
+entry is geometric, so that Right-then-Left returns you exactly where you
+started.  Getting the second one wrong is the difference between a layout that
+feels like a place and one that feels like a menu.
+
+Memory is genuinely nicer for named jumps, and adding it is a method on this
+generic plus a value on the container's PROPS — which is what PROPS is for.
+
+  methods:
+    (policy stack t t t)                ; conventional.lisp
+    (policy split t t t)                ; conventional.lisp
+
+----------------------------------------------------------------------------
+focus-after-remove (latticewm/policy:policy latticewm/policy::world
+                    latticewm/policy::removed-path latticewm/policy::suggested)
+----------------------------------------------------------------------------
+Where should the cursor go after the node at REMOVED-PATH was taken out?
+
+SUGGESTED is what CORE:REPAIR-PATH proposed — the deepest surviving ancestor's
+first leaf — and returning it is the shipped behaviour.  It implements README
+D18's governing property: *nothing ever moves the viewport except the user*.
+Under a most-recently-used rule the next window can be anywhere on the plane,
+so closing something can teleport you across your desktop.
+
+Returning something else is a one-method change, and MRU-after-close is one of
+the shipped worked examples precisely because it is the most commonly wanted
+one.
+
+  methods:
+    (policy t t t)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+gaps (latticewm/policy:policy latticewm/policy::container)
+----------------------------------------------------------------------------
+Pixels of empty space to leave between CONTAINER's adjacent children.
+
+Specialize on the container to vary it: zero inside a stack, larger between
+lattice cells than between splits within a cell.
+
+  methods:
+    (policy stack)                      ; conventional.lisp
+    (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
+gravity (latticewm/policy:policy latticewm/policy::leaf latticewm/policy::rect
+         latticewm/policy::width latticewm/policy::height)
+----------------------------------------------------------------------------
+Where to place a WIDTH by HEIGHT window inside the larger RECT it was given.
+
+Returns a RECT.  This is the involuntary case — a client that refused the
+proposed size.  The deliberate case, where a user wants a window to occupy
+less than its pane, is handled by splitting against an empty pane instead
+(README D17), which is why this only needs one sane answer rather than a
+policy language.
+
+  methods:
+    (policy leaf t t t)                 ; conventional.lisp
+
+----------------------------------------------------------------------------
+insertion-weight (latticewm/policy:policy latticewm/policy::split
+                  latticewm/policy::address)
+----------------------------------------------------------------------------
+The weight a child newly inserted at ADDRESS of SPLIT should receive.
+
+The default is the mean of the existing weights, so inserting into an even
+split keeps it even and inserting into a lopsided one does not hand the
+newcomer a surprising share.
+
+  methods:
+    (policy split t)                    ; conventional.lisp
+
+----------------------------------------------------------------------------
+key-unbound (latticewm/policy:policy latticewm/policy::world
+             latticewm/policy::keysym)
+----------------------------------------------------------------------------
+An unbound key was pressed while the cursor rests on an empty pane.
+
+README D19: this is what gives the empty pane something to *be*.  The keypress
+is run through a keysym-to-command table — `e` opens an editor there, `t` a
+terminal, `b` a browser — so that an empty pane is a spawn menu with no menu.
+
+Note the design constraint that forces a table rather than a single default:
+the keystroke is consumed as a trigger and *cannot be replayed* into the
+application that opens, because nothing in either river protocol synthesises
+input.  Under a single-default policy, typing `ls` at an empty pane opens a
+terminal showing `s`.  Under the table the keypress was a choice rather than
+content, and nothing is lost.
+
+  methods:
+    (policy t t)                        ; lifecycle.lisp
+
+----------------------------------------------------------------------------
+layout-children (latticewm/policy:policy latticewm/policy::container
+                 latticewm/policy::rect)
+----------------------------------------------------------------------------
+Divide RECT among CONTAINER's children.
+
+Returns a list of (ADDRESS . RECT), one entry per child that should be
+*rendered*.  Children omitted from the list are not drawn — that is how a
+STACK shows one tab, and how the lattice hides cells outside the viewport.
+
+This is the single most important generic in the file.  Every layout model
+this window manager will ever have is a method on it:
+
+  * the shipped SPLIT method divides by weight,
+  * the shipped STACK method gives the whole rectangle to one child,
+  * the lattice's GRID method places cells on a coordinate plane and crops to
+    a viewport.
+
+It is pure.  It must not touch the compositor, must not mutate CONTAINER, and
+must be safe to call repeatedly — the emitter calls it on every relayout and
+diffs the result.
+
+  methods:
+    (policy stack t)                    ; conventional.lisp
+    (policy container t)                ; conventional.lisp
+    (policy split t)                    ; conventional.lisp
+
+----------------------------------------------------------------------------
+layout-node (latticewm/policy:policy latticewm/policy::node
+             latticewm/policy::rect)
+----------------------------------------------------------------------------
+Recursively lay NODE out inside RECT.
+
+Returns a list of (NODE PATH RECT VISIBLE-P) for every node beneath and
+including NODE, deepest last, which is everything the placement emitter needs.
+Specialize this only to change the *recursion* — to add a decoration band
+above every container, say, or to stop descending past a certain depth for a
+drawn overview map.  To change how one container divides its space, specialize
+LAYOUT-CHILDREN instead; it is far cheaper.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+motion-escapes-p (latticewm/policy:policy latticewm/policy::container
+                  latticewm/policy::direction)
+----------------------------------------------------------------------------
+May motion leave CONTAINER travelling DIRECTION, or is it a wall?
+
+Answering NIL makes a container trap the cursor, which is how a fullscreen
+group or a modal region is built.  The default is T everywhere: the tree is
+one continuous space.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+move-into-occupied (latticewm/policy:policy latticewm/policy::world
+                    latticewm/policy::from latticewm/policy::to)
+----------------------------------------------------------------------------
+What does moving the subtree at FROM onto an occupied TO mean?
+
+Returns :SPLIT, :SWAP or :STACK.  The shipped answer is :SPLIT — README's open
+question notes that if move-onto-occupied swapped, the separate swap verb
+would be half redundant, and splitting is the only choice that never destroys
+structure.  Both other verbs remain separately bound.
+
+  methods:
+    (policy t t t)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+new-child-side (latticewm/policy:policy latticewm/policy::node
+                latticewm/policy::direction)
+----------------------------------------------------------------------------
+:BEFORE or :AFTER — which side of NODE does a new sibling land on?
+
+DIRECTION is the direction the user asked for, or NIL for a plain spawn.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+on-focus-change (latticewm/policy:policy latticewm/policy::world
+                 latticewm/policy::old-path latticewm/policy::new-path)
+----------------------------------------------------------------------------
+Called after the cursor moves from OLD-PATH to NEW-PATH.
+
+For side effects: raising a float, warping the pointer, updating a bar.
+Return value ignored.  Errors here are caught and logged rather than allowed
+to abort the motion.
+
+  methods:
+    (policy t t t)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+on-key (latticewm/policy:policy latticewm/policy::world latticewm/policy::key)
+----------------------------------------------------------------------------
+A bound key fired.  Returns non-NIL when the policy handled it itself.
+
+The default returns NIL, letting the command bound to KEY run.  Specializing
+this is how a modal layer — a resize mode, a vi-style submap — intercepts
+everything without unbinding anything.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+on-minimize (latticewm/policy:policy latticewm/policy::world
+             latticewm/policy::window)
+----------------------------------------------------------------------------
+WINDOW asked to be minimized, or the user asked for it.
+
+River is explicit that this is entirely ours to define — the window manager is
+'free to ignore this request, hide the window, or do whatever else it
+chooses'.  The shipped behaviour meets the stated requirement: *minimized
+windows leave the tiling tree entirely* and the remaining windows retile
+without them.  It is not 'hide it somewhere', it is 'take it out of the
+layout'.  They go to a flat scratchpad list, remembering the path they came
+from.
+
+  methods:
+    (policy t window)                   ; lifecycle.lisp
+
+----------------------------------------------------------------------------
+on-restore (latticewm/policy:policy latticewm/policy::world
+            latticewm/policy::window)
+----------------------------------------------------------------------------
+Bring WINDOW back from the scratchpad.
+
+The shipped rule returns it to the slot it was minimized from if that slot
+still exists, and to the cursor's pane otherwise.
+
+  methods:
+    (policy t window)                   ; lifecycle.lisp
+
+----------------------------------------------------------------------------
+on-window-close (latticewm/policy:policy latticewm/policy::world
+                 latticewm/policy::window latticewm/policy::path)
+----------------------------------------------------------------------------
+WINDOW has gone away and was at PATH.  Repair the tree.
+
+The shipped behaviour is README D17's CLOSE: the pane goes with the window and
+its sibling grows to fill the space.  The other half of D17 — CLEAR, which
+empties the pane but leaves it standing — is a separate command rather than a
+mode, and configuration decides which one holds the primary binding.
+
+  methods:
+    (policy t window t)                 ; lifecycle.lisp
+
+----------------------------------------------------------------------------
+on-window-open (latticewm/policy:policy latticewm/policy::world
+                latticewm/policy::window)
+----------------------------------------------------------------------------
+A window has appeared.  Place it, and decide whether it takes focus.
+
+Returns the path it was placed at, or NIL if the policy declined to tile it
+(having floated it, or parked it).  This is the top of the placement path;
+SPAWN-TARGET is the part you usually want to specialize instead.
+
+  methods:
+    (policy t window)                   ; lifecycle.lisp
+
+----------------------------------------------------------------------------
+outer-rect (latticewm/policy:policy latticewm/policy::output)
+----------------------------------------------------------------------------
+The rectangle the layout tree may use on OUTPUT.
+
+Subtract space here for a status bar or a reserved strip; everything
+downstream honours it without knowing why.
+
+  methods:
+    (policy output)                     ; conventional.lisp
+
+----------------------------------------------------------------------------
+pointer-focus (latticewm/policy:policy latticewm/policy::world
+               latticewm/policy::x latticewm/policy::y)
+----------------------------------------------------------------------------
+Which path, if any, does the pointer at (X, Y) name?
+
+Returns a path or NIL.  Used by focus-follows-mouse, which is off by default
+and is one of the shipped worked examples.
+
+  methods:
+    (policy t t t)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+policy-name (latticewm/policy:policy)
+----------------------------------------------------------------------------
+A short human-readable name for POLICY, shown in status output.
+
+  methods:
+    (policy)                            ; protocol.lisp
+
+----------------------------------------------------------------------------
+render-order (latticewm/policy:policy latticewm/policy::placements)
+----------------------------------------------------------------------------
+Order PLACEMENTS from bottom to top for river's place_above chain.
+
+River says the initial position of a node in the render list is *undefined*,
+so every node must be ordered explicitly or overlapping windows flicker
+between frames.  The default is tiled nodes in layout order, then floats, then
+overlays.
+
+  methods:
+    (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
+should-collapse-p (latticewm/policy:policy latticewm/policy::container)
+----------------------------------------------------------------------------
+Should CONTAINER be dissolved now that it has one child left?
+
+The default is yes for splits and no for stacks: a one-pane split is
+pointless, whereas a one-workspace workspace list is a thing you are about to
+add to.  Answering NIL for splits gives i3's behaviour, where containers
+persist and can be filled again.
+
+  methods:
+    (policy t)                          ; conventional.lisp
+    (policy stack)                      ; conventional.lisp
+    (policy split)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+should-float-p (latticewm/policy:policy latticewm/policy::window)
+----------------------------------------------------------------------------
+Should WINDOW float rather than tile?
+
+The shipped rule is: anything with a parent floats — river reports that via
+river_window_v1.parent and the spec says it 'might be a dialog, file picker,
+or similar' — and everything else tiles.  Adding app-id rules is the canonical
+first extension anybody writes, which is why it is a shipped worked example.
+
+  methods:
+    (policy window)                     ; conventional.lisp
+
+----------------------------------------------------------------------------
+spawn-target (latticewm/policy:policy latticewm/policy::world
+              latticewm/policy::window)
+----------------------------------------------------------------------------
+Where should a newly appeared WINDOW be placed?
+
+Returns (values PATH DISPOSITION), where DISPOSITION is
+
+  :SPLIT   split the node at PATH, putting the new window beside it,
+  :FILL    the node at PATH is an empty pane; fill it,
+  :STACK   stack the new window onto the node at PATH as a tab,
+  :FLOAT   do not tile it at all.
+
+README D14 rules that all three placement modes ship and configuration picks
+the default; this generic plus the *SPAWN-MODE* option is that ruling.  The
+shipped default is 'split the focused pane', which is Emacs's and hyprland's
+behaviour and the one nobody has to be taught.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+split-axis-for (latticewm/policy:policy latticewm/policy::node
+                latticewm/policy::rect)
+----------------------------------------------------------------------------
+Which way should a fresh split at NODE be cut?
+
+The shipped rule is dynamic: cut along whichever axis is longer, so panes tend
+towards square instead of towards slivers.  A fixed :HORIZONTAL is one method
+away and is what people who want dwindle-style predictability ask for.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
+stack-visible-address (latticewm/policy:policy latticewm/policy::stack)
+----------------------------------------------------------------------------
+Which child of STACK is currently shown?
+
+The default is its SELECTED slot.  Overriding this is how you get a stack that
+shows two children side by side at wide sizes and one at narrow — a
+responsive tab bar, in nine lines.
+
+  methods:
+    (policy stack)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+step-address (latticewm/policy:policy latticewm/policy::container
+              latticewm/policy::address latticewm/policy::direction)
+----------------------------------------------------------------------------
+Moving DIRECTION from ADDRESS inside CONTAINER, which address do we reach?
+
+Returns an address, or NIL meaning 'motion cannot be satisfied here' — at
+which point the caller ascends to CONTAINER's own parent and asks it the same
+question.  That one rule is what makes motion continuous across every kind of
+boundary: move left from the leftmost pane of a split and you leave the split;
+if the split sits in a lattice cell you arrive in the cell to its left, and
+you enter *through its right edge*, landing on its rightmost pane.  No mode,
+no second command, no discontinuity in the user's model.
+
+A STACK returns NIL for every spatial direction, deliberately: you do not
+arrive in another workspace by pressing Left.
+
+  methods:
+    (policy stack t t)                  ; conventional.lisp
+    (policy split t t)                  ; conventional.lisp
+
+----------------------------------------------------------------------------
+visible-p (latticewm/policy:policy latticewm/policy::node)
+----------------------------------------------------------------------------
+Should NODE be shown at all?
+
+Nodes that answer NIL are sent river's hide request and cost nothing further.
+Newly created windows are shown unless explicitly hidden, so anything offscreen
+must be hidden deliberately.
+
+  methods:
+    (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
+window-capabilities (latticewm/policy:policy latticewm/policy::window)
+----------------------------------------------------------------------------
+The capability bitfield to declare for WINDOW.
+
+River draws client-side-decoration titlebar buttons based on what we declare,
+so this is directly user-visible.  The shipped answer declares all four —
+window_menu, maximize, fullscreen, minimize — because we honour all four and
+fullscreen in particular is free.
+
+  methods:
+    (policy window)                     ; conventional.lisp
+
+----------------------------------------------------------------------------
+window-dimensions (latticewm/policy:policy latticewm/policy::leaf
+                   latticewm/policy::rect)
+----------------------------------------------------------------------------
+The size to propose for LEAF's window, given the RECT it has been assigned.
+
+Returns (values WIDTH HEIGHT).  River's propose_dimensions is advisory — the
+spec calls out terminal emulators that quantise to their cell size — so the
+real size arrives later in a dimensions event and may not be what was asked
+for.  GRAVITY decides where the shortfall goes.
+
+  methods:
+    (policy leaf t)                     ; conventional.lisp
+
+----------------------------------------------------------------------------
+window-rule-for (latticewm/policy:policy latticewm/policy::window)
+----------------------------------------------------------------------------
+A property list of overrides for WINDOW, or NIL.
+
+Consulted once when the window appears.  Recognised keys: :FLOAT, :WORKSPACE,
+:PATH, :FOCUS, :FULLSCREEN, :BORDER-COLOR.  This is the declarative escape
+hatch for people who do not want to write methods; the method is still there
+underneath for people who do.
+
+  methods:
+    (policy window)                     ; conventional.lisp
+
+============================================================================
+OPTIONS
+============================================================================
+
+*border-width*
+  now: 2
+  Border thickness in pixels, drawn by the compositor around every window.
+
+*browser*
+  now: "firefox"
+  The web browser the `browser' command runs.
+
+*collapse-degenerate-splits*
+  now: T
+  Dissolve a split once it is down to one child.
+
+T is Emacs's behaviour and keeps the tree shallow.  NIL is i3's, where an
+emptied container persists and can be filled again.
+
+*cursor-size*
+  now: 24
+  The xcursor size in logical pixels.
+
+*cursor-theme*
+  now: NIL
+  The xcursor theme name, or NIL to leave the compositor's default alone.
+
+*editor*
+  now: "emacs"
+  The editor the `editor' command runs.
+
+*empty-pane-color*
+  now: (0.3 0.3 0.36 1.0)
+  Border colour drawn around a focused empty pane.
+
+*empty-pane-keys*
+  now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
+  README D19's keysym-to-command table for typing in an empty pane.
+
+While the cursor rests on an empty pane, an unbound printable key is looked up
+here and the named command is run, so the empty pane is a spawn menu with no
+menu.  It has to be a table rather than a single default because the keystroke
+is consumed as a trigger and cannot be replayed into the application that
+opens — nothing in either river protocol synthesises input — so under a single
+default, typing `ls` at an empty pane opens a terminal showing `s`.
+
+*file-manager*
+  now: "thunar"
+  The file manager the `files' command runs.
+
+*float-dialogs*
+  now: T
+  Float windows that river reports as having a parent — dialogs, file
+pickers and similar.
+
+*float-fraction*
+  now: 3/5
+  Fraction of the output a floated window takes when it has no opinion.
+
+*focus-after-close*
+  now: :STAY
+  Where the cursor goes when the focused window closes.
+
+  :STAY  the deepest surviving place along the old path (the default).
+  :MRU   the most recently used window anywhere.
+  :NEXT  the next pane in layout order.
+
+:STAY implements the governing property that *nothing moves the viewport
+except the user*.  Under :MRU the next window can be anywhere, so closing
+something can teleport you across your desktop.
+
+*focus-follows-mouse*
+  now: NIL
+  Move the cursor to whatever pane the pointer is over.
+
+*focus-new-windows*
+  now: T
+  Move the cursor onto a window when it appears.
+
+*focused-border-color*
+  now: (0.4 0.65 1.0 1.0)
+  Border colour of the focused pane, as (R G B A) from 0.0 to 1.0.
+
+Do not make this subtle.  Focus may rest on an *empty* pane, which has no
+window to look at, and an empty pane that does not obviously hold the cursor
+reads as a broken keyboard rather than as a place.
+
+*gaps*
+  now: 0
+  Pixels of empty space between adjacent panes.  0 is a clean grid; 4 to 8
+gives the airy look, at the cost of that much screen.
+
+*modifier*
+  now: :SUPER
+  The modifier every default binding uses.
+
+:SUPER is the only one that does not collide with something an application
+already wants.
+
+*motion-reference-rect*
+  now: (0 0 1920 1080)
+  The nominal output used to compute geometry for motion when no layout has
+been drawn yet, as (X Y WIDTH HEIGHT).
+
+Only the aspect ratio matters, and only for deciding which pane lines up with
+which across a boundary.  You will not need to change this.
+
+*move-into-occupied*
+  now: :SPLIT
+  What dropping a window onto an occupied pane means: :SPLIT, :SWAP or :STACK.
+
+:SPLIT is shipped because it is the only one that never destroys structure.
+SWAP remains a separate verb with its own binding, so nothing is lost.
+
+*new-child-side*
+  now: :AFTER
+  Which side of the existing pane a new sibling lands on: :AFTER or :BEFORE.
+
+*outer-gaps*
+  now: 0
+  Pixels of empty space between the layout and the edge of the output.
+
+*smart-gaps*
+  now: T
+  Drop gaps and borders entirely when a workspace holds exactly one window.
+
+*spawn-mode*
+  now: :SPLIT
+  Where a new window goes.  README D14 rules that all three ship.
+
+  :SPLIT       split the focused pane and put it beside — Emacs, hyprland.
+  :FILL-FIRST  drop it in the nearest empty pane if there is one, else split.
+  :STACK       add it as a tab on the focused pane.
+
+:SPLIT is the shipped default because it is the behaviour nobody has to be
+taught.
+
+*split-axis*
+  now: :LONGER
+  How a fresh split is cut.
+
+  :LONGER      along whichever axis is longer, so panes tend towards square.
+  :HORIZONTAL  always side by side.
+  :VERTICAL    always stacked.
+
+:LONGER is the default because fixed-axis splitting produces slivers as soon
+as you go three deep, and everybody's first configuration change in the
+fixed-axis window managers is to add a 'split the other way' binding.
+
+*terminal*
+  now: "foot"
+  The terminal emulator the `terminal' command runs.
+
+*unfocused-border-color*
+  now: (0.22 0.22 0.26 1.0)
+  Border colour of every pane that is not focused.
+

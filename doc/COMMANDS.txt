@@ -1,0 +1,226 @@
+
+LatticeWM commands.
+
+(anchor-float &optional (path (current-path)))
+  Pin the focused floating window to the pane at PATH.
+  
+  An anchored float travels with the pane it belongs to: it moves when the pane
+  moves, hides when the pane hides, and is clipped by the pane's clip box.  That
+  is what "a floating window inside a window" means here — a picture-in-picture,
+  a preview, a terminal that follows its editor across the plane.
+  
+  Costs one slot on the float.  The alternative — floats pinned to the output —
+  is still the default, because most floats are dialogs and a dialog belongs to
+  the screen rather than to a pane.
+
+(browser)
+  Open a web browser.  Bound to `b' in an empty pane by default.
+
+(clear)
+  Empty the focused pane but leave it standing.
+  
+  You are now *in* an empty pane, which still occupies its space.  README D17's
+  CLEAR: a separate verb from CLOSE rather than a mode, because they are
+  different intentions and a mode would make you remember which one you were in.
+  
+  The window itself is closed; what survives is the place.
+
+(close)
+  Close the focused window, and take its pane with it.
+  
+  The sibling grows to fill the space.  README D17's CLOSE; see CLEAR for the
+  other half.
+
+(describe-key spec)
+  Print what SPEC is bound to.
+
+(editor)
+  Open an editor.  Bound to `e' in an empty pane by default.
+
+(equalize)
+  Give every pane in the focused container an equal share.
+  
+  Applies to the nearest enclosing split.  With a prefix of nothing else, this is
+  the command people reach for after ten minutes of resizing.
+
+(equalize-all)
+  Give every pane in the whole workspace an equal share.
+
+(files)
+  Open a file manager.  Bound to `f' in an empty pane by default.
+
+(focus direction)
+  Move the cursor one pane DIRECTION — :LEFT, :RIGHT, :UP or :DOWN.
+  
+  Motion is continuous across every boundary: within a split, out of a split
+  when the direction crosses its axis, and — once the lattice is loaded — into
+  the cell next door, entering through the edge you crossed.  Bumping the edge of
+  the world does nothing, and that is not an error.
+
+(focus-next)
+  Move the cursor to the next pane in layout order, wrapping.
+
+(focus-path path)
+  Move the cursor to PATH, a list of addresses from the root.
+
+(focus-previous)
+  Move the cursor to the previous pane in layout order, wrapping.
+
+(minimize)
+  Take the focused window out of the tiling tree entirely.
+  
+  The remaining windows retile without it.  Minimize is not 'hide it somewhere',
+  it is 'take it out of the layout' — and where it went is the scratchpad, which
+  RESTORE-LAST brings it back from.
+
+(move direction &key (join nil))
+  Move the focused pane DIRECTION, onto whatever is there.
+  
+  JOIN says what landing on something occupied means — :SPLIT, :SWAP or :STACK —
+  and defaults to the policy's answer, which ships as :SPLIT.  Landing on an
+  *empty* pane always fills it, whatever JOIN says, because an empty pane is a
+  place someone made for something.
+  
+  This is the verb that satisfies 'you can move a window to be a split window in
+  another window': the destination does not have to be adjacent in the tree, only
+  adjacent on screen.
+
+(move-float direction &optional (pixels 40))
+  Nudge the focused floating window DIRECTION.
+  
+  Floats are positioned by hand, which is the point of floating them; this is
+  the keyboard half of that.
+
+(new-workspace)
+  Add a workspace after the current one and switch to it.
+
+(next-workspace &optional (step 1))
+  Switch to the next workspace, wrapping.
+
+(previous-workspace)
+  Switch to the previous workspace, wrapping.
+
+(pull direction)
+  Bring the pane DIRECTION of here *into* the focused pane, as a split.
+  
+  The inverse of MOVE, and the reason it exists separately: pulling does not
+  require navigating to the thing first.  You stay where you are and the window
+  comes to you.
+
+(quit)
+  Exit the session.  This logs you out.
+
+(reload-config)
+  Re-read the configuration file.
+  
+  Note that this only re-runs the file; anything you redefined at a REPL and did
+  not write down is unaffected, and anything the file *removed* since last time
+  is not undone.  Live redefinition is not transactional, and pretending it is
+  would be worse than saying so.
+
+(remove-pane)
+  Remove the focused pane entirely, whether or not it holds anything.
+
+(resize direction &optional (amount 1/20))
+  Grow the focused pane DIRECTION by AMOUNT of its container's total.
+  
+  Resizing is a *transfer* between two adjacent weights rather than an
+  assignment, so dragging one divider never disturbs the divider beyond it —
+  which is the single most common complaint about tiling resize.
+  
+  Because weights are relative, this behaves identically at every zoom level and
+  on every monitor, and needs to know nothing about pixels.
+
+(resize-float direction &optional (pixels 40))
+  Grow or shrink the focused floating window DIRECTION.
+
+(restart-wm)
+  Stop the window manager without ending the session.
+  
+  River keeps running, and so does every application; the window manager is an
+  ordinary Wayland client.  Relaunch it and the layout comes back, because
+  persistence is keyed on river's stable window identifiers.
+
+(restore-last)
+  Bring back the most recently minimized window.
+  
+  To the slot it was minimized from if that slot still exists, and to the cursor
+  otherwise.
+
+(send-to-workspace index &key (follow nil))
+  Move the focused pane to workspace INDEX.
+  
+  This is TREE-TRANSPLANT and nothing else — because a workspace is a container
+  and a pane is a subtree, 'send to workspace' needed no code of its own.
+
+(spawn &rest command)
+  Run COMMAND as a detached process.
+  
+      (spawn "foot")
+      (spawn "firefox" "--new-window")
+  
+  The child is detached and its output goes nowhere, so a program that writes to
+  stderr cannot fill a pipe nobody is reading and block.
+
+(split &optional axis (side after))
+  Split the focused pane, leaving an *empty* pane beside it.
+  
+  AXIS is :HORIZONTAL, :VERTICAL, or NIL to let the policy choose — which by
+  default cuts along the longer side so panes tend towards square.
+  
+  This is README D17's resize idiom, and the empty pane it makes is a
+  first-class object rather than a gap waiting to be filled: you split a pane and
+  leave one side empty, and the window occupies the rest.  The cursor moves into
+  the new empty pane, where — per D19 — typing a key spawns something.
+
+(swap direction)
+  Exchange the focused pane with the one DIRECTION of it.
+  
+  Neither changes shape and nothing else moves — the cheap, predictable way to
+  rearrange.  The cursor follows the pane you were in, so swapping twice returns
+  you exactly where you were.
+
+(tab)
+  Turn the focused pane and its next sibling into tabs.
+  
+  A stack is what tabs are — an ordered set of alternatives of which one is
+  current — so this is the same object a workspace list is, and every verb that
+  works on one works on the other.
+
+(tab-next &optional (step 1))
+  Show the next tab of the nearest enclosing stack.
+  
+  Also how you switch workspaces, because a workspace list *is* a stack — see
+  NEXT-WORKSPACE, which is this command aimed at the root.
+
+(tab-previous)
+  Show the previous tab of the nearest enclosing stack.
+
+(terminal)
+  Open a terminal.  Bound to `t' in an empty pane by default.
+
+(toggle-float)
+  Float the focused window, or put a floating one back into the tree.
+  
+  Floating is per window and chosen, never inferred and forced: SHOULD-FLOAT-P
+  only supplies the initial guess, and this is how you overrule it.
+
+(toggle-fullscreen)
+  Make the focused window the only thing on its output, or stop.
+  
+  Cheap in both directions: river ignores clip boxes and does not draw borders
+  while fullscreen, so entering and leaving cost no relayout.
+
+(unanchor-float)
+  Pin the focused floating window to the output instead of to a pane.
+
+(untab)
+  Dissolve the nearest enclosing stack back into a split.
+
+(workspace index)
+  Switch to workspace INDEX, creating it and any before it if needed.
+  
+  Workspaces are a stack at the root of the tree, so this is the same operation
+  as switching a tab — and 'infinite workspaces' costs nothing, because a stack
+  grows.
+

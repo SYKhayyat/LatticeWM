@@ -20,7 +20,30 @@ re-raise it as a fresh idea.
 
 ** Status
 
-Nothing is built. This is a design + research document.
+*It is built, and it runs.* This section was "Nothing is built" until
+2026-07-30; what follows is a pointer to the artifacts, and the design below is
+otherwise unchanged.
+
+- =src/= — the window manager. Runs under river 0.4.5, nested or bare.
+- =lattice/= — the infinite plane, as a separate ASDF system.
+- [[file:FINDINGS.org][FINDINGS.org]] — *the result of [[#d21][D21]]'s experiment*, which is the most
+  useful thing this project has to say about its own premise. Read it before
+  the design if you are short of time.
+- [[file:doc/EXTENDING.org][doc/EXTENDING.org]] — how to change it.
+- [[file:PLAN.org::#log][PLAN.org §log]] — what the execution actually did, including the
+  corrections it forced on this document.
+
+: make            build, gates, tests
+: make run        river nested inside the session you are already in
+: latticewm --extension-surface
+
+*Corrections this document needs, recorded rather than applied* (full list in
+[[file:PLAN.org::#log][PLAN §log]]): the shipped =river-window-management-v1= is *version 4 with 42
+events*, not 5 with 44 — the measurement below was taken against master. River
+ships *six* protocols, not two. ~manage_start~ and ~render_start~ are events,
+not requests. And river 0.4.5 is in nixpkgs, prebuilt, and runs nested — so the
+"get access to a machine running river" critical path in [[#next][Next actions]] never
+existed.
 
 *The Week 0 spike has been run — 2026-07-29, and it passed.* Results:
 [[file:SPIKE-WEEK0.org][SPIKE-WEEK0.org]]. Read it alongside this file; where the two

@@ -631,3 +631,125 @@ Recorded so nobody mistakes the plan for a guarantee.
   than the ones README used to reach it — and it stands *conditionally on gate 6*, since
   a Vim-shaped codebase in Common Lisp would have paid the correctness tax and received
   none of the benefit.
+
+* Execution record — 2026-07-30 into 2026-07-31
+:PROPERTIES:
+:CUSTOM_ID: log
+:END:
+
+Written as it happened. This section is the only one in either document that is
+a record rather than a plan, and it exists because [[#honest][§honest]] is going to want
+checking against something.
+
+** What the schedule actually did
+
+The plan budgeted fifteen days against a worst-case expiry of 2026-08-14, with
+Phase 0 timeboxed to day one and an abort condition if there were no working
+river by day two. Phases 0 through 5 completed in one session.
+
+*The reason is not that the estimates were bad.* It is that the single item the
+whole plan was blocked on turned out to be already solved by somebody else:
+
+#+begin_quote
+*Abort condition: if there is no working river by end of Day 2, stop and
+re-plan.* Every subsequent phase past Phase 2 assumes it.
+#+end_quote
+
+river *0.4.5* is packaged in nixpkgs, prebuilt in the binary cache, and runs
+nested inside an ordinary Wayland session. [[#phase-0][Phase 0]]'s hopeful first bullet —
+"Try river nested first. […] *Verify this specifically for river before betting
+the day on it.*" — was correct, and it took ten minutes rather than a day.
+Everything downstream of "get access to a machine running river 0.4.0", which
+[[file:README.org::#next][README §next]] called "now the critical path", evaporated.
+
+The other estimate that was wrong in the same direction: canoe was budgeted as
+a two-day saving that the language reversal gave up. It was never needed. The
+sequencing questions the spec contradicts itself about were answered by the
+sequence discipline catching violations at the point of use, with the request
+name and the required context in the error message, three times.
+
+** Corrections to both documents
+
+Recorded here rather than applied silently, per README's standing rule.
+
+| Claim | Correction |
+|-------+------------|
+| =river-window-management-v1= is version 5 with 44 events | Shipped 0.4.5 is *version 4 with 42 events*. The documents measured master; 0.4.5 stable is what we run against. Gate 5 pins 8/57/42/10. |
+| Two river protocols | *Six.* =river-layer-shell-v1=, =river-input-management-v1=, =river-xkb-config-v1= and =river-libinput-config-v1= also ship. Three are vendored; the other three are not needed yet. |
+| ~manage_start~ / ~render_start~ are requests | They are *events*. Only ~manage_finish~ and ~render_finish~ are client-callable. |
+| wayflan is on sr.ht and the GitHub mirror is stale | Still true, and nixpkgs already pins the sr.ht tree at 2026-01-01. But =sbclPackages.wayflan= is *broken* — it compiles wayflan-client's sources into a read-only store path. =wayflan-client= builds and omits =wayflan.asd=. The workaround is to take the nixpkgs package's *source* and let ASDF compile it: same pin, no fork. |
+| SBCL images are ~40–60 MB RSS | On this machine a *bare* SBCL image is 111 MB on disk and 64 MB RSS before anything is loaded. The window manager adds ~49 MB, for 113 MB with six windows open. The concession to a compiled binary is larger than README estimated, and most of it is not ours. |
+
+** Deltas 1 and 2 held; Delta 3 is conditional
+
+[[#delta-1][Delta 1]] — cells and splits share one geometry — is the strongest result here.
+It was implemented as *one container protocol*, and directional motion across a
+cell boundary needed zero lines: ~find-motion-target~ ascends out of a split,
+asks the grid, and descends, without knowing what a grid is.
+
+[[#delta-2][Delta 2]] — the lattice as a separate ASDF system, gated daily — worked exactly
+as designed and is why the findings in [[file:FINDINGS.org][FINDINGS.org]] exist at all.
+
+[[#delta-3][Delta 3]] — ~absolute-with-clipping~ as the shipped default — is *reversed, with
+its own argument preserved*. Delta 3 is right that ~exact-fit~ makes a column's
+rendered width depend on which columns are beside it, so panning resizes every
+window on screen. What it does not say is that this is *conditional*: it only
+bites once columns are non-uniform, and columns are uniform until somebody
+resizes one. On a uniform lattice ~exact-fit~ panning resizes nothing.
+
+So ~exact-fit~ ships as the default, it is free for anybody who never resizes a
+column, and the first ~resize-column~ logs what it now costs and how to flip it.
+There is a test asserting both halves. If this proves wrong in daily use the fix
+is one ~setf~.
+
+** The gates, at the end of the session
+
+: gate 1  zero compiler warnings                        PASS
+: gate 2  37 generics and 40 commands, all documented   PASS
+: gate 3  lattice: 1,060 lines, 16 defmethods, 3 core edits
+: gate 4  the core runs with the lattice absent         PASS
+: gate 5  8/57/42/10 and 3/11/5/1, 74 wrapped requests  PASS
+: gate 6  runtime 2,299 / policy 2,907 = 1.20           healthy
+
+Gate 6 is the one worth watching. It started at 0.92 — runtime outgrowing
+policy, which [[#gates][§gates]] names as "the earliest visible symptom of the monolith
+failure mode" — and the lattice moved it to 1.20. That is the shape the language
+argument depends on, and it is now measured rather than asserted. It is still a
+long way from the Emacs ratio of roughly 3.5, and it should be checked again
+after the next extension rather than treated as settled.
+
+** What §honest predicted, scored
+
+- /"Nothing verifies that the decomposition is good."/ *Correct, and worse than
+  stated.* The surface passed gate 2, passed 416 unit tests and ran a real
+  window manager for hours while being *unusable in its most common mode* —
+  every default was on the class users are told to specialize, so
+  ~call-next-method~ signalled. What caught it was writing four extensions the
+  way a stranger would. See [[file:FINDINGS.org][FINDINGS.org]] core edit 3.
+- /"Gate 3 is satisfiable in bad faith."/ Still true. The numbers are reported
+  raw so a reader can disagree with the interpretation.
+- /"Days 5 to 9 carry the schedule risk […] where an unknown compositor meets a
+  spec that contradicts itself."/ *This was the right thing to worry about and
+  the mitigation worked.* Every one of the wiring bugs — bitfields as keyword
+  lists, 32-bit colour components, binding enable outside a manage sequence —
+  was found in minutes because the error named the request. The spec
+  contradiction itself never came up, because ~*render-legal-in-manage*~
+  defaulted permissively and river accepted it.
+- /"The strongest argument for Rust gets stronger under time pressure."/ Mixed.
+  Gate 1 caught what it was predicted to catch. What it did not catch, and what
+  a type system would not have either, was the four logic bugs the *tests*
+  found — a subtree silently deleted, motion that was not involutive, a stale
+  cursor, a container left invalid. Those are wrong-but-well-typed, which
+  [[file:README.org::#language][§language]] names as the residue. The residue was the whole of it.
+
+** Open, and now cheap
+
+- The drawn map at deep zoom. ~wl_shm~ and the fd path are still unexercised,
+  which was the point of cutting them, but ~river_layer_shell_v1~ is vendored
+  and shipped by 0.4.5 and may be an easier route than a shell surface.
+- ~ate_unbound_key~ under ~clear_focus~. The D19 machinery is written and
+  bound; whether river delivers the event when the seat has no keyboard focus
+  is still unverified, because verifying it needs a human at a keyboard.
+- Bare-metal river. Everything here ran nested. Nested is a real compositor and
+  a real protocol, but it is not a real display, and multi-monitor in
+  particular has been written and not exercised.

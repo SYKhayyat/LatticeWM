@@ -1,0 +1,184 @@
+
+LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
+
+*BORDER-WIDTH*
+  value:   2
+  default: 2
+  Border thickness in pixels, drawn by the compositor around every window.
+
+*BROWSER*
+  value:   "firefox"
+  default: "firefox"
+  The web browser the `browser' command runs.
+
+*COLLAPSE-DEGENERATE-SPLITS*
+  value:   T
+  default: T
+  Dissolve a split once it is down to one child.
+  
+  T is Emacs's behaviour and keeps the tree shallow.  NIL is i3's, where an
+  emptied container persists and can be filled again.
+
+*CURSOR-SIZE*
+  value:   24
+  default: 24
+  The xcursor size in logical pixels.
+
+*CURSOR-THEME*
+  value:   NIL
+  default: NIL
+  The xcursor theme name, or NIL to leave the compositor's default alone.
+
+*EDITOR*
+  value:   "emacs"
+  default: "emacs"
+  The editor the `editor' command runs.
+
+*EMPTY-PANE-COLOR*
+  value:   (0.3 0.3 0.36 1.0)
+  default: (0.3 0.3 0.36 1.0)
+  Border colour drawn around a focused empty pane.
+
+*EMPTY-PANE-KEYS*
+  value:   ((#\e . "editor") (#\t . "terminal") (#\b . "browser")
+            (#\f . "files"))
+  default: ((#\e . "editor") (#\t . "terminal") (#\b . "browser")
+            (#\f . "files"))
+  README D19's keysym-to-command table for typing in an empty pane.
+  
+  While the cursor rests on an empty pane, an unbound printable key is looked up
+  here and the named command is run, so the empty pane is a spawn menu with no
+  menu.  It has to be a table rather than a single default because the keystroke
+  is consumed as a trigger and cannot be replayed into the application that
+  opens — nothing in either river protocol synthesises input — so under a single
+  default, typing `ls` at an empty pane opens a terminal showing `s`.
+
+*FILE-MANAGER*
+  value:   "thunar"
+  default: "thunar"
+  The file manager the `files' command runs.
+
+*FLOAT-DIALOGS*
+  value:   T
+  default: T
+  Float windows that river reports as having a parent — dialogs, file
+  pickers and similar.
+
+*FLOAT-FRACTION*
+  value:   3/5
+  default: 3/5
+  Fraction of the output a floated window takes when it has no opinion.
+
+*FOCUS-AFTER-CLOSE*
+  value:   :STAY
+  default: :STAY
+  Where the cursor goes when the focused window closes.
+  
+    :STAY  the deepest surviving place along the old path (the default).
+    :MRU   the most recently used window anywhere.
+    :NEXT  the next pane in layout order.
+  
+  :STAY implements the governing property that *nothing moves the viewport
+  except the user*.  Under :MRU the next window can be anywhere, so closing
+  something can teleport you across your desktop.
+
+*FOCUS-FOLLOWS-MOUSE*
+  value:   NIL
+  default: NIL
+  Move the cursor to whatever pane the pointer is over.
+
+*FOCUS-NEW-WINDOWS*
+  value:   T
+  default: T
+  Move the cursor onto a window when it appears.
+
+*FOCUSED-BORDER-COLOR*
+  value:   (0.4 0.65 1.0 1.0)
+  default: (0.4 0.65 1.0 1.0)
+  Border colour of the focused pane, as (R G B A) from 0.0 to 1.0.
+  
+  Do not make this subtle.  Focus may rest on an *empty* pane, which has no
+  window to look at, and an empty pane that does not obviously hold the cursor
+  reads as a broken keyboard rather than as a place.
+
+*GAPS*
+  value:   0
+  default: 0
+  Pixels of empty space between adjacent panes.  0 is a clean grid; 4 to 8
+  gives the airy look, at the cost of that much screen.
+
+*MODIFIER*
+  value:   :SUPER
+  default: :SUPER
+  The modifier every default binding uses.
+  
+  :SUPER is the only one that does not collide with something an application
+  already wants.
+
+*MOTION-REFERENCE-RECT*
+  value:   (0 0 1920 1080)
+  default: (0 0 1920 1080)
+  The nominal output used to compute geometry for motion when no layout has
+  been drawn yet, as (X Y WIDTH HEIGHT).
+  
+  Only the aspect ratio matters, and only for deciding which pane lines up with
+  which across a boundary.  You will not need to change this.
+
+*MOVE-INTO-OCCUPIED*
+  value:   :SPLIT
+  default: :SPLIT
+  What dropping a window onto an occupied pane means: :SPLIT, :SWAP or :STACK.
+  
+  :SPLIT is shipped because it is the only one that never destroys structure.
+  SWAP remains a separate verb with its own binding, so nothing is lost.
+
+*NEW-CHILD-SIDE*
+  value:   :AFTER
+  default: :AFTER
+  Which side of the existing pane a new sibling lands on: :AFTER or :BEFORE.
+
+*OUTER-GAPS*
+  value:   0
+  default: 0
+  Pixels of empty space between the layout and the edge of the output.
+
+*SMART-GAPS*
+  value:   T
+  default: T
+  Drop gaps and borders entirely when a workspace holds exactly one window.
+
+*SPAWN-MODE*
+  value:   :SPLIT
+  default: :SPLIT
+  Where a new window goes.  README D14 rules that all three ship.
+  
+    :SPLIT       split the focused pane and put it beside — Emacs, hyprland.
+    :FILL-FIRST  drop it in the nearest empty pane if there is one, else split.
+    :STACK       add it as a tab on the focused pane.
+  
+  :SPLIT is the shipped default because it is the behaviour nobody has to be
+  taught.
+
+*SPLIT-AXIS*
+  value:   :LONGER
+  default: :LONGER
+  How a fresh split is cut.
+  
+    :LONGER      along whichever axis is longer, so panes tend towards square.
+    :HORIZONTAL  always side by side.
+    :VERTICAL    always stacked.
+  
+  :LONGER is the default because fixed-axis splitting produces slivers as soon
+  as you go three deep, and everybody's first configuration change in the
+  fixed-axis window managers is to add a 'split the other way' binding.
+
+*TERMINAL*
+  value:   "foot"
+  default: "foot"
+  The terminal emulator the `terminal' command runs.
+
+*UNFOCUSED-BORDER-COLOR*
+  value:   (0.22 0.22 0.26 1.0)
+  default: (0.22 0.22 0.26 1.0)
+  Border colour of every pane that is not focused.
+
