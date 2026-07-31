@@ -1,0 +1,121 @@
+.TH LATTICEWM 1 "2026-07-31" "LatticeWM 0.1.0" "User Commands"
+.SH NAME
+latticewm \- an extensible window manager for the river Wayland compositor
+.SH SYNOPSIS
+.B river \-c
+.RI [ options ]
+.br
+.B latticewm
+.RI [ options ]
+.SH DESCRIPTION
+.B LatticeWM
+is a window manager for
+.BR river (1),
+written in Common Lisp.  It is started by river rather than run on its own:
+river is the compositor, LatticeWM decides where the windows go.
+.PP
+Its layout model is a replaceable policy layer rather than the program itself.
+The shipped layer is conventional \(em recursive splits, tabs, workspaces,
+floating, minimise, multi-monitor.  Loading the
+.B lattice
+system on top turns each workspace into an infinite plane of cells addressed by
+integer coordinate, with zoom, pan and a drawn map.
+.PP
+Every decision it makes is a generic function you can add a method to, and it
+carries a live Lisp image, so a method added at a REPL takes effect on the
+running desktop without a restart.
+.SH OPTIONS
+.TP
+.B \-\-help
+Print a usage summary and exit.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.B \-\-write\-config
+Write a commented starter configuration to
+.I ~/.config/latticewm/init.lisp
+and exit.  Never overwrites an existing one.
+.TP
+.B \-\-no\-config
+Start without reading the configuration file.  Use this when a change to it
+has broken something.
+.TP
+.B \-\-no\-restore
+Start with an empty layout instead of the one saved at the last exit.
+.TP
+.BI \-\-swank\-port " N"
+Listen for a SLIME/SWANK connection on port
+.IR N ,
+4005 by default.  0 disables it.
+.TP
+.BI \-\-log\-level " LEVEL"
+One of debug, info, warn, error or none.
+.TP
+.B \-\-list\-options
+Print every configuration value with its default and its documentation.
+.TP
+.B \-\-list\-commands
+Print every command with its documentation.
+.TP
+.B \-\-list\-keys
+Print every key binding.
+.TP
+.B \-\-extension\-surface
+Print every generic function that can be specialized, generated from the
+running image.
+.SH KEYS
+The complete keymap is drawn on screen by
+.BR Super+/ ,
+built from the live bindings, so it includes anything you added yourself.
+A few worth knowing before that:
+.TP
+.B Super+Return
+A terminal.
+.TP
+.B Super+x
+Run a command by name.  Emacs's M\-x; Tab completes, and a command that takes
+arguments asks for them.
+.TP
+.B Super+;
+Evaluate a Lisp expression in the running window manager.
+.TP
+.B Super+?
+Ask about something: b for every binding, k for a key, c for a command,
+a to search, o for a configuration value, s to change one.
+.TP
+.B Super+h j k l
+Move the focus left, down, up, right.  The arrow keys do the same.
+.SH FILES
+.TP
+.I ~/.config/latticewm/init.lisp
+The configuration file.  Plain Common Lisp, read in the LATTICEWM/USER package.
+Errors in it are logged and do not stop startup.
+.TP
+.I ~/.local/state/latticewm/state.lisp
+The saved layout, written at exit and restored at startup.
+.SH ENVIRONMENT
+.TP
+.B XDG_CONFIG_HOME
+Where the configuration directory is looked for, if set.
+.SH EXAMPLES
+Run it nested inside an existing Wayland session, which is a real compositor
+and a real protocol and needs no second machine:
+.PP
+.RS
+.B river \-c latticewm
+.RE
+.PP
+Change something on the running desktop, from a shell:
+.PP
+.RS
+.B wmeval '(setf *gaps* 8)' '(relayout :force t)'
+.RE
+.SH SEE ALSO
+.BR river (1),
+.BR sbcl (1)
+.PP
+.I doc/EXTENDING.org
+in the source tree is the guide to changing it, with worked examples.
+.SH AUTHOR
+Shaul Khayyat.

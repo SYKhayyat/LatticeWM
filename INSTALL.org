@@ -1,0 +1,172 @@
+#+TITLE: Installing LatticeWM on Linux
+#+OPTIONS: toc:2 num:nil
+
+* The short version
+
+#+begin_src sh
+git clone … && cd LatticeWM
+./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
+make                  # build, six gates, 566 tests
+make image            # dump ./latticewm, one executable
+./install.sh          # into ~/.local, and offer it at the login screen
+#+end_src
+
+Then log out and pick *LatticeWM*, or try it without logging out of anything:
+
+#+begin_src sh
+river -c latticewm    # nested, in a window, inside the session you have
+#+end_src
+
+*The first thing to press is =Super+/=*, which draws the whole keymap.
+
+* What it needs
+
+|-------------+---------------------------------------------------------------|
+| =sbcl=      | The Lisp compiler.  Every distro packages it.                  |
+| =river= 0.4+ | The compositor.  LatticeWM is its window manager, not a       |
+|             | replacement for it.                                            |
+| =git=, =curl= | Once, to fetch the rest.                                     |
+|-------------+---------------------------------------------------------------|
+
+Nothing else.  =bootstrap.sh= puts the Lisp libraries under =./.deps/= and
+writes nowhere else; =rm -rf .deps= undoes it completely.
+
+** SBCL
+
+#+begin_src sh
+sudo pacman -S sbcl               # Arch, Manjaro, EndeavourOS
+sudo apt install sbcl             # Debian, Ubuntu, Mint, Pop!_OS
+sudo dnf install sbcl             # Fedora, RHEL, CentOS
+sudo zypper install sbcl          # openSUSE
+sudo apk add sbcl                 # Alpine
+sudo xbps-install -S sbcl         # Void
+sudo emerge dev-lisp/sbcl         # Gentoo
+#+end_src
+
+Any SBCL from the last few years will do.  =bootstrap.sh= prints the right
+line for your distro if it is missing.
+
+** river, and the version that matters
+
+*LatticeWM needs river 0.4 or newer.*  This is not a preference: it talks
+=river-window-management-v1=, the protocol through which river hands window
+management to an outside program, and that protocol does not exist in earlier
+releases.  Check what you have:
+
+#+begin_src sh
+river -version
+#+end_src
+
+Most distributions package river.  Whether the packaged one is new enough
+varies and changes month to month, so check rather than assume — and if it is
+older, building river is genuinely easy, because it is one Zig program with no
+plugin system:
+
+#+begin_src sh
+sudo pacman -S zig wayland wayland-protocols libxkbcommon pixman     # or your equivalent
+git clone --recurse-submodules https://codeberg.org/river/river
+cd river && zig build -Doptimize=ReleaseSafe --prefix ~/.local install
+#+end_src
+
+=bootstrap.sh= warns if it finds a river older than 0.4, and does not stop:
+everything except actually running the window manager — the build, all six
+gates, all the tests — works with no compositor on the machine at all.
+
+* Where the Lisp dependencies come from
+
+There are three ways for them to be present and the build cares about none of
+them.  =tools/prelude.lisp= works out which applies:
+
+1. *Already visible to ASDF* — a distro package, or a Quicklisp in your home
+   directory that your =~/.sbclrc= loads.  Nothing to do.
+2. *Under =./.deps/=*, which is what =bootstrap.sh= fills.
+3. *Nowhere*, in which case the build stops and says to run =bootstrap.sh=.
+
+The dependency that matters is *wayflan*, the Wayland client library.  The nix
+build takes it from nixpkgs, which pins the upstream tree at 2026-01-01;
+Quicklisp's dist of the same date carries the same tree.  So the two build
+paths do not merely agree, they compile the same source, and there is no
+second set of version numbers to keep in step.
+
+The others are ordinary: =alexandria=, =closer-mop=, =bordeaux-threads=, plus
+=fiveam= for the tests and =swank= for the REPL bridge.
+
+** If you would rather use your own Quicklisp
+
+#+begin_src sh
+sbcl --eval '(ql:quickload (list "wayflan-client" "alexandria" "closer-mop" "bordeaux-threads" "fiveam" "swank"))'
+make    # prelude.lisp finds them and never touches .deps/
+#+end_src
+
+** If your distro packages the Lisp libraries
+
+Debian and Fedora package some of these as =cl-alexandria= and so on.  If
+ASDF can already find them, the build uses them; wayflan is the one that is
+unlikely to be packaged anywhere.
+
+* Installing
+
+=install.sh= puts four things in place, and each of them is a step that
+somebody's first attempt at running a window manager from source misses:
+
+| =$PREFIX/bin/latticewm=                    | the binary                     |
+| =$PREFIX/bin/latticewm-session=            | river, told to run it          |
+| =$PREFIX/share/wayland-sessions/….desktop= | so the login screen offers it  |
+| =$PREFIX/share/man/man1/latticewm.1=       | =man latticewm=                |
+
+#+begin_src sh
+./install.sh                            # ~/.local, no root
+sudo ./install.sh --prefix /usr/local   # system-wide
+./install.sh --uninstall                # takes it all back out
+#+end_src
+
+A home-directory install puts the session entry in
+=~/.local/share/wayland-sessions=.  GDM and SDDM read =$XDG_DATA_DIRS= and
+find it; a few lighter greeters only look in =/usr/share/wayland-sessions=, so
+if LatticeWM does not appear at the login screen, install it system-wide.
+
+Your configuration is never overwritten — not on install, not on upgrade.
+
+* NixOS
+
+#+begin_src sh
+nix-shell            # everything, including river and a screenshot tool
+make
+#+end_src
+
+or with flakes:
+
+#+begin_src sh
+nix develop
+nix run .#nested     # river with LatticeWM inside the current session
+#+end_src
+
+=bootstrap.sh= is unnecessary there and says so.  Nothing under =src/= knows
+that nix exists: delete =shell.nix= and =flake.nix= and the project still
+builds, which is the property those two files are held to.
+
+* Checking that it worked
+
+#+begin_src sh
+make            # gate 1 through 6, then the unit suite
+./latticewm --version
+./latticewm --list-commands | head
+river -c "$PWD/latticewm --log-level debug"
+#+end_src
+
+The last one runs it nested inside your current session, in a window.  That is
+a real compositor speaking the real protocol — it is how nearly all of this was
+developed — and it cannot disturb the desktop you are already using.
+
+* When something goes wrong
+
+- *The build stops naming a system it cannot find.*  Run =./bootstrap.sh=.
+- *It starts and the screen is black.*  That is an empty pane and it is
+  drawn — press =Super+Return= for a terminal, or =Super+/= for the keymap.
+- *A change to =init.lisp= broke it.*  Start with =--no-config=.  An error in
+  the file is already logged rather than fatal, but this skips it entirely.
+- *It will not start after a crash.*  =--no-restore= ignores the saved layout.
+- *Nothing responds to keys.*  Check =river -version=; below 0.4 the window
+  management protocol is absent and LatticeWM cannot bind anything.
+- *You want to see what it is doing.*  =--log-level debug=, and
+  =tools/wmeval --state= asks the running window manager where it thinks it is.

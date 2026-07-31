@@ -4,21 +4,37 @@
 # dependency: nothing under src/ knows that nix exists, and if shell.nix is
 # deleted the project still builds.  That is the test.
 #
+#   ./bootstrap.sh  fetch the dependencies (any Linux, no nix, once)
 #   make            build and run the gates
 #   make test       the unit suite
 #   make image      dump ./latticewm, one executable
 #   make run        run nested inside the current Wayland session
 #   make surface    regenerate doc/EXTENSION-SURFACE.txt
-#   make install    ./latticewm plus a sample config into $(PREFIX)
+#   make install    ./latticewm, a session entry and a man page into $(PREFIX)
 
 LISP        ?= sbcl
 PREFIX      ?= $(HOME)/.local
-REGISTRY    := CL_SOURCE_REGISTRY="$(WAYFLAN_SRC)//:$(CURDIR)//"
-RUN         := $(REGISTRY) $(LISP) --non-interactive
 
-.PHONY: all build gates test image release bench run run-bare surface config install clean help
+# Three ways for the dependencies to be present, and the build cares about
+# none of them: WAYFLAN_SRC is exported by shell.nix, ./.deps is what
+# bootstrap.sh fills, and a distro package or a personal quicklisp is already
+# on ASDF's path.  tools/prelude.lisp sorts out which and says so if none.
+ifdef WAYFLAN_SRC
+REGISTRY    := CL_SOURCE_REGISTRY="$(WAYFLAN_SRC)//:$(CURDIR)//"
+else
+REGISTRY    :=
+endif
+RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --non-interactive \
+                 --load tools/prelude.lisp
+
+.PHONY: all deps build gates test image release bench run run-bare surface config install uninstall clean distclean help
 
 all: build gates test
+
+# Idempotent, and skipped entirely when the dependencies are already visible —
+# so this is safe to run first on a strange machine and free on a familiar one.
+deps:
+	@./bootstrap.sh
 
 build:
 	@$(RUN) --load tools/build.lisp
@@ -72,15 +88,23 @@ surface: build
 config: image
 	@./latticewm --write-config
 
+# install.sh does the rest — the session entry, the man page and the starter
+# config — because those are the parts that differ between a system install
+# and a home-directory one, and a shell script can ask.
 install: image
-	@install -Dm755 latticewm $(PREFIX)/bin/latticewm
-	@install -Dm644 doc/EXTENSION-SURFACE.txt \
-		$(PREFIX)/share/latticewm/EXTENSION-SURFACE.txt
-	@echo "installed $(PREFIX)/bin/latticewm"
+	@./install.sh --prefix "$(PREFIX)"
+
+uninstall:
+	@./install.sh --uninstall --prefix "$(PREFIX)"
 
 clean:
 	@rm -f latticewm
 	@rm -rf $(HOME)/.cache/common-lisp/*/$(CURDIR)
 
+# Everything bootstrap.sh downloaded.  Separate from `clean' because it costs
+# a download to undo and nobody expects `make clean' to do that.
+distclean: clean
+	@rm -rf .deps
+
 help:
-	@sed -n '1,15p' Makefile
+	@sed -n '1,16p' Makefile

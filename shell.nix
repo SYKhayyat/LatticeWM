@@ -41,6 +41,7 @@ pkgs.mkShell {
     lisp
     pkgs.river
     pkgs.foot # a tiny terminal, for testing under nested river
+    pkgs.grim # screenshots of the nested session -- see PLAN.org §looking
     pkgs.wayland-utils
     pkgs.git
   ];
