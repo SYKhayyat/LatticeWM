@@ -15,24 +15,6 @@
 
 ;;; --------------------------------------------------- the program defaults
 
-(p:define-option *terminal* "foot"
-  "The terminal emulator the `terminal' command runs.")
-
-(p:define-option *editor* "emacs"
-  "The editor the `editor' command runs.")
-
-(p:define-option *browser* "firefox"
-  "The web browser the `browser' command runs.")
-
-(p:define-option *file-manager* "thunar"
-  "The file manager the `files' command runs.")
-
-(p:define-option *modifier* :super
-  "The modifier every default binding uses.
-
-:SUPER is the only one that does not collide with something an application
-already wants.")
-
 (p:define-option *cursor-theme* nil
   "The xcursor theme name, or NIL to leave the compositor's default alone.")
 

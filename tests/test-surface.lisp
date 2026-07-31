@@ -58,6 +58,37 @@
   (let ((n (length (p:policy-generics))))
     (is (<= 10 n 60) "the extension surface has ~d generics" n)))
 
+(test the-surface-is-what-takes-a-policy-and-nothing-else
+  "POLICY-GENERICS used to mean 'every exported generic in the package'.
+
+That is indistinguishable from the structural test for exactly as long as the
+only generics in LATTICEWM/POLICY are the surface — and it stopped being so
+the moment a class with slot readers moved into the package.  Ten CLOS
+accessors became extension-surface entries, gate 2 started demanding
+docstrings for COMMAND-FUNCTION, and the sentence the surface document prints
+at the top of itself — \"every generic below takes a POLICY as its first
+argument\" — was false.
+
+POLICY-GENERIC-P had been written, documented, and never called.
+
+This asserts the two halves separately, because a test that only counted
+would have passed throughout the bug."
+  (dolist (symbol (p:policy-generics))
+    (is (p:policy-generic-p symbol)
+        "~a is in the surface but is not specialized on a policy" symbol))
+  ;; The accessors that exposed it: exported, generic, and correctly excluded.
+  (dolist (symbol '(p:command-name p:command-function p:command-lambda-list
+                    p:argument-type-prompt p:argument-type-parser))
+    (is (typep (fdefinition symbol) 'generic-function)
+        "~a really is a generic, so this test is not vacuous" symbol)
+    (is (not (p:policy-generic-p symbol))
+        "~a is a slot reader on a command, not something you specialize" symbol)
+    (is (not (member symbol (p:policy-generics)))
+        "~a must not be in the extension surface" symbol))
+  ;; And something that genuinely is the surface still is.
+  (is (p:policy-generic-p 'p:gaps))
+  (is (member 'p:container-axis (p:policy-generics))))
+
 (test every-option-is-documented-and-has-a-default
   (dolist (row (p:all-options))
     (destructuring-bind (key variable value default documentation) row

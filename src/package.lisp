@@ -209,6 +209,24 @@ You never edit this package.")
    ;; the split mechanism, as policy rather than as a TYPEP
    #:container-axis #:equalize-container #:tab-siblings
    #:join-existing-split-p #:split-join-predicate
+   ;; logging, and the boundary every policy method is called behind
+   #:logmsg #:guarded #:with-abandon #:install-debugger-hook
+   #:*log-level* #:*log-stream* #:+log-levels+
+   ;; the command registry.  §extensibility-real: "the command registry
+   ;; is a user interface rather than an implementation detail".
+   #:defcommand #:command #:find-command #:all-commands #:run-command
+   #:command-name #:command-documentation #:command-function
+   #:command-lambda-list #:command-interactive #:command-interactive-p
+   #:command-arguments #:*commands* #:undocumented-commands
+   #:*last-command* #:*not-repeatable*
+   #:define-argument-type #:argument-type #:argument-type-name
+   #:argument-type-prompt #:argument-type-candidates
+   #:argument-type-parser #:argument-type-documentation #:*argument-types*
+   ;; text, as it reads: where a summary ends, where a line breaks,
+   ;; what a truncation looks like -- decisions, not drawing
+   #:summary-of #:truncate-text #:wrap-text #:split-lines #:split-words #:substitute-arguments
+   ;; the five values people change on their first day
+   #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
    ;; appearance: the widget layer's decisions, moved out of src/runtime/
    #:font #:font-p #:make-font #:font-name #:font-width #:font-height
    #:font-first-code #:font-glyphs #:font-stride
@@ -241,6 +259,46 @@ You never edit this package.")
 
 (defpackage #:latticewm/runtime
   (:use #:cl)
+  ;; Imported rather than prefixed at every call site.  The command registry
+  ;; and the logging boundary moved to LATTICEWM/POLICY -- see PLAN §log5 --
+  ;; and importing them means the move cost zero edits in the four hundred
+  ;; places that use LOGMSG, GUARDED and DEFCOMMAND.  They are re-exported
+  ;; below as well, so `r:defcommand' keeps resolving for the lattice.
+  (:import-from #:latticewm/policy
+   #:defcommand
+   #:command
+   #:find-command
+   #:all-commands
+   #:run-command
+   #:command-name
+   #:command-documentation
+   #:command-function
+   #:command-lambda-list
+   #:command-interactive
+   #:command-interactive-p
+   #:command-arguments
+   #:*last-command*
+   #:*not-repeatable*
+   #:*commands*
+   #:undocumented-commands
+   #:define-argument-type
+   #:argument-type
+   #:argument-type-name
+   #:argument-type-prompt
+   #:argument-type-candidates
+   #:argument-type-parser
+   #:argument-type-documentation
+   #:*argument-types*
+   #:logmsg
+   #:guarded
+   #:with-abandon
+   #:install-debugger-hook
+   #:*log-level*
+   #:*log-stream*
+   #:+log-levels+
+   #:substitute-arguments
+   #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
+   #:summary-of #:truncate-text #:wrap-text #:split-lines #:split-words)
   (:local-nicknames (#:c #:latticewm/core)
                     (#:p #:latticewm/policy)
                     (#:w #:latticewm/wire)
@@ -298,7 +356,6 @@ keybindings, the command registry, and the session loop.")
    ;; missing convenience: (setf *terminal* "alacritty") in a config file
    ;; interns a brand new symbol in LATTICEWM/USER and silently changes
    ;; nothing at all, which is the worst of the three possible outcomes.
-   #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
    #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*

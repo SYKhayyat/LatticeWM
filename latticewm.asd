@@ -44,12 +44,16 @@
      (:module "policy"
       :serial t
       :components
-      ((:file "protocol")
+      (;; log first: GUARDED is the boundary every policy method is called
+       ;; behind, so it has to exist before the first one is written.
+       (:file "log")
+       (:file "protocol")
        (:file "conventional")
        (:file "motion")
        (:file "lifecycle")
        (:file "surface")
-       (:file "appearance")))
+       (:file "appearance")
+       (:file "commands")))
      (:module "wire"
       :serial t
       :components
@@ -58,10 +62,8 @@
      (:module "runtime"
       :serial t
       :components
-      ((:file "log")
-       (:file "hooks")
+      ((:file "hooks")
        (:file "server")
-       (:file "commands")
        (:file "keys")
        (:file "font")
        (:file "psf")

@@ -481,16 +481,6 @@ the next question."
                           :history (format nil "~(~a~)" type))))))))
     (step-through arguments '())))
 
-(defun split-words (string)
-  "STRING split on runs of whitespace."
-  (let ((out '()) (start nil))
-    (dotimes (i (length string) (nreverse (if start
-                                              (cons (subseq string start) out)
-                                              out)))
-      (let ((space (member (char string i) '(#\Space #\Tab))))
-        (cond ((and space start) (push (subseq string start i) out) (setf start nil))
-              ((not (or space start)) (setf start i)))))))
-
 (defun call-interactively (command)
   "Run COMMAND, asking for whatever it needs first.
 

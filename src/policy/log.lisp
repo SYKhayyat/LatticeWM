@@ -1,4 +1,4 @@
-;;;; runtime/log.lisp --- Logging, and the top-level error handler.
+;;;; policy/log.lisp --- Logging, and the top-level error handler.
 ;;;;
 ;;;; THE HANDLER IS NOT OPTIONAL, and it is here rather than in main.lisp so
 ;;;; that it exists before anything can signal.
@@ -19,7 +19,7 @@
 ;;;; signalled while the desktop you are looking at continues to work.  This is
 ;;;; why StumpWM users run one image for months.
 
-(in-package #:latticewm/runtime)
+(in-package #:latticewm/policy)
 
 (defvar *log-level* :info
   "One of :DEBUG, :INFO, :WARN, :ERROR, or NIL for silence.")

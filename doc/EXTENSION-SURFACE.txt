@@ -9,7 +9,7 @@ write a method; it takes effect the moment you evaluate it.
 (defmethod gaps ((policy conventional-policy) container) 8)
 
 ----------------------------------------------------------------------------
-argument-type-for (latticewm/policy:policy latticewm/policy::command
+argument-type-for (latticewm/policy:policy latticewm/policy:command
                    latticewm/policy::parameter)
 ----------------------------------------------------------------------------
 What kind of value does PARAMETER of COMMAND hold?  A keyword, or NIL.

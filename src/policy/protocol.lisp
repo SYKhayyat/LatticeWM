@@ -682,10 +682,21 @@ POLICY somewhere.  A list would drift; this cannot."
   "Every extension-surface generic, sorted by name.
 
 This is what the generated extension-surface document walks, and what the
-SWANK bridge answers 'what can I change?' with."
+SWANK bridge answers 'what can I change?' with.
+
+This walks POLICY-GENERIC-P rather than every exported generic function, and
+the difference is not cosmetic.  It used to accept anything in this package
+that happened to be a GENERIC-FUNCTION, which was indistinguishable from the
+structural test for as long as the only generics here were the surface — and
+stopped being so the moment a class with slot readers moved in.  Ten CLOS
+slot accessors became extension-surface entries, gate 2 demanded docstrings
+for them, and the printed contract at the top of the surface document —
+\"every generic below takes a POLICY as its first argument\" — was false.
+
+POLICY-GENERIC-P had been written, documented and left unused.  Its docstring
+describes exactly this test."
   (let ((out '()))
     (do-external-symbols (symbol '#:latticewm/policy)
-      (when (and (fboundp symbol)
-                 (typep (fdefinition symbol) 'generic-function))
+      (when (policy-generic-p symbol)
         (pushnew symbol out)))
     (sort out #'string< :key #'symbol-name)))

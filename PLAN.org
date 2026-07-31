@@ -1252,3 +1252,123 @@ lines to cross, and the honest candidates are no longer easy ones:
 
 That is a genuine architectural call rather than an accounting one, and it is
 the next thing to decide.
+
+* Fifth session — 2026-07-31: gate 6 crosses, on a ruling about defaults
+:PROPERTIES:
+:CUSTOM_ID: log5
+:END:
+
+[[#log4][§log4]] ended at 0.86 and named the open question as /is the command registry
+policy?/ — framed as a close call. It was answered by inverting the burden of
+proof, and the ruling is the useful part of this session:
+
+#+begin_quote
+Anything you can put above the line and give the user is a win. You need a
+real, solid, very good reason to make something core.
+#+end_quote
+
+That is a stronger claim than [[#extensibility-real][§extensibility-real]] ever made, and it changes the
+question from /can I justify moving this?/ to /can I justify keeping it?/
+Applied mechanically, the test for "solid reason" is: *does it touch the
+protocol or the server?*
+
+: commands.lisp    241 lines    0 protocol references
+: minibuffer.lisp  614 lines    0
+: config.lisp      321 lines    0
+: state.lisp       224 lines    0
+: log.lisp         100 lines    0
+: keys.lisp        309 lines    2
+: windows.lisp     232 lines   12
+
+On that test the command registry is not a close call at all.
+
+** What moved, and the trick that made it free
+
+~log.lisp~ and ~commands.lisp~ to ~src/policy/~, plus the pure text functions
+out of =help.lisp= and the five program defaults out of =config.lisp=.
+
+~guarded~ earns its place there by its own docstring, which was written long
+before this question came up: it exists "at every boundary where a *policy
+method* is called — that is, at every point where user code runs inside ours."
+That is a policy decision about what happens when an extension misbehaves, and
+it was sitting in the runtime.
+
+*The move cost zero edits at four hundred call sites*, and the first attempt
+at it was the wrong one. Prefixing every use of ~logmsg~, ~guarded~ and
+~defcommand~ with ~p:~ was a 403-substitution rewrite that also mangled
+~command~ — a parameter name in half a dozen files — and prefixed words inside
+comments. It was reverted whole. What replaced it is ~:import-from~ in the
+runtime's ~defpackage~: the symbols live in ~LATTICEWM/POLICY~, are imported
+into ~LATTICEWM/RUNTIME~, and are re-exported there so ~r:defcommand~ keeps
+resolving for the lattice. Not one reference in any file changed.
+
+The lesson is worth keeping: *a package system is the tool for moving symbols
+between layers.* Rewriting call sites to do it is doing the package system's
+job by hand, badly.
+
+** The bug the move exposed
+
+Gate 2 failed immediately: ten undocumented generics, all of them CLOS slot
+readers — ~command-name~, ~command-function~, ~argument-type-prompt~ and
+friends.
+
+The cause is older than this session. ~policy-generics~ was:
+
+: (do-external-symbols (symbol '#:latticewm/policy)
+:   (when (and (fboundp symbol) (typep (fdefinition symbol) 'generic-function))
+:     (pushnew symbol out)))
+
+— *every exported generic in the package*. Meanwhile ~policy-generic-p~ sat
+beside it, written, documented, and never called, saying:
+
+#+begin_quote
+The test is structural rather than a maintained list: a generic function
+exported from this package whose first required argument is specialized on
+POLICY somewhere. A list would drift; this cannot.
+#+end_quote
+
+The two definitions were indistinguishable for exactly as long as the only
+generics in the package were the surface. The moment a class with slot readers
+moved in, ten accessors became extension-surface entries, gate 2 demanded
+docstrings for them, and *the sentence the surface document prints at the top
+of itself* — "every generic below takes a POLICY as its first argument" —
+became false.
+
+Nothing had noticed, because nothing could: the drift needed a class to arrive
+in the package, and none ever had. ~policy-generics~ walks ~policy-generic-p~
+now, and the test asserts both halves — that everything in the surface passes
+the structural test, *and* that the five accessors which exposed it are
+excluded — because a test that only counted would have passed throughout.
+
+** Gate 6
+
+: 1.20 -> 0.82 -> 0.80 -> 0.86 -> 0.96 (log + commands) -> 0.99 (text) -> 1.01
+
+: gate 6  runtime 4,004 / policy 4,047 = 1.01   healthy
+
+*The label changed.* It has read "watch this: runtime is outgrowing policy"
+since the second session; it now reads "healthy", which is the first time the
+number has said the thing the whole language argument depends on.
+
+Two honesties about it. It is *1.01*, which is a margin of forty-three lines
+and not a comfortable one — the next runtime feature can put it back under.
+And nothing was excluded to get there: ~psf.lisp~'s ninety lines of
+byte-reading are still counted as runtime, which is what they are.
+
+Emacs is around 3.5. This is 1.01. What that number now means is that *the
+system has as much decision in it as mechanism* — which is the floor of the
+argument, not the ceiling.
+
+** Open
+
+- Everything [[#log2][§log2]] left: the shift-modifier question, ~ate_unbound_key~ under
+  ~clear_focus~, and bare-metal river. Still the only items that need a human
+  at a keyboard, and still the last unverified protocol assumptions.
+- =echo.lisp='s content. What a status line is made of is ~mode-line-format~,
+  the most-customised variable in Emacs, and here it is still a hardcoded
+  function in the runtime. It is the largest remaining decision on the wrong
+  side of the line.
+- ~keys.lisp~ has two protocol references out of three hundred lines. The
+  keymap is the single most user-edited object in the system and the shipped
+  keymap is its content rather than its machinery. Under this session's ruling
+  that is a strong candidate; the two references are the thing to look at.
