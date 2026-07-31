@@ -114,6 +114,9 @@ wins."
     (define-key keymap (format nil "~ao" mod) '("editor"))
     ;; --- the window manager itself ---------------------------------------
     (define-key keymap (format nil "~aslash" mod) '("help"))
+    (define-key keymap (format nil "~ax" mod) '("run-command-by-name"))
+    (define-key keymap (format nil "~ap" mod) '("goto-named-cell"))
+    (define-key keymap (format nil "~an" shift) '("name-this"))
     (define-key keymap (format nil "~aquestion" shift) '("help"))
     (define-key keymap (format nil "~ac" shift) '("reload-config"))
     (define-key keymap (format nil "~ar" shift) '("restart-wm"))

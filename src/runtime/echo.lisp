@@ -149,22 +149,31 @@ goes only to a log file nobody is reading."
              (normal (apply #'argb *echo-foreground*))
              (accent (apply #'argb *echo-accent*))
              (divider (apply #'argb *echo-divider*))
+             (prompt-color (apply #'argb *minibuffer-prompt-color*))
+             (dim (apply #'argb *minibuffer-completion-color*))
              (segments (remove-if (lambda (segment) (zerop (length (car segment))))
-                                  (guarded "echo-content"
-                                    (p:echo-content (p:current-policy) world)))))
+                                  (if (reading-p)
+                                      (prompt-segments)
+                                      (guarded "echo-content"
+                                        (p:echo-content (p:current-policy) world))))))
         (loop for (text . kind) in segments
               for firstp = t then nil
               do ;; The separator goes *between* segments, which means before
                  ;; every one but the first.  Putting it after each instead
                  ;; leaves a dangling bar at the end of the line, which looks
-                 ;; like something failed to render.
-                 (unless firstp
+                 ;; like something failed to render.  A prompt draws its parts
+                 ;; contiguously, because "M-x | foc" is not a prompt.
+                 (unless (or firstp (reading-p))
                    (incf pen (* 4 *echo-scale*))
                    (incf pen (canvas-text canvas pen baseline "|" divider
                                           :scale *echo-scale*))
                    (incf pen (* 4 *echo-scale*)))
                  (incf pen (canvas-text canvas pen baseline text
-                                        (if (eq kind :accent) accent normal)
+                                        (case kind
+                                          (:accent accent)
+                                          (:prompt prompt-color)
+                                          (:dim dim)
+                                          (t normal))
                                         :scale *echo-scale*))))
       (overlay-commit *echo-overlay*
                       :rect (c:make-rect (c:rect-x area)

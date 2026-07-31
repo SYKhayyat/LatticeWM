@@ -220,6 +220,16 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: (0.78 0.8 0.86 1.0)
   Colour of the description in the help overlay.
 
+*MINIBUFFER-COMPLETION-COLOR*
+  value:   (0.5 0.55 0.65 1.0)
+  default: (0.5 0.55 0.65 1.0)
+  Colour of the completion hint after what you have typed.
+
+*MINIBUFFER-PROMPT-COLOR*
+  value:   (0.95 0.75 0.35 1.0)
+  default: (0.95 0.75 0.35 1.0)
+  Colour of the prompt in the echo area.
+
 *MODIFIER*
   value:   :SUPER
   default: :SUPER

@@ -88,6 +88,12 @@ LatticeWM commands.
 (focus-tiled)
   Take keyboard focus off any floating window and give it back to the cursor.
 
+(goto-named-cell)
+  Type a name and jump to whatever has it.
+  
+  Works for anything with a label — the lattice's named cells, and any node you
+  have named yourself.
+
 (help)
   Show every key binding on screen, with what it does.
   
@@ -118,6 +124,9 @@ LatticeWM commands.
   
   Floats are positioned by hand, which is the point of floating them; this is
   the keyboard half of that.
+
+(name-this)
+  Give the focused node a name, so it can be jumped to by it.
 
 (new-workspace)
   Add a workspace after the current one and switch to it.
@@ -177,6 +186,13 @@ LatticeWM commands.
   
   To the slot it was minimized from if that slot still exists, and to the cursor
   otherwise.
+
+(run-command-by-name)
+  Type a command name and run it.  Emacs's M-x.
+  
+  Tab completes, Return runs, Escape cancels.  Every command in the system is
+  reachable this way, which is what lets the keymap be the ones you use often
+  rather than the only ones that exist.
 
 (send-to-workspace number &key (follow nil))
   Move the focused pane to workspace NUMBER, counting from one.

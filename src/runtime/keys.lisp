@@ -245,7 +245,9 @@ most confusing thing a keymap can do."
       ;; The help overlay is dismissed by anything, including the key that
       ;; opened it.  A help screen you have to remember how to close is a help
       ;; screen that has failed at its one job.
-      ((and *help-visible* (progn (setf *help-visible* nil) (mark-dirty) t)) t)
+      ((and *help-visible* (not (reading-p))
+            (progn (setf *help-visible* nil) (mark-dirty) t))
+       t)
       ;; Inside a chord.
       (*pending-keymap*
        (let ((target (lookup-key *pending-keymap* key)))

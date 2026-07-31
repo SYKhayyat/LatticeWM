@@ -257,6 +257,8 @@ keybindings, the command registry, and the session loop.")
    #:text-width #:text-height #:*echo-area* #:*echo-scale* #:*echo-position*
    #:current-message #:server-compositor #:server-shm
    #:*help-visible* #:help-entries #:binding-description #:truncate-text
+   #:read-string #:reading-p #:end-prompt #:prompt-segments
+   #:*minibuffer-prompt-color* #:*minibuffer-completion-color*
    #:summary-of
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*

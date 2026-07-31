@@ -365,99 +365,7 @@ question about a blank."
     (emit-window-management-state)
     (emit-dimension-work)
     (apply-keyboard-focus)
-    (arm-empty-pane-capture)))
-
-(defun cursor-on-empty-pane-p ()
-  "True when the cursor rests on a deliberately empty pane and no float has
-the keyboard."
-  (let ((leaf (current-leaf)))
-    (and leaf (c:leaf-empty-p leaf) (null (c:world-focused-float *world*)))))
-
-(defun arm-empty-pane-capture ()
-  "Keep README D19's spawn keys live exactly while they mean something.
-
-D19: while the cursor rests on an empty pane, an unbound printable key runs a
-command from a table -- e opens an editor, t a terminal -- so that the empty
-pane is a spawn menu with no menu.  The keys are the ones in
-P:*EMPTY-PANE-KEYS*.
-
-*THE DESIGN GUESSED THE MECHANISM WRONG, AND THE ANSWER IS BETTER THAN ITS
-FALLBACK.*  D19 rests the whole idea on ensure_next_key_eaten and asks whether
-it carries the keysym or only the fact that *a* key was unbound -- ruling that
-if it carries no keysym, only a single-default mode is possible and the table
-dies.
-
-Measured against the shipped protocol: ate_unbound_key has *no arguments at
-all*.  Not a keysym, not a keycode, nothing.  So that route cannot support the
-table, exactly as feared.
-
-But there is a third option the document did not consider: *bind the keys
-ourselves, and enable them only while they apply*.  river_xkb_binding_v1 has
-enable and disable requests precisely so that a binding can be conditional, so
-each key in the table gets a real binding that is enabled when the cursor is on
-an empty pane and disabled the rest of the time.  We then get the keysym
-because it is *our* binding, the table survives intact, and it composes better
-than the original plan would have: an unmodified `t' is not swallowed when it
-would have gone to an application, because the binding is not enabled then.
-
-ensure_next_key_eaten is still used, for the thing it is actually for —
-letting a chorded submap notice a key it does not bind."
-  (let* ((seat (primary-seat))
-         (bindings-seat (and seat (seat-bindings-seat seat))))
-    (when bindings-seat
-      (when *pending-keymap*
-        (guarded "ensure_next_key_eaten"
-          (w:bindings-seat-ensure-next-key-eaten bindings-seat)))
-      (update-empty-pane-bindings seat (cursor-on-empty-pane-p)))))
-
-(defun update-empty-pane-bindings (seat wanted)
-  "Enable or disable the empty-pane spawn keys to match WANTED.
-
-Diffed against what they already are, because enable and disable are
-window-management state and this runs on every manage sequence."
-  (let ((bindings (server-bindings *server*)))
-    (unless bindings (return-from update-empty-pane-bindings nil))
-    ;; Create them once, on first need.
-    (unless (c:prop seat :empty-pane-bindings)
-      (setf (c:prop seat :empty-pane-bindings)
-            (loop for (character . nil) in p:*empty-pane-keys*
-                  for keysym = (keysym-named (string character))
-                  when keysym
-                    collect (cons character
-                                  (let ((binding
-                                          (guarded "get_xkb_binding"
-                                            (w:bindings-get-xkb-binding
-                                             bindings (seat-proxy seat)
-                                             keysym '()))))
-                                    (when binding
-                                      (push (let ((character character))
-                                              (lambda (event &rest arguments)
-                                                (declare (ignore arguments))
-                                                (with-abandon
-                                                  (when (eq event :pressed)
-                                                    (spawn-for-empty-pane character)))))
-                                            (wl:wl-proxy-hooks binding)))
-                                    binding)))))
-    (unless (eq wanted (c:prop seat :empty-pane-armed))
-      (setf (c:prop seat :empty-pane-armed) wanted)
-      (loop for (nil . binding) in (c:prop seat :empty-pane-bindings)
-            when binding
-              do (guarded "empty-pane binding"
-                   (if wanted (w:binding-enable binding)
-                       (w:binding-disable binding)))))))
-
-(defun spawn-for-empty-pane (character)
-  "Run the command CHARACTER names, if the cursor is still on an empty pane.
-
-Re-checks the condition because a binding is enabled for the whole of a manage
-round trip, and the world can move underneath it."
-  (when (cursor-on-empty-pane-p)
-    (let ((command (guarded "key-unbound"
-                     (p:key-unbound (p:current-policy) *world* character))))
-      (when command
-        (logmsg :debug "empty pane: ~a -> ~a" character command)
-        (run-command command)
-        (after-command)))))
+    (arm-capture)))
 
 (defun run-render-sequence ()
   "Everything that a render sequence may change.
@@ -469,6 +377,102 @@ moved, this sends nothing at all."
     (when (server-dirty *server*)
       (setf (server-dirty *server*) nil)
       (relayout))))
+
+(defun cursor-on-empty-pane-p ()
+  "True when the cursor rests on a deliberately empty pane and no float has
+the keyboard."
+  (let ((leaf (current-leaf)))
+    (and leaf (c:leaf-empty-p leaf) (null (c:world-focused-float *world*)))))
+
+(defparameter +capture-keysyms+
+  (append (loop for code from #x20 to #x7e collect code)   ; printable ASCII
+          (list #xff08 #xff09 #xff0d #xff1b #xff8d))       ; bs tab ret esc kpret
+  "Every key the window manager may want to read directly.
+
+Bound once, enabled only while something is reading — see ARM-CAPTURE.  Ninety
+-eight bindings sounds like a lot and is one round trip at startup; the
+alternative is not being able to read text at all, because river delivers keys
+to the focused *window* and gives us only what we asked for.")
+
+(defun capture-wanted-p ()
+  "Is anything currently waiting to read a key directly?
+
+Two things ever are: a prompt in the echo area, and README D19's empty pane.
+They share the machinery because they are the same question — *should the next
+keypress belong to the window manager rather than to a window?* — and having
+two answers to one question is how they end up disagreeing."
+  (or (reading-p) (cursor-on-empty-pane-p)))
+
+(defun ensure-capture-bindings (seat)
+  "Create the capture bindings, once."
+  (let ((bindings (server-bindings *server*)))
+    (when (and bindings (null (c:prop seat :capture-bindings)))
+      (setf (c:prop seat :capture-bindings)
+            (loop for keysym in +capture-keysyms+
+                  for binding = (guarded "get_xkb_binding"
+                                  (w:bindings-get-xkb-binding
+                                   bindings (seat-proxy seat) keysym '()))
+                  when binding
+                    collect (progn
+                              (push (let ((keysym keysym))
+                                      (lambda (event &rest arguments)
+                                        (declare (ignore arguments))
+                                        (with-abandon
+                                          (when (eq event :pressed)
+                                            (handle-captured-key keysym)))))
+                                    (wl:wl-proxy-hooks binding))
+                              (cons keysym binding))))))
+  (c:prop seat :capture-bindings))
+
+(defun handle-captured-key (keysym)
+  "A key arrived because we had asked for it.  Decide what it meant."
+  (let ((character (when (<= #x20 keysym #x7e) (code-char keysym))))
+    (cond
+      ((reading-p) (prompt-key keysym character))
+      ((cursor-on-empty-pane-p) (spawn-for-empty-pane character))
+      (t nil))))
+
+(defun arm-capture ()
+  "Enable or disable the capture bindings to match what is being read.
+
+Manage sequence only: enable and disable are window-management state.  Diffed,
+because this runs on every manage sequence and there are ninety-eight of them."
+  (let* ((seat (primary-seat))
+         (bindings-seat (and seat (seat-bindings-seat seat))))
+    (when bindings-seat
+      (when *pending-keymap*
+        (guarded "ensure_next_key_eaten"
+          (w:bindings-seat-ensure-next-key-eaten bindings-seat)))
+      (let ((wanted (capture-wanted-p)))
+        (ensure-capture-bindings seat)
+        (unless (eq wanted (c:prop seat :capture-armed))
+          (setf (c:prop seat :capture-armed) wanted)
+          (loop for (nil . binding) in (c:prop seat :capture-bindings)
+                do (guarded "capture binding"
+                     (if wanted (w:binding-enable binding)
+                         (w:binding-disable binding)))))))))
+
+(defun spawn-for-empty-pane (character)
+  "Run the command CHARACTER names, if the cursor is still on an empty pane.
+
+README D19: while the cursor rests on an empty pane, an unbound printable key
+is looked up in a table -- e opens an editor, t a terminal -- so the empty pane
+is a spawn menu with no menu.
+
+THE DESIGN GUESSED THE MECHANISM WRONG AND THE ANSWER IS BETTER THAN ITS
+FALLBACK.  D19 rests on ate_unbound_key and asks whether it carries the keysym,
+ruling that if it does not, only a single-default mode is possible and the table
+dies.  Measured against the shipped protocol, ate_unbound_key has *no arguments
+at all*.  But binding the keys ourselves and enabling them conditionally gets
+the keysym, keeps the table, and never intercepts a key that would have gone to
+an application -- because the binding is not enabled then."
+  (when (and character (cursor-on-empty-pane-p))
+    (let ((command (guarded "key-unbound"
+                     (p:key-unbound (p:current-policy) *world* character))))
+      (when command
+        (logmsg :debug "empty pane: ~a -> ~a" character command)
+        (run-command command)
+        (after-command)))))
 
 ;;; ---------------------------------------------------------------- SWANK
 

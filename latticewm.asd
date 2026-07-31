@@ -64,6 +64,7 @@
        (:file "keys")
        (:file "font")
        (:file "surface")
+       (:file "minibuffer")
        (:file "echo")
        (:file "help")
        (:file "cursor")
