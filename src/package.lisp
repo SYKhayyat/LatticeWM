@@ -243,6 +243,7 @@ You never edit this package.")
    #:keymap-keys
    #:all-bound-keys
    #:bindable-keys
+   #:*shift-map* #:shifted-character
    #:*keymap*
    #:*pending-keymap*
    #:*help-visible*
@@ -420,6 +421,7 @@ keybindings, the command registry, and the session loop.")
    ;; interns a brand new symbol in LATTICEWM/USER and silently changes
    ;; nothing at all, which is the worst of the three possible outcomes.
    #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
+   #:*manage-warn-seconds* #:*manage-timeout-seconds*
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state

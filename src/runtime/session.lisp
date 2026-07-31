@@ -347,6 +347,61 @@ named step because it is the obvious place to hang anything that should happen
 once per user action rather than once per relayout."
   (mark-dirty))
 
+(p:define-option *manage-warn-seconds* 0.25
+  "Log a warning when a manage sequence takes longer than this.  NIL to stop.
+
+A number rather than a failure, in the shape of gate 6: the point is that a
+slow relayout is *visible* rather than that it is fatal.  A quarter second is
+about four frames, which is where a person starts to feel it.")
+
+(p:define-option *manage-timeout-seconds* 5
+  "Abandon a manage sequence that has run this long.  NIL to never abandon.
+
+THE FAILURE THIS EXISTS FOR IS THE WORST ONE THIS PROGRAM HAS.  River waits
+for manage_finish before processing any further input, so a policy method that
+loops forever does not hang the window manager -- it hangs *the desktop*, with
+no keyboard, no mouse and no way back except a tty.  GUARDED catches a method
+that signals and WITH-ABANDON catches an event that breaks; neither catches a
+method that simply never returns.
+
+The cost is real and worth stating.  Abandoning unwinds through whatever was
+mid-flight, and if that was a request being marshalled the connection can end
+up out of step, which river answers by closing it.  So this trades `frozen
+until you reboot' for `probably fine, possibly the session ends' -- a bad
+trade in general and a good one here, because the first outcome has no
+recovery and the second drops you back at a login screen.
+
+WITH-MANAGE-SEQUENCE's UNWIND-PROTECT still sends manage_finish on the way
+out, so the sequence itself is closed properly however the body ends.
+
+Five seconds is deliberately far beyond any legitimate relayout.  Nothing that
+finishes should ever meet it; it is a backstop, not a budget.")
+
+(defun call-with-watchdog (label thunk)
+  "Run THUNK, complaining if it is slow and abandoning it if it never ends."
+  (let ((start (get-internal-real-time)))
+    (flet ((elapsed ()
+             (/ (float (- (get-internal-real-time) start))
+                internal-time-units-per-second)))
+      (prog1
+          (if *manage-timeout-seconds*
+              (handler-case
+                  (sb-ext:with-timeout *manage-timeout-seconds* (funcall thunk))
+                (sb-ext:timeout ()
+                  (p:logmsg :error
+                            "~a ran for ~,1f seconds and was abandoned. ~
+                             Something in the policy is not returning -- the ~
+                             desktop would have frozen here."
+                            label *manage-timeout-seconds*)
+                  nil))
+              (funcall thunk))
+        (let ((seconds (elapsed)))
+          (when (and *manage-warn-seconds* (> seconds *manage-warn-seconds*))
+            (p:logmsg :warn "~a took ~,3f seconds" label seconds)))))))
+
+(defmacro with-watchdog ((label) &body body)
+  `(call-with-watchdog ,label (lambda () ,@body)))
+
 (defun run-manage-sequence ()
   "Everything that is only legal in a manage sequence.
 
@@ -355,6 +410,7 @@ moment `window' arrives we know nothing about the window — its app_id, title
 and parent are all still in flight — and SHOULD-FLOAT-P would be answering a
 question about a blank."
   (w:with-manage-sequence ((server-manager *server*))
+   (with-watchdog ("manage sequence")
     (when (server-bindings-dirty *server*)
       (setf (server-bindings-dirty *server*) nil)
       (dolist (seat (server-seats *server*)) (register-bindings seat)))
@@ -365,7 +421,7 @@ question about a blank."
     (emit-window-management-state)
     (emit-dimension-work)
     (apply-keyboard-focus)
-    (arm-capture)))
+    (arm-capture))))
 
 (defun run-render-sequence ()
   "Everything that a render sequence may change.
@@ -374,9 +430,10 @@ Called after every manage sequence, and again whenever a window changes its
 own size.  Cheap because the emitter diffs: in the common case where nothing
 moved, this sends nothing at all."
   (w:with-render-sequence ((server-manager *server*))
-    (when (server-dirty *server*)
-      (setf (server-dirty *server*) nil)
-      (relayout))))
+    (with-watchdog ("render sequence")
+      (when (server-dirty *server*)
+        (setf (server-dirty *server*) nil)
+        (relayout)))))
 
 (defun cursor-on-empty-pane-p ()
   "True when the cursor rests on a deliberately empty pane and no float has
@@ -449,7 +506,14 @@ always and the window manager acted on them never."
 
 (defun handle-captured-key (keysym modifiers)
   "A key arrived because we had asked for it.  Decide what it meant."
-  (let ((character (when (<= #x20 keysym #x7e) (code-char keysym))))
+  (let ((character (when (<= #x20 keysym #x7e)
+                     (let ((base (code-char keysym)))
+                       ;; River sends the *unshifted* keysym with Shift in the
+                       ;; modifier set, so the shifted glyph is ours to work
+                       ;; out.  See *SHIFT-MAP*.
+                       (if (member :shift modifiers)
+                           (p:shifted-character base)
+                           base)))))
     (cond
       ((reading-p) (prompt-key keysym modifiers character))
       ;; A chord is waiting for its second key.  HANDLE-KEY already knows what

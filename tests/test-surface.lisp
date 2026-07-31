@@ -394,6 +394,36 @@ ter-d28n is fourteen, so the cap refused every size above the smallest."
       (is (= 24 (p:font-text-height big)))
       (is (= 120 (p:font-text-width big "hello" :scale 2))))))
 
+;;; ------------------------------------------------------ shifted keys
+
+(test shift-produces-the-shifted-glyph
+  "River sends the *unshifted* keysym, so the shifted glyph is ours to work out.
+
+The design assumed the opposite and said so in a comment: that xkb produces
+`parenleft' for Shift+9 and river passes it through with Shift still set.  So
+every printable keysym was bound twice, bare and shifted, and the prompt used
+the keysym as the character.
+
+On a real keyboard what arrives for Shift+9 is keysym `9' with Shift set.
+Typing (+ 1 2) into M-: produced `9= 1 20' -- ( became 9, + became =, ) became
+0 -- and the reader reported an unbound variable called 9=.  That log line is
+the whole of the evidence and it took bare metal to produce it."
+  (is (char= #\( (p:shifted-character #\9)))
+  (is (char= #\+ (p:shifted-character #\=)))
+  (is (char= #\) (p:shifted-character #\0)))
+  (is (char= #\_ (p:shifted-character #\-)))
+  (is (char= #\? (p:shifted-character #\/)))
+  (is (char= #\: (p:shifted-character #\;)))
+  (is (char= #\" (p:shifted-character #\')))
+  ;; Letters need no table entry.
+  (is (char= #\A (p:shifted-character #\a)))
+  (is (char= #\Z (p:shifted-character #\z)))
+  ;; And the table is a tier-0 value, because on a German or Dvorak layout the
+  ;; shipped answer is wrong and there is no way to derive the right one.
+  (let ((p:*shift-map* (cons '(#\8 . #\() p:*shift-map*)))
+    (is (char= #\( (p:shifted-character #\8))
+        "a config file can move the bracket to where their keyboard has it")))
+
 ;;; --------------------------------------------- what river is told about
 
 (test a-submap-does-not-steal-the-alphabet

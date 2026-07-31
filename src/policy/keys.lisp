@@ -72,6 +72,42 @@ two spellings of the same chord are EQUAL."
             (case m (:mod4 :super) (:mod1 :alt) (t m)))
           (remove-if-not (lambda (m) (member m modifiers)) +modifier-order+)))
 
+(define-option *shift-map*
+  '((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
+    (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
+    (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
+    (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
+    (#\` . #\~))
+  "What a key produces when Shift is held, for keys that are not letters.
+
+*This exists because river sends the unshifted keysym.*  The design assumed
+the opposite -- that xkb would produce `parenleft' for Shift+9 and river would
+pass it through with Shift still in the modifier set -- and bound every
+printable keysym twice, bare and shifted, on that reasoning.  Measured against
+a real keyboard on bare metal, what arrives for Shift+9 is keysym `9' with
+Shift set, so the prompt inserted a nine.  Typing (+ 1 2) into M-: produced
+`9= 1 20', which is a symbol called 9= and an unbound-variable error.
+
+Letters need no entry: CHAR-UPCASE is right for every alphabet SBCL knows,
+and it is the fallback.
+
+*This table is US-layout and there is no way for it not to be.*  River does
+the xkb work and does not tell us the shifted keysym, so the shifted glyph
+cannot be derived -- it has to be declared.  Which is exactly why this is a
+tier-0 option rather than a constant: on a German or Dvorak layout the shipped
+answer is wrong, and being wrong in a value somebody can edit is a different
+kind of wrong from being wrong in a function nobody can reach.
+
+    (setf *shift-map* (append '((#\8 . #\() (#\9 . #\))) *shift-map*))")
+
+(defun shifted-character (character)
+  "What CHARACTER becomes with Shift held, per *SHIFT-MAP*.
+
+Falls back to CHAR-UPCASE, which is correct for letters and harmless for
+anything the table does not mention."
+  (or (cdr (assoc character *shift-map*))
+      (char-upcase character)))
+
 ;;; --------------------------------------------------------------- keysyms
 
 (defparameter +named-keysyms+
