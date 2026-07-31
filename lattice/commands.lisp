@@ -84,9 +84,7 @@ is why zoom is not animated — it would relayout every window every frame."
       (setf (viewport-cols viewport) (max 1 cols)
             (viewport-rows viewport) (max 1 rows))
       (when focus
-        (setf (viewport-origin viewport)
-              (cell (- (cell-x focus) (floor (1- cols) 2))
-                    (- (cell-y focus) (floor (1- rows) 2))))
+        (setf (viewport-origin viewport) (zoom-origin focus cols rows))
         (ensure-visible grid focus)))))
 
 (r:defcommand zoom-fit ()
@@ -418,3 +416,37 @@ container is inert, not broken."
   (setf p:*policy* (make-instance 'p:conventional-policy))
   (r:relayout :force t)
   t)
+
+;;; ==================================================================
+;;; MAKING THE VOCABULARY REACHABLE
+;;; ==================================================================
+
+(defun install-vocabulary (&optional (package '#:latticewm/user))
+  "Make the lattice's names visible in PACKAGE, which defaults to the one
+configuration files and the REPL are read in.
+
+Without this, loading the system gives you a working lattice whose commands
+you cannot type: DEFCOMMAND interns its symbols in the package the file was
+compiled in, which is LATTICE, and LATTICEWM/USER has no reason to know about
+a package that did not exist when it was defined.  So (zoom-out) at a REPL is
+an undefined function, and the whole extension appears to be broken while
+working perfectly.
+
+USE-PACKAGE at load time rather than a hand-maintained re-export list, so that
+a command added tomorrow is reachable tomorrow.  Conflicts are reported and
+skipped rather than signalling, because a configuration file that has already
+defined its own ZOOM-OUT should keep it — it is theirs, and refusing to load
+over it would be the wrong way round."
+  (handler-bind ((package-error
+                   (lambda (condition)
+                     (r:logmsg :warn "lattice: ~a (skipping that name)" condition)
+                     (let ((restart (or (find-restart 'cl:continue condition)
+                                        (find-restart 'sb-impl::take-new condition))))
+                       (when restart (invoke-restart restart))))))
+    (ignore-errors (use-package '#:lattice package)))
+  package)
+
+;; Do it on load, so that `asdf:load-system "lattice"' is the whole of the
+;; installation and `lattice:enable' is genuinely optional.
+(eval-when (:load-toplevel :execute)
+  (install-vocabulary))

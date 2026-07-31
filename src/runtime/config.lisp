@@ -87,6 +87,8 @@ wins."
     (define-key keymap (format nil "~ae" shift) '("equalize-all"))
     ;; --- disposition ------------------------------------------------------
     (define-key keymap (format nil "~aspace" mod) '("toggle-float"))
+    (define-key keymap (format nil "~aspace" shift) '("focus-float"))
+    (define-key keymap (format nil "~agrave" mod) '("focus-float"))
     (define-key keymap (format nil "~af" mod) '("toggle-fullscreen"))
     (define-key keymap (format nil "~am" mod) '("minimize"))
     (define-key keymap (format nil "~am" shift) '("restore-last"))

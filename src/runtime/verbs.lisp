@@ -55,7 +55,7 @@ the world does nothing, and that is not an error."
 
 ;;; ============================================================ structure
 
-(defcommand split (&optional axis (side :after))
+(defcommand (split-pane "split") (&optional axis (side :after))
   "Split the focused pane, leaving an *empty* pane beside it.
 
 AXIS is :HORIZONTAL, :VERTICAL, or NIL to let the policy choose — which by
@@ -82,7 +82,7 @@ the new empty pane, where — per D19 — typing a key spawns something."
 The sibling grows to fill the space.  README D17's CLOSE; see CLEAR for the
 other half."
   (with-relayout
-    (let ((window (current-window)))
+    (let ((window (focused-window)))
       (if window
           (guarded "close" (w:window-close (c:window-proxy window)))
           ;; An empty pane has nothing to close, so closing it means removing
@@ -180,7 +180,7 @@ comes to you."
 
 ;;; ================================================================ resize
 
-(defcommand resize (direction &optional (amount 1/20))
+(defcommand (resize-pane "resize") (direction &optional (amount 1/20))
   "Grow the focused pane DIRECTION by AMOUNT of its container's total.
 
 Resizing is a *transfer* between two adjacent weights rather than an
@@ -237,7 +237,7 @@ the command people reach for after ten minutes of resizing."
 
 ;;; ============================================================== tabbing
 
-(defcommand tab ()
+(defcommand (tab-pane "tab") ()
   "Turn the focused pane and its next sibling into tabs.
 
 A stack is what tabs are — an ordered set of alternatives of which one is
@@ -377,7 +377,7 @@ and a pane is a subtree, 'send to workspace' needed no code of its own."
 Floating is per window and chosen, never inferred and forced: SHOULD-FLOAT-P
 only supplies the initial guess, and this is how you overrule it."
   (with-relayout
-    (let ((window (current-window)))
+    (let ((window (focused-window)))
       (cond
         ((null window) nil)
         ((c:window-floating-p window) (unfloat-window window))
@@ -399,7 +399,7 @@ only supplies the initial guess, and this is how you overrule it."
 
 Cheap in both directions: river ignores clip boxes and does not draw borders
 while fullscreen, so entering and leaving cost no relayout."
-  (let ((window (current-window)))
+  (let ((window (focused-window)))
     (when window (request-fullscreen window (not (c:window-fullscreen-p window))))))
 
 (defcommand minimize ()
@@ -408,7 +408,7 @@ while fullscreen, so entering and leaving cost no relayout."
 The remaining windows retile without it.  Minimize is not 'hide it somewhere',
 it is 'take it out of the layout' — and where it went is the scratchpad, which
 RESTORE-LAST brings it back from."
-  (let ((window (current-window)))
+  (let ((window (focused-window)))
     (when window (minimize-window window))))
 
 (defcommand restore-last ()
@@ -504,8 +504,8 @@ Costs one slot on the float.  The alternative — floats pinned to the output �
 is still the default, because most floats are dialogs and a dialog belongs to
 the screen rather than to a pane."
   (with-relayout
-    (let* ((window (current-window))
-           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+    (let* ((window (focused-window))
+           (float (c:float-of-window *world* window)))
       (cond
         ((null float)
          (logmsg :warn "anchor-float: the focused window is not floating")
@@ -528,8 +528,8 @@ the screen rather than to a pane."
 (defcommand unanchor-float ()
   "Pin the focused floating window to the output instead of to a pane."
   (with-relayout
-    (let* ((window (current-window))
-           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+    (let* ((window (focused-window))
+           (float (c:float-of-window *world* window)))
       (when (and float (c:float-anchor float))
         (let ((base (gethash (c:float-anchor float) (c:prop *world* :rect-index)))
               (rect (c:float-rect float)))
@@ -547,8 +547,8 @@ the screen rather than to a pane."
 Floats are positioned by hand, which is the point of floating them; this is
 the keyboard half of that."
   (with-relayout
-    (let* ((window (current-window))
-           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+    (let* ((window (focused-window))
+           (float (c:float-of-window *world* window)))
       (when float
         (let ((rect (c:float-rect float))
               (dx (if (c:direction-horizontal-p direction)
@@ -562,8 +562,8 @@ the keyboard half of that."
 (defcommand resize-float (direction &optional (pixels 40))
   "Grow or shrink the focused floating window DIRECTION."
   (with-relayout
-    (let* ((window (current-window))
-           (float (find window (c:world-floats *world*) :key #'c:float-window)))
+    (let* ((window (focused-window))
+           (float (c:float-of-window *world* window)))
       (when float
         (let* ((rect (c:float-rect float))
                (sign (c:direction-sign direction))
@@ -573,3 +573,50 @@ the keyboard half of that."
                 (c:make-rect (c:rect-x rect) (c:rect-y rect)
                              (max 100 (+ (c:rect-w rect) dw))
                              (max 60 (+ (c:rect-h rect) dh)))))))))
+
+(defcommand focus-float (&optional (step 1))
+  "Move keyboard focus to the next floating window, or back to the tree.
+
+Cycling past the last float returns focus to the cursor, so one key both enters
+and leaves the float layer and there is no mode to be stuck in.
+
+This command exists because focus is a *place in the tree* (D18) and a float is
+deliberately not in the tree.  That is the right model — it is what makes
+'move one cell left whether or not anything is there' mean something — but it
+leaves floats with no way to be focused at all, and a floating window you
+cannot type into is not a floating window.  WORLD-FOCUSED-FLOAT is the one slot
+that fixes it, and this is the verb that sets it."
+  (with-relayout
+    (let* ((floats (remove-if-not (lambda (f) (c:window-live-p (c:float-window f)))
+                                  (c:world-floats *world*)))
+           (current (c:world-focused-float *world*))
+           (position (position current floats)))
+      (setf (c:world-focused-float *world*)
+            (cond ((null floats) nil)
+                  ((null position) (first floats))
+                  (t (let ((next (+ position step)))
+                       (when (< -1 next (length floats)) (nth next floats))))))
+      (request-manage)
+      (c:world-focused-float *world*))))
+
+(defcommand focus-tiled ()
+  "Take keyboard focus off any floating window and give it back to the cursor."
+  (with-relayout
+    (setf (c:world-focused-float *world*) nil)
+    (request-manage)))
+
+(defcommand raise-float ()
+  "Put the focused floating window on top of the other floats."
+  (with-relayout
+    (let ((float (c:world-focused-float *world*)))
+      (when float
+        (setf (c:world-floats *world*)
+              (append (remove float (c:world-floats *world*)) (list float)))))))
+
+(defcommand close-float ()
+  "Close the focused floating window."
+  (let ((float (c:world-focused-float *world*)))
+    (when float
+      (let ((window (c:float-window float)))
+        (when (c:window-proxy window)
+          (guarded "close" (w:window-close (c:window-proxy window))))))))

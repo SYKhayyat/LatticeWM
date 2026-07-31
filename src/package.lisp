@@ -155,7 +155,8 @@ deliberately decomposed so that policy can redirect it.")
    #:window-preferred-size
    ;; the world
    #:world #:world-root #:world-cursor #:world-outputs #:world-scratchpad
-   #:world-floats #:make-world #:world-props
+   #:world-floats #:make-world #:world-props #:world-focused-float
+   #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
    #:world-node-at #:world-leaf-at #:world-window-at #:world-focus-window
@@ -232,6 +233,7 @@ keybindings, the command registry, and the session loop.")
    #:server-display #:server-seats #:server-running #:seat-proxy
    #:window-of-proxy #:all-windows #:all-outputs #:current-output
    #:current-node #:current-leaf #:current-window #:current-path
+   #:focused-window #:in-wm-thread-p
    #:window-river-node #:guarded #:with-abandon
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command

@@ -64,6 +64,18 @@ without going through the registry."
        (defun ,symbol ,lambda-list
          ,@(when documentation (list documentation))
          ,@forms)
+       ;; Export it from its *own* package.  The whole point of LATTICEWM/USER
+       ;; is that a config file and a REPL can say (focus :left) with no
+       ;; prefix, and that only works if the runtime publishes its commands.
+       ;; Doing it here rather than from a hand-maintained list means a new
+       ;; command is usable the moment it exists.
+       ;;
+       ;; SYMBOL-PACKAGE rather than a literal, because DEFCOMMAND is part of
+       ;; the extension surface: a user defining a command in their own package
+       ;; would otherwise be asking us to export a symbol that package does not
+       ;; own, which is an error and a baffling one.
+       (let ((home (symbol-package ',symbol)))
+         (when home (export ',symbol home)))
        (setf (gethash ,string *commands*)
              (make-instance 'command
                             :name ,string

@@ -7,7 +7,14 @@
 (in-package #:lattice)
 
 (defclass lattice-policy (p:conventional-policy)
-  ((name :initform "lattice"))
+  ;; %NAME, not NAME.  A slot is identified by its *symbol*, so writing
+  ;; (name :initform "lattice") in this package would declare a brand new
+  ;; LATTICE::NAME slot alongside the inherited one rather than overriding it,
+  ;; and POLICY-NAME would keep answering "conventional".  It did, and it cost
+  ;; twenty minutes of chasing a layout bug that was not there.  Naming the
+  ;; slot with a prefix that is only ever written in one package makes the
+  ;; mistake impossible to make by accident.
+  ((p::%name :initform "lattice"))
   (:documentation
    "The conventional policy, plus a plane.
 
@@ -300,13 +307,30 @@ by exactly one column."
                   do (setf best i best-distance distance)
                 finally (return best))))))
 
-(defun set-zoom (grid index &key (focus nil))
-  "Move the viewport to rung INDEX of the ladder, centred near FOCUS.
+(defun zoom-origin (anchor cols rows)
+  "Where the viewport origin goes when ANCHOR should be centre-ish within a
+COLS by ROWS view, biased toward the top-left.
 
-The zoom anchor: origin = focused cell minus floor((N-1)/2) on each axis, so
-the focused cell lands centre-ish, biased toward the origin, always visible,
-and deterministically.  Deterministic matters more than centred — a zoom you
-cannot predict is a zoom you stop using."
+*The two axes are not symmetric, and that is the sign convention biting.*
+Biasing left on X means subtracting floor((cols-1)/2), so the focused cell sits
+at or left of centre.  Biasing *top* on Y, with +Y up, means the focused cell
+should be at or above centre — which is subtracting the ceiling rather than the
+floor, because the origin is the *bottom* row.
+
+Getting this wrong is not a rounding detail.  With two rows, the floor rule put
+the focused cell on the bottom row of the viewport and filled the top half with
+the empty row above it — so zooming out from a full lattice showed you half a
+screen of nothing, while every number in the model was correct.  It took a
+screenshot to see."
+  (cell (- (cell-x anchor) (floor (1- cols) 2))
+        (- (cell-y anchor) (ceiling (1- rows) 2))))
+
+(defun set-zoom (grid index &key (focus nil))
+  "Move the viewport to rung INDEX of the ladder, anchored near FOCUS.
+
+The focused cell lands centre-ish, biased top-left, always visible, and
+deterministically.  Deterministic matters more than centred — a zoom you cannot
+predict is a zoom you stop using."
   (let* ((viewport (grid-viewport grid))
          (index (max 0 (min index (1- (length *zoom-ladder*)))))
          (step (nth index *zoom-ladder*))
@@ -315,8 +339,6 @@ cannot predict is a zoom you stop using."
          (anchor (or focus (viewport-origin viewport))))
     (setf (viewport-cols viewport) cols
           (viewport-rows viewport) rows
-          (viewport-origin viewport)
-          (cell (- (cell-x anchor) (floor (1- cols) 2))
-                (- (cell-y anchor) (floor (1- rows) 2))))
+          (viewport-origin viewport) (zoom-origin anchor cols rows))
     (when focus (ensure-visible grid focus))
     (cons cols rows)))

@@ -54,7 +54,7 @@
   (:documentation "A short human-readable name for POLICY, shown in status output."))
 
 (defclass policy ()
-  ((name :initarg :name :initform "policy" :accessor policy-name)
+  ((%name :initarg :name :initform "policy" :accessor policy-name)
    (props :initform '() :accessor policy-props
           :documentation "Extension state, as on a node.  See CORE:PROPS."))
   (:documentation

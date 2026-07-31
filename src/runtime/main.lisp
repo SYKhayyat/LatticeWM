@@ -64,9 +64,6 @@ wakeup interrupt below.  It exists only so that a bug in either cannot wedge
 the window manager permanently, and 30 seconds is long enough that the cost of
 it existing is nil — two wakeups a minute.")
 
-(defvar *wm-thread* nil
-  "The thread running the event loop, so other threads can wake it.")
-
 (defvar *woken* nil
   "Set by the wakeup interrupt.  Only ever read to decide whether to log.")
 
@@ -89,20 +86,37 @@ once, exactly when there is something to deliver."
   (let ((thread *wm-thread*))
     (when (and thread (sb-thread:thread-alive-p thread))
       (ignore-errors
-       (sb-thread:interrupt-thread thread (lambda () (setf *woken* t)))))))
+       (sb-thread:interrupt-thread
+        thread
+        (lambda ()
+          (setf *woken* t)
+          ;; THROW, not just a flag.  SB-SYS:WAIT-UNTIL-FD-USABLE restarts
+          ;; itself on EINTR, so an interruption that merely sets a variable
+          ;; is delivered and then *the wait resumes for its full timeout*.
+          ;; The queued work then sat there until the compositor happened to
+          ;; say something — which in an idle session can be a very long time.
+          ;;
+          ;; The symptom was superb: every command worked, the model was
+          ;; correct, and the screen was thirty seconds stale.  Zoom in
+          ;; particular looked completely broken while being completely right.
+          ;;
+          ;; IGNORE-ERRORS because the interrupt can land while the loop is
+          ;; outside the CATCH, in which case there is nothing to unwind to
+          ;; and the flag alone is the correct outcome.
+          (ignore-errors (throw 'wake nil))))))))
 
 (defun wait-for-work (fd)
   "Block until the compositor speaks, or another thread wakes us.
 
 Zero wakeups while nothing is happening, which is the whole point.  The
 timeout is a backstop against a bug in the above, not a polling interval."
-  (handler-case
-      (if fd
-          (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
-          (sleep 0.05))
-    ;; EINTR from the wakeup interrupt arrives here and is the normal path.
-    (error () nil)
-    (sb-sys:interactive-interrupt () nil)))
+  (catch 'wake
+    (handler-case
+        (if fd
+            (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
+            (sleep 0.05))
+      (error () nil)
+      (sb-sys:interactive-interrupt () nil))))
 
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."

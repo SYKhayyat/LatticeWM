@@ -157,7 +157,13 @@ condition."
                                                  policy (c:world-root world))))))
     (when target
       (let ((old (c:world-cursor world)))
-        (setf (c:world-cursor world) target)
+        (setf (c:world-cursor world) target
+              ;; Directional motion is a statement about the tree, so it takes
+              ;; the keyboard back from any floating window.  Otherwise
+              ;; pressing Left while a dialog is up moves the cursor invisibly
+              ;; underneath it, which is the worst kind of bug: nothing looks
+              ;; wrong until you type.
+              (c:world-focused-float world) nil)
         (ignore-errors (on-focus-change policy world old target))
         target))))
 
@@ -172,7 +178,8 @@ than an edge — README D20's second rule."
                      (descend-to-leaf policy node path nil)
                      (c:repair-path root path))))
     (let ((old (c:world-cursor world)))
-      (setf (c:world-cursor world) target)
+      (setf (c:world-cursor world) target
+            (c:world-focused-float world) nil)
       (ignore-errors (on-focus-change policy world old target))
       target)))
 

@@ -135,6 +135,43 @@ time."
                 (when (and width height)
                   (push (list window (max 1 width) (max 1 height)) out))))))))))
 
+(defun emit-window-management-state ()
+  "Reconcile every window's management state with the model.  Manage only.
+
+WHY THIS EXISTS RATHER THAN EACH COMMAND SENDING ITS OWN REQUESTS.  Floating,
+minimizing and fullscreening all change window-management state, which is legal
+only inside a manage sequence.  A command invoked from a *key binding* is
+already inside one; the same command invoked from a REPL is not.  So a
+command that sent its own requests worked when typed and failed when evaluated
+— which is precisely backwards, since the REPL is the development interface.
+
+Instead the commands change the model and this reconciles it, from the one
+place that is always in the right sequence.  It is the same rule the file
+header states: policy says where things go, the runtime decides which sequence
+that turns into.  Diffed, so the common case sends nothing."
+  (dolist (window (all-windows))
+    (let ((proxy (c:window-proxy window)))
+      (when (and proxy (c:window-live-p window))
+        ;; Tiled edges: a floating window is adjacent to nothing, so clients
+        ;; stop suppressing their rounded corners and shadows.
+        (when-changed (window :tiled (not (c:window-floating-p window)))
+          (guarded "set_tiled"
+            (w:window-set-tiled proxy (if (c:window-floating-p window)
+                                          w:+edges-none+
+                                          w:+edges-all+))))
+        ;; Fullscreen.  Cheap in both directions: river ignores clip boxes and
+        ;; draws no borders while fullscreen, so there is no relayout either
+        ;; way.
+        (when-changed (window :fullscreen (c:window-fullscreen-p window))
+          (guarded "fullscreen"
+            (if (c:window-fullscreen-p window)
+                (let ((output (current-output)))
+                  (when (and output (c:output-proxy output))
+                    (w:window-fullscreen proxy (c:output-proxy output))
+                    (w:window-inform-fullscreen proxy)))
+                (progn (w:window-exit-fullscreen proxy)
+                       (w:window-inform-not-fullscreen proxy)))))))))
+
 (defun emit-dimension-work ()
   "Drain the pending propose_dimensions work.  Manage sequence only."
   (let ((work (server-pending-dimensions *server*)))

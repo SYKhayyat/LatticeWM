@@ -77,6 +77,18 @@ keyboard focus is derived from it on every relayout and never stored.")
             :documentation "List of OUTPUT, in the order river reported them.")
    (floats :initform '() :accessor world-floats
            :documentation "List of FLOATING-WINDOW, bottom to top.")
+   (focused-float :initform nil :accessor world-focused-float
+                  :documentation
+                  "The floating window that has keyboard focus, or NIL.
+
+Focus is a *place* in the tree (D18), and a float is deliberately not in the
+tree — so without this slot there is no way to express \"the keyboard is
+talking to the floating window\", and a floated window could never be typed
+into.  That is not a corner case: it is every dialog, every file picker, and
+the first thing anybody notices.
+
+The cursor keeps pointing wherever it was, so dismissing the float returns you
+exactly where you were without anything having to remember it.")
    (scratchpad :initform '() :accessor world-scratchpad
                :documentation
                "Minimized windows, most recent first.  They are genuinely out
@@ -122,8 +134,17 @@ empty, which is an ordinary state and not an error."
     (when leaf (leaf-window leaf))))
 
 (defun world-focus-window (world)
-  "The window the cursor is on, or NIL when it rests on an empty pane."
-  (world-window-at world))
+  "The window that should have keyboard focus, or NIL.
+
+A focused float wins over the cursor, because a float is on top and is what the
+user is looking at.  Otherwise it is the cursor's window, which may be NIL when
+the cursor rests on an empty pane — and NIL is the honest answer there, not a
+reason to leave focus on the last window."
+  (let ((float (world-focused-float world)))
+    (if (and float (window-live-p (float-window float))
+             (member float (world-floats world)))
+        (float-window float)
+        (world-window-at world))))
 
 (defun world-workspaces (world)
   "The workspace container, if the root is one, else NIL.
@@ -146,3 +167,7 @@ one-element path — or the empty path when the root is not a workspace stack."
   "The node of the workspace the cursor is in, or the root."
   (or (resolve-path (world-root world) (workspace-path world))
       (world-root world)))
+
+(defun float-of-window (world window)
+  "The FLOATING-WINDOW record for WINDOW, or NIL."
+  (find window (world-floats world) :key #'float-window))

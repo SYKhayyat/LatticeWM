@@ -15,7 +15,7 @@
 (in-package #:latticewm/policy)
 
 (defclass conventional-policy (policy)
-  ((name :initform "conventional"))
+  ((%name :initform "conventional"))
   (:documentation
    "Recursive splits, tabs, workspaces, floats, minimize-out-of-tree.
 

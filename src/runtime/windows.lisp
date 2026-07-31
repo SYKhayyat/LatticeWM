@@ -130,10 +130,9 @@ nothing."
         (if (eq (p:decoration-mode policy window) :ssd)
             (w:window-use-ssd proxy)
             (w:window-use-csd proxy)))
-      ;; Tell a tiled window it is tiled on every edge, so clients that draw
-      ;; rounded corners or drop shadows stop doing it.
-      (unless (c:window-floating-p window)
-        (guarded "set_tiled" (w:window-set-tiled proxy w:+edges-all+))))))
+      ;; set_tiled is reconciled by EMIT-WINDOW-MANAGEMENT-STATE, so that there
+      ;; is exactly one place that decides it.
+      nil)))
 
 ;;; ------------------------------------------------------------- floating
 
@@ -145,16 +144,25 @@ nothing."
                      (p:default-float-rect policy window output))
                    (c:make-rect 100 100 640 480))))
     (setf (c:window-floating-p window) t)
-    (push (make-instance 'c:floating-window
-                         :window window
-                         :rect (or rect (c:make-rect 100 100 640 480)))
-          (c:world-floats *world*))
-    (let ((proxy (c:window-proxy window)))
-      (when proxy (guarded "set_tiled" (w:window-set-tiled proxy w:+edges-none+))))
+    (let ((float (make-instance 'c:floating-window
+                                :window window
+                                :rect (or rect (c:make-rect 100 100 640 480)))))
+      (push float (c:world-floats *world*))
+      ;; Focus follows the window you just floated.  Without this, floating
+      ;; something takes the keyboard away from it — which is exactly backwards,
+      ;; since you floated it in order to use it.
+      (setf (c:world-focused-float *world*) float))
+    ;; set_tiled is window-management state and is reconciled by the emitter in
+    ;; the next manage sequence.  Sending it here would work from a key binding
+    ;; and fail from a REPL.
+    (mark-dirty)
     window))
 
 (defun unfloat-window (window)
   "Put a floating window back into the tree, at the cursor."
+  (let ((float (c:float-of-window *world* window)))
+    (when (eq float (c:world-focused-float *world*))
+      (setf (c:world-focused-float *world*) nil)))
   (setf (c:world-floats *world*)
         (remove window (c:world-floats *world*) :key #'c:float-window)
         (c:window-floating-p window) nil)
@@ -163,8 +171,7 @@ nothing."
          (here (current-leaf))
          (landed (p:place-node policy *world* leaf (current-path)
                                (if (and here (c:leaf-empty-p here)) :fill :split))))
-    (let ((proxy (c:window-proxy window)))
-      (when proxy (guarded "set_tiled" (w:window-set-tiled proxy w:+edges-all+))))
+    (mark-dirty)
     (p:jump-cursor policy *world* landed)
     landed))
 
@@ -177,36 +184,31 @@ River makes a fullscreen window the only thing rendered on its output; clip
 boxes are ignored and borders are not drawn.  So entering and leaving cost no
 relayout at all, which is why we honour it unconditionally rather than making
 it a policy question."
-  (let ((proxy (c:window-proxy window))
-        (output (current-output)))
-    (when proxy
-      (cond
-        ((and on output (c:output-proxy output))
-         (setf (c:window-fullscreen-p window) t)
-         (guarded "fullscreen" (w:window-fullscreen proxy (c:output-proxy output)))
-         (guarded "inform_fullscreen" (w:window-inform-fullscreen proxy)))
-        (t
-         (setf (c:window-fullscreen-p window) nil)
-         (guarded "exit_fullscreen" (w:window-exit-fullscreen proxy))
-         (guarded "inform_not_fullscreen"
-           (w:window-inform-not-fullscreen proxy))))
-      (forget-window-state window)
-      (mark-dirty))))
+  ;; Model only.  EMIT-WINDOW-MANAGEMENT-STATE reconciles it in the next manage
+  ;; sequence, which is the only place the requests are legal.
+  (setf (c:window-fullscreen-p window) on)
+  (mark-dirty)
+  (request-manage)
+  window)
 
 (defun minimize-window (window)
   "Take WINDOW out of the tree and onto the scratchpad."
   (guarded "on-minimize" (p:on-minimize (p:current-policy) *world* window))
-  (let ((proxy (c:window-proxy window)))
-    (when proxy (guarded "hide" (w:window-hide proxy))))
-  (forget-window-state window)
+  ;; No explicit hide: the window is out of the tree, so the next layout does
+  ;; not place it, and the emitter hides everything it did not place.  Hiding
+  ;; here as well would be a rendering request outside a render sequence.
+  (let ((float (c:float-of-window *world* window)))
+    (when (eq float (c:world-focused-float *world*))
+      (setf (c:world-focused-float *world*) nil)))
   (mark-dirty)
+  (request-manage)
   window)
 
 (defun restore-window (window)
   "Bring WINDOW back from the scratchpad."
   (guarded "on-restore" (p:on-restore (p:current-policy) *world* window))
-  (forget-window-state window)
   (mark-dirty)
+  (request-manage)
   window)
 
 ;;; ------------------------------------------------------------ keyboard focus
@@ -220,7 +222,7 @@ clear_focus is the honest answer rather than leaving the last window focused
 while the cursor is somewhere else — which would mean your keystrokes go
 somewhere other than where the highlight is."
   (let ((seat (primary-seat))
-        (window (current-window)))
+        (window (c:world-focus-window *world*)))
     (when seat
       (unless (eq window (seat-focused seat))
         (setf (seat-focused seat) window)

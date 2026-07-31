@@ -17,6 +17,13 @@ At a REPL this is the thing to look at:
 (defvar *server* nil
   "The live SERVER, or NIL when not connected.")
 
+(defvar *wm-thread* nil
+  "The thread that owns the compositor socket, so other threads can wake it.
+
+Declared here, before anything that consults it, because the whole point is
+that code all over the runtime can ask \"am I allowed to write to the socket
+from here?\" — and the answer must never depend on load order.")
+
 (defclass server ()
   ((display :initarg :display :accessor server-display
             :documentation "The wl_display.")
@@ -124,6 +131,16 @@ ask twice, so this must be the only place that asks."
   "The window the cursor is on, or NIL — including when the pane is
 deliberately empty, which is an ordinary state and not an error."
   (and *world* (c:world-window-at *world* path)))
+
+(defun focused-window ()
+  "The window that currently has keyboard focus, float or tiled.
+
+Distinct from CURRENT-WINDOW, which is *the cursor's* window.  They differ
+exactly when a floating window is focused, and every command that acts on \"the
+window\" — close, minimize, fullscreen, float — means this one.  Getting that
+wrong is not subtle in use: you press close, and the window behind the dialog
+you were looking at disappears."
+  (and *world* (c:world-focus-window *world*)))
 
 (defun current-output ()
   "The output the cursor is on, or the first one.

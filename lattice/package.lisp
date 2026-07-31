@@ -39,12 +39,12 @@ motion runs straight through the cell boundary as though it were not there.")
    ;; the viewport
    #:viewport #:viewport-origin #:viewport-cols #:viewport-rows
    #:viewport-cells #:viewport-contains-p #:ensure-visible
-   #:zoom-index #:set-zoom #:cell-rects
+   #:zoom-index #:set-zoom #:zoom-origin #:cell-rects
    ;; the policy
    #:lattice-policy
    #:*zoom-mode* #:*zoom-ladder* #:*cell-width* #:*cell-height* #:*cell-gap*
    #:*skip-empty-cells* #:*coordinate-overlay* #:*lattice-border-parity*
    ;; using it
-   #:enable #:disable #:install-lattice-keys
+   #:enable #:disable #:install-lattice-keys #:install-vocabulary
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell #:tag-cell-parity))

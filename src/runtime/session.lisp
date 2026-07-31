@@ -241,12 +241,27 @@ this is safe to call from anywhere, including a SWANK thread."
 ;;; ------------------------------------------------------------- the loop
 
 (defun mark-dirty ()
-  "Note that the layout needs recomputing.
+  "Note that the layout needs recomputing, and make sure it happens.
 
-Does *not* ask river for a manage sequence: most callers are already inside
-one, and asking from inside is a wasted round trip.  REQUEST-MANAGE is the one
-that asks."
-  (when *server* (setf (server-dirty *server*) t)))
+Inside a protocol sequence this only sets the flag — the sequence we are
+already in will do the work, and asking for another would be a wasted round
+trip.  *Outside* one it also asks river for a manage sequence, because
+otherwise nothing would ever collect the flag.
+
+That second half is not an optimisation, it is the difference between a
+command working and not.  Commands invoked from a key binding run inside a
+manage sequence and were fine; the identical command invoked from a REPL or a
+script set the flag and stopped, so the model changed and the screen did not.
+Zoom looked completely broken while being completely correct — the viewport
+said 3x2 and the display showed one cell — and no unit test could have seen it,
+because the model was right."
+  (when *server*
+    (setf (server-dirty *server*) t)
+    (when (null w:*sequence*) (request-manage))))
+
+(defun in-wm-thread-p ()
+  "True when we are running on the thread that owns the compositor socket."
+  (or (null *wm-thread*) (eq sb-thread:*current-thread* *wm-thread*)))
 
 (defun request-manage ()
   "Ask river to start a manage sequence, because we want to change something
@@ -254,14 +269,28 @@ only a manage sequence may change.
 
 There is no frame or timer event in this protocol, so this is the only way to
 drive anything of our own.  It costs a full manage round trip — it is not a
-frame clock."
-  (when (and *server* (server-manager *server*))
-    (guarded "manage_dirty" (w:wm-manage-dirty (server-manager *server*)))))
+frame clock.
+
+*Safe from any thread*, and that is not a nicety.  This writes to the
+compositor socket, and the wayflan client is single-threaded, so calling it
+from a SWANK REPL raced with whatever the window manager thread was
+marshalling — which does not error, it *hangs*, holding the desktop.  Every
+command that changes window-management state calls this, so without the guard
+below almost the entire command set was a REPL hazard.  Off-thread callers
+queue and wake the loop instead."
+  (cond
+    ((not (and *server* (server-manager *server*))) nil)
+    ((in-wm-thread-p)
+     (guarded "manage_dirty" (w:wm-manage-dirty (server-manager *server*))))
+    (t (call-in-wm-thread #'request-manage))))
 
 (defun after-command ()
-  "Called after a key binding runs.  Push the consequences out."
-  (mark-dirty)
-  (request-manage))
+  "Called after a key binding runs.  Push the consequences out.
+
+MARK-DIRTY does the asking now, so this is a single call; it is kept as a
+named step because it is the obvious place to hang anything that should happen
+once per user action rather than once per relayout."
+  (mark-dirty))
 
 (defun run-manage-sequence ()
   "Everything that is only legal in a manage sequence.
@@ -278,6 +307,7 @@ question about a blank."
     (when (server-dirty *server*)
       (setf (server-dirty *server*) nil)
       (relayout))
+    (emit-window-management-state)
     (emit-dimension-work)
     (apply-keyboard-focus)))
 

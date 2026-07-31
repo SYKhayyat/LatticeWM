@@ -495,3 +495,28 @@ is exactly when to switch *ZOOM-MODE* to :FIXED"))))
     (setf (gethash "code" (l:grid-names grid)) (l:cell 3 -1))
     (is (equal (l:cell 3 -1) (gethash "code" (l:grid-names grid))))
     (is (equal "3,-1" (l:cell-string (l:cell 3 -1))))))
+
+(test the-zoom-anchor-covers-the-content-not-the-void
+  ;; +Y is up, so "biased top-left" means biasing the *opposite* way on Y from
+  ;; X.  With the naive symmetric rule, zooming to two rows from a full
+  ;; lattice put the focused cell on the bottom row and filled the top half of
+  ;; the screen with the empty row above it.
+  (let ((grid (grid-of)))
+    (dolist (address (list (l:cell 0 0) (l:cell 1 0) (l:cell 0 1) (l:cell 1 1)))
+      (setf (c:child-at grid address) (leaf (l:cell-string address))))
+    ;; Focused on the top-left of the occupied block, zooming to 2x2.
+    (l:set-zoom grid 2 :focus (l:cell 0 1))
+    (let ((viewport (l:grid-viewport grid)))
+      (is (equal (l:cell 0 0) (l:viewport-origin viewport))
+          "the viewport covers rows 0 and 1, which is where the windows are")
+      (dolist (address (list (l:cell 0 0) (l:cell 1 0) (l:cell 0 1) (l:cell 1 1)))
+        (is-true (l:viewport-contains-p viewport address)
+                 "~a is visible" (l:cell-string address))))))
+
+(test the-zoom-anchor-keeps-the-focus-visible-at-every-rung
+  (let ((grid (grid-of)))
+    (dolist (focus (list (l:cell 0 0) (l:cell 3 -2) (l:cell -5 7)))
+      (dotimes (rung (length l:*zoom-ladder*))
+        (l:set-zoom grid rung :focus focus)
+        (is-true (l:viewport-contains-p (l:grid-viewport grid) focus)
+                 "focus ~a stays visible at rung ~d" (l:cell-string focus) rung)))))
