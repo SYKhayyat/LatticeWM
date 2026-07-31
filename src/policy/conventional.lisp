@@ -458,9 +458,14 @@ otherwise take a fraction of the output."
                      w h)))))
 
 (defmethod window-capabilities ((policy conventional-policy) (window c:window))
-  "Declare all four.  We honour all four, and fullscreen is free."
+  "Declare all four.  We honour all four, and fullscreen is free.
+
+Returns a list of keywords drawn from :WINDOW-MENU, :MAXIMIZE, :FULLSCREEN and
+:MINIMIZE — river's bitfield, in the keyword-list form the bindings use.
+River draws client-side-decoration titlebar buttons from this, so declaring a
+capability you do not honour produces a button that does nothing."
   (declare (ignore window))
-  15)                                   ; menu | maximize | fullscreen | minimize
+  (list :window-menu :maximize :fullscreen :minimize))
 
 (defmethod decoration-mode ((policy conventional-policy) (window c:window))
   "Server-side, which under river means our borders and no client titlebar."

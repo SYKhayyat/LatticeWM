@@ -96,11 +96,11 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    ;; enums, as plain integers
    #:+mod-none+ #:+mod-shift+ #:+mod-ctrl+ #:+mod-alt+
    #:+mod-mod3+ #:+mod-super+ #:+mod-mod5+
-   #:+edge-none+ #:+edge-top+ #:+edge-bottom+ #:+edge-left+ #:+edge-right+
+   #:+edges-none+ #:+edge-top+ #:+edge-bottom+ #:+edge-left+ #:+edge-right+
    #:+edges-all+
    #:+cap-window-menu+ #:+cap-maximize+ #:+cap-fullscreen+ #:+cap-minimize+
-   #:+caps-all+
-   #:modifier-mask #:modifier-names))
+   #:+caps-all+ #:+protocol-modifier-bits+ #:+modifier-order+
+   #:modifier-mask #:modifier-names #:color-component))
 
 (defpackage #:latticewm/core
   (:use #:cl)
@@ -196,6 +196,7 @@ You never edit this package.")
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change
    #:find-motion-target #:move-cursor #:jump-cursor #:descend-to-leaf
+   #:repair-cursor #:motion-rects #:best-aligned-address
    #:mru-path #:node-rect #:place-node
    ;; --- structure ------------------------------------------------------
    #:spawn-target #:split-axis-for #:new-child-side #:should-collapse-p
@@ -210,7 +211,8 @@ You never edit this package.")
    #:stack-visible-address #:container-label
    ;; --- introspection --------------------------------------------------
    #:policy-generic-p #:policy-generics #:extension-surface
-   #:print-extension-surface))
+   #:print-extension-surface #:undocumented-generics #:generic-description
+   #:*motion-reference-rect*))
 
 (defpackage #:latticewm/runtime
   (:use #:cl)
@@ -225,9 +227,17 @@ You never edit this package.")
 keybindings, the command registry, and the session loop.")
   (:export
    ;; the live session
-   #:*world* #:window-of-proxy #:all-windows #:all-outputs
+   #:*world* #:*server* #:server #:seat #:primary-seat #:server-manager
+   #:server-display #:server-seats #:server-running #:seat-proxy
+   #:window-of-proxy #:all-windows #:all-outputs #:current-output
    #:current-node #:current-leaf #:current-window #:current-path
-   #:window-river-node #:window-dirty-p
+   #:window-river-node #:guarded #:with-abandon
+   #:float-window-now #:unfloat-window #:minimize-window #:restore-window
+   #:request-fullscreen #:rebind-keys #:request-manage #:after-command
+   #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
+   #:load-config #:config-file #:config-directory #:write-sample-config
+   #:install-default-keymap #:print-options #:print-commands #:print-keymap
+   #:main #:all-hooks #:defhook
    ;; commands
    #:defcommand #:command #:find-command #:all-commands #:run-command
    #:command-name #:command-documentation #:command-function
@@ -235,7 +245,7 @@ keybindings, the command registry, and the session loop.")
    #:keymap #:make-keymap #:*keymap* #:keymap-entries #:keymap-parent
    #:parse-key #:kbd #:define-key #:lookup-key #:key-to-string
    ;; the loop
-   #:start #:quit #:relayout #:mark-dirty
+   #:start #:quit #:relayout #:mark-dirty #:compute-layout
    #:spawn #:notify #:*log-level* #:logmsg #:*server*
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*

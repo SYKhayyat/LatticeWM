@@ -1,1 +1,195 @@
+;;;; runtime/main.lisp --- Startup, the dispatch loop, and the command line.
+
 (in-package #:latticewm/runtime)
+
+;;; ------------------------------------------------------ the dispatch loop
+;;;
+;;; wayflan's %find-proxy! signals WL-MESSAGE-ERROR when a message arrives for
+;;; an object id it does not know.  libwayland has zombie-proxy machinery to
+;;; swallow events that were in flight when the client destroyed something;
+;;; wayflan has the marker class but no guard.  In a window manager, windows
+;;; are created and destroyed constantly, so this *will* be hit.
+;;;
+;;; The fix is a handler here rather than a fork, and it is safe for a specific
+;;; mechanical reason: wayflan's %call-with-message reads the header and then
+;;; drains the whole message body into a separate buffer *before* invoking the
+;;; handler.  So when the handler throws, the socket stream is already
+;;; positioned at the start of the next message and no desynchronisation is
+;;; possible.  README calls this a five-line fix from a source read; it is
+;;; five lines because of that property and not otherwise.
+
+(defun dispatch-events ()
+  "Read and dispatch whatever the compositor has sent.  Returns NIL on hangup."
+  (handler-case
+      (progn
+        (loop while (wl:wl-display-listen (server-display *server*))
+              do (handler-case (wl:wl-display-dispatch-event (server-display *server*))
+                   (wl:wl-message-error (condition)
+                     ;; An event for an object we already destroyed.  Ordinary.
+                     (logmsg :debug "stale event ignored: ~a" condition))))
+        t)
+    (end-of-file () (logmsg :info "compositor closed the connection") nil)
+    (wl:wl-server-error (condition)
+      (logmsg :error "protocol error: ~a" condition)
+      nil)
+    #+sbcl
+    (sb-int:simple-stream-error (condition)
+      (logmsg :info "connection lost: ~a" condition)
+      nil)))
+
+(defun run-event-loop ()
+  "The main loop.  Runs until the connection closes or QUIT is called."
+  (loop while (server-running *server*)
+        do (with-abandon
+             (drain-wm-queue)
+             (unless (dispatch-events)
+               (setf (server-running *server*) nil))
+             (save-state-if-needed))))
+
+;;; ---------------------------------------------------------------- startup
+
+(defun start (&key (swank-port *swank-port*) (config t) (restore t))
+  "Connect to river and run.  This is the whole program.
+
+Order matters and each step is deliberate:
+
+  1. The debugger hook goes in first, because a daemon with no controlling
+     terminal that hits an unhandled condition hangs on a stdin that is not
+     there — and a hung window manager freezes the desktop, since river waits
+     for our manage sequence before processing input.
+  2. SWANK starts before anything interesting exists, so that if step 4 fails
+     you still have a REPL inside the running image to find out why.
+  3. Defaults, then the user's configuration, so the configuration wins.
+  4. Connect and bind, refusing to start on a protocol version mismatch."
+  (install-debugger-hook)
+  (start-swank swank-port)
+  (setf *world* (c:make-world)
+        p:*policy* (or p:*policy* (make-instance 'p:conventional-policy)))
+  (install-default-keymap)
+  (when config (load-config))
+  (run-hooks :startup)
+  (let ((display (wl:wl-display-connect)))
+    (setf *server* (make-instance 'server :display display)
+          (server-running *server*) t)
+    (unwind-protect
+         (progn
+           (bind-globals *server*)
+           (attach-manager-hooks *server*)
+           (wl:wl-display-roundtrip display)
+           (apply-cursor-theme)
+           (when restore (load-state))
+           (mark-dirty)
+           (request-manage)
+           (logmsg :info "LatticeWM running on ~a"
+                   (or (uiop:getenv "WAYLAND_DISPLAY") "?"))
+           (run-event-loop))
+      (guarded "shutdown"
+        (run-hooks :shutdown)
+        (save-state))
+      (ignore-errors (wl:wl-display-disconnect display))
+      (setf *server* nil)
+      (logmsg :info "LatticeWM stopped"))))
+
+(defun apply-cursor-theme ()
+  "Set the xcursor theme, if the configuration asked for one."
+  (when *cursor-theme*
+    (dolist (seat (server-seats *server*))
+      (guarded "set_xcursor_theme"
+        (w:seat-set-xcursor-theme (seat-proxy seat)
+                                  *cursor-theme* *cursor-size*)))))
+
+;;; ------------------------------------------------------------ the CLI
+
+(defun print-options ()
+  "Print every tier-0 option with its value, default and documentation."
+  (format t "~&LatticeWM options.  Set any of these in ~a~2%" (config-file))
+  (dolist (row (p:all-options))
+    (destructuring-bind (key variable value default documentation) row
+      (declare (ignore key))
+      (format t "~a~%  value:   ~s~%  default: ~s~%~{  ~a~%~}~%"
+              variable value default
+              (split-lines documentation)))))
+
+(defun split-lines (string)
+  "STRING split on newlines, for indenting a docstring."
+  (loop with start = 0
+        for position = (position #\Newline string :start start)
+        collect (subseq string start position)
+        while position
+        do (setf start (1+ position))))
+
+(defun print-commands ()
+  "Print every command with its arguments and documentation."
+  (format t "~&LatticeWM commands.~2%")
+  (dolist (command (all-commands))
+    (format t "(~a~{ ~(~a~)~})~%~{  ~a~%~}~%"
+            (command-name command) (command-lambda-list command)
+            (split-lines (or (command-documentation command)
+                             "UNDOCUMENTED <-- flag me")))))
+
+(defun print-keymap (&optional (keymap *keymap*) (prefix ""))
+  "Print every binding."
+  (when (string= prefix "") (format t "~&LatticeWM keymap.~2%"))
+  (dolist (entry (keymap-keys keymap))
+    (destructuring-bind (key . target) entry
+      (if (typep target 'keymap)
+          (print-keymap target (format nil "~a~a " prefix (key-to-string key)))
+          (format t "~a~a~30t~s~%" prefix (key-to-string key) target)))))
+
+(defun main ()
+  "Entry point for the dumped image."
+  (let ((arguments (rest sb-ext:*posix-argv*)))
+    (cond
+      ((member "--help" arguments :test #'string=)
+       (format t "~&usage: latticewm [options]~%~%~
+                  ~2t--help                print this and exit~%~
+                  ~2t--version             print the version and exit~%~
+                  ~2t--list-options        every configuration value~%~
+                  ~2t--list-commands       every command~%~
+                  ~2t--list-keys           every key binding~%~
+                  ~2t--extension-surface   every generic you can specialize~%~
+                  ~2t--write-config        write a starter init.lisp~%~
+                  ~2t--no-config           ignore the configuration file~%~
+                  ~2t--no-restore          ignore the saved layout~%~
+                  ~2t--swank-port N        REPL port (default ~d, 0 disables)~%~
+                  ~2t--log-level LEVEL     debug, info, warn, error, or none~%~%~
+                  LatticeWM is a window manager for the river Wayland~%~
+                  compositor.  It must run inside river:~%~%~
+                  ~2triver -c latticewm~%"
+               *swank-port*))
+      ((member "--version" arguments :test #'string=)
+       (format t "~&LatticeWM ~a (river_window_manager_v1 v~d)~%"
+               (asdf:component-version (asdf:find-system "latticewm"))
+               +window-management-version+))
+      ((member "--write-config" arguments :test #'string=)
+       (install-default-keymap)
+       (let ((path (write-sample-config)))
+         (format t "~&~:[~a already exists; left alone~;wrote ~a~]~%"
+                 path (config-file))))
+      ((member "--list-options" arguments :test #'string=)
+       (print-options))
+      ((member "--list-commands" arguments :test #'string=)
+       (print-commands))
+      ((member "--list-keys" arguments :test #'string=)
+       (install-default-keymap)
+       (print-keymap))
+      ((member "--extension-surface" arguments :test #'string=)
+       (p:print-extension-surface))
+      (t
+       (let ((level (argument-value arguments "--log-level"))
+             (port (argument-value arguments "--swank-port")))
+         (when level
+           (setf *log-level* (if (string= level "none")
+                                 nil
+                                 (intern (string-upcase level) :keyword))))
+         (start :swank-port (cond ((null port) *swank-port*)
+                                  ((string= port "0") nil)
+                                  (t (parse-integer port :junk-allowed t)))
+                :config (not (member "--no-config" arguments :test #'string=))
+                :restore (not (member "--no-restore" arguments :test #'string=))))))))
+
+(defun argument-value (arguments name)
+  "The value following NAME in ARGUMENTS, or NIL."
+  (let ((position (position name arguments :test #'string=)))
+    (when (and position (< (1+ position) (length arguments)))
+      (nth (1+ position) arguments))))

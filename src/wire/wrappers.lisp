@@ -296,47 +296,82 @@ is also what README D19's typing-in-an-empty-pane rests on.")
          "Ask to be told when modifier state changes, for hold-to-peek."))
 
 ;;; ---------------------------------------------------------------- enums
+;;;
+;;; WAYFLAN REPRESENTS A BITFIELD AS A LIST OF KEYWORDS, not as an integer,
+;;; and that is the whole story of this section.  Passing 15 where river's
+;;; `edges' bitfield is expected does not produce a wrong border — it produces
+;;; a type error inside the generated marshaller, which is much better, but
+;;; only if you know to expect it.
+;;;
+;;; So the vocabulary above takes keyword lists, and the integers below exist
+;;; only as documentation of what the protocol actually puts on the wire.
 
-(defconstant +mod-none+ 0)
-(defconstant +mod-shift+ 1)
-(defconstant +mod-ctrl+ 4)
-(defconstant +mod-alt+ 8 "mod1, commonly alt.")
-(defconstant +mod-mod3+ 32)
-(defconstant +mod-super+ 64 "mod4, commonly super or logo.")
-(defconstant +mod-mod5+ 128)
-;; 2 and 16 — capslock and numlock — are deliberately absent from the
-;; protocol: locked modifiers make no sense in a binding.
+(defparameter +edges-none+ '())
+(defparameter +edge-top+ '(:top))
+(defparameter +edge-bottom+ '(:bottom))
+(defparameter +edge-left+ '(:left))
+(defparameter +edge-right+ '(:right))
+(defparameter +edges-all+ '(:top :bottom :left :right)
+  "Every edge.  What a fully tiled window is adjacent on.")
 
-(defconstant +edge-none+ 0)
-(defconstant +edge-top+ 1)
-(defconstant +edge-bottom+ 2)
-(defconstant +edge-left+ 4)
-(defconstant +edge-right+ 8)
-(defconstant +edges-all+ 15)
+(defparameter +cap-window-menu+ '(:window-menu))
+(defparameter +cap-maximize+ '(:maximize))
+(defparameter +cap-fullscreen+ '(:fullscreen))
+(defparameter +cap-minimize+ '(:minimize))
+(defparameter +caps-all+ '(:window-menu :maximize :fullscreen :minimize)
+  "Every capability.  We honour all four, so we declare all four.")
 
-(defconstant +cap-window-menu+ 1)
-(defconstant +cap-maximize+ 2)
-(defconstant +cap-fullscreen+ 4)
-(defconstant +cap-minimize+ 8)
-(defconstant +caps-all+ 15)
+(defparameter +protocol-modifier-bits+
+  '((:shift . 1) (:ctrl . 4) (:mod1 . 8) (:mod3 . 32) (:mod4 . 64) (:mod5 . 128))
+  "River's modifier bitfield, for reference.  Note the absences: 2 and 16 —
+capslock and numlock — are deliberately not in the protocol, because a locked
+modifier in a binding makes no sense.")
 
-(defparameter *modifier-names*
-  `((:shift . ,+mod-shift+) (:ctrl . ,+mod-ctrl+) (:control . ,+mod-ctrl+)
-    (:alt . ,+mod-alt+) (:mod1 . ,+mod-alt+) (:meta . ,+mod-alt+)
-    (:mod3 . ,+mod-mod3+) (:super . ,+mod-super+) (:mod4 . ,+mod-super+)
-    (:logo . ,+mod-super+) (:hyper . ,+mod-mod5+) (:mod5 . ,+mod-mod5+))
-  "Keyword to bit, with the aliases people actually type.")
+(defparameter *modifier-aliases*
+  '((:shift . :shift)
+    (:ctrl . :ctrl) (:control . :ctrl) (:c . :ctrl)
+    (:alt . :mod1) (:mod1 . :mod1) (:meta . :mod1) (:m . :mod1)
+    (:mod3 . :mod3)
+    (:super . :mod4) (:mod4 . :mod4) (:logo . :mod4) (:win . :mod4)
+    (:s . :mod4)
+    (:hyper . :mod5) (:mod5 . :mod5))
+  "What people type, mapped to what the protocol calls it.
+
+Both `super' and `mod4' work, and so do `C-' and `ctrl', because muscle memory
+differs and refusing one of them is a pointless fight to pick.")
+
+(defparameter +modifier-order+ '(:shift :ctrl :mod1 :mod3 :mod4 :mod5)
+  "Canonical order, so that (:super :shift) and (:shift :super) are the same
+key as far as EQUAL is concerned — which matters, because keys are hash keys.")
 
 (defun modifier-mask (modifiers)
-  "The bitfield for MODIFIERS, a list of keywords such as (:super :shift)."
-  (reduce #'logior modifiers :initial-value 0
-          :key (lambda (m)
-                 (or (cdr (assoc m *modifier-names*))
-                     (error "Unknown modifier ~s.  Known: ~{~s~^ ~}"
-                            m (remove-duplicates (mapcar #'car *modifier-names*)))))))
+  "The canonical keyword list for MODIFIERS.
 
-(defun modifier-names (mask)
-  "The canonical keywords named by bitfield MASK."
-  (loop for (name . bit) in '((:shift . 1) (:ctrl . 4) (:alt . 8)
-                              (:mod3 . 32) (:super . 64) (:mod5 . 128))
-        when (logtest mask bit) collect name))
+MODIFIERS is a list of the names people type — (:super :shift), (:ctrl) — and
+the result is what river's generated bindings want, in a fixed order so that
+two spellings of the same chord are EQUAL."
+  (let ((canonical '()))
+    (dolist (modifier modifiers)
+      (let ((mapped (cdr (assoc modifier *modifier-aliases*))))
+        (unless mapped
+          (error "Unknown modifier ~s.  Known: ~{~(~a~)~^ ~}"
+                 modifier (remove-duplicates (mapcar #'car *modifier-aliases*))))
+        (pushnew mapped canonical)))
+    (remove-if-not (lambda (m) (member m canonical)) +modifier-order+)))
+
+(defun modifier-names (modifiers)
+  "MODIFIERS rendered the way a person would write them."
+  (mapcar (lambda (m)
+            (case m (:mod4 :super) (:mod1 :alt) (t m)))
+          (remove-if-not (lambda (m) (member m modifiers)) +modifier-order+)))
+
+(defun color-component (value)
+  "Convert a 0.0-to-1.0 colour component to the 32-bit unsigned value river
+wants.
+
+River's set_borders takes four 32-bit RGBA values with pre-multiplied alpha.
+Nobody wants to write colours that way, so the policy surface uses floats and
+the conversion happens here — once, at the boundary, rather than in every
+theme anybody ever writes."
+  (max 0 (min #xffffffff
+              (round (* (max 0.0 (min 1.0 (float value))) #xffffffff)))))

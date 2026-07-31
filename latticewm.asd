@@ -59,14 +59,18 @@
       :components
       ((:file "log")
        (:file "hooks")
+       (:file "server")
        (:file "commands")
        (:file "keys")
-       (:file "session")
-       (:file "windows")
+       ;; config comes before verbs because it declares the program defaults
+       ;; the launcher commands use, and after keys because it installs the
+       ;; default keymap.
+       (:file "config")
        (:file "emit")
+       (:file "windows")
+       (:file "session")
        (:file "verbs")
        (:file "state")
-       (:file "config")
        (:file "main")))))))
 
 (defsystem "latticewm/tests"
