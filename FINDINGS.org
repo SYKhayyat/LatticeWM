@@ -297,6 +297,46 @@ keyboards. D19 asked "does this event carry what I need?", got the answer no,
 and had a fallback ready for no — but the fallback assumed the event was the
 only way in. It was worth ten minutes to ask what else the protocol offered.
 
+* What only running it could find
+
+Recorded separately from the core edits, because these are a different kind of
+result: not "was the surface extensible" but "was any of it *right*". Fourteen
+defects were found by running the window manager under a real compositor and
+looking at it, and none of them was reachable from a unit test.
+
+The pattern is worth more than the list. *Every one of them was invisible to
+the model.* The tree was correct, the tests passed, and the thing on screen was
+wrong — or was correct and unusable. A model is a claim about structure, and
+none of these were structural.
+
+| Defect | Why no test could see it |
+|--------+--------------------------|
+| Floating windows could never be focused | The model has no opinion about keyboard focus; it is derived |
+| The screen was up to thirty seconds stale | ~wait-until-fd-usable~ restarts on EINTR, so the wakeup was delivered and ignored |
+| Commands changed the model and not the screen | Only the key path asked for a manage sequence |
+| ~request-manage~ hung when called off-thread | A race, and it did not error — it *hung*, holding the desktop |
+| The zoom anchor showed empty space | +Y up means biasing the opposite way on Y from X |
+| Multi-monitor drew every window twice | The model was fine; the *projection* of it was not |
+| Binding ~wl_shm~ killed startup | An event nobody reads, about formats nobody asked for |
+| The empty pane was invisible | Nothing in the model says what a person can see |
+| The help screen truncated every line mid-word | Legibility is not a property of data |
+
+The two that are worth naming individually, because they say something about
+the architecture rather than about a bug:
+
+*The sequence discipline paid for itself three times.* Enabling a keybinding, a
+cross-thread relayout, and every window-management request in a command each
+tried to reach the wire in the wrong protocol context, and each produced a
+named, continuable error at the point of use instead of a dead connection and a
+hang to bisect. That was the whole argument for building it, made on its first
+contact with a real compositor.
+
+*Half the fixes were structural rather than local.* Window-management requests
+left the commands entirely and became state the emitter reconciles; ~mark-dirty~
+became the single thing that pushes work to the screen; ~output-content~ became
+a policy generic. In each case the bug was a symptom of a decision that had not
+been made explicitly, and the fix was to make it.
+
 * Where the honest claim now stands
 
 README's §extensibility settled on a deliberately modest claim:

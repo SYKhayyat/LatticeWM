@@ -742,6 +742,48 @@ after the next extension rather than treated as settled.
   cursor, a container left invalid. Those are wrong-but-well-typed, which
   [[file:README.org::#language][§language]] names as the residue. The residue was the whole of it.
 
+** The second half of the session: everything the cut list cut
+
+[[#cuts][The cut list]] removed the minimap, the drawn map, ~wl_shm~ and the fd path,
+named cells, and ephemeral jump labels — on the grounds that the fifteen days
+did not have room for them and that ~wl_shm~ was "the least-proven part of
+wayflan". Both premises turned out to be wrong, and the second one is the
+interesting one: *the ~wl_shm~ path is about ninety lines and worked first
+time.* wayflan's fd passing is real ~sendmsg~ with cmsg header walking, and
+~sb-posix~ supplies ~mkstemp~, ~ftruncate~ and ~mmap~, so there is nothing to
+be uncertain about.
+
+That one file unlocked, in order: the echo area, the coordinate overlay, the
+help screen, and the visible empty pane. Every one of them is drawing text into
+a shared-memory buffer and hanging it on a river node.
+
+| Shipped | Was | Why it mattered |
+|---------+-----+-----------------|
+| Echo area | not planned | The cheapest possible "where am I", and the only one that stays readable at any zoom |
+| Coordinate overlay | [[#cuts][kept, "by far the cheapest of the three"]] | D5, and the last of the three defences against getting lost |
+| Named cells | *cut* | ~name-cell~ and ~goto-name~; the overlay shows the name where the coordinate would be |
+| Help overlay | not planned | Built from the live keymap and each command's docstring, so it cannot go stale |
+| Visible empty pane | *implied by D18 and never scheduled* | D18: "not optional polish, it is what stops an empty pane reading as a broken keyboard" |
+
+The one still outstanding is the *drawn map* at deep zoom — [[file:README.org::#open][README's open
+question]], which is a ruling rather than an implementation and is still awaiting
+one.
+
+** On the value of looking at it
+
+The single most productive activity in the second half was taking a screenshot
+and asking what a person would think of it. That found: a twelve-pixel black
+band between cells that read as empty columns; a status line so blocky it
+looked unfinished; a help screen truncated mid-word; workspaces numbered from
+zero on keys numbered from one; and an empty pane that was simply invisible.
+
+None of those is a bug in any useful sense. All of them are the difference
+between a window manager that works and one somebody would use, and *the test
+suite cannot be extended to cover any of them*. [[#honest][§honest]] says the only real
+check on quality is qualitative and there is nobody available to run it. There
+was somebody available; it took an afternoon; it was worth more per hour than
+anything else in the session.
+
 ** Open, and now cheap
 
 - The drawn map at deep zoom. ~wl_shm~ and the fd path are still unexercised,
