@@ -18,73 +18,67 @@ re-raise it as a fresh idea.
 
 =LatticeWM= is a working name. Rename freely.
 
-** Status
+** Status: built, and it runs
 
-*It is built, and it runs.* This section was "Nothing is built" until
-2026-07-30; what follows is a pointer to the artifacts, and the design below is
-otherwise unchanged.
+#+begin_quote
+An extensible window manager for the river Wayland compositor, in Common Lisp,
+whose layout model is a replaceable policy layer rather than the program itself.
+#+end_quote
 
-- =src/= — the window manager. Runs under river 0.4.5, nested or bare.
-- =lattice/= — the infinite plane, as a separate ASDF system.
-- [[file:FINDINGS.org][FINDINGS.org]] — *the result of [[#d21][D21]]'s experiment*, which is the most
-  useful thing this project has to say about its own premise. Read it before
-  the design if you are short of time.
-- [[file:doc/EXTENDING.org][doc/EXTENDING.org]] — how to change it.
-- [[file:PLAN.org::#log][PLAN.org §log]] — what the execution actually did, including the
-  corrections it forced on this document.
+[[file:doc/echo-area.png]]
 
-: make            build, gates, tests
-: make run        river nested inside the session you are already in
-: latticewm --extension-surface
+*Quickstart.* Needs river 0.4.x and SBCL.
 
-*Corrections this document needs, recorded rather than applied* (full list in
-[[file:PLAN.org::#log][PLAN §log]]): the shipped =river-window-management-v1= is *version 4 with 42
-events*, not 5 with 44 — the measurement below was taken against master. River
-ships *six* protocols, not two. ~manage_start~ and ~render_start~ are events,
-not requests. And river 0.4.5 is in nixpkgs, prebuilt, and runs nested — so the
-"get access to a machine running river" critical path in [[#next][Next actions]] never
-existed.
+: git clone … && cd LatticeWM
+: nix-shell           # or install sbcl + the deps in shell.nix by hand
+: make                # build, six gates, 500 tests
+: make run            # river nested inside the session you are already in
 
-*The Week 0 spike has been run — 2026-07-29, and it passed.* Results:
-[[file:SPIKE-WEEK0.org][SPIKE-WEEK0.org]]. Read it alongside this file; where the two
-disagree, the spike wins, because it measured and this document estimated. What it
-changed here:
+Or, in a real session: =river -c latticewm=. =latticewm --write-config= drops a
+commented starter configuration in =~/.config/latticewm/=.
 
-- The language decision is no longer a bet. wayflan's scanner generates working bindings
-  from both river protocols, ~new_id~-in-events included, and the wire layer connects and
-  roundtrips against a live compositor. → [[#spike-result][§spike-result]]
-- *~defclass~, not ~defstruct~, for core state.* Live class redefinition was verified to
-  migrate pre-existing instances, so [[#d20][D20]]'s rationale is superseded (the ~props~
-  ruling survives on different grounds). → [[#spec][Data model]]
-- The extensibility tiers are mechanically verified, 7/7 — *and the criticism in
-  [[#extensibility][The extensibility surface]] still stands unchanged*, because the tests
-  ran against a toy core. → [[#extensibility-status][§extensibility-status]]
-- Counts corrected: 68 requests and 49 events, not 65 and 48. Line audit 1,749, not
-  1,550. The GitHub wayflan mirror is four years stale — use sr.ht.
-- *Everything river-side is still untested*, because no river machine was available.
-  Getting one is now the critical path.
+*The first thing to press is =Super+/=*, which draws the whole keymap with what
+each binding does. =Super+x= is M-x. =Super+Return= is a terminal.
 
-*Two reversals, both on 2026-07-29.* Both are recorded rather than quietly applied.
+*What it does.* Recursive splits like Emacs and hyprland, tabs, workspaces,
+per-window floating, minimize that leaves the tiling tree, multi-monitor, an
+echo area, and persistence across a restart. Then, opt-in:
 
-1. *The implementation language was reversed from Rust to Common Lisp*, after research
-   the earlier decision was made without. Reasoning in [[#language][Language: Common Lisp]] —
-   including the honest list of what Rust would still have been better at, and the
-   later and sharper honest list in [[#extensibility][The extensibility surface]]. Do not re-open without
-   reading both.
+: (asdf:load-system "lattice")
+: (lattice:enable)
 
-2. *The thesis was reversed* — from /the lattice is the project/ to /extensibility is
-   the project, and the lattice is its first hard test/. This came out of pressing on
-   whether the extensibility claim was actually true. It is weaker than this document
-   originally asserted, and [[#extensibility][The extensibility surface]] now says so in detail. The
-   consequence is a *sequencing* change, not an abandonment: a conventional
-   split / float / minimize window manager ships first on a deliberately
-   over-decomposed core, and the lattice is then built *as an extension to it*. See
-   [[#d21][D21]].
+and each workspace becomes an *infinite plane of cells*, addressed by integer
+coordinate, with zoom as the choice of how many cells you can see — 1, 2, 4, 6,
+8 — and a drawn map once they get too small to render. Motion runs straight
+through the cell boundary as though it were not there.
 
-*The lattice is still the goal. It is no longer the foundation.*
+| | |
+|---+---|
+| [[file:doc/coordinate-overlay.png][Cells and coordinates]] | [[file:doc/drawn-map.png][The drawn map at deep zoom]] |
+| [[file:doc/help-overlay.png][Super+/, the keymap]] | [[file:doc/minibuffer.png][M-x]] |
 
-The next concrete action is in [[#next][Next actions]]. It is a half-day spike and everything
-rests on it.
+*Where to read next.*
+
+- [[file:FINDINGS.org][FINDINGS.org]] — *the result of [[#d21][D21]]'s experiment*: what building the lattice
+  from outside the core actually cost, which is the most useful thing this
+  project has to say about its own premise. Read it before the design if you
+  are short of time.
+- [[file:doc/EXTENDING.org][doc/EXTENDING.org]] — how to change it. Four worked examples in =examples/=,
+  including a whole new layout model in one method and a new *container kind* —
+  niri's scrolling strip — in sixty lines.
+- [[file:PLAN.org::#log][PLAN.org §log]] — what the execution actually did, and the corrections it
+  forced on the design below.
+- =latticewm --extension-surface= — every generic you can specialize, generated
+  from the running image.
+
+*This design document is otherwise unchanged*, and the sections below were
+written before any of it was built. Corrections it needs, recorded rather than
+applied (full list in [[file:PLAN.org::#log][PLAN §log]]): the shipped =river-window-management-v1= is
+*version 4 with 42 events*, not 5 with 44 — the measurement below was taken
+against master. River ships *six* protocols, not two. ~manage_start~ and
+~render_start~ are events, not requests. And river 0.4.5 is in nixpkgs,
+prebuilt, and runs nested — so the "get access to a machine running river"
+critical path in [[#next][Next actions]] never existed.
 
 * Context and constraints
 :PROPERTIES:
