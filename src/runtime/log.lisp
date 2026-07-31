@@ -75,11 +75,26 @@ unfinished manage sequence."
             (if restart (invoke-restart restart) (abort))))))
 
 (defmacro with-abandon (&body body)
-  "Run BODY with an ABANDON restart, so the debugger hook has somewhere to go.
+  "Run BODY; on any error, log it with a backtrace and carry on.
 
-Wrapped around each iteration of the event loop: one bad event is abandoned,
-and the loop goes round again."
-  `(restart-case (progn ,@body)
+Wrapped around each event handler and each iteration of the event loop, so
+that one bad event is abandoned and the loop goes round again.
+
+It *handles* rather than only offering a restart, and that distinction was
+learned the hard way: relying on the debugger hook to invoke the restart left
+a path where a type error in an event handler printed a debugger banner to a
+stderr nobody was reading and stopped the window manager dead.  A restart
+nothing invokes is not a safety net.  The hook is still installed, as a second
+line for anything that escapes this."
+  `(restart-case
+       (handler-case (progn ,@body)
+         (error (condition)
+           (logmsg :error "abandoned: ~a" condition)
+           (ignore-errors
+            (format *log-stream* "~&~a~%"
+                    (with-output-to-string (out)
+                      (sb-debug:print-backtrace :stream out :count 20))))
+           nil))
      (abandon ()
        :report "Abandon this event and keep the window manager running."
        nil)))

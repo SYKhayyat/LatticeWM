@@ -219,21 +219,13 @@ be told about the *first* key of every chord and nothing else."
   (etypecase target
     (null nil)
     (keymap (setf *pending-keymap* target)
-            (enter-submap)
+            ;; The arming happens in the manage sequence — see
+            ;; ARM-EMPTY-PANE-CAPTURE — because ensure_next_key_eaten is
+            ;; window-management state and a key binding may fire outside one.
             t)
     (function (guarded "key binding" (funcall target)) t)
     (cons (apply #'run-command (first target) (rest target)) t)
     (string (run-command target) t)))
-
-(defun enter-submap ()
-  "Ask river for the next keypress even if it is unbound, so a chord can end.
-
-Without this a submap has no way to know that an unrecognised key was pressed,
-and would either swallow it or stay armed forever."
-  (let ((seat (primary-seat)))
-    (when (and seat (seat-bindings-seat seat))
-      (guarded "ensure_next_key_eaten"
-        (w:bindings-seat-ensure-next-key-eaten (seat-bindings-seat seat))))))
 
 (defun handle-key (key)
   "A bound key fired.  Returns T when it was handled.

@@ -250,6 +250,53 @@ drawn correctly.
   abstraction sits at the right level.
 - *Persistence, floating, minimize, fullscreen, tabs.* Untouched.
 
+* The protocol answered D19's open question, and the fallback was wrong
+
+Not a core edit — a *design* finding, and the most useful thing measured
+against the real compositor.
+
+[[file:README.org::#d19][README D19]] makes typing in an empty pane conditional on one unverified fact,
+and states the consequence of it going the wrong way:
+
+#+begin_quote
+*Unverified — this is a Week 1 check, and the design degrades if it fails.*
+[…] 2. Does it carry the keysym, or only the fact that /a/ key was unbound?
+*If it carries no keysym, only the single-default mode is possible* and the
+table dies.
+#+end_quote
+
+*Measured against the shipped protocol: ~ate_unbound_key~ has no arguments at
+all.* Not a keysym, not a keycode, nothing:
+
+: <event name="ate_unbound_key" since="2"> … </event>
+
+So the mechanism D19 rests on cannot support the table, exactly as feared. But
+the fallback — "only the single-default mode is possible" — is *wrong*, because
+the document considered only one route.
+
+*The third option: bind the keys ourselves, and enable them only while they
+apply.* ~river_xkb_binding_v1~ has ~enable~ and ~disable~ precisely so that a
+binding can be conditional. Each key in the table gets a real binding, enabled
+when the cursor is on an empty pane and disabled the rest of the time.
+
+That is strictly better than the plan it replaces:
+
+- the keysym arrives, because it is *our* binding, so the table survives whole;
+- it composes better than ~ate_unbound_key~ would have, because an unmodified
+  ~t~ is not intercepted when it would have gone to an application — the
+  binding is not enabled then, rather than being enabled and then declined;
+- ~ensure_next_key_eaten~ is left for the thing it is actually for, which is
+  letting a chorded submap notice a key it does not bind. D19 worried these two
+  uses would compete. They no longer share a mechanism, so they cannot.
+
+*Verified end to end:* split a pane, land the cursor in the empty half, press
+~t~, and a terminal opens *in that pane*.
+
+The transferable lesson is about how the question was framed rather than about
+keyboards. D19 asked "does this event carry what I need?", got the answer no,
+and had a fallback ready for no — but the fallback assumed the event was the
+only way in. It was worth ten minutes to ask what else the protocol offered.
+
 * Where the honest claim now stands
 
 README's §extensibility settled on a deliberately modest claim:
