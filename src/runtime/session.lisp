@@ -263,7 +263,7 @@ Must be called inside a manage sequence: river_xkb_binding_v1.enable is
 window-management state."
   (let ((bindings (server-bindings *server*)))
     (unless bindings (return-from register-bindings nil))
-    (dolist (entry (all-bound-keys))
+    (dolist (entry (p:bindable-keys))
       (let ((key (car entry)))
         (unless (gethash key (seat-bound-keys seat))
           (let ((binding (guarded "get_xkb_binding"
@@ -416,10 +416,15 @@ to the focused *window* and gives us only what we asked for.")
   "Is anything currently waiting to read a key directly?
 
 Two things ever are: a prompt in the echo area, and DESIGN D19's empty pane.
-They share the machinery because they are the same question — *should the next
-keypress belong to the window manager rather than to a window?* — and having
-two answers to one question is how they end up disagreeing."
-  (or (reading-p) (cursor-on-empty-pane-p)))
+*Three* things are, since a submap joined them.  They share the machinery
+because they are the same question — *should the next keypress belong to the
+window manager rather than to a window?* — and having three answers to one
+question is how they end up disagreeing.
+
+The submap was the one that got this wrong.  Its keys were registered with
+river permanently instead of only while it was pending, so river ate them
+always and the window manager acted on them never."
+  (or (reading-p) (cursor-on-empty-pane-p) *pending-keymap*))
 
 (defun ensure-capture-bindings (seat)
   "Create the capture bindings, once."
@@ -447,6 +452,10 @@ two answers to one question is how they end up disagreeing."
   (let ((character (when (<= #x20 keysym #x7e) (code-char keysym))))
     (cond
       ((reading-p) (prompt-key keysym modifiers character))
+      ;; A chord is waiting for its second key.  HANDLE-KEY already knows what
+      ;; to do with one; it just needs to be given the key, which is the whole
+      ;; of what ate_unbound_key cannot tell us.
+      (*pending-keymap* (handle-key (cons keysym modifiers)))
       ;; A chord in an empty pane is not a request to open an editor.  The
       ;; empty pane's table is single printable keys, and letting Ctrl through
       ;; would make C-c there mean whatever `c' means.

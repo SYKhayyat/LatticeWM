@@ -242,6 +242,7 @@ You never edit this package.")
    #:lookup-key
    #:keymap-keys
    #:all-bound-keys
+   #:bindable-keys
    #:*keymap*
    #:*pending-keymap*
    #:*help-visible*

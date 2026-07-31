@@ -262,6 +262,36 @@ the whole point of having a registry."
              (keymap-entries keymap))
     (sort out #'string< :key (lambda (row) (key-to-string (car row))))))
 
+(defun bindable-keys (&optional (keymap *keymap*))
+  "Every key river should be told about: the first key of every chord, and
+nothing inside one.
+
+THIS IS NOT ALL-BOUND-KEYS, AND THE DIFFERENCE WAS A REAL BUG.  Registration
+used to walk ALL-BOUND-KEYS, which descends into submaps -- so the help
+submap's second keys (b, c, f, k, o, a, s) were registered with river as
+*bare, unmodified, global* bindings.
+
+River then ate every one of those keypresses, because a registered binding is
+by definition not delivered to the focused window.  And LATTICE-KEY did
+nothing with them, because LOOKUP-KEY searched the global keymap, where `s' is
+not bound -- it is bound one level down, inside a submap that was not pending.
+
+The result: seven letters silently vanished.  Not misbehaved -- vanished.
+Typing `ls' in a terminal produced `l'.  It survived every nested session
+because every nested session was driven through the SWANK bridge, and nobody
+had ever sat down and typed into a window.
+
+A submap's keys are reached through the capture bindings instead, the same way
+a prompt and an empty pane reach theirs -- see CAPTURE-WANTED-P, which asks the
+one question all three share."
+  (let ((out '()))
+    (labels ((walk (map)
+               (maphash (lambda (key target) (push (cons key target) out))
+                        (keymap-entries map))
+               (when (keymap-parent map) (walk (keymap-parent map)))))
+      (walk keymap))
+    (nreverse out)))
+
 (defun all-bound-keys (&optional (keymap *keymap*))
   "Every key bound anywhere under KEYMAP, as (KEY . TARGET) with chord prefixes
 flattened.  This is what the binding registration walks, because river needs to

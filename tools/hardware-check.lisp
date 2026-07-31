@@ -72,8 +72,13 @@ something goes wrong is worse than no report."
 ;;; keyboard focus, which is exactly the state an empty pane puts it in.
 
 (defmethod key-unbound ((policy conventional-policy) world keysym)
-  (note "UNBOUND ate_unbound_key FIRED, keysym=~a (~d) -- D19 works on bare metal"
-        (keysym-name keysym) keysym)
+  ;; KEYSYM arrives as a *character* for anything printable -- HANDLE-UNBOUND-KEY
+  ;; passes (or character keysym) -- and the first version of this called
+  ;; KEYSYM-NAME on it, which wants an integer.  The method therefore signalled,
+  ;; GUARDED swallowed it, and the empty pane stopped spawning: pressing `t'
+  ;; did nothing, and the instrumentation was the reason.
+  (note "UNBOUND ate_unbound_key FIRED, key=~s -- D19 works on bare metal"
+        keysym)
   (call-next-method))
 
 ;;; ------------------------------------------------------------- question 3

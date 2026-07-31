@@ -394,6 +394,51 @@ ter-d28n is fourteen, so the cap refused every size above the smallest."
       (is (= 24 (p:font-text-height big)))
       (is (= 120 (p:font-text-width big "hello" :scale 2))))))
 
+;;; --------------------------------------------- what river is told about
+
+(test a-submap-does-not-steal-the-alphabet
+  "Registration must tell river the *first* key of every chord and nothing else.
+
+This is the bug bare metal found, and it is the only one in this project so
+far that could not have been found any other way.
+
+Registration walked ALL-BOUND-KEYS, which descends into submaps.  So the help
+submap's second keys -- b, c, f, k, o, a, s -- were registered with river as
+bare, unmodified, global bindings.  River then ate every one of those
+keypresses, because a registered binding is by definition not delivered to the
+focused window, and HANDLE-KEY did nothing with them, because LOOKUP-KEY
+searches the global keymap where `s' is not bound -- it is bound one level
+down, in a submap that was not pending.
+
+Seven letters silently vanished.  Not misbehaved: vanished.  Typing `ls' in a
+terminal produced `l'.
+
+It survived every nested session and 745 checks because the sessions were
+driven through the SWANK bridge and nobody had ever sat down and typed into a
+window.  ALL-BOUND-KEYS was correct for what help and where-is want; it was
+simply the wrong list to hand the compositor."
+  (let ((map (p:make-keymap :name "global"))
+        (sub (p:make-keymap :name "help")))
+    (p:define-key sub "b" '("help"))
+    (p:define-key sub "s" '("set-option"))
+    (p:define-key map "Shift+Super+question" sub)
+    (p:define-key map "Super+Return" '("terminal"))
+    (let ((registered (p:bindable-keys map))
+          (everything (p:all-bound-keys map)))
+      (is (= 2 (length registered))
+          "river hears the chord's first key and Super+Return, and no more")
+      (is (= 4 (length everything))
+          "help and where-is still see inside the submap")
+      ;; The property that actually matters, stated directly.
+      (is (null (remove-if #'cdr registered :key #'car))
+          "not one registered key is unmodified: ~s"
+          (mapcar (lambda (e) (p:key-to-string (car e)))
+                  (remove-if #'cdr registered :key #'car)))
+      ;; And the submap's keys are still reachable where they should be.
+      (is (equal '("help") (p:lookup-key sub (p:kbd "b"))))
+      (is (null (p:lookup-key map (p:kbd "b")))
+          "but not from the global map, which is what made them disappear"))))
+
 ;;; ------------------------------------- how the system describes itself
 
 (test the-composition-path-runs-end-to-end
