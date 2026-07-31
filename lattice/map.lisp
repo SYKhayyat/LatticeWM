@@ -161,4 +161,4 @@ still does the only thing it knows how to do."
                                       (apply #'r:argb *map-detail-color*)))))
           (r:overlay-commit *map-overlay* :rect (c:output-rect output)))))))
 
-(r:add-hook :draw-overlays #'draw-map)
+(r:add-hook :draw-overlays 'draw-map)

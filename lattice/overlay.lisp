@@ -116,4 +116,4 @@ coordinate is still one keystroke away in the echo area."
                        (push box *overlay-dirty*))))
         (r:overlay-commit *overlay* :rect (c:output-rect output))))))
 
-(r:add-hook :draw-overlays #'draw-coordinate-overlay)
+(r:add-hook :draw-overlays 'draw-coordinate-overlay)

@@ -312,3 +312,48 @@ method."))
                          index)))
       (is (equal '("a" "b") (mapcar #'c:window-app-id (c:node-windows node)))
           "both windows survived a container kind that is no longer loaded"))))
+
+(test a-restored-cursor-is-always-on-a-screen
+  ;; The bug: restart while on workspace 3 of a single-monitor session.  The
+  ;; cursor came back on workspace 3 and the output came back showing workspace
+  ;; 1, because which workspace an output displays lives on the output and
+  ;; outputs are made fresh at startup.  The result is a black screen and a
+  ;; status line confidently reporting [3/3].
+  (let* ((stack (c:make-stack (leaves 3)))
+         (world (c:make-world :root stack))
+         (output (make-instance 'c:output :name "DP-1")))
+    (setf (c:world-outputs world) (list output)
+          (c:world-cursor world) '(2)
+          (c:stack-selected stack) 2)
+    (let ((r::*world* world))
+      ;; No saved mapping at all -- an older state file, or a monitor that has
+      ;; been swapped for a different one.
+      (r::restore-output-workspaces '())
+      (is (= 2 (c:prop output :workspace))
+          "the output follows the cursor when nothing else says otherwise"))))
+
+(test a-saved-output-keeps-its-own-workspace
+  (let* ((stack (c:make-stack (leaves 4)))
+         (world (c:make-world :root stack))
+         (left (make-instance 'c:output :name "DP-1"))
+         (right (make-instance 'c:output :name "HDMI-A-1")))
+    (setf (c:world-outputs world) (list left right)
+          (c:world-cursor world) '(3)
+          (c:stack-selected stack) 3)
+    (let ((r::*world* world))
+      (r::restore-output-workspaces '(("DP-1" . 3) ("HDMI-A-1" . 1)))
+      (is (= 3 (c:prop left :workspace)))
+      (is (= 1 (c:prop right :workspace))
+          "the second monitor keeps its own workspace rather than being
+           dragged to the cursor's"))))
+
+(test a-saved-workspace-that-no-longer-exists-is-ignored
+  (let* ((stack (c:make-stack (leaves 2)))
+         (world (c:make-world :root stack))
+         (output (make-instance 'c:output :name "DP-1")))
+    (setf (c:world-outputs world) (list output)
+          (c:world-cursor world) '(1))
+    (let ((r::*world* world))
+      (r::restore-output-workspaces '(("DP-1" . 9)))
+      (is (= 1 (c:prop output :workspace))
+          "an index past the end of the stack is dropped, not clamped to it"))))

@@ -27,22 +27,28 @@ whose layout model is a replaceable policy layer rather than the program itself.
 
 [[file:doc/echo-area.png]]
 
-*Quickstart.* Needs river 0.4.x and SBCL.
+*Quickstart.* Needs river 0.4.x and SBCL. *Any Linux* — nix is one of the
+supported ways, not the required one. Full details in [[file:INSTALL.org][INSTALL.org]].
 
 : git clone … && cd LatticeWM
-: nix-shell           # or install sbcl + the deps in shell.nix by hand
-: make                # build, six gates, 500 tests
+: ./bootstrap.sh      # fetches the Lisp dependencies into ./.deps/  (or: nix-shell)
+: make                # build, six gates, 566 tests
 : make run            # river nested inside the session you are already in
+: ./install.sh        # and it appears at the login screen like any desktop
 
 Or, in a real session: =river -c latticewm=. =latticewm --write-config= drops a
 commented starter configuration in =~/.config/latticewm/=.
 
 *The first thing to press is =Super+/=*, which draws the whole keymap with what
-each binding does. =Super+x= is M-x. =Super+Return= is a terminal.
+each binding does. =Super+x= is M-x — every command, including the ones that
+take arguments, which it asks for. =Super+;= evaluates a Lisp form in the
+running window manager. =Super+?= asks about anything: a key, a command, a
+configuration value. =Super+Return= is a terminal.
 
 *What it does.* Recursive splits like Emacs and hyprland, tabs, workspaces,
 per-window floating, minimize that leaves the tiling tree, multi-monitor, an
-echo area, and persistence across a restart. Then, opt-in:
+echo area with a real minibuffer in it, and persistence across a restart.
+Then, opt-in:
 
 : (asdf:load-system "lattice")
 : (lattice:enable)
@@ -55,10 +61,29 @@ through the cell boundary as though it were not there.
 | | |
 |---+---|
 | [[file:doc/coordinate-overlay.png][Cells and coordinates]] | [[file:doc/drawn-map.png][The drawn map at deep zoom]] |
-| [[file:doc/help-overlay.png][Super+/, the keymap]] | [[file:doc/minibuffer.png][M-x]] |
+| [[file:doc/help-overlay.png][Super+/, the keymap]] | [[file:doc/minibuffer.png][M-x, with the completion it ships]] |
+| [[file:doc/which-key.png][A chord says what it offers]] | [[file:doc/apropos.png][Search every command by what it does]] |
+
+*Asking it things.* Every command is named, documented and reachable, which is
+the half of Emacs that is not the keybindings:
+
+| =Super+x= | run any command by name; the ones that take arguments ask for them |
+| =Super+;= | evaluate a Lisp form in the running window manager, and see the answer |
+| =Super+.= | do that again |
+| =Super+/= | the whole keymap, drawn from the live bindings |
+| =Super+? k= | what does this key do? |
+| =Super+? a= | is there a command for …? — searches the docstrings |
+| =Super+? o= / =s= | what is this setting, and change it now |
+
+Completion is prefix, then substring, then subsequence, so =wsp= finds
+=send-to-workspace=. The prompt has a point, a history and the readline keys,
+because a prompt you can only backspace out of is one you stop using.
 
 *Where to read next.*
 
+- [[file:INSTALL.org][INSTALL.org]] — installing it on a Linux that is not this one: what each
+  distribution calls the two packages it needs, where the dependencies come
+  from without nix, and how it gets to the login screen.
 - [[file:FINDINGS.org][FINDINGS.org]] — *the result of [[#d21][D21]]'s experiment*: what building the lattice
   from outside the core actually cost, which is the most useful thing this
   project has to say about its own premise. Read it before the design if you

@@ -209,11 +209,24 @@ A hook notices *that something happened*; every function runs and nobody is in
 charge. If you want a hook's return value, you wanted a method.
 
 #+begin_src lisp
-(add-hook :window-opened (lambda (win) (log-it (window-app-id win))))
+(defun note-the-window (win) (logmsg :info "opened ~a" (window-app-id win)))
+(add-hook :window-opened 'note-the-window)
 #+end_src
 
 ~:startup :shutdown :window-opened :window-closed :focus-changed
-:layout-changed :workspace-changed~.
+:layout-changed :workspace-changed :draw-overlays~.
+
+*Give the function a name and add the symbol, not ~#'the-function~ and not a
+lambda.* The list holds whatever you give it, and a function object is a
+snapshot: redefining the function afterwards leaves the hook calling the old
+one, and evaluating the ~add-hook~ again adds a *second* entry, because the new
+object is not ~EQL~ to the old. A symbol has neither problem — it is looked up
+when the hook runs, so redefinition takes effect, and adding it twice replaces
+rather than accumulates.
+
+This is not a style preference. It bit the shipped code: reloading the file
+that draws the help screen left the old drawing winning, because both
+generations were on the hook and the older one ran second.
 
 * Keys
 
@@ -243,6 +256,51 @@ New commands are ordinary functions with a docstring:
   (toggle-float)
   (relayout))
 #+end_src
+
+** Commands that take arguments
+
+A command with parameters is reachable from ~M-x~ too: it is asked for them,
+one prompt at a time. You do not have to say anything for this to happen — the
+*name* of the parameter decides what kind of value it holds.
+
+#+begin_src lisp
+(defcommand nudge (direction pixels)
+  "Move the focused float DIRECTION by PIXELS."
+  (move-float direction pixels))
+;; M-x nudge  ->  "nudge direction: " (completing over left/right/up/down)
+;;            ->  "nudge pixels: "
+#+end_src
+
+~*argument-naming-convention*~ is the table, and it is a tier-0 value, so
+adding to it is a ~setf~. Where a name is misleading, say so at the command:
+
+#+begin_src lisp
+(defcommand open-in (name)
+  "Open the program NAME."
+  (:interactive :shell-command)   ; not one of *our* command names
+  (spawn name))
+#+end_src
+
+A new *kind* of value takes three lines. ~:candidates~ is a form evaluated each
+time the prompt goes up, so it can name things that did not exist at load time:
+
+#+begin_src lisp
+(define-argument-type :monitor "monitor: "
+  :documentation "One of the connected outputs, by name."
+  :candidates (mapcar #'output-name (all-outputs))
+  :parse (lambda (text)
+           (or (find text (all-outputs) :key #'output-name :test #'string-equal)
+               (error "no monitor called ~a" text))))
+#+end_src
+
+Two policy generics govern the prompt itself, and both are one method to
+replace: ~complete-candidates~ decides how what you type is matched against the
+candidates (the default is prefix, then substring, then subsequence), and
+~argument-type-for~ decides the naming convention wholesale.
+
+A key bound to a command with required arguments and given none *asks* for
+them, so ~(define-key *keymap* "Super+g" '("goto"))~ is a sensible binding: the
+key names the verb and the verb collects its own object.
 
 * The development loop
 

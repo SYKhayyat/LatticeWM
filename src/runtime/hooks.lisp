@@ -36,7 +36,19 @@ finds it."
           ,name))
 
 (defun add-hook (name function &key append)
-  "Add FUNCTION to hook NAME, at the front unless APPEND."
+  "Add FUNCTION to hook NAME, at the front unless APPEND.
+
+*Pass a symbol rather than #'a-function where you can.*  The list holds
+whatever it is given, and a function object is a snapshot: redefining the
+function afterwards leaves the hook calling the old one, and re-evaluating the
+ADD-HOOK adds a second entry because the new object is not EQL to the old.
+Both of those bit this project — the help overlay drew itself twice, once
+through each generation of the same function, and the newer drawing lost.
+
+A symbol has neither problem.  It is looked up when the hook runs, so
+redefinition takes effect, and a second ADD-HOOK of the same symbol replaces
+rather than accumulates.  An anonymous lambda has the same trouble as #' and no
+way out of it, so give it a name first."
   (let ((existing (remove function (gethash name *hooks*))))
     (setf (gethash name *hooks*)
           (if append (append existing (list function)) (cons function existing))))
@@ -92,3 +104,11 @@ been emitted.  Fires often; keep it cheap.")
 
 (defhook :workspace-changed (index) "Run after switching to a different
 workspace.")
+
+(defhook :draw-overlays () "Run inside every render sequence, for anything
+that draws pixels of its own: the echo area, the empty-pane cursor, the help
+screen, the lattice's coordinate overlay and map.
+
+This is the seam a status bar, a notification popup or a minimap attaches to,
+and it is declared here rather than left implicit because it was the one hook
+in the system that nothing documented and four things used.")

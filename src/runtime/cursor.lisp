@@ -118,4 +118,4 @@ because it is a good idea.")
                                           :scale 1))))))))
              (overlay-commit *cursor-overlay* :rect area))))))))
 
-(add-hook :draw-overlays #'draw-empty-panes)
+(add-hook :draw-overlays 'draw-empty-panes)

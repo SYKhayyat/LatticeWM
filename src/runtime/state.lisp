@@ -30,7 +30,12 @@
 Bumped when the shape changes.  LOAD-STATE refuses anything else rather than
 guessing, because a half-understood layout file is worse than none: it puts
 windows somewhere plausible and wrong, which is much harder to notice than an
-empty desktop.")
+empty desktop.
+
+*Adding a key is not a shape change.*  The file is a plist read with GETF, so
+a reader that does not know :OUTPUTS ignores it and a reader that does gets NIL
+from a file written before it existed.  Bumping for that would throw away
+everybody's layout once to protect against nothing.")
 
 (defun serialize-node (node)
   "NODE as a readable s-expression.
@@ -106,6 +111,47 @@ mistake unavailable."
                  (t (c:make-split :horizontal children)))))
         (t (c:make-leaf))))))
 
+(defun output-workspaces ()
+  "Which workspace each output is showing, by output name.
+
+Saved separately from the tree because it is not part of the tree: the
+workspace stack knows which of its children is selected, and the *output*
+knows which one it is displaying, and on one monitor those look like the same
+fact right up until they disagree."
+  (loop for output in (c:world-outputs *world*)
+        for name = (c:output-name output)
+        for index = (c:prop output :workspace)
+        when (and name index) collect (cons name index)))
+
+(defun restore-output-workspaces (saved)
+  "Point each output back at the workspace it was showing.
+
+Then the safety net, which is the part that matters: *if the workspace the
+cursor is on is not on a screen anywhere, put it on one.*
+
+Without it, restarting while on workspace 3 of a single-monitor session
+restored the cursor to workspace 3 and left the output showing workspace 1 —
+which is a black screen, a status line confidently reporting [3/3], and every
+key doing something invisible.  Nothing about it looks like a workspace
+problem, which is what makes it worth a paragraph."
+  (let ((outputs (c:world-outputs *world*))
+        (stack (c:world-workspaces *world*)))
+    (when (and stack outputs)
+      (dolist (output outputs)
+        (let ((index (cdr (assoc (c:output-name output) saved :test #'equal))))
+          (when (and index (< -1 index (c:container-count stack)))
+            (setf (c:prop output :workspace) index))))
+      (let ((wanted (first (c:world-cursor *world*))))
+        (when (and (integerp wanted)
+                   (< -1 wanted (c:container-count stack))
+                   (notany (lambda (output)
+                             (eql wanted (c:prop output :workspace)))
+                           outputs))
+          (setf (c:prop (first outputs) :workspace) wanted
+                (c:stack-selected stack) wanted)
+          (logmsg :debug "no output was showing workspace ~d; ~a is now"
+                  (1+ wanted) (or (c:output-name (first outputs)) "the output")))))))
+
 (defun save-state (&optional (path (state-file)))
   "Write the layout out.  Never signals; a failure to save is not fatal."
   (guarded "save-state"
@@ -118,6 +164,7 @@ mistake unavailable."
                      ;;;; window manager restart but not a reboot.~%~%")
         (write (list :version +state-version+
                      :cursor (c:world-cursor *world*)
+                     :outputs (output-workspaces)
                      :root (serialize-node (c:world-root *world*)))
                :stream out)
         (terpri out)))
@@ -157,6 +204,7 @@ be."
                           (c:window-minimized-p window))
                 (guarded "replace unlisted window"
                   (p:on-window-open (p:current-policy) *world* window)))))
+          (restore-output-workspaces (getf form :outputs))
           (logmsg :info "restored layout from ~a" path)
           (mark-dirty)
           t)))))

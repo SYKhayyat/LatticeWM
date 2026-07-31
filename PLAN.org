@@ -795,3 +795,236 @@ anything else in the session.
 - Bare-metal river. Everything here ran nested. Nested is a real compositor and
   a real protocol, but it is not a real display, and multi-monitor in
   particular has been written and not exercised.
+
+* Second session — 2026-07-31: the interactive layer, and Linux without nix
+:PROPERTIES:
+:CUSTOM_ID: log2
+:END:
+
+Two things were asked for: /make it something power users, Lisp maniacs and
+your grandmother would all love/, and /make it all Linux, not just nix./ They
+turn out to be one piece of work and one separate one.
+
+** The hole the first session left, stated plainly
+
+M-x shipped, and it could reach *thirty-seven of sixty-seven commands* — the
+ones that take no arguments, counting the core and the lattice together. The
+rest took arguments, and the answer to those was a message:
+
+: workspace takes number -- run it from a REPL
+
+which is a reasonable thing to say to a Lisp programmer and no answer at all to
+anybody else. Half of the system was reachable only by a key somebody had
+already bound, or by opening a REPL — and [[#extensibility-real][§extensibility-real]]'s whole argument
+is that the command registry is a *user interface* rather than an
+implementation detail. It was not one yet.
+
+It is now *71 of 72*, and the exception is ~focus-path~, whose argument is a
+list of integers naming a place in the tree. Nobody types that. The point of
+the exception is that M-x says so instead of putting up a prompt that cannot be
+answered. There is a test asserting that the list of refusals is exactly that
+one command, so a future command that quietly becomes unreachable fails the
+build rather than going unnoticed.
+
+** How, and why it is not Emacs's design
+
+Emacs's ~(interactive "sPrompt: ")~ is a string DSL with about forty
+single-letter codes, and nobody remembers more than four. The mechanism here is
+the same idea with the hindsight applied:
+
+- An *argument type* is a named object — a prompt, a candidate list, a parser —
+  and ~define-argument-type~ adds one in three lines from a configuration file.
+- The type of a parameter is *inferred from what it is called*. A parameter
+  named ~direction~ holds a direction; one named ~number~ holds a number.
+- ~(:interactive ...)~ after a docstring overrides that per command, and is
+  needed exactly twice in the whole system: ~spawn~'s ~command~ is a shell
+  command line, and ~describe-command~'s ~name~ is one of ours.
+
+The inference sounds like a hack and is not. The parameter names were already
+chosen to read well in a docstring — that is what makes ~substitute-arguments~
+work on the help screen — and *a name that reads well in a docstring is a name
+that says what kind of thing it is*. The convention covers every shipped
+command, in the core and in the lattice, with two exceptions and no
+annotations. It is a tier-0 option, so adding to it needs no code.
+
+Two decisions inside this went to [[#the-policy-surface][the policy surface]] rather than the runtime,
+and the surface count moved 40 → 42 for them:
+
+- ~complete-candidates~ — prefix, then substring, then subsequence. This is the
+  most personal decision in the whole minibuffer; Emacs ships six completion
+  styles and that is the right number to ship when the answer is taste.
+- ~argument-type-for~ — the naming convention itself, which is a *scheme*
+  somebody may want to replace wholesale rather than entry by entry.
+
+The test that caps the surface at forty was moved to forty-five, with the
+reason written into the test rather than into a commit message.
+
+** What else the session shipped
+
+| =Super+;= | ~eval-expression~ — read a form in LATTICEWM/USER, run it in the window manager's own thread, echo the value, bind it to ~$~. The live-image argument, reduced to one keystroke and no SWANK. |
+| =Super+.= | ~repeat~, with the arguments. Three prompts to say, one key to say twice. |
+| =Super+?= | a submap: describe-key, describe-command, apropos, describe-option, set-option. The one chord the shipped keymap has. |
+| which-key | pressing a chord's first key lists what the second can be, built from the live submap and each command's docstring |
+| ~set-option~ | change any tier-0 value from a prompt, live, without a file or a REPL |
+| the prompt | a point, the arrows, Home/End, C-a C-e C-b C-f C-d C-k C-u C-w C-y, a per-prompt history ring on Up and Down, and a drawn caret |
+| a key that needs arguments | now *asks* for them instead of failing, which is what makes ~("describe-key")~ a sensible thing to put in a keymap |
+
+** The bindings nobody would have found by reasoning
+
+Reading text needs the keys bound, because river delivers keys to the focused
+*window* and gives the window manager only what it asked for. The first session
+bound printable ASCII with *no modifiers* — 98 bindings — and that was enough
+to type a command name.
+
+It is not enough to type ~(+ 1 2)~. River matches a binding on keysym *and*
+modifiers, and the keysym xkb produces for Shift+9 on a US layout is
+~parenleft~ with Shift still in the modifier set. A binding for ~parenleft~
+with no modifiers never fires. So every printable keysym is now bound twice,
+bare and with Shift, plus the arrows, Home, End, Delete, and twelve Ctrl
+chords: *214 bindings, created once, enabled only while a prompt is up.*
+
+Doing it by mask rather than by working out which characters are shifted on
+which layout is what makes it work on a Dvorak or a German keyboard.
+
+*Still unverified:* whether river reports Shift in the modifier set for a
+shifted keysym, or masks it out. Both bindings exist, so one of them matches
+either way — but which one has not been observed, because observing it needs a
+human pressing a bracket, and the whole session was driven through the SWANK
+bridge.
+
+** The finding: ~#'foo~ in a hook cannot be redefined
+
+Worth recording because it is a defect in the *live-redefinition thesis*
+itself rather than in a feature.
+
+Reloading =help.lisp= into the running window manager changed nothing on
+screen. The reason: ~(add-hook :draw-overlays #'draw-help-overlay)~ stores the
+function *object*. Redefining the function afterwards leaves the hook calling
+the old one, and re-running the ~add-hook~ adds a second entry, because the new
+object is not ~EQL~ to the old. Both generations then ran, and the older
+drawing won by being second.
+
+=echo.lisp= had the same bug in a worse form — a ~pushnew~ of an anonymous
+lambda onto ~*reserve-hooks*~, which cannot dedupe at all, so every reload
+would have reserved another strip of the screen.
+
+Fixed by registering *symbols*: a symbol is looked up when the hook runs, so
+redefinition takes effect, and a second ~add-hook~ of the same symbol replaces
+rather than accumulates. ~add-hook~'s docstring now says so, and ~:draw-overlays~
+— the one hook in the system that four things used and nothing documented — is
+now declared, so it appears in the extension surface.
+
+*The general form of this:* the mechanisms that make a live image worth having
+are not automatic. They have to be used a particular way, and the way is not
+the one that reads most naturally.
+
+** Gate 6 went the wrong way, and it is right to
+
+: gate 6  runtime 4,201 / policy 3,449 = 0.82   <-- watch this
+
+It was 1.20 at the end of the first session. Two things moved it and only one
+of them is mine: the drawn map, the overlays and the first minibuffer landed
+after that number was written, and the interactive layer added about 450 more
+runtime lines against 100 of policy.
+
+*Not gamed, and the temptation is named here so that it stays named.* The
+obvious move is to argue that =wire/wrappers.lisp= is mechanical and should be
+excluded the way =font.lisp= is. That is exactly the bad-faith move [[#gates][§gates]]
+warns about for gate 3, one file over. The number is reported as measured.
+
+What the number is honestly saying: *the drawing and interaction subsystem is
+now the largest thing in the runtime*, and it is neither protocol plumbing nor
+policy. Whether that means gate 6 is measuring the wrong pair, or that a
+widget layer wants to be its own module with its own ratio, is a question for
+the next session rather than one to answer by editing the measurement.
+
+** Linux without nix, verified rather than asserted
+
+[[#packaging][§packaging]] says "if shell.nix is deleted the project still builds. That is the
+test." The test had never been run. It has now, with a plain =sbcl= and
+=CL_SOURCE_REGISTRY= and =WAYFLAN_SRC= both unset:
+
+: ./bootstrap.sh   ->  sbcl found, river found, quicklisp into ./.deps/
+: make             ->  gate 1 clean, all six gates pass, 566 checks pass
+: make image       ->  ./latticewm
+: ./install.sh     ->  bin, session entry, launcher, man page
+
+*The best find:* wayflan is in Quicklisp, in the *2026-01-01* dist — the same
+date nixpkgs pins the sr.ht tree at. The two build paths do not merely agree,
+they compile the same source. There is no vendored copy to go stale and no
+second set of version numbers to keep in step.
+
+The pieces:
+
+- =bootstrap.sh= — POSIX sh. Checks for sbcl and river, names the package for
+  the distro it is running on (reading =/etc/os-release=), installs Quicklisp
+  into =./.deps/= and nowhere else. =rm -rf .deps= undoes all of it. A missing
+  river is a *warning*, not an error: the build, the gates and the tests all
+  work with no compositor on the machine.
+- =tools/prelude.lisp= — three legitimate ways for a Lisp library to be
+  present, and the build cares about none of them. If none applies it says
+  ~Run ./bootstrap.sh~ rather than ~Component :ALEXANDRIA not found~.
+- =install.sh= — the binary, a =latticewm-session= launcher, *a
+  wayland-sessions desktop entry* so the login screen offers it like any other
+  desktop, and a man page. Home directory by default, =--prefix /usr/local=
+  for a system install, =--uninstall= to take it back out. It never overwrites
+  an existing =init.lisp=.
+- =INSTALL.org= — what each distribution calls the two packages, and what to
+  do when the packaged river is older than 0.4.
+
+** What looking at it found, again
+
+[[#looking][§looking]] said this was worth more per hour than anything else in the session.
+Second time, same result. Four things, none of which any test could state:
+
+1. =M-x wsp[5] workspace= — the caret sat hard against the candidate count,
+   and the two read as one word. Two spaces.
+2. The which-key line ran off the right edge, so the last choice looked like a
+   word that had lost its ending. It now budgets in characters and says
+   =+1 more=.
+3. The apropos screen read as a paragraph with some words in bold, because
+   each description started wherever its command name ended. One aligned
+   column fixed it.
+4. Aligning that column then squeezed *the keymap* screen — one
+   forty-character chord dragged every description down to nothing — and, on
+   the small nested screen, two columns of forty-one rows silently dropped the
+   last eighteen bindings. Now: the alignment is capped at half a column, the
+   column count grows to fit, and if anything still does not fit the title says
+   so.
+
+Item 4 is the useful one. It is a regression *introduced by* item 3's fix,
+found in the next screenshot, thirty seconds later. The loop is what makes the
+qualitative check affordable, not the looking.
+
+And then a fifth, which is a real bug rather than a matter of taste, and which
+nothing else in the session would have found:
+
+*Restart while on workspace 3 and the screen is black.*
+
+The cursor is restored from the state file. Which workspace an *output* is
+showing is not — it lives on the output's props, and outputs are made fresh at
+startup, so the output came back showing workspace 1 while the cursor was on
+workspace 3. The status line said =[3/3]=, every key worked, and nothing was on
+the screen. On one monitor "which workspace is selected" and "which workspace
+is displayed" look like the same fact right up until they disagree.
+
+It was found by taking a screenshot after a restart and asking why the terminal
+was not in it. The fix saves the per-output mapping by output name and, more
+importantly, adds the invariant that should always have been there: *if the
+workspace the cursor is on is not on a screen anywhere, put it on one.* Three
+unit tests, including the case where the monitor has been swapped for a
+different one and the saved name no longer matches.
+
+This is the second time the session's own log has had to record that the thing
+which found the bug was running it and looking. It is not an anecdote any more.
+
+** Open
+
+- The shift-modifier question above. It needs a keyboard.
+- Whether ~$~ should be a ring (~$$~, ~$$$~) rather than one value.
+- Gate 6's pair, as discussed. A widget layer that reports its own ratio may
+  be the honest answer, or it may be a way of hiding the number.
+- =INSTALL.org= names no river version numbers per distro, deliberately: they
+  change monthly and a wrong one is worse than telling somebody to run
+  ~river -version~. If this project ever has users, that is the line that will
+  need a maintainer rather than a document.
