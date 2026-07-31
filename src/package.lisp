@@ -266,6 +266,7 @@ You never edit this package.")
    #:font #:font-p #:make-font #:font-name #:font-width #:font-height
    #:font-first-code #:font-glyphs #:font-stride
    #:*fonts* #:*default-font* #:register-font #:find-font #:font-names
+   #:*keys-hint* #:*keymap-ever-opened* #:keys-hint
    #:*ui-font* #:font-for #:glyph-row #:font-text-width #:font-text-height
    #:*echo-area* #:*echo-height* #:*echo-scale* #:*echo-position*
    #:*echo-background* #:*echo-foreground* #:*echo-accent* #:*echo-divider*

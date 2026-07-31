@@ -447,6 +447,44 @@ is the difference between a reference and a help screen."
                (< (- (get-universal-time) (cdr message)) *echo-message-seconds*))
       (car message))))
 
+(define-option *keys-hint* t
+  "Keep a one-line reminder of the essential keys in the status line, until
+the keymap has been opened at least once.
+
+WHY THIS EXISTS, IN THE WORDS OF THE FIRST PERSON TO USE IT COLD: \"i have no
+clue how to close windows or how to pick which splits\".
+
+Everything needed was already there -- the welcome overlay lists these keys,
+Super+/ draws the whole keymap, and the empty pane already says `e t b to
+open\'.  None of it helped, for a reason worth writing down: the welcome
+overlay is dismissed by *any* key, so the first keystroke of an impatient
+person removes it before it has been read, and every other affordance is
+behind a key you have to already know.
+
+A status line is the one place that cannot be dismissed by accident.  So the
+essentials live there until Super+/ has been pressed once, at which point the
+hint has done its job and goes away by itself rather than nagging forever.")
+
+(defvar *keymap-ever-opened* nil
+  "True once the help overlay has been shown.  Turns *KEYS-HINT* off.")
+
+(defgeneric keys-hint (policy world)
+  (:documentation
+   "The one-line reminder of essential keys, or NIL for none.
+
+Shown in the status line until the keymap has been opened once.  Derived from
+*MODIFIER* so it follows a rebinding, and deliberately six items long: this is
+the smallest set somebody cannot work the machine without -- open something,
+split it, move between the pieces, close one, and find everything else."))
+
+(defmethod keys-hint ((policy policy) world)
+  (declare (ignore world))
+  (when (and *keys-hint* (not *keymap-ever-opened*))
+    (let ((mod (string-capitalize (string *modifier*))))
+      (format nil "~a+Return term  ~a+d/s split  ~a+hjkl move  ~a+q close  ~
+                   ~a+/ all keys"
+              mod mod mod mod mod))))
+
 (defmethod echo-content ((policy policy) world)
   "The shipped echo area: workspace, place, contents, counts, last message."
   (let* ((root (c:world-root world))
@@ -486,8 +524,12 @@ is the difference between a reference and a help screen."
                           (and (plusp scratch) scratch))
                   :normal)
             segments))
+    ;; A message wins the space when there is one -- it is about what just
+    ;; happened, and the hint is about what is always true.
     (let ((message (current-message)))
-      (when message (push (cons message :accent) segments)))
+      (cond (message (push (cons message :accent) segments))
+            ((keys-hint policy world)
+             (push (cons (keys-hint policy world) :normal) segments))))
     (nreverse segments)))
 
 (defun keymap-choices (policy keymap)

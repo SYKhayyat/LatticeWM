@@ -115,6 +115,7 @@
 
 Built from the live keymap and each command's own docstring, so it includes
 anything you bound yourself and cannot go out of date.  Any key dismisses it."
+  (setf p:*keymap-ever-opened* t)
   (setf *help-visible* (not *help-visible*))
   (mark-dirty)
   *help-visible*)
