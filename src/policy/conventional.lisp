@@ -585,6 +585,86 @@ capability you do not honour produces a button that does nothing."
   (declare (ignore world key))
   nil)
 
+;;; ==================================================================
+;;; READING FROM THE USER
+;;; ==================================================================
+
+(define-option *argument-naming-convention*
+  '((:direction     "direction")
+    (:axis          "axis")
+    (:side          "side")
+    (:number        "number" "count" "steps" "step" "by" "index"
+                    "cols" "rows" "cells" "columns" "visible" "x" "y")
+    (:fraction      "amount" "fraction" "weight")
+    (:pixels        "pixels" "distance")
+    (:shell-command "command" "program")
+    (:key           "spec" "key")
+    (:name          "name" "label")
+    (:string        "text" "string" "title")
+    (:sexp          "form" "expression"))
+  "Which kind of value a command's parameter holds, keyed by its name.
+
+A convention rather than a declaration, so that a command written the obvious
+way is interactively callable without its author doing anything.  Every
+parameter name in the shipped commands is here, which is not a coincidence:
+they were named to read well in a docstring, and a name that reads well in a
+docstring is a name that says what kind of thing it is.
+
+Where a name is genuinely ambiguous — SPAWN's COMMAND is a shell command line
+and DESCRIBE-COMMAND's NAME is one of ours — DEFCOMMAND's (:interactive ...)
+clause says so at the command instead of bending the table.
+
+PATH is deliberately absent.  A tree path is a list of integers that nobody
+should be asked to type, and leaving it out of the table is what makes M-x
+say so rather than putting up a prompt that cannot be answered.")
+
+(defmethod argument-type-for ((policy policy) command parameter)
+  "The shipped naming convention.  See *ARGUMENT-NAMING-CONVENTION*."
+  (declare (ignore command))
+  (let ((name (string-downcase (string parameter))))
+    (loop for (type . names) in *argument-naming-convention*
+          when (member name names :test #'string=)
+            return type)))
+
+(defun subsequence-match-p (needle haystack)
+  "True when NEEDLE's characters appear in HAYSTACK in order, gaps allowed.
+
+The `fzf' match, and the reason `swsp' finds `send-to-workspace'.  Deliberately
+last of the three tests in COMPLETE-CANDIDATES: on its own it matches nearly
+everything, and a completion list that matches nearly everything has told you
+nothing."
+  (let ((position 0))
+    (every (lambda (character)
+             (let ((found (position character haystack :start position
+                                                       :test #'char-equal)))
+               (when found (setf position (1+ found)))))
+           needle)))
+
+(defun rank-candidates (candidates)
+  "Shortest first, then alphabetical.
+
+Length before alphabet because the shorter of two matches is nearly always the
+more general one — `close' before `close-float' — and the general one is what
+somebody typing four letters meant."
+  (sort candidates (lambda (a b)
+                     (if (= (length a) (length b))
+                         (string< a b)
+                         (< (length a) (length b))))))
+
+(defmethod complete-candidates ((policy policy) input candidates)
+  "Prefix, then substring, then subsequence.  See the generic's docstring."
+  (if (zerop (length input))
+      (rank-candidates (copy-list candidates))
+      (let ((prefix '()) (substring '()) (fuzzy '()))
+        (dolist (candidate candidates)
+          (let ((position (search input candidate :test #'char-equal)))
+            (cond ((eql position 0) (push candidate prefix))
+                  (position (push candidate substring))
+                  ((subsequence-match-p input candidate) (push candidate fuzzy)))))
+        (nconc (rank-candidates prefix)
+               (rank-candidates substring)
+               (rank-candidates fuzzy)))))
+
 (defvar *reserve-hooks* '()
   "Functions of an output, each returning (TOP RIGHT BOTTOM LEFT) pixels to
 keep clear.

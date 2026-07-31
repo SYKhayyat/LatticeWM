@@ -11,8 +11,10 @@
 (defpackage #:latticewm/tests
   (:use #:cl #:fiveam)
   (:local-nicknames (#:c #:latticewm/core)
-                    (#:p #:latticewm/policy))
-  (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface))
+                    (#:p #:latticewm/policy)
+                    (#:r #:latticewm/runtime))
+  (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
+           #:minibuffer))
 
 (in-package #:latticewm/tests)
 
@@ -23,6 +25,9 @@
 (def-suite motion :in model)
 (def-suite lifecycle :in model)
 (def-suite surface :in model)
+(def-suite minibuffer :in model
+  :description "Reading a line, which needs no compositor either — the prompt
+is a string, a point and a table of what keys mean.")
 
 (defun run-all ()
   "Run every suite and return T when they all pass.

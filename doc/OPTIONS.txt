@@ -1,5 +1,42 @@
+This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
 
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
 LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
+
+*ARGUMENT-NAMING-CONVENTION*
+  value:   ((:DIRECTION "direction") (:AXIS "axis") (:SIDE "side")
+            (:NUMBER "number" "count" "steps" "step" "by" "index" "cols" "rows"
+             "cells" "columns" "visible" "x" "y")
+            (:FRACTION "amount" "fraction" "weight")
+            (:PIXELS "pixels" "distance") (:SHELL-COMMAND "command" "program")
+            (:KEY "spec" "key") (:NAME "name" "label")
+            (:STRING "text" "string" "title") (:SEXP "form" "expression"))
+  default: ((:DIRECTION "direction") (:AXIS "axis") (:SIDE "side")
+            (:NUMBER "number" "count" "steps" "step" "by" "index" "cols" "rows"
+             "cells" "columns" "visible" "x" "y")
+            (:FRACTION "amount" "fraction" "weight")
+            (:PIXELS "pixels" "distance") (:SHELL-COMMAND "command" "program")
+            (:KEY "spec" "key") (:NAME "name" "label")
+            (:STRING "text" "string" "title") (:SEXP "form" "expression"))
+  Which kind of value a command's parameter holds, keyed by its name.
+  
+  A convention rather than a declaration, so that a command written the obvious
+  way is interactively callable without its author doing anything.  Every
+  parameter name in the shipped commands is here, which is not a coincidence:
+  they were named to read well in a docstring, and a name that reads well in a
+  docstring is a name that says what kind of thing it is.
+  
+  Where a name is genuinely ambiguous — SPAWN's COMMAND is a shell command line
+  and DESCRIBE-COMMAND's NAME is one of ours — DEFCOMMAND's (:interactive ...)
+  clause says so at the command instead of bending the table.
+  
+  PATH is deliberately absent.  A tree path is a list of integers that nobody
+  should be asked to type, and leaving it out of the table is what makes M-x
+  say so rather than putting up a prompt that cannot be answered.
 
 *BORDER-WIDTH*
   value:   2
@@ -220,6 +257,21 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: (0.78 0.8 0.86 1.0)
   Colour of the description in the help overlay.
 
+*HISTORY-LENGTH*
+  value:   100
+  default: 100
+  How many past entries each minibuffer history ring keeps.
+
+*MINIBUFFER-CANDIDATES-SHOWN*
+  value:   6
+  default: 6
+  How many completion candidates the echo area lists at once.
+
+*MINIBUFFER-CARET-COLOR*
+  value:   (0.95 0.75 0.35 1.0)
+  default: (0.95 0.75 0.35 1.0)
+  Colour of the caret — the bar showing where what you type will go.
+
 *MINIBUFFER-COMPLETION-COLOR*
   value:   (0.5 0.55 0.65 1.0)
   default: (0.5 0.55 0.65 1.0)
@@ -264,6 +316,18 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   value:   0
   default: 0
   Pixels of empty space between the layout and the edge of the output.
+
+*OVERLAY-BUFFER-IDLE*
+  value:   T
+  default: T
+  Release an overlay's pixel buffer while it is hidden.
+  
+  A full-screen ARGB buffer is about four megabytes, and the help screen and the
+  drawn map are each hidden almost all of the time.  Keeping their buffers costs
+  eight megabytes of resident memory to save one allocation on a keypress, which
+  is the wrong way round.
+  
+  Set to NIL if you would rather have the allocation happen once.
 
 *SHOW-EMPTY-PANES*
   value:   T

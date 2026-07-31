@@ -1,4 +1,10 @@
+This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
 
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
 LatticeWM commands.
 
 (anchor-float &optional (path (current-path)))
@@ -12,6 +18,15 @@ LatticeWM commands.
   Costs one slot on the float.  The alternative — floats pinned to the output —
   is still the default, because most floats are dialogs and a dialog belongs to
   the screen rather than to a pane.
+
+(apropos-command)
+  Search every command by name and by documentation, and show what matches.
+  
+  Emacs's C-h a.  The one question a discoverable system has to be able to
+  answer is `is there a command for this', and neither the keymap nor M-x can
+  answer it — the keymap only knows what somebody bound, and M-x only matches
+  names.  This reads the docstrings, so `screen' finds `toggle-fullscreen' even
+  though the word does not occur in its name.
 
 (browser)
   Open a web browser.  Bound to `b' in an empty pane by default.
@@ -35,10 +50,21 @@ LatticeWM commands.
   Close the focused floating window.
 
 (describe-command name)
-  Print a command's full documentation to the echo area and the log.
+  Show a command's documentation, its arguments and the keys that run it.
+  
+  Emacs's C-h f, and the reason the docstrings in this system are written as
+  paragraphs rather than as labels: this is where they are read.
 
 (describe-key spec)
-  Print what SPEC is bound to.
+  Say what SPEC is bound to, and what that does.  Emacs's C-h k.
+  
+  SPEC is written the way a binding is: Super+Return, Ctrl+Super+h, C-x.
+
+(describe-option name)
+  Show a configuration value: what it is now, what it shipped as, and why.
+  
+  Every option in this system carries a paragraph explaining what turning it off
+  costs you, and this is where those paragraphs are read.
 
 (editor)
   Open an editor.  Bound to `e' in an empty pane by default.
@@ -51,6 +77,22 @@ LatticeWM commands.
 
 (equalize-all)
   Give every pane in the whole workspace an equal share.
+
+(eval-expression)
+  Type a Lisp form and evaluate it.  Emacs's M-:.
+  
+  The form is read in LATTICEWM/USER — the same package as your init.lisp — so
+  everything is visible without a prefix, and it runs in the window manager's own
+  thread, so it may touch the compositor:
+  
+      (setf *gaps* 12)
+      (relayout :force t)
+      (mapcar #'window-app-id (all-windows))
+  
+  The result appears in the echo area and in the log, and is bound to $ for the
+  next expression.  This is the whole live-image argument reduced to one
+  keystroke: no SWANK, no editor, no second machine — the running window manager
+  will simply answer a question about itself.
 
 (files)
   Open a file manager.  Bound to `f' in an empty pane by default.
@@ -161,6 +203,12 @@ LatticeWM commands.
 (remove-pane)
   Remove the focused pane entirely, whether or not it holds anything.
 
+(repeat)
+  Run the last command again, with the same arguments.
+  
+  Emacs's C-x z, vi's `.', and the reason a command that took three prompts to
+  say is one keystroke to say twice.
+
 (resize direction &optional (amount 1/20))
   Grow the focused pane DIRECTION by AMOUNT of its container's total.
   
@@ -190,9 +238,11 @@ LatticeWM commands.
 (run-command-by-name)
   Type a command name and run it.  Emacs's M-x.
   
-  Tab completes, Return runs, Escape cancels.  Every command in the system is
-  reachable this way, which is what lets the keymap be the ones you use often
-  rather than the only ones that exist.
+  Tab completes, Return runs, Escape cancels, Up walks back through what you ran
+  before.  Every command in the system is reachable this way — including the ones
+  that take arguments, which are asked for one at a time once the name is in —
+  and that is what lets the keymap be the commands you use often rather than the
+  only ones that exist.
 
 (send-to-workspace number &key (follow nil))
   Move the focused pane to workspace NUMBER, counting from one.
@@ -200,11 +250,27 @@ LatticeWM commands.
   This is TREE-TRANSPLANT and nothing else — because a workspace is a container
   and a pane is a subtree, 'send to workspace' needed no code of its own.
 
+(set-option name value)
+  Change a configuration value, now, without restarting anything.
+  
+      M-x set-option  gaps  8
+  
+  VALUE is read as a Lisp object, so a number is a number, a string wants its
+  quotes, and a colour is a list: (0.9 0.5 0.2 1.0).
+  
+  This is the tier-0 half of README's live-reconfiguration argument made
+  available without a REPL.  Nothing here is written to your init.lisp — put it
+  there when you are sure, and until then the cost of being wrong is one more
+  prompt.
+
 (spawn &rest command)
   Run COMMAND as a detached process.
   
       (spawn "foot")
       (spawn "firefox" "--new-window")
+  
+  From M-x this is the run-a-program prompt, and what you type is split on
+  spaces the way a shell would split it.
   
   The child is detached and its output goes nowhere, so a program that writes to
   stderr cannot fill a pipe nobody is reading and block.

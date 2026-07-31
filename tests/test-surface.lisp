@@ -25,8 +25,20 @@
   ;; PLAN.org: "If this list reaches thirty, the decomposition has gone wrong in
   ;; the direction of ceremony.  If it drops below ten, it has gone wrong in the
   ;; direction of a monolith."
+  ;;
+  ;; The ceiling has moved twice and both moves are recorded rather than
+  ;; quietly applied, because a tripwire somebody steps over without comment is
+  ;; not a tripwire.  Thirty to forty was the layout and lifecycle surface
+  ;; settling; forty to forty-five was the interactive layer, which added
+  ;; COMPLETE-CANDIDATES and ARGUMENT-TYPE-FOR.  Both earn it: completion style
+  ;; is the most personal decision in the minibuffer, and a naming convention
+  ;; that cannot see which command it is talking about cannot be corrected per
+  ;; command.
+  ;;
+  ;; What would make this wrong is generics arriving one per feature.  If the
+  ;; count passes forty-five, read the last five before raising it again.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 40) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 45) "the extension surface has ~d generics" n)))
 
 (test every-option-is-documented-and-has-a-default
   (dolist (row (p:all-options))

@@ -57,7 +57,7 @@ terminal across the screen repeatedly steals focus from itself."
          (rect (and node (gethash node (prop world :rect-index)))))
     (when (and rect *focus-follows-mouse* (primary-seat))
       (multiple-value-bind (x y) (rect-center rect)
-        ;; POINTER-WARP is window-management state, so it may only be sent in a
+        ;; WARP-POINTER is window-management state, so it may only be sent in a
         ;; manage sequence.  The runtime is already inside one when focus
         ;; changes from a key binding — but IN-WM makes it safe from a REPL too.
-        (in-wm (seat-pointer-warp (seat-proxy (primary-seat)) x y))))))
+        (in-wm (warp-pointer x y))))))

@@ -384,13 +384,31 @@ the keyboard."
   (let ((leaf (current-leaf)))
     (and leaf (c:leaf-empty-p leaf) (null (c:world-focused-float *world*)))))
 
-(defparameter +capture-keysyms+
-  (append (loop for code from #x20 to #x7e collect code)   ; printable ASCII
-          (list #xff08 #xff09 #xff0d #xff1b #xff8d))       ; bs tab ret esc kpret
-  "Every key the window manager may want to read directly.
+(defparameter +capture-keys+
+  (append
+   ;; Printable ASCII, twice: once bare and once with Shift.  The second copy
+   ;; is not redundant and its absence is a bug you would find by trying to
+   ;; type a bracket.  River matches a binding on keysym *and* modifiers, and
+   ;; the keysym xkb produces for Shift+9 on a US layout is `parenleft' with
+   ;; Shift still in the modifier set — so a binding for parenleft with no
+   ;; modifiers never fires, and M-: could not read a single open bracket.
+   ;; Doing it by mask rather than by guessing which characters are shifted on
+   ;; which layout is what makes this work on a Dvorak or a German keyboard.
+   (loop for code from #x20 to #x7e
+         append (list (cons code '()) (cons code '(:shift))))
+   ;; The keys that move and delete rather than type.
+   (loop for keysym in '(#xff08 #xff09 #xff0d #xff1b #xff8d #xffff
+                         #xff51 #xff52 #xff53 #xff54 #xff50 #xff57)
+         collect (cons keysym '()))
+   ;; The readline chords, which are what fingers do at a prompt without being
+   ;; asked.  Bound only for as long as a prompt is up, so C-w still means
+   ;; close-tab to the browser underneath.
+   (loop for letter across "abdefgknpuwy"
+         collect (cons (char-code letter) '(:ctrl))))
+  "Every key the window manager may want to read directly, with its modifiers.
 
-Bound once, enabled only while something is reading — see ARM-CAPTURE.  Ninety
--eight bindings sounds like a lot and is one round trip at startup; the
+Bound once, enabled only while something is reading — see ARM-CAPTURE.  Two
+hundred-odd bindings sounds like a lot and is one round trip at startup; the
 alternative is not being able to read text at all, because river delivers keys
 to the focused *window* and gives us only what we asked for.")
 
@@ -408,28 +426,32 @@ two answers to one question is how they end up disagreeing."
   (let ((bindings (server-bindings *server*)))
     (when (and bindings (null (c:prop seat :capture-bindings)))
       (setf (c:prop seat :capture-bindings)
-            (loop for keysym in +capture-keysyms+
+            (loop for (keysym . modifiers) in +capture-keys+
                   for binding = (guarded "get_xkb_binding"
                                   (w:bindings-get-xkb-binding
-                                   bindings (seat-proxy seat) keysym '()))
+                                   bindings (seat-proxy seat) keysym modifiers))
                   when binding
                     collect (progn
-                              (push (let ((keysym keysym))
+                              (push (let ((keysym keysym) (modifiers modifiers))
                                       (lambda (event &rest arguments)
                                         (declare (ignore arguments))
                                         (with-abandon
                                           (when (eq event :pressed)
-                                            (handle-captured-key keysym)))))
+                                            (handle-captured-key keysym modifiers)))))
                                     (wl:wl-proxy-hooks binding))
-                              (cons keysym binding))))))
+                              (cons (cons keysym modifiers) binding))))))
   (c:prop seat :capture-bindings))
 
-(defun handle-captured-key (keysym)
+(defun handle-captured-key (keysym modifiers)
   "A key arrived because we had asked for it.  Decide what it meant."
   (let ((character (when (<= #x20 keysym #x7e) (code-char keysym))))
     (cond
-      ((reading-p) (prompt-key keysym character))
-      ((cursor-on-empty-pane-p) (spawn-for-empty-pane character))
+      ((reading-p) (prompt-key keysym modifiers character))
+      ;; A chord in an empty pane is not a request to open an editor.  The
+      ;; empty pane's table is single printable keys, and letting Ctrl through
+      ;; would make C-c there mean whatever `c' means.
+      ((and (cursor-on-empty-pane-p) (null modifiers))
+       (spawn-for-empty-pane character))
       (t nil))))
 
 (defun arm-capture ()

@@ -442,8 +442,12 @@ otherwise."
     (spawn \"foot\")
     (spawn \"firefox\" \"--new-window\")
 
+From M-x this is the run-a-program prompt, and what you type is split on
+spaces the way a shell would split it.
+
 The child is detached and its output goes nowhere, so a program that writes to
 stderr cannot fill a pipe nobody is reading and block."
+  (:interactive :shell-command)
   (guarded "spawn"
     (sb-ext:run-program (first command) (rest command)
                         :search t :wait nil
@@ -497,10 +501,16 @@ persistence is keyed on river's stable window identifiers."
   (setf (server-running *server*) nil))
 
 (defcommand describe-key (spec)
-  "Print what SPEC is bound to."
-  (let* ((key (kbd spec))
+  "Say what SPEC is bound to, and what that does.  Emacs's C-h k.
+
+SPEC is written the way a binding is: Super+Return, Ctrl+Super+h, C-x."
+  (:interactive :key)
+  (let* ((key (handler-case (kbd spec) (error (condition)
+                                         (notify "~a" condition)
+                                         (return-from describe-key nil))))
          (target (lookup-key *keymap* key)))
-    (format t "~&~a: ~:[unbound~;~:*~s~]~%" (key-to-string key) target)
+    (notify "~a: ~a" (key-to-string key)
+            (if target (binding-description target) "unbound"))
     target))
 
 ;;; ==================================================================

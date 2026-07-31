@@ -87,6 +87,17 @@ render sequence.")
   "The first seat, which on every ordinary machine is the only one."
   (first (server-seats *server*)))
 
+(defun warp-pointer (x y &optional (seat (primary-seat)))
+  "Move the pointer to X, Y in output-layout coordinates.
+
+Wraps one protocol request, and exists because the alternative is that an
+extension reaches into LATTICEWM/WIRE for it.  That is the seam the package
+comment draws — policy and user code talk to the runtime, the runtime talks to
+the protocol — and the first worked example that crossed it did so because
+this function was missing rather than because the rule was wrong."
+  (when seat
+    (guarded "pointer_warp" (w:seat-pointer-warp (seat-proxy seat) x y))))
+
 ;;; ------------------------------------------------------------ registries
 
 (defun window-of-proxy (proxy)

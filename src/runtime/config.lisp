@@ -39,6 +39,44 @@ already wants.")
 (p:define-option *cursor-size* 24
   "The xcursor size in logical pixels.")
 
+(define-argument-type :shell-command "run: "
+  :documentation "A program to run, with its arguments."
+  :candidates (list *terminal* *editor* *browser* *file-manager*)
+  ;; No parser: a command line is text, and the only thing that could be
+  ;; checked here — does this program exist — is better answered by trying it
+  ;; and saying what happened.
+  )
+
+(define-argument-type :option "option: "
+  :documentation "One of the configuration values -- see SET-OPTION."
+  :candidates (mapcar (lambda (row) (string-downcase (string (first row))))
+                      (p:all-options))
+  :parse (lambda (text)
+           (let ((keyword (find-symbol (string-upcase (string-trim " " text))
+                                       :keyword)))
+             (unless (and keyword (p:option-boundp keyword))
+               (error "there is no option called ~a" text))
+             keyword)))
+
+(defcommand set-option (name value)
+  "Change a configuration value, now, without restarting anything.
+
+    M-x set-option  gaps  8
+
+VALUE is read as a Lisp object, so a number is a number, a string wants its
+quotes, and a colour is a list: (0.9 0.5 0.2 1.0).
+
+This is the tier-0 half of README's live-reconfiguration argument made
+available without a REPL.  Nothing here is written to your init.lisp — put it
+there when you are sure, and until then the cost of being wrong is one more
+prompt."
+  (:interactive :option :sexp)
+  (handler-case
+      (progn (setf (p:option name) value)
+             (notify "~(~a~) = ~s" name (p:option name))
+             (relayout :force t))
+    (error (condition) (notify "~a" condition))))
+
 ;;; ------------------------------------------------------- the default keymap
 
 (defun modifier-string (&rest extra)
@@ -115,9 +153,24 @@ wins."
     ;; --- the window manager itself ---------------------------------------
     (define-key keymap (format nil "~aslash" mod) '("help"))
     (define-key keymap (format nil "~ax" mod) '("run-command-by-name"))
+    (define-key keymap (format nil "~asemicolon" mod) '("eval-expression"))
+    (define-key keymap (format nil "~aperiod" mod) '("repeat"))
     (define-key keymap (format nil "~ap" mod) '("goto-named-cell"))
     (define-key keymap (format nil "~an" shift) '("name-this"))
-    (define-key keymap (format nil "~aquestion" shift) '("help"))
+    ;; --- asking, as a submap.  Emacs's C-h, and the one chord we ship. ----
+    ;; It earns the chord: these are the five questions somebody has about a
+    ;; system they are learning, they are asked rarely enough that a two-key
+    ;; sequence is no burden, and pressing the prefix alone lists them in the
+    ;; echo area — so the submap is its own documentation.
+    (let ((help-map (make-keymap :name "help")))
+      (define-key help-map "b" '("help"))
+      (define-key help-map "k" '("describe-key"))
+      (define-key help-map "c" '("describe-command"))
+      (define-key help-map "f" '("describe-command"))
+      (define-key help-map "a" '("apropos-command"))
+      (define-key help-map "o" '("describe-option"))
+      (define-key help-map "s" '("set-option"))
+      (define-key keymap (format nil "~aquestion" shift) help-map))
     (define-key keymap (format nil "~ac" shift) '("reload-config"))
     (define-key keymap (format nil "~ar" shift) '("restart-wm"))
     (define-key keymap (format nil "~aescape" shift) '("quit"))
@@ -187,6 +240,10 @@ particular program."
 ;;;; M-x slime-connect to port 4005 — and takes effect immediately, with no
 ;;;; restart and without losing your layout.
 ;;;;
+;;;; You do not have to start here.  Super+? o reads a setting's documentation
+;;;; on screen and Super+? s changes it on the spot; this file is for making
+;;;; the ones you settled on stick.
+;;;;
 ;;;; \"latticewm --list-options\" prints every value with its default and its
 ;;;; documentation.  \"latticewm --extension-surface\" prints every generic you
 ;;;; can specialize.
@@ -233,12 +290,27 @@ particular program."
 ;; Bigger gaps around lattice cells than around splits inside them.
 ;; (defmethod gaps ((policy conventional-policy) (container split)) 4)
 
+;;; ------------------------------------------------------------- commands
+;;; A command is a named, documented function.  Every one of them is reachable
+;;; from Super+x by name, and the ones that take arguments are asked for them —
+;;; the *name* of a parameter decides what it is asked for.
+
+;; (defcommand work ()
+;;   \"Open the two things I always open.\"
+;;   (spawn *editor*)
+;;   (spawn *terminal*))
+;; (define-key *keymap* \"Super+F1\" '(\"work\"))
+
 ;;; ------------------------------------------------------------- hooks
 ;;; Notice that something happened.  Use a method when you want to *change* a
 ;;; decision; use a hook when you only want to react.
+;;;
+;;; Give the function a name and add the SYMBOL.  A #'function or a lambda is a
+;;; snapshot: redefining it later leaves the hook calling the old one, and
+;;; re-evaluating the ADD-HOOK adds a second copy instead of replacing it.
 
-;; (add-hook :window-opened
-;;           (lambda (win) (format t \"~~&opened ~~a~~%\" (window-app-id win))))
+;; (defun note-window (win) (logmsg :info \"opened ~~a\" (window-app-id win)))
+;; (add-hook :window-opened 'note-window)
 
 ;;; ------------------------------------------------------ the lattice
 ;;; The infinite 2D plane of cells, with zoom and pan.  It is a separate system

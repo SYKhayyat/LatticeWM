@@ -22,6 +22,10 @@
    (lambda-list :initarg :lambda-list :initform '() :reader command-lambda-list)
    (documentation :initarg :documentation :initform nil
                   :reader command-documentation)
+   (interactive :initarg :interactive :initform nil :reader command-interactive
+                :documentation
+                "One argument-type keyword per parameter, or NIL to let the
+naming convention decide.  See COMMAND-ARGUMENTS.")
    (props :initform '() :accessor c:props))
   (:documentation "A named operation, invocable by key or by name."))
 
@@ -54,12 +58,28 @@ is not: a command without one cannot be found by anybody who does not already
 know it exists.
 
 The command is also an ordinary function, so Lisp code calls it directly
-without going through the registry."
+without going through the registry.
+
+An optional (:INTERACTIVE ...) clause after the docstring names the kind of
+value each parameter holds, for the benefit of M-x:
+
+    (defcommand describe-command (name)
+      \"Print a command's documentation.\"
+      (:interactive :command)
+      ...)
+
+It is needed only where the parameter's *name* does not already say — see
+ARGUMENT-TYPE-FOR, which gets it right for almost everything without being
+told."
   (let* ((symbol (if (consp name) (first name) name))
          (string (string-downcase (if (consp name) (second name) (string symbol))))
          (documentation (when (and (stringp (first body)) (rest body))
                           (first body)))
-         (forms (if documentation (rest body) body)))
+         (body (if documentation (rest body) body))
+         (interactive (when (and (consp (first body))
+                                 (eq :interactive (first (first body))))
+                        (rest (first body))))
+         (forms (if interactive (rest body) body)))
     `(progn
        (defun ,symbol ,lambda-list
          ,@(when documentation (list documentation))
@@ -81,6 +101,7 @@ without going through the registry."
                             :name ,string
                             :function #',symbol
                             :lambda-list ',lambda-list
+                            :interactive ',interactive
                             :documentation ,documentation))
        ',symbol)))
 
@@ -95,6 +116,18 @@ without going through the registry."
              *commands*)
     (sort out #'string< :key #'command-name)))
 
+(defvar *last-command* nil
+  "The last repeatable command run, as (NAME . ARGUMENTS).  See the REPEAT
+command.")
+
+(defparameter *not-repeatable* '("repeat" "run-command-by-name")
+  "Commands that REPEAT should look straight through.
+
+Two of them, for one reason each.  `repeat' itself, because repeating a repeat
+is a fixed point and not a useful one.  And `run-command-by-name', because what
+you meant by pressing `.' after M-x is the command M-x ran — the prompt was how
+you said it, not what you said.")
+
 (defun run-command (name &rest arguments)
   "Look NAME up and run it with ARGUMENTS.
 
@@ -104,8 +137,104 @@ message and a working window manager rather than a broken session."
   (let ((command (find-command name)))
     (cond
       ((null command) (logmsg :warn "no such command: ~a" name) nil)
-      (t (guarded (format nil "command ~a" name)
-           (apply (command-function command) arguments))))))
+      (t (let ((string (command-name command)))
+           (unless (member string *not-repeatable* :test #'string=)
+             (setf *last-command* (cons string arguments)))
+           (guarded (format nil "command ~a" string)
+             (apply (command-function command) arguments)))))))
+
+;;; -------------------------------------------------- interactive arguments
+;;;
+;;; A command that takes arguments used to be unreachable from M-x, which meant
+;;; that a third of the system was theoretical for anybody without a REPL open:
+;;; `goto' exists, `workspace' exists, `resize' exists, and the only way to say
+;;; so was a key binding somebody had already written.  What follows is the
+;;; machinery for asking.
+;;;
+;;; The design is Emacs's, with the one change that thirty years of hindsight
+;;; suggests: Emacs's (interactive "sPrompt: ") is a string DSL with about
+;;; forty single-letter codes, and nobody remembers more than four of them.
+;;; Here an argument type is a named object with a prompt, a candidate list and
+;;; a parser, `define-argument-type' adds one, and the *default* is inferred
+;;; from what the parameter is called — so the common case needs no annotation
+;;; at all and the uncommon case is one keyword.
+
+(defclass argument-type ()
+  ((name :initarg :name :reader argument-type-name)
+   (prompt :initarg :prompt :reader argument-type-prompt)
+   (candidates :initarg :candidates :initform (constantly nil)
+               :reader argument-type-candidates
+               :documentation
+               "A function of no arguments returning candidate strings.  A
+function rather than a list because the interesting ones — command names, the
+names you have given cells — are answers about the live system.")
+   (parser :initarg :parser :initform #'identity :reader argument-type-parser
+           :documentation
+           "STRING -> value.  Signals on input it cannot make sense of; the
+prompt catches that and says so rather than running the command with a
+plausible wrong value.")
+   (documentation :initarg :documentation :initform nil
+                  :reader argument-type-documentation))
+  (:documentation "A kind of value a command can be asked for."))
+
+(defvar *argument-types* (make-hash-table :test #'eq)
+  "Keyword -> ARGUMENT-TYPE.")
+
+(defmacro define-argument-type (name prompt &key documentation candidates parse)
+  "Define the kind of value NAME, so that M-x can ask for one.
+
+    (define-argument-type :direction \"direction: \"
+      :documentation \"One of left, right, up or down.\"
+      :candidates '(\"left\" \"right\" \"up\" \"down\")
+      :parse (lambda (text) (or (direction-named text) (error \"...\"))))
+
+CANDIDATES is a form evaluated *each time the prompt goes up*, so it may name
+things that did not exist at load time.  PARSE turns the typed string into the
+value the command receives."
+  `(setf (gethash ,name *argument-types*)
+         (make-instance 'argument-type
+                        :name ,name
+                        :prompt ,prompt
+                        :documentation ,documentation
+                        :candidates (lambda () ,candidates)
+                        ,@(when parse `(:parser ,parse)))))
+
+(defun argument-type (name)
+  "The argument type called NAME, or NIL."
+  (and name (gethash name *argument-types*)))
+
+(defun command-arguments (command &optional (policy (p:current-policy)))
+  "COMMAND's parameters as (SYMBOL TYPE-KEYWORD KIND), KIND being one of
+:REQUIRED, :OPTIONAL or :REST.
+
+&key and &aux end the list: a keyword argument is a refinement rather than a
+question, and asking somebody for one at a prompt would be asking them to
+recite the source code."
+  (let ((declared (command-interactive command))
+        (declaredp (and (command-interactive command) t))
+        (kind :required)
+        (out '()))
+    (dolist (parameter (command-lambda-list command) (nreverse out))
+      (case parameter
+        (&optional (setf kind :optional))
+        ((&rest &body) (setf kind :rest))
+        ((&key &aux &allow-other-keys) (return (nreverse out)))
+        (t (let ((symbol (if (consp parameter) (first parameter) parameter)))
+             (push (list symbol
+                         (if declaredp
+                             (pop declared)
+                             (p:argument-type-for policy command symbol))
+                         kind)
+                   out)))))))
+
+(defun command-interactive-p (command)
+  "True when every required argument of COMMAND is one a person can be asked
+for.  What M-x checks before offering to run something."
+  (every (lambda (argument)
+           (destructuring-bind (symbol type kind) argument
+             (declare (ignore symbol))
+             (or (argument-type type) (not (eq kind :required)))))
+         (command-arguments command)))
 
 (defun undocumented-commands ()
   "Every command with no docstring.  Build gate 2 covers these too."

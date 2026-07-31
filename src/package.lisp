@@ -211,6 +211,9 @@ You never edit this package.")
    #:default-float-rect #:window-rule-for
    ;; --- input ----------------------------------------------------------
    #:key-unbound #:on-key #:pointer-focus
+   ;; --- reading from the user -------------------------------------------
+   #:complete-candidates #:argument-type-for #:*argument-naming-convention*
+   #:subsequence-match-p #:rank-candidates
    ;; --- stacks / workspaces --------------------------------------------
    #:stack-visible-address #:container-label
    ;; --- introspection --------------------------------------------------
@@ -246,8 +249,15 @@ keybindings, the command registry, and the session loop.")
    ;; commands
    #:defcommand #:command #:find-command #:all-commands #:run-command
    #:command-name #:command-documentation #:command-function
+   #:command-lambda-list #:command-interactive #:*last-command* #:*not-repeatable*
+   ;; interactive arguments
+   #:define-argument-type #:argument-type #:argument-type-name
+   #:argument-type-prompt #:argument-type-candidates #:argument-type-parser
+   #:argument-type-documentation #:command-arguments #:command-interactive-p
+   #:call-interactively #:read-arguments #:split-words #:labelled-names
    ;; keys
    #:keymap #:make-keymap #:*keymap* #:keymap-entries #:keymap-parent
+   #:keymap-name #:keymap-keys #:all-bound-keys #:keysym-name #:keysym-named
    #:parse-key #:kbd #:define-key #:lookup-key #:key-to-string
    ;; the loop
    #:start #:quit #:relayout #:mark-dirty #:compute-layout
@@ -257,9 +267,10 @@ keybindings, the command registry, and the session loop.")
    #:text-width #:text-height #:*echo-area* #:*echo-scale* #:*echo-position*
    #:current-message #:server-compositor #:server-shm
    #:*help-visible* #:help-entries #:binding-description #:truncate-text
-   #:read-string #:reading-p #:end-prompt #:prompt-segments
+   #:read-string #:reading-p #:end-prompt #:prompt-segments #:echo-segments
    #:*minibuffer-prompt-color* #:*minibuffer-completion-color*
-   #:summary-of
+   #:*minibuffer-caret-color* #:*history-length* #:history #:history-push
+   #:summary-of #:wrap-text #:show-help-page #:keys-running #:warp-pointer
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state

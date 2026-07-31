@@ -1,13 +1,41 @@
+This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
 
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
 ============================================================================
 LatticeWM extension surface
-39 generics, 40 options.  Generated from the running image.
+42 generics, 51 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
 write a method; it takes effect the moment you evaluate it.
 
 (defmethod gaps ((policy conventional-policy) container) 8)
+
+----------------------------------------------------------------------------
+argument-type-for (latticewm/policy:policy latticewm/policy::command
+                   latticewm/policy::parameter)
+----------------------------------------------------------------------------
+What kind of value does PARAMETER of COMMAND hold?  A keyword, or NIL.
+
+This is what lets M-x prompt for a command's arguments instead of refusing to
+run it.  The default is a naming convention rather than a declaration: a
+parameter called DIRECTION holds a direction, one called NUMBER holds a number,
+one called NAME holds a name.  That is worth stating plainly because it looks
+like a hack and is not — the parameter names were already chosen to read well
+in a docstring, so the convention costs nothing and covers almost every command
+in the system without a single annotation.
+
+Where the convention is wrong, DEFCOMMAND's (:interactive ...) clause overrides
+it per command, and specializing this covers a whole naming scheme at once.
+NIL means the parameter cannot be read from a human, which is what stops M-x
+offering to prompt for a tree path.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
 
 ----------------------------------------------------------------------------
 border-color (latticewm/policy:policy latticewm/policy::node
@@ -52,6 +80,26 @@ lattice is what makes it earn its keep.
     (policy t t)                        ; conventional.lisp
 
 ----------------------------------------------------------------------------
+complete-candidates (latticewm/policy:policy latticewm/policy::input
+                     latticewm/policy::candidates)
+----------------------------------------------------------------------------
+Which of CANDIDATES does INPUT match, best first?
+
+Emacs calls this a completion style and ships six of them, which is the correct
+number to ship when the answer is a matter of taste and everybody's taste
+differs.  The shipped default is the one nobody has to be taught: what you
+typed as a prefix first, then as a substring, then as a subsequence — so
+`wsp' finds `send-to-workspace' and `close' finds both `close' and
+`close-float', with the exact prefix on top where the eye already is.
+
+Pure string work, specialized on the policy for one reason: it is the single
+most personal decision in the whole minibuffer, and somebody will want flex,
+or initials-only, or plain strict prefixes.  Returns a fresh list.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
+
+----------------------------------------------------------------------------
 container-label (latticewm/policy:policy latticewm/policy::container)
 ----------------------------------------------------------------------------
 A short human-readable name for CONTAINER, or NIL.
@@ -84,6 +132,24 @@ and otherwise takes a fraction of the output.
 
   methods:
     (policy window output)              ; conventional.lisp
+
+----------------------------------------------------------------------------
+echo-content (latticewm/policy:policy latticewm/policy::world)
+----------------------------------------------------------------------------
+What the echo area says, as a list of (TEXT . KIND).
+
+KIND is :ACCENT for the part that says where you are and :NORMAL for the rest.
+Segments are drawn left to right with separators between them; empty ones are
+dropped, so returning "" is how a segment says nothing this time.
+
+This is a policy decision and not a status-bar feature: what a window manager
+should tell you about depends entirely on what its layout model *is*.  The
+shipped answer names the workspace, the place, what is in it, and the counts.
+The lattice's answer would sensibly include the viewport; a policy with no
+workspaces should not mention them.
+
+  methods:
+    (policy t)                          ; echo.lisp
 
 ----------------------------------------------------------------------------
 entry-address (latticewm/policy:policy latticewm/policy::container
@@ -596,6 +662,30 @@ underneath for people who do.
 OPTIONS
 ============================================================================
 
+*argument-naming-convention*
+  now: ((:DIRECTION "direction") (:AXIS "axis") (:SIDE "side")
+        (:NUMBER "number" "count" "steps" "step" "by" "index" "cols" "rows"
+         "cells" "columns" "visible" "x" "y")
+        (:FRACTION "amount" "fraction" "weight") (:PIXELS "pixels" "distance")
+        (:SHELL-COMMAND "command" "program") (:KEY "spec" "key")
+        (:NAME "name" "label") (:STRING "text" "string" "title")
+        (:SEXP "form" "expression"))
+  Which kind of value a command's parameter holds, keyed by its name.
+
+A convention rather than a declaration, so that a command written the obvious
+way is interactively callable without its author doing anything.  Every
+parameter name in the shipped commands is here, which is not a coincidence:
+they were named to read well in a docstring, and a name that reads well in a
+docstring is a name that says what kind of thing it is.
+
+Where a name is genuinely ambiguous — SPAWN's COMMAND is a shell command line
+and DESCRIBE-COMMAND's NAME is one of ours — DEFCOMMAND's (:interactive ...)
+clause says so at the command instead of bending the table.
+
+PATH is deliberately absent.  A tree path is a list of integers that nobody
+should be asked to type, and leaving it out of the table is what makes M-x
+say so rather than putting up a prompt that cannot be answered.
+
 *border-width*
   now: 2
   Border thickness in pixels, drawn by the compositor around every window.
@@ -677,9 +767,27 @@ at any size.
   now: "emacs"
   The editor the `editor' command runs.
 
+*empty-hint-color*
+  now: (0.7 0.75 0.86 1.0)
+  Text colour of the hint inside the focused empty pane.
+
+*empty-outline-color*
+  now: (0.3 0.32 0.4 0.55)
+  Outline colour of an unfocused empty pane.
+
 *empty-pane-color*
-  now: (0.3 0.3 0.36 1.0)
+  now: (0.42 0.56 0.78 1.0)
   Border colour drawn around a focused empty pane.
+
+Deliberately bright.  README D18 accepts, as a cost of focus being a place,
+that "you can stand somewhere that typing does not reach", and names the
+mitigation: "the cursor being unmissable — that is not optional polish, it is
+what stops an empty pane reading as a broken keyboard."  A subtle colour here
+is not a taste choice, it is the failure the ruling warned about.
+
+*empty-pane-hint*
+  now: T
+  Show which keys open something, inside the focused empty pane.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
@@ -762,6 +870,26 @@ the wrong half.
   now: (0.78 0.8 0.86 1.0)
   Colour of the description in the help overlay.
 
+*history-length*
+  now: 100
+  How many past entries each minibuffer history ring keeps.
+
+*minibuffer-candidates-shown*
+  now: 6
+  How many completion candidates the echo area lists at once.
+
+*minibuffer-caret-color*
+  now: (0.95 0.75 0.35 1.0)
+  Colour of the caret — the bar showing where what you type will go.
+
+*minibuffer-completion-color*
+  now: (0.5 0.55 0.65 1.0)
+  Colour of the completion hint after what you have typed.
+
+*minibuffer-prompt-color*
+  now: (0.95 0.75 0.35 1.0)
+  Colour of the prompt in the echo area.
+
 *modifier*
   now: :SUPER
   The modifier every default binding uses.
@@ -791,6 +919,26 @@ SWAP remains a separate verb with its own binding, so nothing is lost.
 *outer-gaps*
   now: 0
   Pixels of empty space between the layout and the edge of the output.
+
+*overlay-buffer-idle*
+  now: T
+  Release an overlay's pixel buffer while it is hidden.
+
+A full-screen ARGB buffer is about four megabytes, and the help screen and the
+drawn map are each hidden almost all of the time.  Keeping their buffers costs
+eight megabytes of resident memory to save one allocation on a keypress, which
+is the wrong way round.
+
+Set to NIL if you would rather have the allocation happen once.
+
+*show-empty-panes*
+  now: T
+  Draw an outline around empty panes, and the spawn hints inside the focused
+one.
+
+Turning this off gives you a window manager where standing in an empty pane
+looks exactly like a broken keyboard.  It is here because it is an option, not
+because it is a good idea.
 
 *smart-gaps*
   now: T

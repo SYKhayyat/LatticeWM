@@ -1,4 +1,10 @@
+This is SBCL 2.6.3, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
 
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
 LatticeWM keymap.
 
 Alt+Super+down                ("swap" :DOWN)
@@ -39,7 +45,13 @@ Shift+Super+left              ("move" :LEFT)
 Shift+Super+m                 ("restore-last")
 Shift+Super+n                 ("name-this")
 Shift+Super+q                 ("clear")
-Shift+Super+question          ("help")
+Shift+Super+question a        ("apropos-command")
+Shift+Super+question b        ("help")
+Shift+Super+question c        ("describe-command")
+Shift+Super+question f        ("describe-command")
+Shift+Super+question k        ("describe-key")
+Shift+Super+question o        ("describe-option")
+Shift+Super+question s        ("set-option")
 Shift+Super+r                 ("restart-wm")
 Shift+Super+right             ("move" :RIGHT)
 Shift+Super+space             ("focus-float")
@@ -75,10 +87,12 @@ Super+o                       ("editor")
 Super+p                       ("goto-named-cell")
 Super+pagedown                ("next-workspace")
 Super+pageup                  ("previous-workspace")
+Super+period                  ("repeat")
 Super+q                       ("close")
 Super+return                  ("terminal")
 Super+right                   ("focus" :RIGHT)
 Super+s                       ("split" :VERTICAL)
+Super+semicolon               ("eval-expression")
 Super+slash                   ("help")
 Super+space                   ("toggle-float")
 Super+tab                     ("focus-next")

@@ -131,6 +131,63 @@ goes only to a log file nobody is reading."
       (when message (push (cons message :accent) segments)))
     (nreverse segments)))
 
+(defun keymap-choices (keymap)
+  "KEYMAP's bindings as (KEYS . DESCRIPTION), merged the way the help screen
+merges them: two keys that do the same thing are one choice with two keys on
+it, not two choices."
+  (let ((by-description '()))
+    (loop for (key . target) in (keymap-keys keymap)
+          for description = (binding-description target)
+          for entry = (assoc description by-description :test #'string=)
+          do (if entry
+                 (setf (cdr entry) (append (cdr entry) (list (keysym-name (car key)))))
+                 (push (cons description (list (keysym-name (car key))))
+                       by-description)))
+    (mapcar (lambda (entry)
+              (cons (format nil "~{~a~^/~}" (rest entry)) (first entry)))
+            (nreverse by-description))))
+
+(defun pending-keymap-segments (&optional (columns 120))
+  "What an armed chord offers, as echo-area segments, inside COLUMNS.
+
+which-key, in a window manager: the moment you press the first key of a chord
+the echo area lists what the second key can be, built from the live submap and
+each command's own docstring.  A chord you have to remember is a chord you will
+not use, and the only reason Emacs's C-x map is usable by anybody is that
+somebody eventually wrote this.
+
+The budget is arithmetic rather than clipping.  Letting the compositor cut the
+line at the screen edge is what it did first, and the last choice on the line
+then read as a word that had lost its ending — which is worse than not
+offering it, because it looks like a bug rather than like a list that goes on."
+  (let* ((keymap *pending-keymap*)
+         (label (format nil "~a-" (or (keymap-name keymap) "prefix")))
+         (choices (keymap-choices keymap))
+         (room (- columns (length label) 4))
+         (shown '()))
+    (loop for (keys . description) in choices
+          ;; Each choice is at least its keys plus a word of explanation; if
+          ;; even that does not fit, everything after it is `+n more'.
+          for text = (format nil "~a ~a" keys (truncate-text description 26))
+          while (> room (+ (length text) 8))
+          do (push (cons text :normal) shown)
+             (decf room (+ (length text) 3)))
+    (let ((left (- (length choices) (length shown))))
+      (cons (cons label :prompt)
+            (nreverse (if (plusp left)
+                          (cons (cons (format nil "+~d more" left) :dim) shown)
+                          shown))))))
+
+(defun echo-segments (world &optional (columns 120))
+  "What the echo area is saying right now, inside COLUMNS characters.
+
+Three sources, in the order that decides which one wins when more than one has
+something to say: a prompt owns the line outright, an armed chord is the next
+most urgent thing, and otherwise the status line is the policy's to fill."
+  (cond ((reading-p) (prompt-segments))
+        (*pending-keymap* (pending-keymap-segments columns))
+        (t (guarded "echo-content" (p:echo-content (p:current-policy) world)))))
+
 (defun draw-echo-area (world output)
   "Draw and place the echo area along the bottom of OUTPUT."
   (unless (and *echo-area* *server* output)
@@ -150,12 +207,18 @@ goes only to a log file nobody is reading."
              (accent (apply #'argb *echo-accent*))
              (divider (apply #'argb *echo-divider*))
              (prompt-color (apply #'argb *minibuffer-prompt-color*))
+             (caret-color (apply #'argb *minibuffer-caret-color*))
              (dim (apply #'argb *minibuffer-completion-color*))
-             (segments (remove-if (lambda (segment) (zerop (length (car segment))))
-                                  (if (reading-p)
-                                      (prompt-segments)
-                                      (guarded "echo-content"
-                                        (p:echo-content (p:current-policy) world))))))
+             (segments (remove-if (lambda (segment)
+                                    (and (zerop (length (car segment)))
+                                         ;; The caret is the one segment whose
+                                         ;; whole content is where it is.
+                                         (not (eq (cdr segment) :caret))))
+                                  (echo-segments
+                                   world
+                                   (floor (- width 16)
+                                          (max 1 (text-width "m"
+                                                             :scale *echo-scale*)))))))
         (loop for (text . kind) in segments
               for firstp = t then nil
               do ;; The separator goes *between* segments, which means before
@@ -163,18 +226,26 @@ goes only to a log file nobody is reading."
                  ;; leaves a dangling bar at the end of the line, which looks
                  ;; like something failed to render.  A prompt draws its parts
                  ;; contiguously, because "M-x | foc" is not a prompt.
-                 (unless (or firstp (reading-p))
+                 (unless (or firstp (reading-p) (eq kind :caret))
                    (incf pen (* 4 *echo-scale*))
                    (incf pen (canvas-text canvas pen baseline "|" divider
                                           :scale *echo-scale*))
                    (incf pen (* 4 *echo-scale*)))
-                 (incf pen (canvas-text canvas pen baseline text
-                                        (case kind
-                                          (:accent accent)
-                                          (:prompt prompt-color)
-                                          (:dim dim)
-                                          (t normal))
-                                        :scale *echo-scale*))))
+                 (if (eq kind :caret)
+                     ;; Drawn, not typed: a bar between two characters rather
+                     ;; than a character between them, so that the text does
+                     ;; not jump sideways as the caret moves through it.
+                     (canvas-fill canvas caret-color
+                                  (c:make-rect pen baseline
+                                               (* 2 *echo-scale*)
+                                               (text-height :scale *echo-scale*)))
+                     (incf pen (canvas-text canvas pen baseline text
+                                            (case kind
+                                              (:accent accent)
+                                              (:prompt prompt-color)
+                                              (:dim dim)
+                                              (t normal))
+                                            :scale *echo-scale*)))))
       (overlay-commit *echo-overlay*
                       :rect (c:make-rect (c:rect-x area)
                                          (if (eq *echo-position* :top)
@@ -199,4 +270,12 @@ goes only to a log file nobody is reading."
 
 ;; Take the echo area's strip out of the layout, so windows sit above it
 ;; rather than under it.
-(pushnew (lambda (output) (echo-reserved-edges output)) p:*reserve-hooks*)
+;;
+;; By name, not as a lambda.  A lambda here is a fresh object every time this
+;; file is loaded, so PUSHNEW cannot recognise the one already on the list, and
+;; reloading echo.lisp into a running window manager reserved the strip twice —
+;; the echo area silently ate a second strip of the screen with nothing drawn
+;; in it.  Registering the symbol makes the reload idempotent and makes
+;; redefining the function take effect, which is the whole point of being able
+;; to reload the file at all.
+(pushnew 'echo-reserved-edges p:*reserve-hooks*)

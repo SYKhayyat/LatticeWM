@@ -75,8 +75,15 @@ Rebinding it swaps the entire layout model live:
     (relayout)")
 
 (defun current-policy ()
-  "The policy in force, which is *POLICY*."
-  *policy*)
+  "The policy in force, which is *POLICY* — or a conventional one, made here.
+
+The fallback is not laziness about startup order.  Everything that asks a
+policy a question now includes things that run with no compositor attached at
+all: `latticewm --list-commands', a unit test, a REPL in an editor at three in
+the morning.  Answering NIL there produces a no-applicable-method error whose
+text mentions neither the policy nor the fact that none was ever made, and the
+right answer is available and obvious."
+  (or *policy* (setf *policy* (make-instance 'conventional-policy))))
 
 ;;; --------------------------------------------------------- tier-0 options
 
@@ -543,6 +550,42 @@ application that opens, because nothing in either river protocol synthesises
 input.  Under a single-default policy, typing `ls` at an empty pane opens a
 terminal showing `s`.  Under the table the keypress was a choice rather than
 content, and nothing is lost."))
+
+;;; ==================================================================
+;;; READING FROM THE USER
+;;; ==================================================================
+
+(defgeneric complete-candidates (policy input candidates)
+  (:documentation
+   "Which of CANDIDATES does INPUT match, best first?
+
+Emacs calls this a completion style and ships six of them, which is the correct
+number to ship when the answer is a matter of taste and everybody's taste
+differs.  The shipped default is the one nobody has to be taught: what you
+typed as a prefix first, then as a substring, then as a subsequence — so
+`wsp' finds `send-to-workspace' and `close' finds both `close' and
+`close-float', with the exact prefix on top where the eye already is.
+
+Pure string work, specialized on the policy for one reason: it is the single
+most personal decision in the whole minibuffer, and somebody will want flex,
+or initials-only, or plain strict prefixes.  Returns a fresh list."))
+
+(defgeneric argument-type-for (policy command parameter)
+  (:documentation
+   "What kind of value does PARAMETER of COMMAND hold?  A keyword, or NIL.
+
+This is what lets M-x prompt for a command's arguments instead of refusing to
+run it.  The default is a naming convention rather than a declaration: a
+parameter called DIRECTION holds a direction, one called NUMBER holds a number,
+one called NAME holds a name.  That is worth stating plainly because it looks
+like a hack and is not — the parameter names were already chosen to read well
+in a docstring, so the convention costs nothing and covers almost every command
+in the system without a single annotation.
+
+Where the convention is wrong, DEFCOMMAND's (:interactive ...) clause overrides
+it per command, and specializing this covers a whole naming scheme at once.
+NIL means the parameter cannot be read from a human, which is what stops M-x
+offering to prompt for a tree path."))
 
 ;;; ==================================================================
 ;;; STACKS, WORKSPACES, NAMES
