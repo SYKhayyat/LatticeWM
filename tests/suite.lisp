@@ -56,6 +56,13 @@ Called by `make test' and by ASDF's TEST-OP."
   "A leaf holding a fresh window tagged APP-ID."
   (c:make-leaf (win app-id)))
 
+(defun byte-vector (length &rest bytes)
+  "A glyph table of LENGTH bytes, starting with BYTES and zero after that."
+  (let ((v (make-array length :element-type '(unsigned-byte 8)
+                              :initial-element 0)))
+    (replace v (coerce bytes 'vector))
+    v))
+
 (defun app-at (root path)
   "The app-id of the window at PATH under ROOT, or NIL.
 

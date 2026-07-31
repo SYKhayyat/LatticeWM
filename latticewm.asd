@@ -48,7 +48,8 @@
        (:file "conventional")
        (:file "motion")
        (:file "lifecycle")
-       (:file "surface")))
+       (:file "surface")
+       (:file "appearance")))
      (:module "wire"
       :serial t
       :components
@@ -63,6 +64,7 @@
        (:file "commands")
        (:file "keys")
        (:file "font")
+       (:file "psf")
        (:file "surface")
        (:file "minibuffer")
        (:file "echo")

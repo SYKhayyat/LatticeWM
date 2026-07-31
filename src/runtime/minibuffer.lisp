@@ -33,21 +33,6 @@
 
 (in-package #:latticewm/runtime)
 
-(p:define-option *minibuffer-prompt-color* '(0.95 0.75 0.35 1.0)
-  "Colour of the prompt in the echo area.")
-
-(p:define-option *minibuffer-completion-color* '(0.50 0.55 0.65 1.0)
-  "Colour of the completion hint after what you have typed.")
-
-(p:define-option *minibuffer-caret-color* '(0.95 0.75 0.35 1.0)
-  "Colour of the caret — the bar showing where what you type will go.")
-
-(p:define-option *minibuffer-candidates-shown* 6
-  "How many completion candidates the echo area lists at once.")
-
-(p:define-option *history-length* 100
-  "How many past entries each minibuffer history ring keeps.")
-
 (defvar *prompt* nil
   "The current prompt string, or NIL when nothing is being read.")
 
@@ -92,7 +77,7 @@ distinct things you did rather than through how many times you did them."
     (let ((ring (remove entry (gethash name *histories*) :test #'string=)))
       (push entry ring)
       (setf (gethash name *histories*)
-            (subseq ring 0 (min (length ring) *history-length*))))))
+            (subseq ring 0 (min (length ring) p:*history-length*))))))
 
 ;;; ----------------------------------------------------------- the prompt
 
@@ -339,7 +324,7 @@ characters at any scale without this function knowing how wide a glyph is."
                     ;; reads as one word — which is exactly what it looked
                     ;; like the first time this was drawn on a screen.
                     (cons (format nil "  [~d]  ~{~a~^  ~}" (length matches)
-                                  (subseq matches 0 (min *minibuffer-candidates-shown*
+                                  (subseq matches 0 (min p:*minibuffer-candidates-shown*
                                                          (length matches))))
                           :dim))))))
 

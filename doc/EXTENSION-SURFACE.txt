@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-42 generics, 52 options.  Generated from the running image.
+47 generics, 53 options.  Generated from the running image.
 ============================================================================
 
 Every generic below takes a POLICY as its first argument.  To change one,
@@ -93,6 +93,25 @@ or initials-only, or plain strict prefixes.  Returns a fresh list.
     (policy t t)                        ; conventional.lisp
 
 ----------------------------------------------------------------------------
+container-axis (latticewm/policy:policy latticewm/policy::container)
+----------------------------------------------------------------------------
+The axis CONTAINER divides space along: :HORIZONTAL, :VERTICAL, or NIL.
+
+NIL is the honest answer for anything that does not divide space — a stack
+gives every child the whole rectangle, a leaf has no children — and it is also
+the answer for NIL itself, so a caller walking up past the root need not guard.
+
+This generic exists because four verbs used to ask (TYPEP CONTAINER 'SPLIT)
+directly, and a TYPEP is not an extension point.  A container kind from
+outside the core that divides space in exactly the way a split does was
+invisible to RESIZE, EQUALIZE, EQUALIZE-ALL and TAB, and no method anywhere
+could say otherwise.  Answer this and all four work.
+
+  methods:
+    (policy split)                      ; conventional.lisp
+    (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
 container-label (latticewm/policy:policy latticewm/policy::container)
 ----------------------------------------------------------------------------
 A short human-readable name for CONTAINER, or NIL.
@@ -181,6 +200,19 @@ generic plus a value on the container's PROPS — which is what PROPS is for.
     (policy split t t t)                ; conventional.lisp
 
 ----------------------------------------------------------------------------
+equalize-container (latticewm/policy:policy latticewm/policy::container)
+----------------------------------------------------------------------------
+Give every child of CONTAINER an equal share of it.  True if anything moved.
+
+The shipped answer evens out a split's weights and does nothing to anything
+else, because a stack's children already have equal shares — every one of them
+the whole rectangle — and there is nothing to even out.
+
+  methods:
+    (policy split)                      ; conventional.lisp
+    (policy t)                          ; conventional.lisp
+
+----------------------------------------------------------------------------
 focus-after-remove (latticewm/policy:policy latticewm/policy::world
                     latticewm/policy::removed-path latticewm/policy::suggested)
 ----------------------------------------------------------------------------
@@ -198,6 +230,31 @@ one.
 
   methods:
     (policy t t t)                      ; conventional.lisp
+
+----------------------------------------------------------------------------
+font-for (latticewm/policy:policy latticewm/policy::role)
+----------------------------------------------------------------------------
+Which font should ROLE be drawn in?
+
+ROLE is a keyword naming a place text appears: :ECHO for the status line,
+:MINIBUFFER for the prompt, :HELP for the keymap and describe screens, :HINT
+for the empty-pane hint, :OVERLAY for the coordinate overlay, :MAP for the
+drawn map, and :DEFAULT for anything that has not been given a role.
+
+The shipped answer is the same font everywhere -- *UI-FONT* if it names one,
+otherwise the built-in Terminus -- because one font everywhere is what a
+window manager should look like until somebody decides otherwise.  Deciding
+otherwise is one method:
+
+    (defmethod font-for ((policy conventional-policy) (role (eql :map)))
+      (find-font "ter-112n"))
+
+A role is a keyword rather than a subclass so that an extension can invent
+one -- a widget the core has never heard of asks FONT-FOR with its own
+keyword and inherits the default answer for free.
+
+  methods:
+    (policy t)                          ; appearance.lisp
 
 ----------------------------------------------------------------------------
 gaps (latticewm/policy:policy latticewm/policy::container)
@@ -238,6 +295,24 @@ newcomer a surprising share.
 
   methods:
     (policy split t)                    ; conventional.lisp
+
+----------------------------------------------------------------------------
+join-existing-split-p (latticewm/policy:policy latticewm/policy::container
+                       latticewm/policy::axis)
+----------------------------------------------------------------------------
+Should a fresh split along AXIS join CONTAINER rather than nest inside it?
+
+This is what stops three windows placed side by side from becoming a lopsided
+nest of two-child splits — press the same key three times and you get one
+split of four, the way Emacs and i3 behave.
+
+The shipped rule is yes exactly when CONTAINER already divides along AXIS.
+Answering NIL always gives hyprland's dwindle, where every split nests inside
+the last; DESIGN's note that binary remains reachable as policy is this
+method plus SPLIT-AXIS-FOR.
+
+  methods:
+    (policy t t)                        ; conventional.lisp
 
 ----------------------------------------------------------------------------
 key-unbound (latticewm/policy:policy latticewm/policy::world
@@ -598,6 +673,23 @@ arrive in another workspace by pressing Left.
   methods:
     (policy stack t t)                  ; conventional.lisp
     (policy split t t)                  ; conventional.lisp
+
+----------------------------------------------------------------------------
+tab-siblings (latticewm/policy:policy latticewm/policy::container
+              latticewm/policy::address)
+----------------------------------------------------------------------------
+Which two children of CONTAINER should TAB fold into one stack?
+
+Returns (VALUES KEEP REMOVE): the address the new stack takes, and the address
+it empties.  NIL means there is no pair to fold here, and TAB does nothing.
+
+The shipped rule is 'this child and the next one, or the previous one when
+this is the last', which is what makes TAB do the obvious thing at either end
+of a row rather than refusing at one of them.
+
+  methods:
+    (policy split t)                    ; conventional.lisp
+    (policy t t)                        ; conventional.lisp
 
 ----------------------------------------------------------------------------
 visible-p (latticewm/policy:policy latticewm/policy::node)
@@ -963,6 +1055,21 @@ fixed-axis window managers is to add a 'split the other way' binding.
 *terminal*
   now: "foot"
   The terminal emulator the `terminal' command runs.
+
+*ui-font*
+  now: NIL
+  The font to draw interface text in, by name, or NIL for the built-in one.
+
+    (setf *ui-font* "ter-118n")
+
+Names come from FONT-NAMES.  The shipped Terminus is registered as
+"terminus".  LOAD-PSF registers any console font on disk under its own file
+name, so putting a different one everywhere is two lines in a config file:
+
+    (register-font (load-psf "/usr/share/kbd/consolefonts/ter-124n.psf.gz"))
+    (setf *ui-font* "ter-124n")
+
+Per-role control is one method rather than one option -- see FONT-FOR.
 
 *unfocused-border-color*
   now: (0.22 0.22 0.26 1.0)

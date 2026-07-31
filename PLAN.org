@@ -1146,3 +1146,109 @@ runtime font loading, which is a feature rather than an accounting exercise.
   virtual-keyboard protocol would bypass the xkb layer that is the actual
   question.
 - The announcement. Everything it was waiting on is now true.
+
+* Fourth session — 2026-07-31: the widget layer starts crossing the line
+:PROPERTIES:
+:CUSTOM_ID: log4
+:END:
+
+[[#log3][§log3]] ruled that gate 6 should move because code crosses from runtime to
+policy, not because the pair being measured changes. This is the first half of
+doing that, plus the split-mechanism work that turned out to be the same
+question one layer down.
+
+** The split mechanism was half policy and half TYPEP
+
+Every genuine *decision* about splits was already a method — ~layout-children~,
+~step-address~, ~entry-address~, ~should-collapse-p~, ~insertion-weight~. The
+*verbs* were not: five places asked ~(typep x 'split)~ inline, and a ~typep~
+cannot be specialized.
+
+The consequence was specific rather than theoretical. A container kind from
+outside that divides space exactly the way a split does — the shipped
+scrolling-columns example, or anybody's own variant — was invisible to
+~resize~, ~equalize~, ~equalize-all~ and ~tab~, and ~tree-split-at~ would never
+join it, so splitting three times inside one built a ladder of nested
+two-child containers instead of one row of four.
+
+~a-container-kind-the-core-never-heard-of-works-everywhere~ passed throughout,
+because it exercises layout, motion and surgery, all of which do go through
+generics. *The test was right and the claim it was read as supporting was
+wider than the test.*
+
+Four generics carry it now, each fallback specialized on ~T~ rather than on
+~container~ so that a caller walking up a parent chain and reaching ~NIL~ gets
+an answer instead of ~no-applicable-method~ — the same lesson
+~layout-children~'s fallback already records. ~src/model/~ stays pure: the
+decision crosses that line as a closure, exactly the way ~%simplify-upwards~
+already takes ~allow-collapse~ instead of calling ~should-collapse-p~.
+
+** Fonts are data now, and the cap on them was wrong
+
+The window manager shipped with one font wired in as three constants and a
+table. The reasoning for a bitmap font at all still holds — Pango would be a C
+font stack in the way of surviving without a maintainer — but it was never an
+argument for the font being *unchangeable*.
+
+A ~font~ is now a struct, the generated Terminus table registers itself as the
+default, ~load-psf~ reads any console font off the disk, and ~font-for (policy
+role)~ decides which is used where. PSF rather than BDF or TTF for one reason:
+*the fonts are already on the machine*, a few dozen of them, so changing the
+font needs nothing found, converted or installed.
+
+Two things only running it could find, and it found both inside a minute:
+
+1. ~uiop:run-program~ with ~(:string :element-type (unsigned-byte 8))~ reads
+   the pipe as *text* anyway and dies on the first octet that is not valid in
+   the default encoding — immediately, for a font table. The failure surfaced
+   as *"the font did not change"* rather than as an error, because the caller
+   fell back to the built-in one. ~:external-format :latin-1~ is the fix: the
+   encoding whose code points are its bytes.
+2. The first version capped fonts at eight pixels wide, with a docstring
+   confidently explaining that Terminus's larger sizes are taller rather than
+   wider. *They are not.* ~ter-122b~ is eleven wide and ~ter-d28n~ is fourteen,
+   so the cap refused every size above the smallest — which is to say every
+   font somebody changing the font would be reaching for. Glyph rows are
+   stride-addressed now and the leftmost pixel is the high bit at any width.
+
+The second is the more interesting one. It was not a coding error; it was a
+*stated assumption in a docstring* that was simply false, and the only thing
+that could have caught it was pointing the loader at the fonts on the disk.
+Third time this log has had to record that.
+
+** Where gate 6 actually stands
+
+: 1.20 -> 0.82 -> 0.80 -> 0.87 (options and fonts) -> 0.85 (the PSF loader)
+:                            -> 0.86 (font tests)
+
+~policy/appearance.lisp~ took the twenty-four widget options — every colour,
+scale, height and column count in the echo area, minibuffer, help overlay and
+empty-pane hint — out of ~src/runtime/~, and added the font layer. That is
+~+259~ policy lines and ~-100~ runtime.
+
+Then ~psf.lisp~ put ninety-odd lines *back* into the runtime, and the ratio
+fell again. That is correct and worth stating plainly rather than hiding:
+reading bytes off a disk is mechanism. A feature that makes the system more
+configurable can move the number the wrong way, and a gate that punished it
+for that would be a gate arguing against its own purpose.
+
+*It is 0.86, and it is not above 1 yet.* Getting there needs roughly 270 more
+lines to cross, and the honest candidates are no longer easy ones:
+
+- The text-composition half of =help.lisp= — ~summary-of~, ~wrap-text~,
+  ~truncate-text~, ~substitute-arguments~. Pure functions, and every one of
+  them is a decision about how a docstring reads on a screen. Perhaps ninety
+  lines, and the only obstacle is that ~substitute-arguments~ takes a command
+  object and would have to take a lambda list instead.
+- =echo.lisp='s content. What a status line is made of is ~mode-line-format~,
+  the single most-customised variable in Emacs, and here it is hardcoded.
+- *The real question: the command registry and the keymap.*
+  [[#extensibility-real][§extensibility-real]] says outright that the command registry is "a user
+  interface rather than an implementation detail". If that is true then
+  ~defcommand~, ~define-key~ and the shipped keymap are policy, and moving
+  them settles gate 6 outright — five hundred and fifty lines. If it is not
+  true, then a registry is infrastructure and the number has to be earned
+  somewhere else.
+
+That is a genuine architectural call rather than an accounting one, and it is
+the next thing to decide.

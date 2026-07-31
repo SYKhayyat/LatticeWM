@@ -21,51 +21,6 @@
 
 (in-package #:latticewm/runtime)
 
-(p:define-option *echo-area* t
-  "Show a status line along the bottom of the screen.
-
-It reports where the cursor is, what is on this workspace, and the last
-message.  Turn it off if you want the screen entirely to yourself; you will
-lose the only permanent indication of which cell you are in.")
-
-(p:define-option *echo-height* 24
-  "Height of the echo area in pixels.")
-
-(p:define-option *echo-scale* 1
-  "Integer scale factor for echo-area text.
-
-1 is the font's own size — sixteen pixels tall, which is an ordinary status
-bar.  2 is for a HiDPI display, where it is again ordinary rather than large.
-There is no half step, deliberately: a bitmap font scaled by anything but a
-whole number is a smear, and a bitmap font scaled by a whole number is crisp
-at any size.")
-
-(p:define-option *echo-position* :bottom
-  "Which edge the echo area sits on: :BOTTOM or :TOP.
-
-Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
-for two situations: running nested inside another desktop whose panel is along
-the bottom, and any setup where something else already owns that edge.")
-
-(p:define-option *echo-background* '(0.09 0.09 0.12 0.92)
-  "Echo area background, as (R G B A).  Slightly translucent by default so it
-reads as an overlay rather than as a window.")
-
-(p:define-option *echo-foreground* '(0.75 0.78 0.85 1.0)
-  "Echo area text colour.")
-
-(p:define-option *echo-accent* '(0.40 0.65 1.00 1.0)
-  "Colour for the part of the echo area that says where you are.")
-
-(p:define-option *echo-divider* '(0.28 0.28 0.34 1.0)
-  "Colour of the separators between echo-area segments.
-
-Dim on purpose: a separator is punctuation, and punctuation you notice is
-punctuation that is too loud.")
-
-(p:define-option *echo-message-seconds* 6
-  "How long a message stays in the echo area before it is dropped.")
-
 (defvar *echo-overlay* nil)
 (defvar *echo-message* nil "A cons of text and the time it was posted.")
 
@@ -85,7 +40,7 @@ goes only to a log file nobody is reading."
   "The message to show, or NIL once it has aged out."
   (let ((message *echo-message*))
     (when (and message
-               (< (- (get-universal-time) (cdr message)) *echo-message-seconds*))
+               (< (- (get-universal-time) (cdr message)) p:*echo-message-seconds*))
       (car message))))
 
 (defmethod p:echo-content ((policy p:policy) world)
@@ -190,25 +145,25 @@ most urgent thing, and otherwise the status line is the policy's to fill."
 
 (defun draw-echo-area (world output)
   "Draw and place the echo area along the bottom of OUTPUT."
-  (unless (and *echo-area* *server* output)
+  (unless (and p:*echo-area* *server* output)
     (when *echo-overlay* (overlay-hide *echo-overlay*))
     (return-from draw-echo-area nil))
   (unless *echo-overlay*
     (setf *echo-overlay* (make-instance 'overlay :name "echo")))
   (let* ((area (c:output-rect output))
-         (height (max (+ 6 (text-height :scale *echo-scale*)) *echo-height*))
+         (height (max (+ 6 (text-height :scale p:*echo-scale*)) p:*echo-height*))
          (width (c:rect-w area))
          (canvas (ensure-overlay *echo-overlay* width height)))
     (when canvas
-      (canvas-fill canvas (apply #'argb *echo-background*))
+      (canvas-fill canvas (apply #'argb p:*echo-background*))
       (let* ((pen 8)
-             (baseline (floor (- height (text-height :scale *echo-scale*)) 2))
-             (normal (apply #'argb *echo-foreground*))
-             (accent (apply #'argb *echo-accent*))
-             (divider (apply #'argb *echo-divider*))
-             (prompt-color (apply #'argb *minibuffer-prompt-color*))
-             (caret-color (apply #'argb *minibuffer-caret-color*))
-             (dim (apply #'argb *minibuffer-completion-color*))
+             (baseline (floor (- height (text-height :scale p:*echo-scale*)) 2))
+             (normal (apply #'argb p:*echo-foreground*))
+             (accent (apply #'argb p:*echo-accent*))
+             (divider (apply #'argb p:*echo-divider*))
+             (prompt-color (apply #'argb p:*minibuffer-prompt-color*))
+             (caret-color (apply #'argb p:*minibuffer-caret-color*))
+             (dim (apply #'argb p:*minibuffer-completion-color*))
              (segments (remove-if (lambda (segment)
                                     (and (zerop (length (car segment)))
                                          ;; The caret is the one segment whose
@@ -218,7 +173,7 @@ most urgent thing, and otherwise the status line is the policy's to fill."
                                    world
                                    (floor (- width 16)
                                           (max 1 (text-width "m"
-                                                             :scale *echo-scale*)))))))
+                                                             :scale p:*echo-scale*)))))))
         (loop for (text . kind) in segments
               for firstp = t then nil
               do ;; The separator goes *between* segments, which means before
@@ -227,28 +182,28 @@ most urgent thing, and otherwise the status line is the policy's to fill."
                  ;; like something failed to render.  A prompt draws its parts
                  ;; contiguously, because "M-x | foc" is not a prompt.
                  (unless (or firstp (reading-p) (eq kind :caret))
-                   (incf pen (* 4 *echo-scale*))
+                   (incf pen (* 4 p:*echo-scale*))
                    (incf pen (canvas-text canvas pen baseline "|" divider
-                                          :scale *echo-scale*))
-                   (incf pen (* 4 *echo-scale*)))
+                                          :scale p:*echo-scale*))
+                   (incf pen (* 4 p:*echo-scale*)))
                  (if (eq kind :caret)
                      ;; Drawn, not typed: a bar between two characters rather
                      ;; than a character between them, so that the text does
                      ;; not jump sideways as the caret moves through it.
                      (canvas-fill canvas caret-color
                                   (c:make-rect pen baseline
-                                               (* 2 *echo-scale*)
-                                               (text-height :scale *echo-scale*)))
+                                               (* 2 p:*echo-scale*)
+                                               (text-height :scale p:*echo-scale*)))
                      (incf pen (canvas-text canvas pen baseline text
                                             (case kind
                                               (:accent accent)
                                               (:prompt prompt-color)
                                               (:dim dim)
                                               (t normal))
-                                            :scale *echo-scale*)))))
+                                            :scale p:*echo-scale*)))))
       (overlay-commit *echo-overlay*
                       :rect (c:make-rect (c:rect-x area)
-                                         (if (eq *echo-position* :top)
+                                         (if (eq p:*echo-position* :top)
                                              (c:rect-y area)
                                              (- (c:rect-bottom area) height))
                                          width height))
@@ -257,14 +212,14 @@ most urgent thing, and otherwise the status line is the policy's to fill."
 (defun echo-reserved-height (output)
   "How much of OUTPUT the echo area is using, so the layout can avoid it."
   (declare (ignore output))
-  (if (and *echo-area* *server*)
-      (max (+ 6 (text-height :scale *echo-scale*)) *echo-height*)
+  (if (and p:*echo-area* *server*)
+      (max (+ 6 (text-height :scale p:*echo-scale*)) p:*echo-height*)
       0))
 
 (defun echo-reserved-edges (output)
   "The echo area's reservation as (TOP RIGHT BOTTOM LEFT)."
   (let ((height (echo-reserved-height output)))
-    (if (eq *echo-position* :top)
+    (if (eq p:*echo-position* :top)
         (list height 0 0 0)
         (list 0 0 height 0))))
 

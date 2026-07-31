@@ -312,6 +312,57 @@ src/ is sufficient."
     (is (not (c:default-split-join-p r :horizontal))
         "the pure default knows only SPLIT, which is why the policy one exists")))
 
+;;; ------------------------------------------------------------------ fonts
+
+(test a-font-is-data-and-the-policy-picks-it
+  "The window manager shipped with one font wired in as three constants.
+
+Fonts are policy now: which one is drawn for which role is FONT-FOR, and the
+generated Terminus table is simply the one that registers itself as the
+default.  What this asserts is the part that had a real bug in it — the
+representation.  An earlier version stored one byte per row and refused
+anything wider than eight pixels, on the reasoning that Terminus's larger
+sizes are taller rather than wider.  They are not: ter-122b is eleven wide and
+ter-d28n is fourteen, so the cap refused every size above the smallest."
+  (let ((policy (policy)))
+    ;; The shipped font is registered and is what FONT-FOR answers with.
+    (is (p:font-p p:*default-font*))
+    (is (equal "terminus" (p:font-name p:*default-font*)))
+    (is (eq p:*default-font* (p:font-for policy :default)))
+    (is (eq p:*default-font* (p:font-for policy :a-role-nobody-has-defined))
+        "an unknown role inherits the default rather than signalling")
+    ;; Stride is derived from width, at both widths that matter.
+    (is (= 1 (p:font-stride (p:make-font "narrow" 8 16 32 (byte-vector 16)))))
+    (is (= 2 (p:font-stride (p:make-font "wide" 14 28 32 (byte-vector 56)))))
+    ;; Bit order: leftmost pixel is the high bit, at either stride.
+    (let ((narrow (p:make-font "n" 8 1 65 (byte-vector 1 #x80))))
+      (is (logbitp 7 (p:glyph-row narrow #\A 0)) "leftmost pixel is bit 7")
+      (is (zerop (p:glyph-row narrow #\A 5)) "a row past the end is blank")
+      (is (zerop (p:glyph-row narrow #\Space 0)) "so is a glyph before FIRST-CODE"))
+    (let ((wide (p:make-font "w" 14 1 65 (byte-vector 2 #x80 #x00))))
+      (is (logbitp 15 (p:glyph-row wide #\A 0))
+          "at stride 2 the leftmost pixel is bit 15, not bit 7")
+      (is (= 2 (p:font-stride wide))))
+    ;; *UI-FONT* names a font, and naming one changes what FONT-FOR answers.
+    (let ((mine (p:make-font "test-font" 12 24 32 (byte-vector (* 24 2 95)))))
+      (p:register-font mine)
+      (is (eq mine (p:find-font "test-font")))
+      (is (eq mine (p:find-font mine)) "a font passes through FIND-FONT")
+      (is (member "test-font" (p:font-names) :test #'equal))
+      (let ((p:*ui-font* "test-font"))
+        (is (eq mine (p:font-for policy :echo))
+            "setting the option is the whole of changing the font"))
+      (is (eq p:*default-font* (p:font-for policy :echo))
+          "and unsetting it puts the shipped one back")
+      (let ((p:*ui-font* "a-font-that-was-never-registered"))
+        (is (eq p:*default-font* (p:font-for policy :echo))
+            "a name nobody registered falls back rather than drawing nothing")))
+    ;; Metrics come from the font, which is what makes a bigger one bigger.
+    (let ((big (p:make-font "big" 12 24 32 (byte-vector 1))))
+      (is (= 60 (p:font-text-width big "hello")))
+      (is (= 24 (p:font-text-height big)))
+      (is (= 120 (p:font-text-width big "hello" :scale 2))))))
+
 ;;; ------------------------------------------------------------ live surgery
 
 (test redefining-a-method-takes-effect-immediately

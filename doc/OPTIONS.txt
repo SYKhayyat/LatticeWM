@@ -367,6 +367,22 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: "foot"
   The terminal emulator the `terminal' command runs.
 
+*UI-FONT*
+  value:   NIL
+  default: NIL
+  The font to draw interface text in, by name, or NIL for the built-in one.
+  
+      (setf *ui-font* "ter-118n")
+  
+  Names come from FONT-NAMES.  The shipped Terminus is registered as
+  "terminus".  LOAD-PSF registers any console font on disk under its own file
+  name, so putting a different one everywhere is two lines in a config file:
+  
+      (register-font (load-psf "/usr/share/kbd/consolefonts/ter-124n.psf.gz"))
+      (setf *ui-font* "ter-124n")
+  
+  Per-role control is one method rather than one option -- see FONT-FOR.
+
 *UNFOCUSED-BORDER-COLOR*
   value:   (0.22 0.22 0.26 1.0)
   default: (0.22 0.22 0.26 1.0)

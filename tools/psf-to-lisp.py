@@ -80,22 +80,36 @@ FONT_TEMPLATE = r''';;;; runtime/font.lisp --- The bitmap font.  GENERATED; see 
     ))
   "ASCII 32 to 126, {height} row bytes each.")
 
-(declaim (inline glyph-row))
-(defun glyph-row (character row)
+
+;;; Everything above is the table.  Everything below hands it to the policy
+;;; layer, which is what decides where it gets used -- see
+;;; policy/appearance.lisp.  This file supplies the *default* font and has no
+;;; opinion about anything else.
+
+(p:register-font (p:make-font "terminus" +font-width+ +font-height+
+                              +font-first+ +font+))
+
+(setf p:*default-font* (p:find-font "terminus"))
+
+(defun current-font (&optional (role :default))
+  "The font ROLE should be drawn in, as the policy decides.
+
+Falls back to the built-in table if a method answers NIL, because a window
+manager that draws nothing because a font is missing is worse than one that
+draws the wrong font."
+  (or (p:font-for (p:current-policy) role) p:*default-font*))
+
+(defun glyph-row (character row &optional (font (current-font)))
   "Row ROW of CHARACTER, as a byte whose bit 7 is the leftmost pixel."
-  (let ((code (char-code character)))
-    (if (and (<= +font-first+ code 126) (< -1 row +font-height+))
-        (aref +font+ (+ (* (- code +font-first+) +font-height+) row))
-        0)))
+  (p:glyph-row font character row))
 
-(defun text-width (string &key (scale 1) (tracking 0))
+(defun text-width (string &key (scale 1) (tracking 0) (font (current-font)))
   "How wide STRING will be drawn, in pixels."
-  (let ((advance (* scale (+ +font-width+ tracking))))
-    (max 0 (- (* advance (length string)) (* scale tracking)))))
+  (p:font-text-width font string :scale scale :tracking tracking))
 
-(defun text-height (&key (scale 1))
+(defun text-height (&key (scale 1) (font (current-font)))
   "How tall one line of text is, in pixels."
-  (* scale +font-height+))
+  (p:font-text-height font :scale scale))
 '''
 
 main()

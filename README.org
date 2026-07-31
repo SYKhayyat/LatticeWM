@@ -162,6 +162,29 @@ latticewm --list-commands     # every command
 Anything you can set in the file you can also set live with =Super+? s=, and
 =Shift+Super+c= reloads the file without restarting.
 
+** Fonts
+
+It ships with Terminus, and it will use any PSF console font — which means the
+few dozen already under =/usr/share/kbd/consolefonts/= on your machine, with
+nothing to find, convert or install.
+
+: M-x load-font  /usr/share/kbd/consolefonts/ter-124n.psf.gz
+
+That takes effect immediately. To make it stick, or to use different fonts in
+different places:
+
+#+begin_src lisp
+(register-font (load-psf "/usr/share/kbd/consolefonts/ter-124n.psf.gz"))
+(setf *ui-font* "ter-124n")
+
+;; Or per role — :echo, :minibuffer, :help, :hint, :overlay, :map.
+(defmethod font-for ((policy conventional-policy) (role (eql :map)))
+  (find-font "ter-112n"))
+#+end_src
+
+Widths up to sixteen pixels and any height. =(font-names)= lists what is
+registered.
+
 * Extending it
 
 The point of the project. Changing behaviour means writing one =defmethod= in

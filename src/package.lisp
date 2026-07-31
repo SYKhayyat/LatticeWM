@@ -209,6 +209,20 @@ You never edit this package.")
    ;; the split mechanism, as policy rather than as a TYPEP
    #:container-axis #:equalize-container #:tab-siblings
    #:join-existing-split-p #:split-join-predicate
+   ;; appearance: the widget layer's decisions, moved out of src/runtime/
+   #:font #:font-p #:make-font #:font-name #:font-width #:font-height
+   #:font-first-code #:font-glyphs #:font-stride
+   #:*fonts* #:*default-font* #:register-font #:find-font #:font-names
+   #:*ui-font* #:font-for #:glyph-row #:font-text-width #:font-text-height
+   #:*echo-area* #:*echo-height* #:*echo-scale* #:*echo-position*
+   #:*echo-background* #:*echo-foreground* #:*echo-accent* #:*echo-divider*
+   #:*echo-message-seconds*
+   #:*minibuffer-prompt-color* #:*minibuffer-completion-color*
+   #:*minibuffer-caret-color* #:*minibuffer-candidates-shown* #:*history-length*
+   #:*help-columns* #:*help-background* #:*help-key-color* #:*help-text-color*
+   #:*help-scale*
+   #:*show-empty-panes* #:*empty-pane-hint* #:*empty-outline-color*
+   #:*empty-hint-color* #:*overlay-buffer-idle*
    ;; --- window lifecycle -----------------------------------------------
    #:on-window-open #:on-window-close #:should-float-p #:on-minimize
    #:on-restore #:window-capabilities #:decoration-mode
@@ -268,13 +282,13 @@ keybindings, the command registry, and the session loop.")
    #:spawn #:notify #:*log-level* #:logmsg #:*server*
    #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
-   #:text-width #:text-height #:*echo-area* #:*echo-scale* #:*echo-position*
+   #:text-width #:text-height
    #:current-message #:server-compositor #:server-shm
    #:*help-visible* #:help-entries #:binding-description #:truncate-text
-   #:read-string #:reading-p #:end-prompt #:prompt-segments #:echo-segments
-   #:*minibuffer-prompt-color* #:*minibuffer-completion-color*
-   #:*minibuffer-caret-color* #:*history-length* #:history #:history-push
+   #:read-string #:reading-p #:end-prompt #:prompt-segments #:echo-segments #:history #:history-push
    #:summary-of #:wrap-text #:show-help-page #:keys-running #:warp-pointer
+   ;; fonts from disk
+   #:load-psf #:read-file-bytes #:current-font
    ;; welcome
    #:welcome #:welcome-rows #:welcome-marker #:maybe-show-welcome
    ;; The tier-0 options declared in this package.  Every one of these is a
@@ -285,15 +299,7 @@ keybindings, the command registry, and the session loop.")
    ;; interns a brand new symbol in LATTICEWM/USER and silently changes
    ;; nothing at all, which is the worst of the three possible outcomes.
    #:*terminal* #:*editor* #:*browser* #:*file-manager* #:*modifier*
-   #:*cursor-theme* #:*cursor-size*
-   #:*echo-height* #:*echo-background* #:*echo-foreground* #:*echo-accent*
-   #:*echo-divider* #:*echo-message-seconds*
-   #:*help-columns* #:*help-background* #:*help-key-color* #:*help-text-color*
-   #:*help-scale*
-   #:*minibuffer-candidates-shown*
-   #:*show-empty-panes* #:*empty-pane-hint* #:*empty-hint-color*
-   #:*empty-outline-color*
-   #:*overlay-buffer-idle* #:*welcome-on-first-run*
+   #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
    ;; hooks
    #:add-hook #:remove-hook #:run-hooks #:*hooks*
    ;; state

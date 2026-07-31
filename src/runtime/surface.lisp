@@ -115,21 +115,29 @@ wrong shows up as a halo around everything rather than as an error."
     (canvas-fill canvas color (c:make-rect x y width h))
     (canvas-fill canvas color (c:make-rect (- (+ x w) width) y width h))))
 
-(defun canvas-text (canvas x y string color &key (scale 1) (tracking 0))
+(defun canvas-text (canvas x y string color
+                    &key (scale 1) (tracking 0) (font (current-font)))
   "Draw STRING at (X, Y) — its top-left corner — and return the width used.
 
 Integer scaling only, so the result is crisp at any size instead of blurry at
-most of them.  At scale 1 with the shipped font this is simply text."
+most of them.  At scale 1 with the shipped font this is simply text.
+
+FONT defaults to whatever the policy answers for :DEFAULT.  The cell size is
+read from the font rather than from a constant, so a font of another size
+draws correctly here without anything else in the runtime being told."
   (let ((data (canvas-data canvas))
         (cw (canvas-width canvas))
         (ch (canvas-height canvas))
+        (font-height (p:font-height font))
+        (font-width (p:font-width font))
+        (top-bit (1- (* 8 (p:font-stride font))))
         (pen x))
     (loop for character across string
-          do (loop for row from 0 below +font-height+
-                   for bits = (glyph-row character row)
+          do (loop for row from 0 below font-height
+                   for bits = (p:glyph-row font character row)
                    unless (zerop bits)
-                     do (loop for column from 0 below +font-width+
-                              when (logbitp (- 7 column) bits)
+                     do (loop for column from 0 below font-width
+                              when (logbitp (- top-bit column) bits)
                                 do (loop for dy from 0 below scale
                                          for py = (+ y (* row scale) dy)
                                          when (< -1 py ch)
@@ -139,7 +147,7 @@ most of them.  At scale 1 with the shipped font this is simply text."
                                                       do (setf (sb-sys:sap-ref-32
                                                                 data (* 4 (+ (* py cw) px)))
                                                                color)))))
-             (incf pen (* scale (+ +font-width+ tracking))))
+             (incf pen (* scale (+ font-width tracking))))
     (- pen x)))
 
 ;;; ------------------------------------------------------- shell surfaces
@@ -206,16 +214,6 @@ refused to start because it could not draw a label would be a bad trade."
           (w:node-place-top (overlay-node overlay))))
       (setf (overlay-visible-p overlay) t))))
 
-(p:define-option *overlay-buffer-idle* t
-  "Release an overlay's pixel buffer while it is hidden.
-
-A full-screen ARGB buffer is about four megabytes, and the help screen and the
-drawn map are each hidden almost all of the time.  Keeping their buffers costs
-eight megabytes of resident memory to save one allocation on a keypress, which
-is the wrong way round.
-
-Set to NIL if you would rather have the allocation happen once.")
-
 (defun overlay-hide (overlay)
   "Stop showing OVERLAY, and release its buffer unless told otherwise."
   (when (and (overlay-surface overlay) (overlay-visible-p overlay))
@@ -223,7 +221,7 @@ Set to NIL if you would rather have the allocation happen once.")
     (guarded "overlay hide"
       (wl:wl-surface.attach (overlay-surface overlay) nil 0 0)
       (wl:wl-surface.commit (overlay-surface overlay))))
-  (when (and *overlay-buffer-idle* (overlay-canvas overlay))
+  (when (and p:*overlay-buffer-idle* (overlay-canvas overlay))
     (destroy-canvas (overlay-canvas overlay))
     (setf (overlay-canvas overlay) nil))
   nil)

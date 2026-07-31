@@ -19,25 +19,6 @@
 
 (in-package #:latticewm/runtime)
 
-(p:define-option *help-columns* 2
-  "How many columns of bindings the help overlay uses.
-
-Two, not three.  Three fits more rows and truncates almost every description,
-and a help screen where you can read the keys but not what they do has kept
-the wrong half.")
-
-(p:define-option *help-background* '(0.07 0.07 0.10 0.94)
-  "Help overlay background, as (R G B A).")
-
-(p:define-option *help-key-color* '(0.45 0.70 1.00 1.0)
-  "Colour of the key in the help overlay.")
-
-(p:define-option *help-text-color* '(0.78 0.80 0.86 1.0)
-  "Colour of the description in the help overlay.")
-
-(p:define-option *help-scale* 1
-  "Integer scale factor for help-overlay text.")
-
 (defvar *help-overlay* nil)
 
 (defun summary-of (string)
@@ -161,7 +142,7 @@ that stops mid-word reads as a rendering bug rather than as an abbreviation."
       (when canvas
         (let* ((customp (consp *help-visible*))
                (entries (if customp (cdr *help-visible*) (help-entries)))
-               (line (+ 4 (text-height :scale *help-scale*)))
+               (line (+ 4 (text-height :scale p:*help-scale*)))
                (title-top 16)
                (top (+ title-top (* 2 line)))
                (available (max 1 (floor (- (c:rect-h area) top line) line)))
@@ -176,12 +157,12 @@ that stops mid-word reads as a rendering bug rather than as an abbreviation."
                ;; than the keys.
                (columns (if customp
                             1
-                            (min 3 (max *help-columns*
+                            (min 3 (max p:*help-columns*
                                         (ceiling (length entries) available)))))
                (rows (ceiling (length entries) columns))
                (column-width (floor (- (c:rect-w area) 40) columns))
-               (key-color (apply #'argb *help-key-color*))
-               (text-color (apply #'argb *help-text-color*))
+               (key-color (apply #'argb p:*help-key-color*))
+               (text-color (apply #'argb p:*help-text-color*))
                ;; One left column, as wide as the widest thing in it, so that
                ;; every description starts at the same x.  Ragged descriptions
                ;; are what made the apropos screen read as a paragraph with
@@ -192,14 +173,14 @@ that stops mid-word reads as a rendering bug rather than as an abbreviation."
                ;; than legibility: one forty-character chord — and the keymap
                ;; has some — would otherwise squeeze every description on the
                ;; screen down to nothing to stay level with it.
-               (gap (text-width "  " :scale *help-scale*))
+               (gap (text-width "  " :scale p:*help-scale*))
                (left (min (floor column-width 2)
                           (+ gap (reduce #'max entries :initial-value 0
                                          :key (lambda (entry)
                                                 (text-width (car entry)
-                                                            :scale *help-scale*))))))
+                                                            :scale p:*help-scale*))))))
                (shown 0))
-          (canvas-fill canvas (apply #'argb *help-background*))
+          (canvas-fill canvas (apply #'argb p:*help-background*))
           (loop for entry in entries
                 for index from 0
                 for column = (floor index rows)
@@ -209,17 +190,17 @@ that stops mid-word reads as a rendering bug rather than as an abbreviation."
                 while (< y (- (c:rect-h area) line))
                 do (incf shown)
                    (let ((used (canvas-text canvas x y (car entry) key-color
-                                            :scale *help-scale*)))
+                                            :scale p:*help-scale*)))
                      ;; Truncate rather than overflow into the next column: a
                      ;; help screen that overlaps itself is worse than one that
                      ;; abbreviates.
                      (let* ((offset (max left (+ used gap)))
                             (room (max 0 (- column-width offset gap 10)))
                             (fits (max 0 (floor room (text-width "m"
-                                                                :scale *help-scale*)))))
+                                                                :scale p:*help-scale*)))))
                        (canvas-text canvas (+ x offset) y
                                     (truncate-text (cdr entry) fits)
-                                    text-color :scale *help-scale*))))
+                                    text-color :scale p:*help-scale*))))
           (canvas-text canvas 20 title-top
                        (cond
                          (customp (format nil "~a  --  any key closes this"
@@ -234,7 +215,7 @@ that stops mid-word reads as a rendering bug rather than as an abbreviation."
                          (t (format nil "LatticeWM -- ~d bindings.  ~
                                          Any key closes this."
                                     (length entries))))
-                       key-color :scale *help-scale*))
+                       key-color :scale p:*help-scale*))
         (overlay-commit *help-overlay* :rect area)))))
 
 (defcommand help ()

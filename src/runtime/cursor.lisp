@@ -25,23 +25,6 @@
 
 (in-package #:latticewm/runtime)
 
-(p:define-option *show-empty-panes* t
-  "Draw an outline around empty panes, and the spawn hints inside the focused
-one.
-
-Turning this off gives you a window manager where standing in an empty pane
-looks exactly like a broken keyboard.  It is here because it is an option, not
-because it is a good idea.")
-
-(p:define-option *empty-pane-hint* t
-  "Show which keys open something, inside the focused empty pane.")
-
-(p:define-option *empty-outline-color* '(0.30 0.32 0.40 0.55)
-  "Outline colour of an unfocused empty pane.")
-
-(p:define-option *empty-hint-color* '(0.70 0.75 0.86 1.0)
-  "Text colour of the hint inside the focused empty pane.")
-
 (defvar *cursor-overlay* nil)
 (defvar *cursor-dirty* '())
 
@@ -63,7 +46,7 @@ because it is a good idea.")
 (defun draw-empty-panes ()
   "Outline the empty panes and label the focused one."
   (let ((output (first (all-outputs))))
-    (unless (and *show-empty-panes* output *server* *world*)
+    (unless (and p:*show-empty-panes* output *server* *world*)
       (when *cursor-overlay* (overlay-hide *cursor-overlay*))
       (return-from draw-empty-panes nil))
     (let ((panes (empty-pane-placements)))
@@ -83,8 +66,8 @@ because it is a good idea.")
              (dolist (rect *cursor-dirty*) (canvas-fill canvas 0 rect))
              (setf *cursor-dirty* '())
              (let ((cursor (c:world-cursor *world*))
-                   (dim (apply #'argb *empty-outline-color*))
-                   (hint (apply #'argb *empty-hint-color*)))
+                   (dim (apply #'argb p:*empty-outline-color*))
+                   (hint (apply #'argb p:*empty-hint-color*)))
                (multiple-value-bind (fr fg fb fa)
                    (p:border-color (p:current-policy) (c:make-leaf) t)
                  (let ((bright (argb fr fg fb fa)))
@@ -96,7 +79,7 @@ because it is a good idea.")
                          do (canvas-rect canvas box (if focusedp bright dim)
                                          :width (if focusedp 3 1))
                             (push box *cursor-dirty*)
-                            (when (and focusedp *empty-pane-hint*
+                            (when (and focusedp p:*empty-pane-hint*
                                        (> (c:rect-w box) 220)
                                        (> (c:rect-h box) 90))
                               (let* ((lines (hint-lines))
