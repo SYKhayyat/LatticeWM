@@ -43,4 +43,65 @@
   (timing "layout-node (grid)" 1000 (layout-node policy grid rect))
   (timing "container-addresses" 1000 (container-addresses grid)))
 
+;;; ----------------------------------------------------------------- drawing
+;;;
+;;; THIS SECTION EXISTS BECAUSE EVERYTHING ABOVE IT WAS THE WRONG THING TO
+;;; MEASURE.  For seven sessions this file benchmarked the model — the pure,
+;;; functional, trivially-benchmarkable half — and reported numbers like
+;;; 0.35 ms to lay out two hundred windows, which read as "this program is
+;;; fast".  Meanwhile clearing the help overlay cost 40 ms, on a keypress,
+;;; and nothing measured it.
+;;;
+;;; It is the same shape as the finding in src/runtime/server.lisp — "the
+;;; tests pass because they construct state rather than receive it" — one
+;;; layer over: *the bench measured the model because the model is what is
+;;; easy to measure.*  A benchmark that only covers the pure half of a
+;;; program is not a benchmark of the program.
+;;;
+;;; No compositor is needed.  A canvas is an mmap and a few integers; the
+;;; wl_shm pool is only how the compositor comes to be looking at the same
+;;; bytes, and nothing in the drawing path reads it.  So: mmap anonymously,
+;;; draw, and time it.
+
+(defun bench-canvas (w h scale)
+  "A canvas backed by ordinary anonymous memory rather than by wl_shm."
+  (let* ((width (* scale w)) (height (* scale h))
+         (stride (* width 4)) (size (* stride height))
+         (data (sb-posix:mmap nil size
+                              (logior sb-posix:prot-read sb-posix:prot-write)
+                              (logior sb-posix:map-private sb-posix:map-anon)
+                              -1 0)))
+    (latticewm/runtime::%make-canvas
+     :width width :height height :scale scale
+     :stride stride :size size :fd -1 :data data)))
+
+(setf *policy* (make-instance 'conventional-policy))
+
+(let ((line "[3/3] (-4 . 0) ~/src/latticewm  emacs  120x40  M-x split-right")
+      (row "Super+h        focus-left     move the cursor to the pane on the left")
+      (colour (r:argb 0.9 0.9 0.9)))
+  ;; The echo area, which is redrawn every time anything at all changes.
+  (dolist (spec '((1920 24 1) (3840 48 2)))
+    (destructuring-bind (w h scale) spec
+      (let ((canvas (bench-canvas w h scale)))
+        (format t "~&~%=== echo area ~dx~d at scale ~d ===~%" w h scale)
+        (timing "canvas-fill" 200 (r:canvas-fill canvas 0))
+        (timing "canvas-text (one status line)" 200
+          (r:canvas-text canvas 4 4 line colour))
+        (timing "one redraw" 200
+          (progn (r:canvas-fill canvas 0)
+                 (r:canvas-text canvas 4 4 line colour))))))
+  ;; The help overlay, which is a full screen of text on Super+/.
+  (dolist (spec '((1920 1080 1) (1920 1080 2)))
+    (destructuring-bind (w h scale) spec
+      (let ((canvas (bench-canvas w h scale)))
+        (format t "~&~%=== help overlay ~dx~d at scale ~d ===~%" w h scale)
+        (timing "canvas-fill (whole screen)" 50 (r:canvas-fill canvas 0))
+        (timing "60 rows of text" 50
+          (dotimes (n 60) (r:canvas-text canvas 20 (+ 10 (* n 17)) row colour)))
+        (timing "one full redraw" 50
+          (progn (r:canvas-fill canvas 0)
+                 (dotimes (n 60)
+                   (r:canvas-text canvas 20 (+ 10 (* n 17)) row colour))))))))
+
 (format t "~&~%heap in use: ~,1f MB~%" (/ (sb-kernel:dynamic-usage) 1048576.0))
