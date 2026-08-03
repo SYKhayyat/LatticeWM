@@ -1,0 +1,248 @@
+;;;; tests/test-devices.lisp --- Input device configuration, without hardware.
+;;;;
+;;;; WHAT IS TESTABLE HERE AND WHAT IS NOT, stated up front because this
+;;;; subsystem is the clearest case in the program of the split the whole
+;;;; project keeps rediscovering.
+;;;;
+;;;; The *decision* — which settings a device should have, given the options,
+;;;; the rules and the policy — is pure.  It takes a device and returns a
+;;;; plist, it touches no proxy, and it is the half where a mistake is silent:
+;;;; a rule that matches the wrong device turns natural scrolling on for the
+;;;; mouse and nobody can say why.  All of that is checked below.
+;;;;
+;;;; The *sending* is not testable here at all, and pretending otherwise would
+;;;; be the exact failure src/runtime/server.lisp names — constructing state
+;;;; rather than receiving it.  A proxy cannot be constructed.  That half is
+;;;; checked in tools/integration.lisp against a real river, and the libinput
+;;;; half of it needs real hardware, which is recorded as a skip rather than
+;;;; passed over in silence.
+;;;;
+;;;; The encoding is the interesting middle case: DOUBLE-BYTES puts the raw
+;;;; bytes of an IEEE double on the wire, which is exactly the kind of thing
+;;;; that is wrong by one byte order and looks fine until a touchpad is
+;;;; suddenly the fastest object in the room.  It is pure, so it is checked.
+
+(in-package #:latticewm/tests)
+(in-suite devices)
+
+(defun device (&key name (kind :pointer))
+  "An INPUT-DEVICE with no proxies, which is all a decision needs."
+  (make-instance 'c:input-device :name name :kind kind))
+
+(defclass test-device-policy (p:conventional-policy) ()
+  (:documentation "A policy that adds one setting to the shipped answer.
+
+Defined at top level rather than inside the test, because a DEFMETHOD
+evaluated inside a test body is a redefinition on the second run and gate 1
+counts redefinitions."))
+
+(defmethod p:input-settings ((policy test-device-policy) device)
+  (append (when (equal "Wacom" (c:input-device-name device))
+            '(:accel-profile :flat))
+          (call-next-method)))
+
+;;; ------------------------------------------------------------ matching
+
+(test t-matches-every-device
+  (is (c:input-device-matches-p (device :name "anything") t))
+  (is (c:input-device-matches-p (device :name nil :kind :keyboard) t)))
+
+(test a-keyword-matches-by-kind
+  (let ((touchpad (device :name "ELAN Touchpad" :kind :pointer))
+        (keyboard (device :name "AT keyboard" :kind :keyboard)))
+    (is (c:input-device-matches-p touchpad :pointer))
+    (is (not (c:input-device-matches-p touchpad :keyboard)))
+    (is (c:input-device-matches-p keyboard :keyboard))))
+
+(test a-string-matches-a-substring-of-the-name-case-insensitively
+  ;; The real names have vendor ids and bus numbers in them, so a rule that
+  ;; had to spell one exactly would be a rule nobody types correctly twice.
+  (let ((touchpad (device :name "ELAN0678:00 04F3:3195 Touchpad")))
+    (is (c:input-device-matches-p touchpad "Touchpad"))
+    (is (c:input-device-matches-p touchpad "touchpad"))
+    (is (c:input-device-matches-p touchpad "ELAN"))
+    (is (not (c:input-device-matches-p touchpad "Trackpoint")))))
+
+(test a-nameless-device-matches-no-string-and-does-not-error
+  ;; The name arrives in an event of its own, so there is a window in which a
+  ;; device is real and anonymous.  A rule evaluated in that window must
+  ;; decline rather than signal, because the work is re-run when the name
+  ;; arrives and a signal there would abandon the whole pass.
+  (is (not (c:input-device-matches-p (device :name nil) "Touchpad"))))
+
+(test a-function-matcher-is-given-the-device
+  (let ((seen '()))
+    (is (c:input-device-matches-p
+         (device :name "Wacom")
+         (lambda (d) (push (c:input-device-name d) seen) t)))
+    (is (equal '("Wacom") seen))))
+
+;;; ------------------------------------------------------------- the rules
+
+(test rules-apply-in-order-and-the-later-one-wins
+  ;; Which is what makes a rule for T read as a default and a rule naming a
+  ;; device read as an override -- the order people write them in.
+  (let ((touchpad (device :name "Touchpad")))
+    (is (equal '(t)
+               (list (getf (p:apply-input-rules touchpad '()
+                                                '((t :natural-scroll t)))
+                           :natural-scroll))))
+    (is (null (getf (p:apply-input-rules
+                     touchpad '()
+                     '((t :natural-scroll t) ("Touchpad" :natural-scroll nil)))
+                    :natural-scroll)))))
+
+(test a-rule-that-does-not-match-changes-nothing
+  (let ((mouse (device :name "Logitech USB Receiver")))
+    (is (equal '(:accel-speed 0.5d0)
+               (p:apply-input-rules mouse '(:accel-speed 0.5d0)
+                                    '(("Touchpad" :accel-speed 0.1d0)))))))
+
+(test rules-lay-over-the-options-rather-than-replacing-them
+  ;; The property a rule does not name has to survive it, or every rule would
+  ;; have to restate the whole configuration to change one thing.
+  (let* ((touchpad (device :name "Touchpad"))
+         (result (p:apply-input-rules touchpad
+                                      '(:tap-to-click t :natural-scroll nil)
+                                      '(("Touchpad" :natural-scroll t)))))
+    (is (eq t (getf result :tap-to-click)))
+    (is (eq t (getf result :natural-scroll)))))
+
+;;; --------------------------------------------------------- the decision
+
+(test the-shipped-policy-answers-with-the-options
+  (let ((p:*tap-to-click* t)
+        (p:*natural-scroll* nil)
+        (p:*accel-speed* 0.25d0)
+        (p:*input-rules* '()))
+    (let ((settings (p:input-settings (policy) (device :name "Touchpad"))))
+      (is (eq t (getf settings :tap-to-click)))
+      (is (null (getf settings :natural-scroll)))
+      (is (eql 0.25d0 (getf settings :accel-speed))))))
+
+(test an-option-left-at-nil-is-absent-rather-than-sent-as-nil
+  ;; NIL means `leave the device alone' everywhere in this subsystem, so an
+  ;; unset option must not appear in the plist at all -- otherwise the first
+  ;; startup would reset every acceleration profile on the machine to nothing.
+  (let ((p:*accel-profile* nil) (p:*scroll-method* nil) (p:*input-rules* '()))
+    (let ((settings (p:input-settings (policy) (device :name "Mouse"))))
+      (is (not (member :accel-profile settings)))
+      (is (not (member :scroll-method settings))))))
+
+(test a-keyboard-is-not-asked-about-natural-scrolling
+  ;; Sending a touchpad setting to a keyboard is a round trip whose answer is
+  ;; `unsupported' and a log line that says nothing.
+  (let ((p:*tap-to-click* t) (p:*repeat-rate* 50) (p:*input-rules* '()))
+    (let ((settings (p:input-settings (policy) (device :kind :keyboard))))
+      (is (null (getf settings :tap-to-click)))
+      (is (eql 50 (getf settings :repeat-rate))))))
+
+(test a-method-can-add-one-setting-without-restating-the-rest
+  ;; The shape the generic's docstring promises works.  It is the whole
+  ;; argument for the defaults living on a strictly more general class -- the
+  ;; finding recorded as core edit 3 in FINDINGS.org, checked here for the
+  ;; newest protocol on the surface.
+  (let ((p:*tap-to-click* t) (p:*input-rules* '()))
+    (let* ((policy (make-instance 'test-device-policy))
+           (wacom (p:input-settings policy (device :name "Wacom")))
+           (other (p:input-settings policy (device :name "Mouse"))))
+      (is (eq :flat (getf wacom :accel-profile)))
+      (is (eq t (getf wacom :tap-to-click)) "and the shipped answer survived")
+      (is (null (getf other :accel-profile))))))
+
+(test a-property-named-twice-is-sent-once-and-the-first-wins
+  ;; APPEND is what the docstring shows, and APPEND leaves duplicates.  GETF
+  ;; answers with the first, so that is what a plist means -- but the applier
+  ;; walks the pairs, and walking them all would send the shipped answer
+  ;; *after* the override and undo it a microsecond later.  The extension would
+  ;; appear to have worked, which is the worst way for this to be wrong.
+  (let ((settings (r::first-of-each
+                   '(:accel-profile :flat :tap-to-click t
+                     :accel-profile :adaptive :tap-to-click nil))))
+    (is (eq :flat (getf settings :accel-profile)))
+    (is (eq t (getf settings :tap-to-click)))
+    (is (= 4 (length settings)) "and each property appears exactly once")))
+
+;;; -------------------------------------------------------- the keyboard
+
+(test no-xkb-layout-means-leave-the-compositor-alone
+  ;; The default has to be `do nothing'.  A default of "us" would silently
+  ;; overwrite the layout of every user whose session already set
+  ;; XKB_DEFAULT_LAYOUT -- which is every user who does not type in English,
+  ;; and who would experience it as the window manager breaking their keyboard.
+  (let ((p:*xkb-layout* nil))
+    (is (null (p:keyboard-layout-for (policy) (device :kind :keyboard))))))
+
+(test an-xkb-layout-comes-back-with-its-variant-and-options
+  (let ((p:*xkb-layout* "de")
+        (p:*xkb-variant* "nodeadkeys")
+        (p:*xkb-options* "ctrl:nocaps"))
+    (multiple-value-bind (layout variant options)
+        (p:keyboard-layout-for (policy) (device :kind :keyboard))
+      (is (equal "de" layout))
+      (is (equal "nodeadkeys" variant))
+      (is (equal "ctrl:nocaps" options)))))
+
+;;; ------------------------------------------------------- the wire values
+
+(test acceleration-survives-the-round-trip-through-eight-bytes
+  ;; libinput's `array' arguments carry the raw bytes of an IEEE double, which
+  ;; is precisely the kind of thing that is wrong by one byte order and looks
+  ;; plausible until a touchpad becomes the fastest object in the room.
+  (dolist (speed '(0d0 1d0 -1d0 0.25d0 -0.75d0 0.3333333333333333d0))
+    (is (= speed (r::bytes-double (r::double-bytes speed)))
+        "~a survives the round trip" speed))
+  (is (= 8 (length (r::double-bytes 0.5d0))))
+  (is (null (r::bytes-double #(1 2 3))) "and a wrong-length array is refused"))
+
+(test acceleration-is-little-endian
+  ;; Written out rather than derived, so that the day this runs on a
+  ;; big-endian machine it fails here and not on somebody's desk.
+  (is (equalp #(0 0 0 0 0 0 240 63) (r::double-bytes 1d0)))
+  (is (equalp #(0 0 0 0 0 0 0 0) (r::double-bytes 0d0))))
+
+(test every-setting-in-the-table-names-a-real-wrapped-request
+  ;; The table is the whole of what is configurable, so a typo in a setter name
+  ;; is twenty settings that look present and one that silently is not.  It
+  ;; would show up as `the function is undefined' inside GUARDED -- a log line
+  ;; nobody reads, and a touchpad option that does nothing.
+  (dolist (setting r:+libinput-settings+)
+    (let ((setter (r::input-setting-setter setting)))
+      (is (fboundp setter) "~a is a real function" setter)
+      ;; And it goes through LATTICEWM/WIRE rather than round it.  The package
+      ;; boundary is the architecture -- "policy and the runtime talk to the
+      ;; wrappers, the wrappers talk to the protocol" -- and a table of twenty
+      ;; symbols is exactly the shape in which one of them quietly names
+      ;; LATTICEWM/RIVER instead, which works, and which the next scanner run
+      ;; would leave unwrapped.
+      (is (eq (find-package '#:latticewm/wire) (symbol-package setter))
+          "~a is reached through the wire layer rather than round it"
+          setter))))
+
+(test every-setting-in-the-table-is-a-property-the-shipped-policy-can-produce
+  ;; The other direction: a property the policy can return that the table does
+  ;; not know is a setting silently dropped.  Both lists are short and both
+  ;; are edited by hand, which is exactly when they drift.
+  (let ((p:*input-rules* '())
+        (p:*click-method* :clickfinger)
+        (p:*scroll-method* :two-finger)
+        (p:*accel-profile* :adaptive)
+        (p:*accel-speed* 0.2d0)
+        (p:*drag-lock* :sticky)
+        (p:*scroll-button* 274))
+    (let ((settings (p:input-settings (policy) (device :name "Touchpad"))))
+      (loop for (property nil) on settings by #'cddr
+            do (is (or (member property '(:repeat-rate :repeat-delay
+                                          :scroll-factor :map-to-output))
+                       (r::find-input-setting property))
+                   "~(~a~) is a property something knows how to send"
+                   property)))))
+
+(test an-unrecognised-value-is-refused-rather-than-guessed
+  ;; A configuration file is user input.  `(setf *click-method* :clickfingers)'
+  ;; should leave the touchpad alone and say so, not take down the startup that
+  ;; was reading it and not pick the nearest thing.
+  (is (null (r::one-of :clickfingers r::+click-methods+)))
+  (is (eq :clickfinger (r::one-of :clickfinger r::+click-methods+)))
+  (is (eq :no-scroll (r::one-of :none r::+scroll-methods+))
+      "and a synonym somebody would plausibly write is accepted"))

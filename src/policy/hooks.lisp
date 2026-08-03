@@ -182,3 +182,17 @@ already NIL.")
 
 (defhook :pointer-op (kind window) "Run when an interactive pointer operation
 starts or ends.  KIND is :MOVE, :RESIZE or NIL for the end of one.")
+
+(defhook :input-added (device) "Run when an input device is announced, before
+anything has been configured on it.  The device knows its own proxy and little
+else at this point -- its name and its kind arrive in the events that follow --
+so a hook that wants to know what it is should look at :KEYBOARD-LAYOUT-CHANGED
+or ask again from a later hook.")
+
+(defhook :input-removed (device) "Run after an input device is unplugged and
+forgotten.  The device object is still readable; every proxy on it is stale.")
+
+(defhook :keyboard-layout-changed (device name) "Run when a keyboard's active
+layout changes, whether we asked for it or the user pressed the xkb toggle.
+NAME is the layout's own name, e.g. \"German\".  For a status bar showing which
+layout is live, which is the one thing a two-layout user needs on screen.")

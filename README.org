@@ -228,11 +228,54 @@ latticewm --list-commands     # every command
 Anything you can set in the file you can also set live with =Super+? s=, and
 =Shift+Super+c= reloads the file without restarting.
 
-** Keyboard layout
+** Your keyboard, mouse and touchpad
+
+On river there is nothing else on the machine that configures input — no
+settings daemon, no =xinput=, no compositor config file. The window manager
+owns it, so this is where tap-to-click and your keyboard layout live.
+
+#+begin_src lisp
+(setf *xkb-layout* "de")             ; what the keys do, for every application
+(setf *xkb-options* "ctrl:nocaps")   ; caps lock becomes control
+
+(setf *tap-to-click* t)              ; on by default
+(setf *natural-scroll* t)
+(setf *repeat-rate* 50)              ; key repeats per second
+(setf *repeat-delay* 300)            ; ms held before repeating starts
+(setf *accel-speed* 0.3d0)           ; -1 slowest, 0 default, 1 fastest
+#+end_src
+
+A laptop has a touchpad *and* a mouse and they want opposite things, so rules
+match per device. Later rules win, which makes a rule for =t= a default and a
+rule naming a device an override:
+
+#+begin_src lisp
+(setf *input-rules*
+      '(("Touchpad"   :natural-scroll t :click-method :clickfinger)
+        ("TrackPoint" :scroll-method :on-button-down :scroll-button 274)
+        ("Logitech"   :accel-profile :flat)))
+#+end_src
+
+=(list-inputs)= prints every device with its name, its kind, everything
+settable on it and what is currently in force — which is where those names come
+from. =(set-input "Touchpad" :natural-scroll t)= tries one without writing it
+down. =(keyboard-layout "fr")= switches layout now;
+=(next-keyboard-layout)= cycles through the layouts of a multi-layout keymap
+and can go on any key you like.
+
+Setting =*xkb-layout*= needs =xkbcli=, which ships with libxkbcommon and is
+therefore already installed on any machine running river. Without it the layout
+stays as river started it, and one log line says so.
+
+*** Shift maps, which are a different thing with a similar name
 
 River does the xkb work and does not tell us the *shifted* keysym, so the
-shifted glyph has to be declared rather than derived. If you are not on a US
-keyboard, this is the one line to set before the prompt is typeable:
+window manager cannot derive what =Shift+9= produces — it has to be declared
+per layout, or its own prompt inserts American punctuation on a German
+keyboard.
+
+Setting =*xkb-layout*= adopts the matching table automatically, so in the
+ordinary case there is nothing to do. To set one by hand:
 
 #+begin_src lisp
 (setf *keyboard-layout* "de")   ; us, uk, de, fr, dvorak, colemak
@@ -373,8 +416,15 @@ between cells, and zooming out to a grid.
 
 Verified against a *headless river* on every run of =make check=: connecting,
 version negotiation, receiving an output and its size, a complete manage and
-render sequence, the shared-memory overlay path, and a real client window being
-announced, placed and sized.
+render sequence, the shared-memory overlay path, the three input globals
+binding, and a real client window being announced, placed and sized.
+
+*Input configuration* — device enumeration, key repeat, and compiling and
+installing a keyboard layout — has been driven end to end against a real river
+running nested, which is where the devices exist. The libinput half of it
+(tap-to-click, acceleration, click and scroll method) is written and unit-tested
+as a decision, and cannot be exercised without real hardware behind it; the
+integration test says =skip= there rather than passing quietly.
 
 *Multi-monitor is written and has been executed against one display.* The
 per-output work — deriving the current output from the cursor's rectangle

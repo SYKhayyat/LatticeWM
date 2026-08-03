@@ -147,6 +147,25 @@ LatticeWM commands.
   A minimized one is restored first, which is what makes a tag and a named
   scratchpad the same feature seen twice.
 
+(keyboard-layout name)
+  Set the keyboard layout for every keyboard: "us", "de", "fr".
+  
+  Compiles a keymap with xkbcli and hands it to river, so it changes what the
+  keys do for every application on the machine — and adopts the matching shift
+  map so that this window manager's own prompt agrees with the keyboard.
+  
+  Persistent for the session but not across one: put it in *XKB-LAYOUT* to keep
+  it.
+
+(list-inputs &optional name)
+  Print every input device, or the ones whose name contains NAME.
+  
+  The answer to `what is my touchpad called', which is the first question
+  *INPUT-RULES* asks and the one nothing else on a river system will tell you.
+  Everything printed here is settable; the value shown is what the *device* says
+  is in force, not what the configuration asked for, so the two disagreeing is
+  visible rather than mysterious.
+
 (list-scratchpads)
   Show every named scratchpad and what is on it.
 
@@ -203,6 +222,13 @@ LatticeWM commands.
 (new-workspace)
   Add a workspace after the current one and switch to it.
 
+(next-keyboard-layout)
+  Switch to the next layout of the current keymap, wrapping.
+  
+  For a keymap compiled from "us,de": this is the other half of what
+  `grp:alt_shift_toggle' does, available as a command so it can be on any key you
+  like rather than only on the chord xkb reserves.
+
 (next-workspace &optional (step 1))
   Switch to the next workspace, wrapping.
 
@@ -232,6 +258,13 @@ LatticeWM commands.
   not write down is unaffected, and anything the file *removed* since last time
   is not undone.  Live redefinition is not transactional, and pretending it is
   would be worse than saying so.
+
+(reload-input)
+  Re-apply the input configuration to every device.
+  
+  What to run after changing an option at a REPL.  Nothing else needs it: a
+  device that arrives later is configured when it arrives, and the settings are
+  diffed, so running this when nothing has changed sends nothing.
 
 (remove-pane)
   Remove the focused pane entirely, whether or not it holds anything.
@@ -333,6 +366,17 @@ LatticeWM commands.
   
   Callers that ignore a surgery function's second value have a bug they have not
   noticed yet; this one had it for the life of the command.
+
+(set-input name property value)
+  Set one input PROPERTY to VALUE on every device whose name contains NAME.
+  
+  For finding out what you want before writing it down:
+  
+      (set-input "Touchpad" :natural-scroll t)
+  
+  It is deliberately *not* persistent — it adds no rule and survives no restart —
+  because a setting you cannot find again is worse than one you have to type
+  twice.  Put the answer in *INPUT-RULES* once you like it.
 
 (set-option name value)
   Change a configuration value, now, without restarting anything.

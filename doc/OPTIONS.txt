@@ -1,5 +1,23 @@
 LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
 
+*ACCEL-PROFILE*
+  value:   NIL
+  default: NIL
+  How pointer speed responds to how fast you move.
+  
+    NIL        leave the device's own default alone
+    :ADAPTIVE  faster movement covers more ground — what a touchpad wants
+    :FLAT      one to one — what a gaming mouse and a drawing tablet want
+    :NONE      no acceleration handling at all
+
+*ACCEL-SPEED*
+  value:   NIL
+  default: NIL
+  Pointer speed, from -1 (slowest) through 0 (the device's default) to 1.
+  
+  A double float or NIL.  The scale is libinput's and is not linear; 0.3 is a
+  noticeably brisk touchpad and 1.0 is faster than most people can aim.
+
 *ARGUMENT-NAMING-CONVENTION*
   value:   ((:DIRECTION "direction") (:AXIS "axis") (:SIDE "side")
             (:NUMBER "number" "count" "steps" "step" "by" "index" "cols" "rows"
@@ -40,6 +58,20 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   value:   "firefox"
   default: "firefox"
   The web browser the `browser' command runs.
+
+*CLICK-METHOD*
+  value:   NIL
+  default: NIL
+  How a touchpad press becomes a left, middle or right click.
+  
+    NIL             leave the device's own default alone
+    :BUTTON-AREAS   the bottom of the pad is divided into left/middle/right
+    :CLICKFINGER    one, two or three fingers on the pad choose the button
+  
+  :CLICKFINGER is what a MacBook does and what most people mean by `it should
+  just work'; :BUTTON-AREAS is what a ThinkPad's physical buttons imply.  The
+  default is NIL because libinput already picks the right one per device far
+  more often than a global setting could.
 
 *CLICK-TO-FOCUS*
   value:   T
@@ -88,6 +120,28 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   value:   NIL
   default: NIL
   The xcursor theme name, or NIL to leave the compositor's default alone.
+
+*DISABLE-WHILE-TYPING*
+  value:   T
+  default: T
+  Ignore the touchpad briefly after a keystroke, so a palm does not move the
+  cursor mid-sentence.
+  
+  libinput calls this `dwt'.  On by default because the failure it prevents —
+  the cursor jumping into the middle of a line you are typing — is one people
+  blame on the machine rather than on a setting.
+
+*DRAG-LOCK*
+  value:   NIL
+  default: NIL
+  Keep a tap-drag going across a brief lift of the finger.
+  
+    NIL       off
+    :TIMEOUT  the drag survives a short pause and then ends by itself
+    :STICKY   the drag continues until you tap again
+  
+  Off by default because a drag that does not end when you lift your finger is
+  astonishing the first time it happens.
 
 *ECHO-ACCENT*
   value:   (0.4 0.65 1.0 1.0)
@@ -337,6 +391,31 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   exclusive zone and tells us what is left — so this works for any panel, on any
   edge, at any size, with no per-panel configuration and nothing to keep in sync.
 
+*INPUT-RULES*
+  value:   NIL
+  default: NIL
+  Per-device settings, as a list of (MATCHER . PLIST).
+  
+  The tier-0 answer to the fact that one set of global values cannot describe a
+  laptop, because a laptop has a touchpad *and* a mouse and they want opposite
+  things:
+  
+      (setf *input-rules*
+            '(("Touchpad"  :natural-scroll t :accel-speed 0.3d0)
+              ("Logitech"  :accel-profile :flat)
+              (:keyboard   :repeat-rate 50 :repeat-delay 300)))
+  
+  MATCHER is T for every device, a keyword for every device of that kind
+  (:KEYBOARD :POINTER :TOUCH :TABLET), a string matched case-insensitively
+  against the device name, or a function of one device.  Every matching rule
+  applies, in order, and a later one wins — so a rule for T is a default and a
+  rule naming a device is an override.
+  
+  The property names are the option names without the stars: :TAP-TO-CLICK,
+  :NATURAL-SCROLL, :ACCEL-SPEED, :REPEAT-RATE and the rest.  `latticewm
+  --list-options' prints the whole set, and `(list-inputs)' prints what each
+  device present actually supports.
+
 *IPC-SOCKET*
   value:   T
   default: T
@@ -390,6 +469,11 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   A status line is the one place that cannot be dismissed by accident.  So the
   essentials live there until Super+/ has been pressed once, at which point the
   hint has done its job and goes away by itself rather than nagging forever.
+
+*LEFT-HANDED*
+  value:   NIL
+  default: NIL
+  Swap the left and right buttons.
 
 *LOG-FILE*
   value:   :DEFAULT
@@ -469,6 +553,14 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   slow relayout is *visible* rather than that it is fatal.  A quarter second is
   about four frames, which is where a person starts to feel it.
 
+*MIDDLE-EMULATION*
+  value:   NIL
+  default: NIL
+  Pressing left and right together counts as a middle click.
+  
+  For the machines that have two physical buttons and no third.  NIL leaves the
+  device's default, which is off.
+
 *MINIBUFFER-CANDIDATES-SHOWN*
   value:   6
   default: 6
@@ -533,6 +625,17 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   :SPLIT is shipped because it is the only one that never destroys structure.
   SWAP remains a separate verb with its own binding, so nothing is lost.
 
+*NATURAL-SCROLL*
+  value:   NIL
+  default: NIL
+  Scroll content in the direction of the fingers, as on a phone.
+  
+  NIL matches libinput's default and the behaviour of a mouse wheel.  Set it per
+  device rather than globally if you want it on the touchpad and off on the
+  mouse, which is what most people who want it at all actually want:
+  
+      (setf *input-rules* '(("Touchpad" :natural-scroll t)))
+
 *NEW-CHILD-SIDE*
   value:   :AFTER
   default: :AFTER
@@ -577,6 +680,14 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   A denylist of names cannot express `not repeatable under these circumstances',
   so a command that should be repeatable when it acted and not when it declined
   is a method on the generic rather than an entry here.
+
+*NUMLOCK*
+  value:   NIL
+  default: NIL
+  Turn num lock on for every keyboard as it appears.
+  
+  T is what somebody with a full-size keyboard and a numeric keypad wants and
+  nothing else does.
 
 *OUTER-GAPS*
   value:   0
@@ -632,6 +743,23 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   edge lines up with it exactly, which is the one piece of drag polish that is
   worth having and the one people notice is missing.
 
+*REPEAT-DELAY*
+  value:   NIL
+  default: NIL
+  Milliseconds a key must be held before it starts repeating, or NIL.
+  
+  300 is brisk, 600 is the usual default, and below about 200 an ordinary
+  keypress starts repeating before your finger has left it.
+
+*REPEAT-RATE*
+  value:   NIL
+  default: NIL
+  Key repeats per second once a held key starts repeating, or NIL for the
+  compositor's default.
+  
+  25 is a common choice and 50 is fast.  Set together with *REPEAT-DELAY*: the
+  two are one decision and river takes them in one request.
+
 *RESIZE-AMOUNT*
   value:   1/20
   default: 1/20
@@ -655,6 +783,38 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   NIL saves only at a clean shutdown, which is what this program used to do —
   SAVE-STATE-SOON existed, was documented, and was called from nowhere at all, so
   any crash, any kill -9 and any compositor exit lost the session layout.
+
+*SCROLL-BUTTON*
+  value:   NIL
+  default: NIL
+  The button held down for :ON-BUTTON-DOWN scrolling, as an evdev code.
+  
+  274 is BTN_MIDDLE, which is the one anybody means.  NIL leaves the device's
+  default.  Only consulted when *SCROLL-METHOD* is :ON-BUTTON-DOWN.
+
+*SCROLL-FACTOR*
+  value:   NIL
+  default: NIL
+  Multiply every scroll event's distance by this.
+  
+  A positive real, or NIL for the compositor's default of 1.  This is river's own
+  knob rather than libinput's, so it works on devices libinput does not drive,
+  and it is the right answer for `my scrolling is too fast in every application'
+  — which is a compositor-level complaint dressed as an application one.
+
+*SCROLL-METHOD*
+  value:   NIL
+  default: NIL
+  How scrolling is expressed on a touchpad or trackpoint.
+  
+    NIL              leave the device's own default alone
+    :TWO-FINGER      two fingers anywhere on the pad
+    :EDGE            one finger along the right-hand edge
+    :ON-BUTTON-DOWN  hold *SCROLL-BUTTON* and move — the trackpoint answer
+    :NO-SCROLL       off
+  
+  :ON-BUTTON-DOWN with *SCROLL-BUTTON* set to the middle button is the
+  configuration every ThinkPad user recreates by hand on every new machine.
 
 *SHIFT-MAP*
   value:   NIL
@@ -744,6 +904,27 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
       (setf *swank-port* 4005)   ; in init.lisp
   
   See also *SWANK-INTERFACE*, which decides who may reach it.
+
+*TAP-AND-DRAG*
+  value:   T
+  default: T
+  Tap, then hold and move, to drag without pressing the pad down.
+  
+  Only meaningful where *TAP-TO-CLICK* is on.  Matches libinput's default.
+
+*TAP-TO-CLICK*
+  value:   T
+  default: T
+  Tap a touchpad to click, rather than pressing it down.
+  
+  T on every touchpad that supports it and ignored by everything that does not,
+  which is the shape most of these options have: a setting a device cannot honour
+  is reported in `list-inputs' and never sent.
+  
+  On by default, against libinput's own default of off, and deliberately: every
+  desktop environment that ships a touchpad panel turns this on, the people who
+  want it off know they want it off, and a window manager whose touchpad appears
+  not to respond to taps reads as broken rather than as conservative.
 
 *TERMINAL*
   value:   "foot"
@@ -878,4 +1059,53 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   This is the tier-0 half of window placement.  The tier-1 half is a method on
   WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
   are supported and this one requires no Lisp beyond a quoted list.
+
+*XKB-LAYOUT*
+  value:   NIL
+  default: NIL
+  The keyboard layout the compositor should use: "us", "de", "us,de".
+  
+  NIL — the default — leaves whatever river started with, which comes from
+  XKB_DEFAULT_LAYOUT in the session environment.  Setting this compiles a keymap
+  and hands it to every keyboard; see RUNTIME:APPLY-KEYBOARD-LAYOUT for what that
+  needs.
+  
+  *THIS IS THE OPTION THAT DECIDES WHETHER THE PROGRAM IS USABLE AT ALL* for
+  somebody who does not type on a US keyboard, and until it existed the only
+  answer was to set an environment variable before river started — which is not
+  something a window manager may ask of its user.
+  
+  NOT THE SAME THING AS *KEYBOARD-LAYOUT*, and the difference is worth one
+  sentence because the names are close.  This one changes *what the keys do*, for
+  every application on the machine.  *KEYBOARD-LAYOUT* is a shift map: it tells
+  the window manager what the shifted glyphs are, so that its own prompt inserts
+  the right character.  Setting this one adopts the matching shift map
+  automatically when a table of that name is registered, so in the ordinary case
+  you set this and nothing else.
+
+*XKB-MODEL*
+  value:   NIL
+  default: NIL
+  The XKB model, e.g. "pc105".  NIL uses the default, which is nearly always
+  right on anything made this century.
+
+*XKB-OPTIONS*
+  value:   NIL
+  default: NIL
+  XKB options, comma separated, e.g. "ctrl:nocaps,grp:alt_shift_toggle".
+  
+  `ctrl:nocaps' — caps lock becomes control — is the single most requested one
+  and is most of why this option exists.
+
+*XKB-RULES*
+  value:   NIL
+  default: NIL
+  The XKB rules set, e.g. "evdev".  NIL uses the default.
+
+*XKB-VARIANT*
+  value:   NIL
+  default: NIL
+  The XKB variant, e.g. "nodeadkeys", "dvorak", "colemak", or NIL.
+  
+  Comma separated, one per layout, when *XKB-LAYOUT* names several.
 

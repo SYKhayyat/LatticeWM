@@ -12,9 +12,10 @@
   (:use #:cl #:fiveam)
   (:local-nicknames (#:c #:latticewm/core)
                     (#:p #:latticewm/policy)
-                    (#:r #:latticewm/runtime))
+                    (#:r #:latticewm/runtime)
+                    (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:minibuffer))
+           #:minibuffer #:devices))
 
 (in-package #:latticewm/tests)
 
@@ -25,6 +26,10 @@
 (def-suite motion :in model)
 (def-suite lifecycle :in model)
 (def-suite surface :in model)
+(def-suite devices :in model
+  :description "Input device configuration: which settings a device should
+have, which is pure, and how a value reaches the wire, which is not.")
+
 (def-suite minibuffer :in model
   :description "Reading a line, which needs no compositor either — the prompt
 is a string, a point and a table of what keys mean.")

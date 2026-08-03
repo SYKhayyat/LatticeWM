@@ -34,6 +34,21 @@
        (:wayflan-client-impl "river-xkb-bindings-v1"
         :in-package "LATTICEWM/RIVER" :export t)
        (:wayflan-client-impl "river-layer-shell-v1"
+        :in-package "LATTICEWM/RIVER" :export t)
+       ;; Input configuration.  Three protocols, and the order is a dependency:
+       ;; both of the others carry an `input_device' event whose argument is a
+       ;; river_input_device_v1, so input-management has to be generated first.
+       ;;
+       ;; River hands the window manager the machine's input devices and
+       ;; expects it to configure them.  There is nothing else on the system
+       ;; that will -- which is why a window manager that vendored these three
+       ;; XML files and bound none of them had no way to turn on tap-to-click,
+       ;; set a key repeat rate, or use a keyboard that is not American.
+       (:wayflan-client-impl "river-input-management-v1"
+        :in-package "LATTICEWM/RIVER" :export t)
+       (:wayflan-client-impl "river-libinput-config-v1"
+        :in-package "LATTICEWM/RIVER" :export t)
+       (:wayflan-client-impl "river-xkb-config-v1"
         :in-package "LATTICEWM/RIVER" :export t)))
      (:module "model"
       :serial t
@@ -43,6 +58,7 @@
        (:file "path")
        (:file "surgery")
        (:file "window")
+       (:file "input")
        (:file "world")))
      (:module "policy"
       :serial t
@@ -68,6 +84,10 @@
        (:file "defaults-lifecycle")
        (:file "lifecycle")
        (:file "input")
+       ;; devices after input: the *hardware* half of input policy, kept in its
+       ;; own file because it changes for a different reason -- a touchpad
+       ;; setting is not a completion style.
+       (:file "devices")
        (:file "surface")
        (:file "commands")
        ;; keys before appearance: the status-line and which-key
@@ -113,6 +133,11 @@
        (:file "swank")
        (:file "outputs")
        (:file "seats")
+       ;; input before session: BIND-ONE-GLOBAL hooks each of the three input
+       ;; globals where it binds it, because the registry listener stays
+       ;; attached for the life of the connection and a global can arrive at
+       ;; any time.
+       (:file "input")
        (:file "session")
        ;; ipc after session: the control socket runs forms in the window
        ;; manager's thread, and the queue that makes that possible is there.
@@ -143,5 +168,6 @@ without a compositor — which is the whole model."
      (:file "test-lifecycle")
      (:file "test-surface")
      (:file "test-minibuffer")
+     (:file "test-devices")
      (:file "test-examples"))))
   :perform (test-op (o c) (symbol-call :latticewm/tests :run-all)))

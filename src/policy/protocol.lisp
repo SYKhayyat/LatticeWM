@@ -818,6 +818,62 @@ input.  Under a single-default policy, typing `ls` at an empty pane opens a
 terminal showing `s`.  Under the table the keypress was a choice rather than
 content, and nothing is lost."))
 
+;;; ------------------------------------------------------- the hardware
+;;;
+;;; River hands the window manager the machine's input devices and expects it
+;;; to configure them: there is nothing else on the system that will.  Applying
+;;; a setting is mechanism and lives in runtime/input.lisp; *which* setting
+;;; applies to *which* device is the decision, and it is one people have very
+;;; specific opinions about — natural scrolling on the touchpad but not on the
+;;; mouse is the canonical example and no number of global flags expresses it.
+
+(defgeneric input-settings (policy device)
+  (:documentation
+   "Every setting to apply to DEVICE, as a plist.
+
+Called when a device appears and again whenever the configuration is reloaded.
+The result is diffed against what the device reports is already in force, so
+returning the same plist twice sends nothing.
+
+The recognised properties, each named after its tier-0 option:
+
+  :TAP-TO-CLICK :TAP-AND-DRAG :DRAG-LOCK :NATURAL-SCROLL :LEFT-HANDED
+  :MIDDLE-EMULATION :DISABLE-WHILE-TYPING :CLICK-METHOD :SCROLL-METHOD
+  :SCROLL-BUTTON :ACCEL-PROFILE :ACCEL-SPEED     — libinput
+  :SCROLL-FACTOR :REPEAT-RATE :REPEAT-DELAY      — river, any device
+
+A property the device cannot support is skipped rather than sent; a property
+absent from the plist, or present with the value NIL, is left alone rather than
+reset.  That last rule is what makes the obvious extension do what it reads as
+doing:
+
+    (defmethod input-settings ((p conventional-policy) device)
+      (append (when (search \"Wacom\" (or (input-device-name device) \"\"))
+                '(:accel-profile :flat))
+              (call-next-method)))
+
+The shipped method reads the tier-0 options and then lays *INPUT-RULES* over
+them, so most people never write one.  Write one when the decision is a
+*program* rather than a table."))
+
+(defgeneric keyboard-layout-for (policy device)
+  (:documentation
+   "The keyboard layout DEVICE should use, as (values LAYOUT VARIANT OPTIONS
+MODEL RULES), or NIL for `leave whatever the compositor started with'.
+
+Separate from INPUT-SETTINGS because a keymap is not a setting: it has to be
+compiled, the compilation can fail with a message worth showing, and the result
+is shared between every keyboard that asked for the same one.
+
+Separate from the options because the second keyboard — the one in the dock,
+with a different physical layout — is precisely the case a single global cannot
+express, and precisely the case that matters to the person who has one:
+
+    (defmethod keyboard-layout-for ((p conventional-policy) device)
+      (if (search \"Dock\" (or (input-device-name device) \"\"))
+          (values \"de\" \"nodeadkeys\" nil nil nil)
+          (call-next-method)))"))
+
 ;;; ==================================================================
 ;;; READING FROM THE USER
 ;;; ==================================================================

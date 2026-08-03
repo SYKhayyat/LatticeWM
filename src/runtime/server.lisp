@@ -84,6 +84,36 @@ drift is exactly what a hand-maintained list of handled events would produce."
    (bindings :initform nil :accessor server-bindings
              :documentation "river_xkb_bindings_v1, or NIL if unavailable.")
    (layer-shell :initform nil :accessor server-layer-shell)
+   (input-manager :initform nil :accessor server-input-manager
+                  :documentation "river_input_manager_v1, or NIL.")
+   (libinput-config :initform nil :accessor server-libinput-config
+                    :documentation "river_libinput_config_v1, or NIL.")
+   (xkb-config :initform nil :accessor server-xkb-config
+               :documentation "river_xkb_config_v1, or NIL.")
+   (device-index :initform (make-hash-table :test #'eq) :accessor server-device-index
+                 :documentation
+                 "Any of a device's three proxies -> our INPUT-DEVICE.
+
+One table rather than three because the join is by object identity and the
+question is always the same one: whose event is this?  A touchpad arrives as a
+river_input_device_v1, a river_libinput_device_v1 and — if it were a keyboard —
+a river_xkb_keyboard_v1, on three separate globals in any order, and every one
+of them ends up in here pointing at the same device.")
+   (inputs-dirty :initform nil :accessor server-inputs-dirty
+                 :documentation
+                 "Whether some device's configuration needs (re)applying.
+
+Set by every event that could change the answer and drained once per pass of
+the event loop, rather than acted on where it is set.  A device announces
+itself with a burst of twenty-odd events — its name, its kind, what it
+supports, what is currently in force — and configuring it after the first of
+them would mean deciding what a touchpad supports before it had said.")
+   (wl-outputs :initform (make-hash-table :test #'eql) :accessor server-wl-outputs
+               :documentation
+               "wl_output global id -> the bound wl_output proxy.
+
+Kept because a tablet or a touchscreen is mapped to an output by handing river
+the wl_output itself, and river_output_v1 is not one.")
    (compositor :initform nil :accessor server-compositor
                :documentation "wl_compositor, for surfaces of our own.")
    (shm :initform nil :accessor server-shm

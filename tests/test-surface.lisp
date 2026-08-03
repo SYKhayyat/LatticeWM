@@ -55,8 +55,32 @@
   ;; The test to apply before raising it a fourth time: for each of the last
   ;; five, name the hardcoded answer it replaced.  If you cannot, it is
   ;; ceremony and the number should come down instead.
+  ;;
+  ;; SIXTY TO SIXTY-FIVE is the fourth move, and it is the *first* one that is
+  ;; a new feature rather than a boundary correction -- so it is the one this
+  ;; comment owes the most explanation for.
+  ;;
+  ;; It is two generics: INPUT-SETTINGS and KEYBOARD-LAYOUT-FOR.  What arrived
+  ;; with them is three whole protocols and every knob a person turns on a
+  ;; laptop -- tap-to-click, natural scrolling, pointer acceleration, click and
+  ;; scroll method, key repeat, and the keyboard layout itself.  Twenty-odd
+  ;; settings, and the surface grew by two, because the *decision* being made
+  ;; is the same decision in every case: which settings does this device want?
+  ;;
+  ;; That is the shape the test is asking for.  The failure it exists to catch
+  ;; would have been TAP-TO-CLICK-P, NATURAL-SCROLL-P, ACCEL-PROFILE-FOR and
+  ;; seventeen more -- one generic per knob, each with a docstring, each
+  ;; answerable by a table, and nobody able to read the list in one sitting.
+  ;; The five-per-feature ratio of the earlier moves would have made this one
+  ;; move the ceiling to eighty on its own.
+  ;;
+  ;; The hardcoded answer each replaced, which is the question the paragraph
+  ;; above demands: there was none, and that is the finding.  Every one of
+  ;; those twenty settings had no answer at all -- not a wrong default, not an
+  ;; unreachable constant, but no code.  The XML was vendored and never
+  ;; compiled.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 60) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 65) "the extension surface has ~d generics" n)))
 
 (test the-surface-is-what-takes-a-policy-and-nothing-else
   "POLICY-GENERICS used to mean 'every exported generic in the package'.

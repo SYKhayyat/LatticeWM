@@ -24,11 +24,13 @@
 
 (defpackage #:latticewm/river
   (:use #:cl)
-  ;; river-window-management-v1 refers to wl_surface (for shell surfaces and
-  ;; decorations) without defining it.  wayflan already generates the core
-  ;; Wayland protocol into its own client package, so import the class rather
-  ;; than generating a second, incompatible copy of it here.
-  (:import-from #:xyz.shunter.wayflan.client #:wl-surface)
+  ;; The river protocols refer to core Wayland interfaces without defining
+  ;; them: wl_surface for shell surfaces and decorations, wl_output for the
+  ;; output a stylus or touchscreen maps to, wl_seat for the seat an input
+  ;; device is assigned to.  wayflan already generates the core protocol into
+  ;; its own client package, so import the classes rather than generating a
+  ;; second, incompatible copy of each here.
+  (:import-from #:xyz.shunter.wayflan.client #:wl-surface #:wl-output #:wl-seat)
   (:documentation
    "Generated river protocol bindings, produced by wayflan's scanner from the
 vendored XML under src/protocol/.
@@ -94,6 +96,23 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:bindings-seat-ensure-next-key-eaten
    #:bindings-seat-cancel-ensure-next-key-eaten
    #:bindings-seat-modifiers-watch
+   ;; input configuration: keyboards, mice and touchpads
+   #:input-destroy #:input-set-repeat-info #:input-set-scroll-factor
+   #:input-map-to-output #:input-assign-to-seat
+   #:libinput-destroy #:libinput-set-send-events #:libinput-set-tap
+   #:libinput-set-tap-button-map #:libinput-set-drag #:libinput-set-drag-lock
+   #:libinput-set-three-finger-drag #:libinput-set-accel-profile
+   #:libinput-set-accel-speed #:libinput-set-natural-scroll
+   #:libinput-set-left-handed #:libinput-set-click-method
+   #:libinput-set-clickfinger-button-map #:libinput-set-middle-emulation
+   #:libinput-set-scroll-method #:libinput-set-scroll-button
+   #:libinput-set-scroll-button-lock #:libinput-set-dwt #:libinput-set-dwtp
+   #:libinput-set-rotation #:libinput-set-calibration-matrix
+   #:xkb-create-keymap #:xkb-keymap-destroy #:xkb-keyboard-destroy
+   #:xkb-keyboard-set-keymap #:xkb-keyboard-set-layout-by-index
+   #:xkb-keyboard-set-layout-by-name
+   #:xkb-keyboard-capslock-enable #:xkb-keyboard-capslock-disable
+   #:xkb-keyboard-numlock-enable #:xkb-keyboard-numlock-disable
    ;; enums, as plain integers
    #:+mod-none+ #:+mod-shift+ #:+mod-ctrl+ #:+mod-alt+
    #:+mod-mod3+ #:+mod-super+ #:+mod-mod5+
@@ -159,8 +178,17 @@ deliberately decomposed so that policy can redirect it.")
    #:window-floating-p #:window-minimized-p #:window-fullscreen-p
    #:window-decoration-hint #:window-rect #:window-tags #:window-home-path
    #:window-preferred-size
+   ;; input devices.  Model state for the same reason a window is: policy has
+   ;; to be able to ask a device what it is before deciding how to configure
+   ;; it, and policy may not depend on the runtime.
+   #:input-device #:input-device-proxy #:input-device-libinput
+   #:input-device-keyboard #:input-device-name #:input-device-kind
+   #:input-device-capabilities #:input-device-capability
+   #:input-device-settings #:input-device-setting
+   #:input-device-matches-p #:+input-device-types+
    ;; the world
-   #:world #:world-root #:world-cursor #:world-outputs #:world-scratchpad
+   #:world #:world-root #:world-cursor #:world-outputs #:world-inputs
+   #:world-scratchpad
    #:world-floats #:make-world #:world-props #:world-focused-float
    #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
@@ -264,6 +292,17 @@ You never edit this package.")
    #:*shift-map* #:shifted-character #:*warn-on-rebinding*
    #:*keyboard-layout* #:*shift-maps* #:register-shift-map #:find-shift-map
    #:shift-map-names #:current-shift-map #:command-repeatable-p
+   ;; input devices: the hardware half of input policy.  River hands the
+   ;; window manager the machine's keyboards, mice and touchpads and expects
+   ;; it to configure them, because nothing else on the system will.
+   #:input-settings #:keyboard-layout-for
+   #:option-settings #:apply-input-rules #:*input-rules*
+   #:*tap-to-click* #:*tap-and-drag* #:*drag-lock* #:*natural-scroll*
+   #:*left-handed* #:*middle-emulation* #:*disable-while-typing*
+   #:*click-method* #:*scroll-method* #:*scroll-button*
+   #:*accel-profile* #:*accel-speed* #:*scroll-factor*
+   #:*repeat-rate* #:*repeat-delay* #:*numlock*
+   #:*xkb-layout* #:*xkb-variant* #:*xkb-options* #:*xkb-model* #:*xkb-rules*
    ;; the six protocols POLICY implements
    #:layout-policy #:appearance-policy #:motion-policy
    #:structure-policy #:lifecycle-policy #:input-policy
@@ -502,6 +541,13 @@ keybindings, the command registry, and the session loop.")
    #:list-scratchpads #:list-tags
    #:all-tags #:windows-tagged #:window-tagged-p #:normalize-tag
    #:all-scratchpads #:scratchpad-windows #:focus-existing-window
+   ;; input devices: keyboards, mice, touchpads.  The commands are exported
+   ;; for the same reason the options are -- a configuration file is read in
+   ;; LATTICEWM/USER, and (list-inputs) there has to resolve to this one.
+   #:input-devices #:list-inputs #:reload-input #:set-input
+   #:keyboard-layout #:next-keyboard-layout
+   #:apply-input-configuration #:apply-keyboard-layout #:mark-inputs-dirty
+   #:wl-output-named #:input-setting-property #:+libinput-settings+
    ;; the control socket
    #:start-ipc-server #:stop-ipc-server #:ipc-socket-path #:ipc-evaluate
    #:call-in-wm-thread-sync #:check-config

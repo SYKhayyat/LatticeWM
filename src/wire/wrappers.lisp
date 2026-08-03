@@ -306,7 +306,76 @@ is also what DESIGN D19's typing-in-an-empty-pane rests on.")
          river-xkb-bindings-seat-v1.cancel-ensure-next-key-eaten)
   (alias bindings-seat-modifiers-watch
          river-xkb-bindings-seat-v1.modifiers-watch
-         "Ask to be told when modifier state changes, for hold-to-peek."))
+         "Ask to be told when modifier state changes, for hold-to-peek.")
+  ;; INPUT CONFIGURATION.  Three protocols outside river_window_manager_v1
+  ;; entirely, so none of these is sequence-bound: a touchpad setting can be
+  ;; sent at any moment on the window manager's thread, which is why
+  ;; `(setf *tap-to-click* t) (reload-input)' works at a REPL with no round
+  ;; trip.  It is the only subsystem here of which that is true.
+  (alias input-destroy river-input-device-v1.destroy)
+  (alias input-set-repeat-info river-input-device-v1.set-repeat-info
+         "Key repeats per second, and the milliseconds before repeating starts.
+
+One request carrying both, so a configuration that sets only one has to supply
+the other from what is already in force rather than from a zero.")
+  (alias input-set-scroll-factor river-input-device-v1.set-scroll-factor
+         "Multiply this device's scroll distance.  River's own knob, so it works
+on devices libinput does not drive.")
+  (alias input-map-to-output river-input-device-v1.map-to-output
+         "Confine a stylus or a touchscreen to one monitor.
+Takes the wl_output, which is why the wl_output proxies are kept.")
+  (alias input-assign-to-seat river-input-device-v1.assign-to-seat)
+  ;; libinput.  Every setter takes the value and hands back a
+  ;; river_libinput_result_v1 that answers success, unsupported or invalid
+  ;; exactly once -- which is the only way a wrong value in a configuration
+  ;; file becomes a sentence somebody can read.
+  (alias libinput-destroy river-libinput-device-v1.destroy)
+  (alias libinput-set-send-events river-libinput-device-v1.set-send-events)
+  (alias libinput-set-tap river-libinput-device-v1.set-tap
+         "Tap the pad to click.  The first thing anybody turns on.")
+  (alias libinput-set-tap-button-map river-libinput-device-v1.set-tap-button-map)
+  (alias libinput-set-drag river-libinput-device-v1.set-drag)
+  (alias libinput-set-drag-lock river-libinput-device-v1.set-drag-lock)
+  (alias libinput-set-three-finger-drag
+         river-libinput-device-v1.set-three-finger-drag)
+  (alias libinput-set-accel-profile river-libinput-device-v1.set-accel-profile)
+  (alias libinput-set-accel-speed river-libinput-device-v1.set-accel-speed
+         "Pointer speed in [-1, 1], as the raw bytes of a double.")
+  (alias libinput-set-natural-scroll river-libinput-device-v1.set-natural-scroll)
+  (alias libinput-set-left-handed river-libinput-device-v1.set-left-handed)
+  (alias libinput-set-click-method river-libinput-device-v1.set-click-method)
+  (alias libinput-set-clickfinger-button-map
+         river-libinput-device-v1.set-clickfinger-button-map)
+  (alias libinput-set-middle-emulation
+         river-libinput-device-v1.set-middle-emulation)
+  (alias libinput-set-scroll-method river-libinput-device-v1.set-scroll-method)
+  (alias libinput-set-scroll-button river-libinput-device-v1.set-scroll-button)
+  (alias libinput-set-scroll-button-lock
+         river-libinput-device-v1.set-scroll-button-lock)
+  (alias libinput-set-dwt river-libinput-device-v1.set-dwt
+         "Ignore the touchpad briefly after a keystroke, so a palm does not move
+the cursor mid-sentence.")
+  (alias libinput-set-dwtp river-libinput-device-v1.set-dwtp)
+  (alias libinput-set-rotation river-libinput-device-v1.set-rotation)
+  (alias libinput-set-calibration-matrix
+         river-libinput-device-v1.set-calibration-matrix)
+  ;; xkb.  A keymap is compiled elsewhere and arrives here as a file
+  ;; descriptor; layout switching needs no keymap at all, which is what makes
+  ;; NEXT-KEYBOARD-LAYOUT work on a machine with no xkbcli on it.
+  (alias xkb-create-keymap river-xkb-config-v1.create-keymap
+         "Hand river a compiled XKB keymap on a file descriptor.")
+  (alias xkb-keymap-destroy river-xkb-keymap-v1.destroy)
+  (alias xkb-keyboard-destroy river-xkb-keyboard-v1.destroy)
+  (alias xkb-keyboard-set-keymap river-xkb-keyboard-v1.set-keymap)
+  (alias xkb-keyboard-set-layout-by-index
+         river-xkb-keyboard-v1.set-layout-by-index
+         "Switch layouts within the current keymap.  River wraps an index past
+the end back to zero, so `the next one' needs no layout count.")
+  (alias xkb-keyboard-set-layout-by-name river-xkb-keyboard-v1.set-layout-by-name)
+  (alias xkb-keyboard-capslock-enable river-xkb-keyboard-v1.capslock-enable)
+  (alias xkb-keyboard-capslock-disable river-xkb-keyboard-v1.capslock-disable)
+  (alias xkb-keyboard-numlock-enable river-xkb-keyboard-v1.numlock-enable)
+  (alias xkb-keyboard-numlock-disable river-xkb-keyboard-v1.numlock-disable))
 
 ;;; ---------------------------------------------------------------- enums
 ;;;

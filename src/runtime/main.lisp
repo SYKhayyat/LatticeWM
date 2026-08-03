@@ -147,6 +147,12 @@ timeout is a backstop against a bug in the above, not a polling interval."
                (drain-wm-queue)
                (unless (dispatch-events)
                  (setf (server-running *server*) nil))
+               ;; After the whole batch of events, not inside any of them: a
+               ;; device announces itself with twenty-odd events and
+               ;; configuring it after the first would mean deciding what a
+               ;; touchpad supports before it had said.  Costs one boolean test
+               ;; when nothing changed, which is every pass but a handful.
+               (apply-input-if-needed)
                (save-state-if-needed)
                (when (server-running *server*)
                  (wait-for-work fd))))
@@ -237,7 +243,7 @@ moment ends up invisible at exactly this moment."
    (finish-output *error-output*))
   nil)
 
-(defun start (&key (swank-port *swank-port*) (config t) (restore t))
+(defun start (&key (swank-port :default) (ipc :default) (config t) (restore t))
   "Connect to river and run.  Returns T on a clean exit and NIL on a failure
 to start.  This is the whole program.
 
@@ -249,20 +255,40 @@ Order matters and each step is deliberate:
      for our manage sequence before processing input.
   2. The emergency save is registered next, so that a fatal condition from
      any point after this still writes the layout out.
-  3. SWANK starts, if it was asked for, before anything interesting exists, so
-     that if step 5 fails you still have a REPL inside the running image.
-  4. Defaults, then the user's configuration, so the configuration wins.
+  3. Defaults, then the user's configuration, so the configuration wins.
+  4. *Then* the two servers, because both are configurable and both used to
+     start before the file that configures them.  See below.
   5. Connect and bind, refusing to start on a protocol version mismatch, and
-     saying why in a sentence rather than a backtrace."
+     saying why in a sentence rather than a backtrace.
+
+THE SERVERS COME AFTER THE CONFIGURATION AND THAT IS A FIX, not a preference.
+*IPC-SOCKET*, *IPC-TIMEOUT-SECONDS* and *SWANK-PORT* are registered options,
+printed by `--list-options', documented as things to set in init.lisp — and
+they were read before init.lisp was loaded.  So the socket was already open at
+its default path when the line that turned it off ran, and `(setf *swank-port*
+4005)' in a configuration file did nothing at all, silently, for the life of
+the program.  An option the configuration cannot change is not an option; it is
+a hard-coded value with a docstring.
+
+The reason SWANK used to be first was to have a REPL if startup failed.  That
+still holds — LOAD-CONFIG catches and logs, so a bad configuration file cannot
+prevent this line being reached, and everything that can fail without a REPL to
+debug it (connecting, binding, the first manage sequence) is still after it."
   (install-debugger-hook)
   (p:add-emergency-thunk 'emergency-shutdown)
   (register-data-registry)
-  (start-swank swank-port)
-  (start-ipc-server)
   (setf *world* (c:make-world)
         p:*policy* (or p:*policy* (make-instance 'p:conventional-policy)))
   (install-default-keymap)
   (when config (load-config))
+  ;; :DEFAULT rather than the option's value as a default argument, because a
+  ;; default argument is evaluated by the *caller* — so reading *SWANK-PORT* in
+  ;; the lambda list would have read it in MAIN, before this function had
+  ;; loaded the file that sets it, which is the same bug one level up.  A
+  ;; command-line flag still wins, because it arrives as a real value.
+  (start-swank (if (eq swank-port :default) *swank-port* swank-port))
+  (unless (eq ipc :default) (setf *ipc-socket* ipc))
+  (start-ipc-server)
   (run-hooks :startup)
   (let ((display (handler-case (connect-to-compositor)
                    (cannot-start (condition)
@@ -458,6 +484,57 @@ found this immediately: (lattice:enable) needs a world, and there was none."
                   (reverse problems) (length problems))
           nil))))))
 
+(defparameter +flags+
+  '(("--help" . 0) ("--version" . 0)
+    ("--list-options" . 0) ("--list-commands" . 0) ("--list-keys" . 0)
+    ("--extension-surface" . 0) ("--write-config" . 0) ("--check-config" . 0)
+    ("--no-config" . 0) ("--no-restore" . 0) ("--no-ipc" . 0)
+    ("--eval" . 1) ("--swank-port" . 1) ("--log-level" . 1) ("--log-file" . 1))
+  "Every accepted option, and how many values each takes.
+
+Exists so that an unrecognised one can be *refused*.  It used to be ignored:
+`latticewm --loglevel debug' started the window manager on its defaults and
+said nothing, and so did `--swank-por 4005', and so did every typo anybody ever
+made in a session file — where the consequence is a desktop that comes up
+subtly not as configured, with no line anywhere saying why.  A program whose
+command line silently accepts anything has no command line.")
+
+(defun unknown-arguments (arguments)
+  "Every argument in ARGUMENTS that is not a flag or a flag's value.
+
+Positional arguments count as unknown, because this program has none: every
+value belongs to the flag before it."
+  (let ((out '())
+        (skip 0))
+    (dolist (argument arguments (nreverse out))
+      (cond ((plusp skip) (decf skip))
+            ((assoc argument +flags+ :test #'string=)
+             (setf skip (cdr (assoc argument +flags+ :test #'string=))))
+            (t (push argument out))))))
+
+(defun suggest-flag (argument)
+  "The accepted flag ARGUMENT was most likely meant to be, or NIL.
+
+Three matches, which between them catch the three mistakes people actually
+make: stopping typing early, mistyping a letter, and leaving out the hyphen in
+a two-word flag.  That last one is the common one — `--loglevel' and
+`--logfile' are what fingers produce — and it is the one a prefix or a distance
+test both miss.  Anything cleverer would need a distance function nobody would
+read."
+  (let ((names (mapcar #'car +flags+)))
+    (flet ((squashed (text) (remove #\- text)))
+      (or (find-if (lambda (name) (and (> (length argument) 3)
+                                       (eql 0 (search argument name))))
+                   names)
+          (find-if (lambda (name) (string-equal (squashed name) (squashed argument)))
+                   names)
+          (find-if (lambda (name)
+                     (and (= (length name) (length argument))
+                          (= 1 (loop for a across argument
+                                     for b across name
+                                     count (char/= a b)))))
+                   names)))))
+
 (defun main ()
   "Entry point for the dumped image.
 
@@ -476,7 +553,18 @@ useful if a non-zero exit means what it says."
                                 (intern (string-upcase level) :keyword))))
         (when file
           (setf p:*log-file* (if (string= file "-") nil (pathname file)))))
-      (when (flag "--no-ipc") (setf *ipc-socket* nil))
+      (let ((unknown (unknown-arguments arguments)))
+        (when unknown
+          (format *error-output*
+                  "~&latticewm: unrecognised argument~p ~{~s~^, ~}~
+                   ~{~%~a~}~2%~a~%"
+                  (length unknown) unknown
+                  (loop for argument in unknown
+                        for suggestion = (suggest-flag argument)
+                        when suggestion
+                          collect (format nil "  did you mean ~a ?" suggestion))
+                  "Run `latticewm --help' for the whole command line.")
+          (sb-ext:exit :code 2)))
       (cond
         ((flag "--help") (write-string +usage+) (sb-ext:exit :code 0))
         ((flag "--version")
@@ -506,10 +594,17 @@ useful if a non-zero exit means what it says."
          (p:print-extension-surface) (sb-ext:exit :code 0))
         (t
          (let* ((port (argument-value arguments "--swank-port"))
-                (started (start :swank-port (cond ((null port) *swank-port*)
+                (started (start :swank-port (cond ((null port) :default)
                                                   ((string= port "0") nil)
                                                   (t (parse-integer
                                                       port :junk-allowed t)))
+                                ;; :DEFAULT means `whatever the configuration
+                                ;; says', so the flag wins over init.lisp and
+                                ;; init.lisp wins over the shipped default --
+                                ;; which is the order of specificity everybody
+                                ;; expects and the one the old code had exactly
+                                ;; backwards.
+                                :ipc (if (flag "--no-ipc") nil :default)
                                 :config (not (flag "--no-config"))
                                 :restore (not (flag "--no-restore")))))
            ;; A failure to start is a non-zero exit, so a session manager that

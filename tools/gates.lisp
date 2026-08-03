@@ -124,7 +124,15 @@
 (banner 5 "codegen counts match the pinned XML")
 (let ((expected '(("river-window-management-v1" 8 57 42 10)
                   ("river-xkb-bindings-v1" 3 11 5 1)
-                  ("river-layer-shell-v1" 3 6 4 1)))
+                  ("river-layer-shell-v1" 3 6 4 1)
+                  ;; The three input protocols.  They were vendored here and
+                  ;; never compiled, which is why this row is worth having: an
+                  ;; XML in the tree that no component names is invisible to
+                  ;; every gate, and these three were the difference between a
+                  ;; machine that can be configured and one that cannot.
+                  ("river-input-management-v1" 2 10 5 3)
+                  ("river-libinput-config-v1" 4 27 60 23)
+                  ("river-xkb-config-v1" 3 12 11 3)))
       (total-requests 0))
   (dolist (row expected)
     (destructuring-bind (name interfaces requests events enums) row

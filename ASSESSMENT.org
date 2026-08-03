@@ -2,6 +2,114 @@
 #+DATE: 2026-08-01
 #+OPTIONS: toc:2 num:t
 
+* Second round, 2026-08-03
+:PROPERTIES:
+:CUSTOM_ID: round2
+:END:
+
+Everything below this section was worked through and is closed. What follows
+is a *second* audit, run against the result, and it found one thing that is
+larger than anything in the first pass and four that are smaller.
+
+** The finding: three vendored protocols that nothing compiled
+
+=src/protocol/= contained six XML files. =latticewm.asd= named three.
+
+The three it did not name were =river-input-management-v1=,
+=river-libinput-config-v1= and =river-xkb-config-v1= — which between them are
+every input setting on the machine. On river there is no settings daemon, no
+=xinput=, no compositor-side configuration file: the window manager owns input
+configuration the way it owns the layout, because nothing else will do it. So
+the consequence was not a missing nicety:
+
+- no tap-to-click, on any laptop, ever — the first thing anybody turns on and
+  the reason a touchpad reads as broken until it is done;
+- no key repeat rate or delay;
+- no touchpad acceleration, click method, scroll method, natural scrolling,
+  disable-while-typing, or any of the fifteen others;
+- *and no keyboard layout*, which means anybody who does not type on a US
+  keyboard could not use the program at all except by setting
+  XKB_DEFAULT_LAYOUT before river started — which is not something a window
+  manager may ask of its user.
+
+*What makes it the sharpest finding in either round is that nothing could see
+it.* Gate 1 compiles what the system definition names, and an XML no component
+names is not compiled. Gate 5 counted the codegen of the three that were
+named. Gate 8 checks that every event we *handle* exists — it says nothing
+about an interface we never listen to at all. The unit suite constructs state,
+so it can construct a device without ever having asked river for one. The
+integration test asserted on the manager, the outputs and a window. Every
+instrument in the project was pointed somewhere else, and each of them was
+individually reasonable.
+
+The first assessment's §6 listed missing features against "what a person
+switching from i3, sway or Hyprland expects to find". It listed pointer
+management, output hotplug, HiDPI, layer shell, session lock, idle inhibit, a
+scratchpad, layout undo, and a control socket. It did not list input
+configuration, and the reason it did not is worth recording: *the author's
+machine was already configured.* An absence you do not personally experience
+is an absence you have to go looking for, and the place to look is the gap
+between what the protocol offers and what the program consumes.
+
+Closed: 62 policy generics (two new ones, for twenty-odd settings), a rule
+table for the per-device case, five commands, and the three protocols
+compiled, bound, and checked by gate 5 and the integration test.
+
+** Four smaller ones, all of the same species
+
+*Options that were read before the file that sets them.* =*ipc-socket*=,
+=*ipc-timeout-seconds*= and =*swank-port*= are registered options, printed by
+=--list-options=, documented as things to set in =init.lisp= — and =START=
+opened both servers before =LOAD-CONFIG= ran. So =(setf *swank-port* 4005)= in
+a configuration file did nothing at all, silently, for the life of the
+program. FINDINGS.org keeps rediscovering this shape from new directions: *a
+default an extension cannot replace is not a default, it is a hard-coded value
+with good manners.* This is the same sentence about a configuration file.
+
+*The registry was read exactly once.* =BIND-GLOBALS= collected the globals
+present at the first roundtrip and dropped the listener's results on the
+floor thereafter, and there was no =global_remove= handler at all. A monitor
+plugged in after startup got its =river_output_v1= — so the window manager saw
+it — and never got its =wl_output=, which is where the name and the scale
+factor come from. A HiDPI screen docked at lunchtime therefore drew everything
+the window manager renders for itself at half size, and the per-output
+workspace memory, which is keyed on the name, keyed on NIL. The =outputs.lisp=
+header says "hotplug is the part that was missing" and fixed three quarters of
+it; this was the quarter that lived in another file.
+
+*A seat could go away and nothing noticed.* =river_seat_v1.removed= had no
+clause. The dead seat stayed on =SERVER-SEATS=, =PRIMARY-SEAT= kept returning
+it, and every focus request, pointer warp and binding enable after that went
+to a destroyed object — which is a protocol error, and a protocol error is the
+connection closing.
+
+*The command line accepted anything.* =latticewm --loglevel debug= started the
+window manager on its defaults and said nothing; so did =--swank-por 4005=;
+so did every typo anybody ever made in a session file, where the consequence
+is a desktop that comes up subtly not as configured with no line anywhere
+saying why.
+
+** What this round did not close
+
+- *Gate 6's ratio is 0.99*, down from 1.11, and the gate says "watch this".
+  The input subsystem is genuinely mechanism — twenty settings, three
+  protocols, a join across three proxies — and the *decision* half of it is
+  two generics and a rule table, which is where it belongs. But the number
+  moved and it moved in the direction the gate exists to notice, and the next
+  substantial runtime addition should be paid for by moving something else
+  across the line rather than by moving the floor.
+- *The libinput half is unexercised.* A headless backend has no input devices
+  and a nested one has no libinput behind it, so tap, acceleration and the
+  rest are verified as a *decision* by the unit suite and not at all as a
+  *transmission*. The integration test says =skip= rather than passing
+  quietly. What is verified end to end against a real river is device
+  enumeration, the three-way join, key repeat, and compiling and installing a
+  keyboard layout.
+- *Idle inhibit* remains absent and is listed below. It is the compositor's
+  to implement on river, not the window manager's, and should be struck from
+  §6 rather than fixed — but that has not been confirmed against river's
+  source and so is not claimed here.
+
 * Verdict
 
 LatticeWM is an unusually well-built piece of Common Lisp with a genuinely

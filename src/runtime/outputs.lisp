@@ -41,6 +41,23 @@ rather than in either handler means it does not matter."
               (setf (c:output-name output) name)
               (logmsg :info "output ~a is ~a" id name))))))))
 
+(defun wl-output-named (name)
+  "The bound wl_output proxy for the output called NAME, or NIL.
+
+Needed because a tablet or a touchscreen is confined to a monitor by handing
+river the *wl_output*, and river_output_v1 is not one — so this is the join
+run backwards, from the human-readable name a configuration file writes to the
+object the protocol wants.  Accepts an OUTPUT as well as a name, since half the
+callers already have one."
+  (when (and *server* *world* name)
+    (let ((output (if (typep name 'c:output)
+                      name
+                      (find (string name) (c:world-outputs *world*)
+                            :key #'c:output-name :test #'equal))))
+      (when output
+        (let ((id (c:prop output :wl-output-id)))
+          (and id (gethash id (server-wl-outputs *server*))))))))
+
 (defun attach-output (proxy)
   "Register an output and follow its position, size and layer-shell area."
   (let ((output (make-instance 'c:output :proxy proxy)))

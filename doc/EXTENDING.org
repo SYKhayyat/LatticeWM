@@ -68,6 +68,14 @@ typo.
 (setf *split-axis* :longer)         ; :longer | :horizontal | :vertical
 (setf *focus-after-close* :stay)    ; :stay | :mru | :next
 (setf *focus-follows-mouse* t)
+
+;; The hardware.  On river nothing else on the machine configures it.
+(setf *xkb-layout* "de")            ; what the keys do, for every application
+(setf *tap-to-click* t)
+(setf *repeat-rate* 50)
+(setf *input-rules*                 ; per device, later rules winning
+      '(("Touchpad" :natural-scroll t)
+        ("Logitech" :accel-profile :flat)))
 #+end_src
 
 Every one of these exists because the design reached a fork where both answers
@@ -111,6 +119,24 @@ Float two applications that get tiling wrong:
 
 Paste it into a REPL and the *next* window obeys it. Nothing restarted.
 
+** A second one, where a table cannot reach
+
+~*input-rules*~ covers per-device settings and is what most people want. Write
+the method when the decision is a *program* rather than a table — here, flat
+acceleration for anything that is a drawing tablet, whatever it is called:
+
+#+begin_src lisp
+(defmethod input-settings ((policy conventional-policy) device)
+  (append (when (eq :tablet (input-device-kind device))
+            '(:accel-profile :flat))
+          (call-next-method)))
+#+end_src
+
+Note the shape: your settings, then ~call-next-method~. A property named twice
+takes the first, a property you do not name keeps the shipped answer, and a
+property no device supports is skipped rather than sent. ~(reload-input)~
+applies it to everything already plugged in.
+
 ** The generics worth knowing about first
 
 | Generic | Question |
@@ -124,6 +150,8 @@ Paste it into a REPL and the *next* window obeys it. Nothing restarted.
 | ~focus-after-remove~ | where does the cursor go after a close? |
 | ~border-color~ / ~border-width~ / ~gaps~ | how it looks |
 | ~key-unbound~ | typing in an empty pane |
+| ~input-settings~ | how should this keyboard or touchpad be configured? |
+| ~keyboard-layout-for~ | which xkb layout does this keyboard want? |
 
 ~wmeval --surface~ prints every one with its contract and with the methods that
 currently answer it — including yours, which is how you check that your file
@@ -141,7 +169,7 @@ shipped defaults live on the *narrow* ones:
 | ~motion-policy~ | where the cursor goes |
 | ~structure-policy~ | where things go when the tree changes |
 | ~lifecycle-policy~ | windows arriving, leaving, floating, minimizing |
-| ~input-policy~ | what a key, a click or a drag means |
+| ~input-policy~ | what a key, a click or a drag means, and how the hardware that sends them is configured |
 
 Which means a mixin that answers for *one* of them is a real thing you can
 write, and it says what it is:

@@ -61,6 +61,16 @@
                 ;; SEAT-MODIFIERS was never written, and nothing read it
                 ;; either.  Removed rather than wired up: inventing the feature
                 ;; would be answering a gate instead of listening to it.
+                ;;
+                ;; A SEAT CAN GO AWAY, and until this clause existed nothing
+                ;; noticed.  The dead SEAT stayed on SERVER-SEATS, PRIMARY-SEAT
+                ;; kept returning it, and every focus request, pointer warp and
+                ;; keybinding enable after that went to a destroyed object --
+                ;; which is not a silent failure but a *protocol error*, and a
+                ;; protocol error is the connection closing.  One seat is the
+                ;; normal case; several is what a multi-seat machine and every
+                ;; remote-desktop client create and destroy at will.
+                (:removed (detach-seat seat proxy))
                 (t nil))
     (attach-layer-shell-seat seat)
     (when (server-bindings *server*)
@@ -84,6 +94,43 @@
     (setf (server-bindings-dirty *server*) t)
     (logmsg :info "seat appeared")
     seat))
+
+(defun detach-seat (seat proxy)
+  "A seat went away.  Take it out of everything and release what it held.
+
+The bindings are the part worth naming: every key in the keymap and every one
+of the two-hundred-odd capture keys is a river_xkb_binding_v1 belonging to this
+seat, and a seat that comes and goes without them being destroyed leaks a few
+hundred objects per cycle on the compositor's side as well as ours.
+
+The protocol asks us to destroy the object after `removed', which is what frees
+its half."
+  (loop for binding being the hash-values of (seat-bound-keys seat)
+        do (guarded "binding destroy" (river:river-xkb-binding-v1.destroy binding)))
+  (clrhash (seat-bound-keys seat))
+  (loop for (nil . binding) in (c:prop seat :capture-bindings)
+        do (guarded "capture binding destroy"
+             (river:river-xkb-binding-v1.destroy binding)))
+  (setf (c:prop seat :capture-bindings) nil
+        (c:prop seat :capture-armed) nil)
+  (let ((layer (c:prop seat :layer-shell)))
+    (when layer
+      (guarded "layer shell seat destroy"
+        (river:river-layer-shell-seat-v1.destroy layer))
+      (setf (c:prop seat :layer-shell) nil)))
+  (let ((bindings-seat (seat-bindings-seat seat)))
+    (when bindings-seat
+      (guarded "bindings seat destroy"
+        (river:river-xkb-bindings-seat-v1.destroy bindings-seat))
+      (setf (seat-bindings-seat seat) nil)))
+  (setf (server-seats *server*) (remove seat (server-seats *server*)))
+  (guarded "seat destroy" (river:river-seat-v1.destroy proxy))
+  (setf (seat-proxy seat) nil)
+  ;; Whatever is left needs its bindings re-established, because they were
+  ;; per seat and this was not necessarily the only one.
+  (setf (server-bindings-dirty *server*) t)
+  (logmsg :info "seat removed")
+  nil)
 
 (defun pointer-moved (seat)
   "Focus follows the pointer, if that is turned on."

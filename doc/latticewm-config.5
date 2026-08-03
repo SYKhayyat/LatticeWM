@@ -92,13 +92,53 @@ What the launcher commands run.
 The modifier every default binding hangs off, :SUPER by default.  Change this
 one value and the whole keymap moves with it.
 .TP
+.B *xkb-layout* *xkb-variant* *xkb-options* *xkb-model* *xkb-rules*
+The keyboard layout itself, e.g. \(lqde\(rq or \(lqus,de\(rq.  This changes
+what the keys do for every application on the machine.  On river there is
+nothing else on the system that sets it \(em no settings daemon, no
+.BR xinput (1)
+\(em so if you do not type on a US keyboard this is the line to set.  NIL, the
+default, leaves whatever river started with.  Needs
+.BR xkbcli (1),
+which ships with libxkbcommon.
+.TP
 .B *keyboard-layout*
-\(lqus\(rq, \(lquk\(rq, \(lqde\(rq, \(lqfr\(rq, \(lqdvorak\(rq or
+A different thing with a similar name: the
+.I shift map,
+one of \(lqus\(rq, \(lquk\(rq, \(lqde\(rq, \(lqfr\(rq, \(lqdvorak\(rq or
 \(lqcolemak\(rq.  River does the xkb work and does not tell us the
 .I shifted
-keysym, so the shifted glyph has to be declared rather than derived.  If you
-are not on a US keyboard this is the one line to set before the prompt is
-typeable.
+keysym, so the shifted glyph has to be declared rather than derived, or the
+window manager's own prompt inserts American punctuation on a German keyboard.
+Setting
+.B *xkb-layout*
+adopts the matching table automatically, so in the ordinary case there is
+nothing to do here.
+.TP
+.B *tap-to-click* *natural-scroll* *accel-speed* *accel-profile*
+.TP
+.B *click-method* *scroll-method* *scroll-button* *disable-while-typing*
+.TP
+.B *repeat-rate* *repeat-delay* *scroll-factor* *left-handed*
+Input device settings, applied to every device that supports them.  A device
+that does not support one is skipped rather than sent it.
+.TP
+.B *input-rules*
+Per\-device overrides, as a list of (MATCHER . PLIST).  MATCHER is T, a device
+kind (:KEYBOARD :POINTER :TOUCH :TABLET), a substring of the device name, or a
+function of one device.  Every matching rule applies in order and a later one
+wins, so a rule for T is a default and a rule naming a device is an override.
+A laptop has a touchpad
+.I and
+a mouse and they want opposite things, which is what this exists for.
+.RS
+.PP
+.B (setf *input-rules* '(("Touchpad" :natural-scroll t)))
+.RE
+.PP
+.B (list-inputs)
+prints every device present with its name, its kind, what it supports and what
+is currently in force.
 .TP
 .B *gaps* *outer-gaps* *border-width*
 .TP

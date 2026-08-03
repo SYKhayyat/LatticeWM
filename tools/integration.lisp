@@ -31,7 +31,10 @@
 ;;;;   5. a render sequence completes and the echo area's shared-memory buffer
 ;;;;      is accepted — the wl_shm path, which DESIGN called the least-proven
 ;;;;      part of wayflan;
-;;;;   6. with a client available, a window is announced, placed, given a
+;;;;   6. the three input globals bind, devices are announced with names and
+;;;;      kinds, and a setting river's own protocol carries is accepted --
+;;;;      the half of input configuration that exists without hardware;
+;;;;   7. with a client available, a window is announced, placed, given a
 ;;;;      proposed size and shown.
 ;;;;
 ;;;;   make integration
@@ -271,7 +274,76 @@ the pieces by hand would be constructing state again."
                               10)))
                 (check overlays "an overlay surface exists")
                 (check canvas "with a shared-memory buffer river accepted"))
-              ;; --- 6. a real window, if there is a client to make one -----
+              ;; --- 6. input configuration --------------------------------
+              ;;
+              ;; THE ONLY PLACE THIS CAN BE CHECKED AT ALL.  Three protocols
+              ;; were vendored into src/protocol/ and never compiled, and
+              ;; nothing anywhere noticed -- not gate 1, which cannot see an
+              ;; XML no component names; not gate 5, which counted only the
+              ;; three that were named; not the unit suite, which constructs
+              ;; state and so can construct a device without ever asking river
+              ;; for one.
+              ;;
+              ;; The headless backend has no libinput devices, so what is
+              ;; checked here is the half that exists on every backend: the
+              ;; globals bind, devices are announced, and a name and a kind
+              ;; arrive.  The libinput half is unreachable without hardware and
+              ;; is marked as such rather than quietly skipped.
+              (let ((server (sym "latticewm/runtime:*server*")))
+                (check (call "latticewm/runtime::server-input-manager" server)
+                       "river_input_manager_v1 is bound")
+                (check (call "latticewm/runtime::server-xkb-config" server)
+                       "river_xkb_config_v1 is bound")
+                ;; A HEADLESS BACKEND HAS NO INPUT DEVICES AT ALL — wlroots
+                ;; creates a virtual output and no virtual keyboard — so the
+                ;; two checks below are conditional and say so when they cannot
+                ;; run.  That is the same shape as the terminal check further
+                ;; down and for the same reason: a check that silently passes
+                ;; on an empty list is a measurement wearing a gate's uniform,
+                ;; and this file has one gate's worth of credibility to spend.
+                ;;
+                ;; The device path is exercised for real by running nested
+                ;; under an ordinary session (WLR_BACKENDS=wayland), where
+                ;; river makes one virtual device per capability of the parent
+                ;; seat.  It is not done here because `make check' would then
+                ;; open a window on whatever desktop it was run from.
+                (let ((devices (poll-until
+                                (lambda ()
+                                  (call "latticewm/core:world-inputs"
+                                        (sym "latticewm/runtime:*world*")))
+                                3)))
+                  (cond
+                    ((null devices)
+                     (format t "  skip  the headless backend has no input ~
+                                devices, so no device was configured~%"))
+                    (t
+                     (check (some (lambda (d)
+                                    (call "latticewm/core:input-device-name" d))
+                                  devices)
+                            "~d input device~:p, named: ~{~a~^, ~}"
+                            (length devices)
+                            (remove nil
+                                    (mapcar (lambda (d)
+                                              (call "latticewm/core:input-device-name" d))
+                                            devices)))
+                     ;; Key repeat is river's own request rather than
+                     ;; libinput's, so it is the one setting a backend with no
+                     ;; libinput behind it can still take.
+                     (let ((keyboard
+                             (find :keyboard devices
+                                   :key (lambda (d)
+                                          (call "latticewm/core:input-device-kind" d)))))
+                       (cond
+                         ((null keyboard)
+                          (format t "  skip  no keyboard among them~%"))
+                         (t
+                          (setf (symbol-value (sym "latticewm/policy:*repeat-rate*")) 42
+                                (symbol-value (sym "latticewm/policy:*repeat-delay*")) 250)
+                          (call "latticewm/runtime:apply-input-configuration")
+                          (check (eql 42 (call "latticewm/core:input-device-setting"
+                                               keyboard :repeat-rate))
+                                 "and set_repeat_info was accepted at 42/s"))))))))
+              ;; --- 7. a real window, if there is a client to make one -----
               (let ((client (find-program "foot" "weston-terminal" "alacritty"
                                           "kitty" "xterm")))
                 (cond

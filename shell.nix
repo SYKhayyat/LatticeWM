@@ -43,6 +43,12 @@ pkgs.mkShell {
     pkgs.foot # a tiny terminal, for testing under nested river
     pkgs.grim # screenshots of the nested session -- see PLAN.org §looking
     pkgs.wayland-utils
+    # xkbcli, for *XKB-LAYOUT*.  It compiles a keymap from layout names, which
+    # is libxkbcommon's job and not a thing the protocol will do for us -- see
+    # runtime/input.lisp on why this is the one place the program shells out.
+    # It ships with libxkbcommon, so it is already on any machine running
+    # river; it is named here so that the integration test can rely on it.
+    pkgs.libxkbcommon.dev
     pkgs.git
   ];
 

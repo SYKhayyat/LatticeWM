@@ -103,76 +103,149 @@ that."
       (loop until done
             do (dispatch-one-event display)))))
 
+(defun bind-one-global (server name interface version)
+  "Bind the global called INTERFACE, if it is one we want.  Returns T if bound.
+
+Split out of BIND-GLOBALS so that the *same* code runs for a global present at
+startup and one that appears later, which is not a tidiness argument: the
+registry used to be read exactly once, and a monitor plugged in afterwards
+therefore never had its wl_output bound.  Its river_output_v1 arrived, so the
+window manager saw the monitor; its wl_output did not, so the monitor had no
+name and was assumed to be scale 1 — a HiDPI screen docked at lunchtime drew
+everything the window manager renders for itself at half size, and the
+per-output workspace memory, which is keyed on the name, silently keyed on
+NIL.  Docking a laptop is the case, and it is exactly the case a one-shot
+registry cannot serve."
+  (let ((registry (server-registry server)))
+    (cond
+      ((string= interface "river_window_manager_v1")
+       (unless (= version +window-management-version+)
+         (error 'protocol-version-mismatch
+                :interface interface :wanted +window-management-version+
+                :offered version))
+       (setf (server-version server) version
+             (server-manager server)
+             (wl:wl-registry.bind registry name
+                                  'river:river-window-manager-v1 version)))
+      ((string= interface "river_xkb_bindings_v1")
+       (if (= version +xkb-bindings-version+)
+           (setf (server-bindings server)
+                 (wl:wl-registry.bind registry name
+                                      'river:river-xkb-bindings-v1 version))
+           (logmsg :warn "river_xkb_bindings_v1 is version ~d, we want ~d; ~
+                          keybindings disabled"
+                   version +xkb-bindings-version+)))
+      ((string= interface "wl_compositor")
+       (setf (server-compositor server)
+             (wl:wl-registry.bind registry name 'wl:wl-compositor
+                                  (min version 4))))
+      ((string= interface "wl_output")
+       ;; Bound for the two facts river_output_v1 does not carry: the
+       ;; human-readable name, and the scale factor.  wl_output.name arrived in
+       ;; version 4; below that there is no name to be had and the output stays
+       ;; anonymous, which is degraded rather than broken.  Scale has been
+       ;; there since version 2, so the bind takes whatever is on offer down to
+       ;; 2 rather than refusing.
+       (when (>= version 2)
+         (let ((id name)
+               (proxy (wl:wl-registry.bind registry name 'wl:wl-output
+                                           (min version 4))))
+           (setf (gethash id (server-wl-outputs server)) proxy)
+           (on-events (proxy "wl_output")
+             (:name
+              (setf (gethash id (server-output-names server))
+                    (first arguments))
+              (name-outputs))
+             (:scale
+              (setf (gethash id (server-output-scales server))
+                    (max 1 (or (first arguments) 1)))
+              (dolist (output (c:world-outputs *world*))
+                (adopt-wl-output output)))
+             (t nil)))))
+      ((string= interface "wl_shm")
+       (setf (server-shm server)
+             (wl:wl-registry.bind registry name 'wl:wl-shm 1)))
+      ((string= interface "river_layer_shell_v1")
+       (setf (server-layer-shell server)
+             (wl:wl-registry.bind registry name
+                                  'river:river-layer-shell-v1 version)))
+      ;; The three input globals.  Each is optional and each degrades to
+      ;; exactly what the program did before it bound them: no manager means no
+      ;; device list and no key repeat, no libinput config means no touchpad
+      ;; settings, no xkb config means whatever layout river started with.
+      ((string= interface "river_input_manager_v1")
+       (setf (server-input-manager server)
+             (attach-input-manager
+              (wl:wl-registry.bind registry name
+                                   'river:river-input-manager-v1 version))))
+      ((string= interface "river_libinput_config_v1")
+       (setf (server-libinput-config server)
+             (attach-libinput-config
+              (wl:wl-registry.bind registry name
+                                   'river:river-libinput-config-v1 version))))
+      ((string= interface "river_xkb_config_v1")
+       (setf (server-xkb-config server)
+             (attach-xkb-config
+              (wl:wl-registry.bind registry name
+                                   'river:river-xkb-config-v1 version))))
+      (t (return-from bind-one-global nil)))
+    t))
+
+(defun forget-global (server id)
+  "A global went away.  Drop anything we were keying on its numeric name.
+
+WHY THIS IS NOT MERELY TIDY.  Wayland reuses global ids, so a stale entry is
+not a leak that grows — it is a *wrong answer* waiting to happen: unplug the
+external monitor and plug in a different one, the compositor reuses the id, and
+the new screen inherits the old one's name and scale factor from these two
+tables.  On a laptop that is docked and undocked twice a day the failure
+arrives within the week, and it looks like the window manager forgetting which
+monitor is which."
+  (remhash id (server-output-names server))
+  (remhash id (server-output-scales server))
+  (let ((proxy (gethash id (server-wl-outputs server))))
+    (when proxy
+      (remhash id (server-wl-outputs server))
+      (ignore-errors (wl:wl-output.release proxy))))
+  nil)
+
 (defun bind-globals (server)
-  "Bind the river globals we need, refusing to start on a version mismatch."
+  "Bind the river globals we need, refusing to start on a version mismatch.
+
+The registry hook stays attached for the life of the connection rather than
+being read once and dropped, so a global that appears later — which is what a
+monitor being plugged in *is* — goes through exactly the same code."
   (let ((display (server-display server))
         (found '()))
     (let ((registry (wl:wl-display.get-registry display)))
       (setf (server-registry server) registry)
       (push (wl:evlambda
               (:global (name interface version)
-               (push (list name interface version) found)))
+               (push (list name interface version) found))
+              (:global-remove (name) (forget-global server name)))
             (wl:wl-proxy-hooks registry))
       (safe-roundtrip display)
       (dolist (entry (nreverse found))
         (destructuring-bind (name interface version) entry
-          (cond
-            ((string= interface "river_window_manager_v1")
-             (unless (= version +window-management-version+)
-               (error 'protocol-version-mismatch
-                      :interface interface :wanted +window-management-version+
-                      :offered version))
-             (setf (server-version server) version
-                   (server-manager server)
-                   (wl:wl-registry.bind registry name
-                                        'river:river-window-manager-v1 version)))
-            ((string= interface "river_xkb_bindings_v1")
-             (if (= version +xkb-bindings-version+)
-                 (setf (server-bindings server)
-                       (wl:wl-registry.bind registry name
-                                            'river:river-xkb-bindings-v1 version))
-                 (logmsg :warn "river_xkb_bindings_v1 is version ~d, we want ~d; ~
-                                keybindings disabled"
-                         version +xkb-bindings-version+)))
-            ((string= interface "wl_compositor")
-             (setf (server-compositor server)
-                   (wl:wl-registry.bind registry name 'wl:wl-compositor
-                                        (min version 4))))
-            ((string= interface "wl_output")
-             ;; Bound for the two facts river_output_v1 does not carry: the
-             ;; human-readable name, and the scale factor.  wl_output.name
-             ;; arrived in version 4; below that there is no name to be had and
-             ;; the output stays anonymous, which is degraded rather than
-             ;; broken.  Scale has been there since version 2, so the bind
-             ;; takes whatever is on offer down to 2 rather than refusing.
-             (when (>= version 2)
-               (let ((id name)
-                     (proxy (wl:wl-registry.bind registry name 'wl:wl-output
-                                                 (min version 4))))
-                 (on-events (proxy "wl_output")
-                   (:name
-                    (setf (gethash id (server-output-names server))
-                          (first arguments))
-                    (name-outputs))
-                   (:scale
-                    (setf (gethash id (server-output-scales server))
-                          (max 1 (or (first arguments) 1)))
-                    (dolist (output (c:world-outputs *world*))
-                      (adopt-wl-output output)))
-                   (t nil)))))
-            ((string= interface "wl_shm")
-             (setf (server-shm server)
-                   (wl:wl-registry.bind registry name 'wl:wl-shm 1)))
-            ((string= interface "river_layer_shell_v1")
-             (setf (server-layer-shell server)
-                   (wl:wl-registry.bind registry name
-                                        'river:river-layer-shell-v1 version))))))
+          (bind-one-global server name interface version)))
       (unless (server-manager server)
         (error "This compositor does not offer river_window_manager_v1.~%~
                 LatticeWM is a window manager *for river*, and needs river~%~
                 0.4 or later.  Are you running it inside the right~%~
                 compositor?  WAYLAND_DISPLAY is ~s."
                (uiop:getenv "WAYLAND_DISPLAY")))
+      ;; From here on, a global is bound the moment it is announced.  Replacing
+      ;; the hook rather than adding one keeps the accumulating list from
+      ;; growing for the life of the session, and there is exactly one reader.
+      (setf (wl:wl-proxy-hooks registry)
+            (list (wl:evlambda
+                    (:global (name interface version)
+                     (with-abandon
+                       (when (bind-one-global server name interface version)
+                         (logmsg :info "global appeared: ~a v~d"
+                                 interface version))))
+                    (:global-remove (name)
+                     (with-abandon (forget-global server name))))))
       (logmsg :info "bound river_window_manager_v1 v~d" (server-version server))
       server)))
 

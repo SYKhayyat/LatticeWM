@@ -91,6 +91,14 @@ initial guess."))
 keyboard focus is derived from it on every relayout and never stored.")
    (outputs :initform '() :accessor world-outputs
             :documentation "List of OUTPUT, in the order river reported them.")
+   (inputs :initform '() :accessor world-inputs
+           :documentation
+           "List of INPUT-DEVICE, in the order river reported them.
+
+Here rather than on the server for the same reason the outputs are: policy has
+to be able to ask what is plugged in — a rule that applies to every touchpad
+has to be able to find the touchpads — and policy may not depend on the
+runtime.")
    (floats :initform '() :accessor world-floats
            :documentation "List of FLOATING-WINDOW, bottom to top.")
    (focused-float :initform nil :accessor world-focused-float

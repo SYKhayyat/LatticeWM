@@ -361,6 +361,37 @@ particular program."
 ;; (setf *focus-after-close* :stay)    ; :stay | :mru | :next
 ;; (setf *focus-follows-mouse* t)
 
+;;; ------------------------------------------------------- your hardware
+;;; The keyboard, the mouse and the touchpad.  On river there is nothing else
+;;; on the machine that configures these — no settings daemon, no xinput — so
+;;; if you want tap-to-click or a layout that is not American, it happens here.
+;;;
+;;; \"(list-inputs)\" at Super+x prints every device with its name and
+;;; everything settable on it, which is where the names below come from.
+
+;; (setf *tap-to-click* t)             ; on by default; here so you can see it
+;; (setf *natural-scroll* t)           ; scroll like a phone
+;; (setf *repeat-rate* 50)             ; key repeats per second
+;; (setf *repeat-delay* 300)           ; ms held before repeating starts
+;; (setf *accel-speed* 0.3d0)          ; pointer speed, -1 slowest to 1 fastest
+
+;; The keyboard layout itself.  This changes what the keys do for every
+;; application, and adopts the matching shift map so the window manager's own
+;; prompt agrees with your keyboard.  Needs xkbcli, which ships with
+;; libxkbcommon and is therefore already installed.
+;; (setf *xkb-layout* \"de\")
+;; (setf *xkb-options* \"ctrl:nocaps\")  ; caps lock becomes control
+
+;; A laptop has a touchpad AND a mouse, and they want opposite things.  Later
+;; rules win, so a rule for T is a default and a rule naming a device is an
+;; override.  The matcher is T, a device kind, a substring of the name, or a
+;; function of one device.
+;; (setf *input-rules*
+;;       '((\"Touchpad\"  :natural-scroll t :accel-speed 0.3d0
+;;                      :click-method :clickfinger)
+;;         (\"TrackPoint\" :scroll-method :on-button-down :scroll-button 274)
+;;         (\"Logitech\"   :accel-profile :flat)))
+
 ;;; ------------------------------------------------------------- keys
 ;;; A binding names a command, so redefining the command later takes effect
 ;;; without rebinding the key.
