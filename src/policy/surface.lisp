@@ -73,9 +73,18 @@ build gate's failure output as well as a nudge to whoever is reading."
                     ~76,,,'=<~>~2%"
             (length (getf surface :generics)) (length (getf surface :options)))
     (format stream "~
-Every generic below takes a POLICY as its first argument.  To change one,~%~
-write a method; it takes effect the moment you evaluate it.~2%~
-    (defmethod gaps ((policy conventional-policy) container) 8)~2%")
+Every generic below dispatches on a policy as its first argument.  To change~%~
+one, write a method; it takes effect the moment you evaluate it.~2%~
+    (defmethod gaps ((policy conventional-policy) container) 8)~2%~
+Specialize on CONVENTIONAL-POLICY, not on the class the shipped method uses.~%~
+The defaults sit on the six protocols POLICY implements -- LAYOUT-POLICY,~%~
+APPEARANCE-POLICY, MOTION-POLICY, STRUCTURE-POLICY, LIFECYCLE-POLICY and~%~
+INPUT-POLICY -- so that a mixin answering for one of them is a real thing you~%~
+can write.  Yours has to be strictly more specific than theirs, or it~%~
+replaces the shipped answer instead of extending it and CALL-NEXT-METHOD~%~
+signals NO-NEXT-METHOD.~2%~
+The `methods' list under each generic includes yours, which is how you check~%~
+that your configuration file was actually loaded.~2%")
     (dolist (entry (getf surface :generics))
       (format stream "~&~76,,,'-<~>~%~(~a~) ~(~s~)~%~76,,,'-<~>~%"
               (getf entry :name) (getf entry :lambda-list))

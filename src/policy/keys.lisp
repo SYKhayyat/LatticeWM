@@ -72,40 +72,131 @@ two spellings of the same chord are EQUAL."
             (case m (:mod4 :super) (:mod1 :alt) (t m)))
           (remove-if-not (lambda (m) (member m modifiers)) +modifier-order+)))
 
-(define-option *shift-map*
+;;; ---------------------------------------------------------- shift maps
+;;;
+;;; RIVER SENDS THE UNSHIFTED KEYSYM, and everything below follows from that
+;;; one fact.  The design assumed the opposite — that xkb would produce
+;;; `parenleft' for Shift+9 and river would pass it through with Shift still in
+;;; the modifier set — and bound every printable keysym twice on that
+;;; reasoning.  Measured against a real keyboard on bare metal, what arrives is
+;;; keysym `9' with Shift set, so the prompt inserted a nine: typing (+ 1 2)
+;;; into M-: produced `9= 1 20', which is a symbol called 9= and an
+;;; unbound-variable error.
+;;;
+;;; So the shifted glyph cannot be derived.  It has to be *declared*, per
+;;; layout — and a program that ships one hard-coded US table and no way to
+;;; replace it is a program that cannot be typed into on a German keyboard.
+;;; What ships instead is a registry, four layouts, and a generic.
+
+(defvar *shift-maps* (make-hash-table :test #'equal)
+  "Layout name -> an alist of unshifted character to shifted character.
+
+Letters are never in a table: CHAR-UPCASE is right for every alphabet SBCL
+knows and is the fallback.  What a table holds is the punctuation and digit
+row, which is the part that differs between layouts and the part that cannot be
+computed.")
+
+(defun register-shift-map (name pairs)
+  "Register PAIRS as the shift map called NAME, replacing any of that name.
+
+    (register-shift-map \"my-layout\" '((#\\1 . #\\!) (#\\2 . #\\\") ...))
+    (setf *keyboard-layout* \"my-layout\")
+
+Three lines, and they are the whole of teaching this window manager a keyboard
+it has never seen."
+  (setf (gethash (string-downcase (string name)) *shift-maps*) pairs))
+
+(defun find-shift-map (name)
+  "The registered shift map called NAME, or NIL.  A list passes through."
+  (etypecase name
+    (null nil)
+    (cons name)
+    (string (gethash (string-downcase name) *shift-maps*))
+    (symbol (gethash (string-downcase (symbol-name name)) *shift-maps*))))
+
+(defun shift-map-names ()
+  "Every registered layout name, sorted."
+  (sort (loop for name being the hash-keys of *shift-maps* collect name)
+        #'string<))
+
+(register-shift-map "us"
   '((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
     (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
     (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
     (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
-    (#\` . #\~))
-  "What a key produces when Shift is held, for keys that are not letters.
+    (#\` . #\~)))
 
-*This exists because river sends the unshifted keysym.*  The design assumed
-the opposite -- that xkb would produce `parenleft' for Shift+9 and river would
-pass it through with Shift still in the modifier set -- and bound every
-printable keysym twice, bare and shifted, on that reasoning.  Measured against
-a real keyboard on bare metal, what arrives for Shift+9 is keysym `9' with
-Shift set, so the prompt inserted a nine.  Typing (+ 1 2) into M-: produced
-`9= 1 20', which is a symbol called 9= and an unbound-variable error.
+;; Dvorak and Colemak move the letters and leave most of the punctuation where
+;; QWERTY has it, so they differ from "us" in a handful of keys rather than
+;; wholesale.  Written out in full anyway: a table you can read beside the
+;; keyboard in front of you is worth more than a diff against another table.
+(register-shift-map "dvorak"
+  '((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
+    (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
+    (#\[ . #\{) (#\] . #\}) (#\/ . #\?) (#\= . #\+) (#\\ . #\|)
+    (#\' . #\") (#\, . #\<) (#\. . #\>) (#\; . #\:) (#\- . #\_)
+    (#\` . #\~)))
 
-Letters need no entry: CHAR-UPCASE is right for every alphabet SBCL knows,
-and it is the fallback.
+(register-shift-map "colemak"
+  '((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
+    (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
+    (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
+    (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
+    (#\` . #\~)))
 
-*This table is US-layout and there is no way for it not to be.*  River does
-the xkb work and does not tell us the shifted keysym, so the shifted glyph
-cannot be derived -- it has to be declared.  Which is exactly why this is a
-tier-0 option rather than a constant: on a German or Dvorak layout the shipped
-answer is wrong, and being wrong in a value somebody can edit is a different
-kind of wrong from being wrong in a function nobody can reach.
+(register-shift-map "uk"
+  '((#\1 . #\!) (#\2 . #\") (#\3 . #\£) (#\4 . #\$) (#\5 . #\%)
+    (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
+    (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\# . #\~)
+    (#\; . #\:) (#\' . #\@) (#\, . #\<) (#\. . #\>) (#\/ . #\?)
+    (#\` . #\¬) (#\\ . #\|)))
 
-    (setf *shift-map* (append '((#\8 . #\() (#\9 . #\))) *shift-map*))")
+(register-shift-map "de"
+  '((#\1 . #\!) (#\2 . #\") (#\3 . #\§) (#\4 . #\$) (#\5 . #\%)
+    (#\6 . #\&) (#\7 . #\/) (#\8 . #\() (#\9 . #\)) (#\0 . #\=)
+    (#\ß . #\?) (#\+ . #\*) (#\# . #\') (#\, . #\;) (#\. . #\:)
+    (#\- . #\_) (#\< . #\>) (#\´ . #\`)))
 
-(defun shifted-character (character)
-  "What CHARACTER becomes with Shift held, per *SHIFT-MAP*.
+(register-shift-map "fr"
+  '((#\& . #\1) (#\é . #\2) (#\" . #\3) (#\' . #\4) (#\( . #\5)
+    (#\- . #\6) (#\è . #\7) (#\_ . #\8) (#\ç . #\9) (#\à . #\0)
+    (#\) . #\°) (#\= . #\+) (#\^ . #\¨) (#\$ . #\£) (#\, . #\?)
+    (#\; . #\.) (#\: . #\/) (#\! . #\§) (#\* . #\µ)))
 
-Falls back to CHAR-UPCASE, which is correct for letters and harmless for
-anything the table does not mention."
-  (or (cdr (assoc character *shift-map*))
+(define-option *keyboard-layout* "us"
+  "Which shift map to use, by name.  See (SHIFT-MAP-NAMES).
+
+Shipped: \"us\", \"uk\", \"de\", \"fr\", \"dvorak\" and \"colemak\".  A list of
+(UNSHIFTED . SHIFTED) pairs may be given directly, and REGISTER-SHIFT-MAP adds
+a named one.
+
+This is the one setting somebody outside the United States has to change before
+the minibuffer can be typed into, so it is a tier-0 value with a table behind
+it rather than a constant behind a function.")
+
+(define-option *shift-map* nil
+  "An explicit shift map, overriding *KEYBOARD-LAYOUT*, or NIL to use it.
+
+Kept because it was the documented way to do this and configurations in the
+wild will have set it.  Prefer *KEYBOARD-LAYOUT*, which names a whole layout
+rather than requiring you to write one out:
+
+    (setf *keyboard-layout* \"de\")
+
+To adjust a shipped layout rather than replace it, append to it:
+
+    (setf *shift-map* (append '((#\\8 . #\\() (#\\9 . #\\)))
+                              (find-shift-map \"us\")))")
+
+(defun current-shift-map ()
+  "The shift map in force: *SHIFT-MAP* if set, else *KEYBOARD-LAYOUT*'s."
+  (or *shift-map*
+      (find-shift-map *keyboard-layout*)
+      (find-shift-map "us")))
+
+(defmethod shifted-character ((policy input-policy) character)
+  "The current layout's table, falling back to CHAR-UPCASE."
+  (or (cdr (assoc character (current-shift-map)))
       (char-upcase character)))
 
 ;;; --------------------------------------------------------------- keysyms
@@ -221,6 +312,46 @@ all work — super/mod4/logo, ctrl/control/C, alt/mod1/meta/M."
   "Render a (KEYSYM . MODIFIERS) cons the way a person would type it."
   (format nil "~{~:(~a~)+~}~a"
           (modifier-names (cdr key)) (keysym-name (car key))))
+
+;;; ------------------------------------------------------- pointer buttons
+;;;
+;;; The same idea as the keysym table, for the other input device.  A pointer
+;;; binding takes a *Linux input event code* — BTN_LEFT is 0x110, not 1 — and
+;;; that is exactly the sort of detail that produces a binding which silently
+;;; never fires.
+
+(defparameter +pointer-buttons+
+  '((:btn-left . 272) (:btn-right . 273) (:btn-middle . 274)
+    (:btn-side . 275) (:btn-extra . 276) (:btn-forward . 277)
+    (:btn-back . 278) (:btn-task . 279))
+  "Mouse buttons by name, from linux/input-event-codes.h.")
+
+(defun pointer-button-code (button)
+  "BUTTON as a Linux input event code.  A keyword is looked up; a number passes."
+  (cond ((integerp button) button)
+        ((cdr (assoc button +pointer-buttons+)))
+        (t (error "~s is not a pointer button.  Known: ~{~(~a~)~^ ~}"
+                  button (mapcar #'car +pointer-buttons+)))))
+
+(define-option *pointer-bindings*
+  '((:move   :btn-left  (:super))
+    (:resize :btn-right (:super)))
+  "Which button, with which modifiers, starts which interactive operation.
+
+A list of (OPERATION BUTTON MODIFIERS).  OPERATION is :MOVE or :RESIZE — or
+anything an extension has taught POINTER-DRAG-RECT about.  BUTTON is a keyword
+from +POINTER-BUTTONS+ or a raw event code, and MODIFIERS is written the way a
+key binding's is.
+
+Super+drag to move and Super+right-drag to resize is the convention every
+floating window manager has used for thirty years, and it is chosen here for
+the reason it was chosen there: it works anywhere in the window, so you never
+have to hit a title bar or a five-pixel corner.
+
+Note what is deliberately absent: a *bare* left-drag binding.  A window manager
+that grabs unmodified left-click cannot be used with any application, and the
+mistake is easy to make because it looks like it works right up until you try
+to select text.")
 
 ;;; ---------------------------------------------------------------- keymaps
 

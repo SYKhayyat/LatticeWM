@@ -23,7 +23,7 @@ part of the design.  Zoom is normally a mode you enter and leave; here it is a
 continuous layout control, one knob replacing both workspace switching and
 tiling-layout selection.
 
-    (asdf:load-system \"lattice\")
+    (load-extension \"lattice\")
     (lattice:enable)
 
 Everything the conventional layer does still works inside every cell, and
@@ -45,11 +45,16 @@ motion runs straight through the cell boundary as though it were not there.")
    #:*zoom-mode* #:*zoom-ladder* #:*cell-width* #:*cell-height* #:*cell-gap*
    #:*skip-empty-cells* #:*coordinate-overlay* #:*lattice-border-parity*
    #:*coordinate-tint* #:coordinate-hue #:tag-cell
+   ;; the Z axis: infinitely many planes, one behind another
+   #:*default-viewport* #:*new-workspace-zoom* #:*new-workspace-origin*
+   #:*new-workspace-cells* #:*workspace-entry*
+   #:cursor-grid #:cursor-cell #:workspace-entry-cell #:new-workspace-viewport
    ;; using it
-   #:enable #:disable #:install-lattice-keys #:install-vocabulary
+   #:enable #:enable-in #:disable #:install-lattice-keys #:install-vocabulary
    #:*overlay-scale* #:*overlay-background* #:*overlay-foreground*
    #:*overlay-min-cell* #:cell-label #:draw-coordinate-overlay
    #:*map-threshold* #:*map-background* #:*map-cell-color* #:*map-empty-color*
-   #:*map-text-color* #:map-mode-p #:draw-map
+   #:*map-text-color* #:*map-detail-color* #:map-mode-p #:draw-map #:draw-map-on
+   #:draw-coordinate-overlay-on #:copy-viewport
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell #:tag-cell-parity))

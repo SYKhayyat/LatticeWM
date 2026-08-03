@@ -1,1 +1,12 @@
 river 0.4.5 / nixpkgs /nix/store/dfjjfyqh7dbjbs7rs6ds7ssqsw6j41wz-river-0.4.5
+
+wayland.xml is wayland 1.23, taken from wayflan's own vendored copy.  It is
+here for gate 8 and for nothing else: wayflan generates the core protocol into
+its own package, so nothing under src/protocol/ compiles this file.
+
+Vendoring it is what makes gate 8 total rather than partial.  The gate checks
+that every event we listen for exists on the interface we listen for it on, by
+reading the XML in this directory — so an interface whose XML is absent is a
+handler the gate cannot see.  We listen to wl_output for its name and its scale
+factor, because river_output_v1 carries neither, and without this file that was
+exactly the shape of handler gate 8 was written to catch.

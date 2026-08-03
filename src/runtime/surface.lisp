@@ -29,15 +29,35 @@
 
 Pixels are ARGB8888, premultiplied, one 32-bit word each, row-major.  DATA is
 a foreign pointer; the compositor is looking at the same bytes we are, so a
-write is visible as soon as the surface is committed."
+write is visible as soon as the surface is committed.
+
+WIDTH and HEIGHT are *device* pixels.  SCALE is how many of those there are per
+logical pixel, and every drawing function below takes logical coordinates and
+multiplies.  That is the whole of HiDPI support, and it is done here rather
+than at each call site for the reason it always is: there are forty call sites
+and one of them would be forgotten.
+
+Before this, everything the window manager drew itself — the echo area, the
+empty-pane hint, the help screen, the coordinate overlay, the drawn map — came
+out at half size on a 2x display, in the one place the program writes text for
+a human to read."
   (width 0 :type fixnum)
   (height 0 :type fixnum)
+  (scale 1 :type fixnum)
   (stride 0 :type fixnum)
   (size 0 :type fixnum)
   (fd -1 :type fixnum)
   (data (sb-sys:int-sap 0))
   (pool nil)
   (buffer nil))
+
+(defun canvas-logical-width (canvas)
+  "The canvas's width in logical pixels."
+  (floor (canvas-width canvas) (canvas-scale canvas)))
+
+(defun canvas-logical-height (canvas)
+  "The canvas's height in logical pixels."
+  (floor (canvas-height canvas) (canvas-scale canvas)))
 
 (defun make-shm-file (size)
   "An anonymous file of SIZE bytes in the runtime directory.
@@ -52,10 +72,15 @@ CFFI; this needs nothing and works on every kernel."
       (sb-posix:ftruncate fd size)
       fd)))
 
-(defun make-canvas (shm width height)
-  "A WIDTH by HEIGHT canvas, with a wl_buffer the compositor can attach."
-  (let* ((width (max 1 width))
-         (height (max 1 height))
+(defun make-canvas (shm width height &optional (scale 1))
+  "A canvas WIDTH by HEIGHT *logical* pixels, at SCALE device pixels each.
+
+The buffer is allocated at the device size and the surface is told its scale at
+commit time, which is how Wayland does HiDPI: the compositor is handed more
+pixels for the same area rather than the same pixels stretched."
+  (let* ((scale (max 1 scale))
+         (width (* scale (max 1 width)))
+         (height (* scale (max 1 height)))
          (stride (* width 4))
          (size (* stride height))
          (fd (make-shm-file size))
@@ -65,7 +90,8 @@ CFFI; this needs nothing and works on every kernel."
          (pool (wl:wl-shm.create-pool shm fd size))
          (buffer (wl:wl-shm-pool.create-buffer pool 0 width height stride
                                                :argb8888)))
-    (%make-canvas :width width :height height :stride stride :size size
+    (%make-canvas :width width :height height :scale scale
+                  :stride stride :size size
                   :fd fd :data data :pool pool :buffer buffer)))
 
 (defun destroy-canvas (canvas)
@@ -92,22 +118,28 @@ wrong shows up as a halo around everything rather than as an error."
               (ash (byte8 (* g a)) 8)
               (byte8 (* b a))))))
 
+;;; EVERY COORDINATE BELOW IS LOGICAL, and every one is multiplied by the
+;;; canvas's scale before it touches a pixel.  Callers draw in the same units
+;;; the layout uses and are correct on a HiDPI display without knowing one
+;;; exists.
+
 (defun canvas-fill (canvas color &optional rect)
-  "Fill RECT — or the whole canvas — with COLOR."
+  "Fill RECT — or the whole canvas — with COLOR.  RECT is in logical pixels."
   (let* ((data (canvas-data canvas))
+         (scale (canvas-scale canvas))
          (width (canvas-width canvas))
          (height (canvas-height canvas))
-         (x0 (if rect (max 0 (c:rect-x rect)) 0))
-         (y0 (if rect (max 0 (c:rect-y rect)) 0))
-         (x1 (if rect (min width (c:rect-right rect)) width))
-         (y1 (if rect (min height (c:rect-bottom rect)) height)))
+         (x0 (if rect (max 0 (* scale (c:rect-x rect))) 0))
+         (y0 (if rect (max 0 (* scale (c:rect-y rect))) 0))
+         (x1 (if rect (min width (* scale (c:rect-right rect))) width))
+         (y1 (if rect (min height (* scale (c:rect-bottom rect))) height)))
     (loop for y from y0 below y1
           for row = (* y width)
           do (loop for x from x0 below x1
                    do (setf (sb-sys:sap-ref-32 data (* 4 (+ row x))) color)))))
 
 (defun canvas-rect (canvas rect color &key (width 1))
-  "Draw RECT's outline, WIDTH pixels thick, in COLOR."
+  "Draw RECT's outline, WIDTH logical pixels thick, in COLOR."
   (let ((x (c:rect-x rect)) (y (c:rect-y rect))
         (w (c:rect-w rect)) (h (c:rect-h rect)))
     (canvas-fill canvas color (c:make-rect x y w width))
@@ -119,36 +151,46 @@ wrong shows up as a halo around everything rather than as an error."
                     &key (scale 1) (tracking 0) (font (current-font)))
   "Draw STRING at (X, Y) — its top-left corner — and return the width used.
 
-Integer scaling only, so the result is crisp at any size instead of blurry at
+X, Y and the returned width are *logical* pixels; SCALE is the integer font
+scale on top of the canvas's own device scale, so text on a 2x display at font
+scale 1 is drawn with twice the pixels and comes out the same size, crisp.
+
+Integer scaling only, so the result is sharp at any size instead of blurry at
 most of them.  At scale 1 with the shipped font this is simply text.
 
 FONT defaults to whatever the policy answers for :DEFAULT.  The cell size is
 read from the font rather than from a constant, so a font of another size
 draws correctly here without anything else in the runtime being told."
-  (let ((data (canvas-data canvas))
-        (cw (canvas-width canvas))
-        (ch (canvas-height canvas))
-        (font-height (p:font-height font))
-        (font-width (p:font-width font))
-        (top-bit (1- (* 8 (p:font-stride font))))
-        (pen x))
+  (let* ((data (canvas-data canvas))
+         (device (canvas-scale canvas))
+         (total (* scale device))
+         (cw (canvas-width canvas))
+         (ch (canvas-height canvas))
+         (font-height (p:font-height font))
+         (font-width (p:font-width font))
+         (top-bit (1- (* 8 (p:font-stride font))))
+         (origin-x (* device x))
+         (origin-y (* device y))
+         (pen origin-x))
     (loop for character across string
           do (loop for row from 0 below font-height
                    for bits = (p:glyph-row font character row)
                    unless (zerop bits)
                      do (loop for column from 0 below font-width
                               when (logbitp (- top-bit column) bits)
-                                do (loop for dy from 0 below scale
-                                         for py = (+ y (* row scale) dy)
+                                do (loop for dy from 0 below total
+                                         for py = (+ origin-y (* row total) dy)
                                          when (< -1 py ch)
-                                           do (loop for dx from 0 below scale
-                                                    for px = (+ pen (* column scale) dx)
+                                           do (loop for dx from 0 below total
+                                                    for px = (+ pen (* column total) dx)
                                                     when (< -1 px cw)
                                                       do (setf (sb-sys:sap-ref-32
                                                                 data (* 4 (+ (* py cw) px)))
                                                                color)))))
-             (incf pen (* scale (+ font-width tracking))))
-    (- pen x)))
+             (incf pen (* total (+ font-width tracking))))
+    ;; Logical, so a caller's pen arithmetic stays in the units it started in.
+    ;; Exact: the advance is a whole multiple of the device scale.
+    (floor (- pen origin-x) device)))
 
 ;;; ------------------------------------------------------- shell surfaces
 
@@ -160,40 +202,138 @@ draws correctly here without anything else in the runtime being told."
    (canvas :initform nil :accessor overlay-canvas)
    (rect :initform (c:make-rect 0 0 0 0) :accessor overlay-rect)
    (visible :initform nil :accessor overlay-visible-p)
-   (name :initarg :name :initform "overlay" :reader overlay-name))
+   (name :initarg :name :initform "overlay" :reader overlay-name)
+   (kind :initarg :kind :initform :overlay :reader overlay-kind
+         :documentation
+         "What this overlay is for: :ECHO, :CURSOR, :HELP, or an extension's own
+keyword.  Half of the registry key.")
+   (output :initarg :output :initform nil :reader overlay-output
+           :documentation
+           "The output this overlay belongs to.  The other half of the key.")
+   (props :initform '() :accessor c:props
+          :documentation "Extension state, as on a node.  Used by the
+incremental redraw to remember what it cleared last time."))
   (:documentation
    "A surface of our own that river will position like a window.
 
 Kept alive across redraws and resized only when it has to be, because a buffer
 is an mmap and a file descriptor and churning them for every frame would be
-both slow and a way to run out of descriptors."))
+both slow and a way to run out of descriptors.
 
-(defvar *overlays* '() "Every overlay, so relayout can place them all.")
+*ONE PER OUTPUT, ALWAYS.*  Every shipped overlay used to be a single global —
+one `*echo-overlay*', one `*cursor-overlay*', one `*help-overlay*' — which
+meant the echo area existed on exactly one monitor and stayed there when the
+cursor left, the empty-pane outlines were drawn on monitor 1 whichever monitor
+the empty panes were on, and a user could not have two of anything.  A surface
+is per output in Wayland for the same reason a window is; making the *object*
+per output is what lets the drawing code stop pretending otherwise."))
+
+(defvar *overlays* (make-hash-table :test #'equal)
+  "(KIND . OUTPUT) -> OVERLAY.  Every overlay in the program, so that a
+relayout can place them all and an unplugged monitor can take its own with it.")
+
+(defun overlay-for (kind output)
+  "The overlay of KIND belonging to OUTPUT, made on demand.
+
+This is how a drawing routine gets a surface, and it is deliberately the only
+way: an overlay held in a global of its own is an overlay that cannot follow
+the cursor to the second monitor and cannot be torn down when that monitor is
+unplugged.  An extension asks for its own KIND and inherits both behaviours."
+  (let ((key (cons kind output)))
+    (or (gethash key *overlays*)
+        (setf (gethash key *overlays*)
+              (make-instance 'overlay
+                             :name (string-downcase (string kind))
+                             :kind kind :output output)))))
+
+(defun all-overlays (&optional kind)
+  "Every overlay, or every overlay of KIND."
+  (let ((out '()))
+    (maphash (lambda (key overlay)
+               (when (or (null kind) (eq kind (car key)))
+                 (push overlay out)))
+             *overlays*)
+    out))
+
+(defun destroy-overlay (overlay)
+  "Release everything OVERLAY holds and forget it.
+
+Called when a monitor is unplugged.  Not doing this leaked a shell surface, a
+river node, an mmap and a file descriptor per overlay per hotplug — which on a
+laptop that is docked and undocked twice a day is a real leak with a slow fuse."
+  (when overlay
+    (let ((canvas (overlay-canvas overlay)))
+      (when canvas (ignore-errors (destroy-canvas canvas))))
+    (setf (overlay-canvas overlay) nil)
+    (let ((node (overlay-node overlay)))
+      (when node (ignore-errors (river:river-node-v1.destroy node))))
+    (let ((shell (overlay-shell overlay)))
+      (when shell (ignore-errors (river:river-shell-surface-v1.destroy shell))))
+    (let ((surface (overlay-surface overlay)))
+      (when surface (ignore-errors (wl:wl-surface.destroy surface))))
+    (setf (overlay-node overlay) nil
+          (overlay-shell overlay) nil
+          (overlay-surface overlay) nil
+          (overlay-visible-p overlay) nil)
+    (remhash (cons (overlay-kind overlay) (overlay-output overlay)) *overlays*))
+  nil)
+
+(defun forget-overlays-for-output (output)
+  "Destroy every overlay that belonged to OUTPUT.  For hotplug."
+  (dolist (overlay (all-overlays))
+    (when (eq output (overlay-output overlay))
+      (guarded "destroy overlay" (destroy-overlay overlay))))
+  nil)
+
+(defun hide-overlays (kind &key except)
+  "Hide every overlay of KIND except the one on the EXCEPT output.
+
+What a *single*-output decoration does on a multi-output desktop: the help
+screen and the drawn map belong where you are looking, not on every monitor at
+once, and the one they were on last has to be told to go away."
+  (dolist (overlay (all-overlays kind))
+    (unless (eq (overlay-output overlay) except)
+      (guarded "hide overlay" (overlay-hide overlay))))
+  nil)
+
+(defun overlay-scale (overlay)
+  "How many device pixels per logical pixel OVERLAY should be drawn at.
+
+The scale of the output it belongs to, clamped to at least 1.  An overlay with
+no output — nothing ships one, but an extension might — draws at 1, which is
+correct on every display and merely soft on a scaled one."
+  (let ((output (overlay-output overlay)))
+    (max 1 (if output (or (c:output-scale output) 1) 1))))
 
 (defun ensure-overlay (overlay width height)
-  "Make OVERLAY exist and be WIDTH by HEIGHT.  Returns its canvas, or NIL.
+  "Make OVERLAY exist and be WIDTH by HEIGHT *logical* pixels.
 
-Returns NIL when the compositor has not given us the globals we need, which
-is not an error: the overlays are decoration, and a window manager that
-refused to start because it could not draw a label would be a bad trade."
+Returns its canvas, or NIL when the compositor has not given us the globals we
+need — which is not an error: the overlays are decoration, and a window manager
+that refused to start because it could not draw a label would be a bad trade.
+
+The canvas is reallocated when the logical size changes *or* when the output's
+scale does, so moving a window between a 1x and a 2x monitor redraws at the
+right resolution rather than at the last one's."
   (let ((compositor (server-compositor *server*))
         (shm (server-shm *server*))
-        (manager (server-manager *server*)))
+        (manager (server-manager *server*))
+        (scale (overlay-scale overlay)))
     (unless (and compositor shm manager) (return-from ensure-overlay nil))
     (unless (overlay-surface overlay)
       (setf (overlay-surface overlay) (wl:wl-compositor.create-surface compositor)
             (overlay-shell overlay) (w:wm-get-shell-surface
                                      manager (overlay-surface overlay))
             (overlay-node overlay) (river:river-shell-surface-v1.get-node
-                                    (overlay-shell overlay)))
-      (pushnew overlay *overlays*))
+                                    (overlay-shell overlay))))
     (let ((canvas (overlay-canvas overlay)))
-      (when (and canvas (or (/= (canvas-width canvas) width)
-                            (/= (canvas-height canvas) height)))
+      (when (and canvas (or (/= (canvas-logical-width canvas) (max 1 width))
+                            (/= (canvas-logical-height canvas) (max 1 height))
+                            (/= (canvas-scale canvas) scale)))
         (destroy-canvas canvas)
         (setf canvas nil))
       (or canvas
-          (setf (overlay-canvas overlay) (make-canvas shm width height))))))
+          (setf (overlay-canvas overlay) (make-canvas shm width height scale))))))
 
 (defun overlay-commit (overlay &key (rect (overlay-rect overlay)))
   "Attach the canvas, damage everything, commit, and position the surface."
@@ -201,7 +341,14 @@ refused to start because it could not draw a label would be a bad trade."
         (canvas (overlay-canvas overlay)))
     (when (and surface canvas)
       (setf (overlay-rect overlay) rect)
+      ;; Tell the compositor how many device pixels per logical one this buffer
+      ;; carries, *before* attaching it.  Without this a 2x buffer is drawn at
+      ;; twice the size rather than at twice the resolution.
+      (when (> (canvas-scale canvas) 1)
+        (guarded "set_buffer_scale"
+          (wl:wl-surface.set-buffer-scale surface (canvas-scale canvas))))
       (wl:wl-surface.attach surface (canvas-buffer canvas) 0 0)
+      ;; Damage in *buffer* coordinates, which are device pixels.
       (wl:wl-surface.damage-buffer surface 0 0
                                    (canvas-width canvas) (canvas-height canvas))
       (wl:wl-surface.commit surface)

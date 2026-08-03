@@ -106,6 +106,21 @@ id of the wl_output global -- so the human-readable name has to be fetched
 from wl_output itself, which has carried one since version 4.  This is the
 table those two halves meet in, because the two events race and either can
 arrive first.")
+   (output-scales :initform (make-hash-table :test #'eql)
+                  :accessor server-output-scales
+                  :documentation
+                  "wl_output global id -> its integer scale factor.
+
+The same join as OUTPUT-NAMES and for the same reason: river_output_v1 reports
+position and dimensions in the compositor's *logical* coordinate space and says
+nothing at all about scale, so a HiDPI display is indistinguishable from a
+low-resolution one as far as the window management protocol is concerned.  That
+is right for laying windows out — logical pixels are what a layout wants — and
+wrong for everything the window manager draws *itself*, which is drawn in
+device pixels into a buffer of its own.
+
+Without this, the echo area on a 2x display was half the size it should have
+been, in the one place where a window manager writes text for a human to read.")
    (emitted :initform (make-hash-table :test #'equal) :accessor server-emitted
             :documentation
             "The last value we sent for each (WINDOW . PROPERTY), so that a
@@ -145,8 +160,34 @@ time, on every machine.")
                :documentation "(KEYSYM . MODIFIERS) -> river_xkb_binding_v1.")
    (pointer-x :initform 0 :accessor seat-pointer-x)
    (pointer-y :initform 0 :accessor seat-pointer-y)
+   (pointer-window :initform nil :accessor seat-pointer-window
+                   :documentation
+                   "The window the pointer is currently over, or NIL.
+
+River tells us this directly with pointer_enter and pointer_leave, and its
+notion of a window's *area* includes the borders it draws and the input regions
+of decoration surfaces — none of which our own hit test against the layout
+rectangles knew about.  So this is both cheaper and more correct than asking
+where the pointer is and looking it up.")
    (focused :initform nil :accessor seat-focused
             :documentation "The window we last gave keyboard focus to.")
+   (layer-focus :initform nil :accessor seat-layer-focus
+                :documentation
+                "Whether a layer surface holds the keyboard: :EXCLUSIVE,
+:NON-EXCLUSIVE, or NIL.
+
+:EXCLUSIVE is a screen locker, and the protocol is explicit that every focus
+request we make is ignored until it clears.  Sending them anyway is how a
+window manager ends up fighting a locker for the keyboard on every manage
+sequence — and the window manager loses, quietly, forever.")
+   (pointer-op :initform nil :accessor seat-pointer-op
+               :documentation
+               "The interactive pointer operation in progress, or NIL.
+
+A POINTER-OP struct while a drag is happening: what is being dragged, whether
+it is a move or a resize, and where it started.  River sends cumulative deltas
+from the start of the operation rather than per-motion deltas, so the *start*
+is the thing that has to be remembered.")
    (props :initform '() :accessor c:props))
   (:documentation "One seat: a keyboard, a pointer, and a keyboard focus."))
 
@@ -224,15 +265,69 @@ wrong is not subtle in use: you press close, and the window behind the dialog
 you were looking at disappears."
   (and *world* (c:world-focus-window *world*)))
 
+(defun node-rect-now (node)
+  "The rectangle NODE was last laid out at, or NIL.
+
+Read from the index the emitter caches on the world, so this is a hash lookup
+rather than a layout.  NIL before the first relayout, which every caller has to
+tolerate anyway."
+  (let ((index (and *world* (c:prop *world* :rect-index))))
+    (and index node (gethash node index))))
+
+(defun output-at (x y)
+  "The output containing the point (X, Y), or NIL."
+  (loop for output in (all-outputs)
+        when (c:rect-contains-p (c:output-rect output) x y) return output))
+
+(defun output-for-rect (rect)
+  "The output RECT mostly lies on, or NIL when it lies on none.
+
+*Mostly*, by intersection area, rather than `the first one that overlaps'.  A
+pane straddling the seam between two monitors overlaps both, and which of them
+it is *on* is the one showing more of it — which is also what a person would
+say if you asked them."
+  (when rect
+    (let ((best nil) (best-area 0))
+      (dolist (output (all-outputs) best)
+        (let ((overlap (c:rect-intersect (c:output-rect output) rect)))
+          (when overlap
+            (let ((area (* (c:rect-w overlap) (c:rect-h overlap))))
+              (when (> area best-area)
+                (setf best output best-area area)))))))))
+
+(defun output-showing-workspace (index)
+  "The first output whose displayed workspace is INDEX, or NIL."
+  (when (integerp index)
+    (loop for output in (all-outputs)
+          when (eql index (c:prop output :workspace)) return output)))
+
 (defun current-output ()
-  "The output the cursor is on, or the first one.
+  "The output the cursor is on, or the best guess available.
 
 Multi-monitor is one model with one viewport per output (PLAN §fiat), so this
-is a question about where the cursor is rather than about which tree is
-active."
-  (or (loop for output in (all-outputs)
-            for rect = (c:output-rect output)
-            for window = (current-window)
-            for wr = (and window (c:window-rect window))
-            when (and wr (c:rect-intersect rect wr)) return output)
-      (first (all-outputs))))
+is a question about where the cursor is rather than about which tree is active.
+
+FROM THE CURSOR'S *RECTANGLE*, NOT ITS WINDOW, and that distinction was a real
+two-monitor bug.  The old version intersected each output with the *cursor's
+window's* rect — so when the cursor rested on a deliberately empty pane, which
+is an ordinary first-class state in this model and not an edge case, there was
+no window, nothing matched, and it fell through to the first output.  On a
+two-monitor setup every empty pane was reported as being on monitor 1.  A pane
+has a rectangle whether or not anything is in it, which is the whole point of
+D17, so asking the pane is both correct and shorter.
+
+Three answers in decreasing order of confidence, because each one can be
+unavailable at a different moment:
+
+  1. the pane's own rectangle, once a layout has happened;
+  2. the output displaying the cursor's workspace, before one has;
+  3. the first output, which is right on every single-monitor machine."
+  (let* ((path (current-path))
+         (node (current-node path)))
+    (or (output-for-rect (node-rect-now node))
+        (output-showing-workspace (first path))
+        (first (all-outputs)))))
+
+(defun output-of-window (window)
+  "The output WINDOW is mostly on, or NIL."
+  (and window (output-for-rect (c:window-rect window))))

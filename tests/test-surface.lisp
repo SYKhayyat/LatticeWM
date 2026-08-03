@@ -437,21 +437,30 @@ On a real keyboard what arrives for Shift+9 is keysym `9' with Shift set.
 Typing (+ 1 2) into M-: produced `9= 1 20' -- ( became 9, + became =, ) became
 0 -- and the reader reported an unbound variable called 9=.  That log line is
 the whole of the evidence and it took bare metal to produce it."
-  (is (char= #\( (p:shifted-character #\9)))
-  (is (char= #\+ (p:shifted-character #\=)))
-  (is (char= #\) (p:shifted-character #\0)))
-  (is (char= #\_ (p:shifted-character #\-)))
-  (is (char= #\? (p:shifted-character #\/)))
-  (is (char= #\: (p:shifted-character #\;)))
-  (is (char= #\" (p:shifted-character #\')))
-  ;; Letters need no table entry.
-  (is (char= #\A (p:shifted-character #\a)))
-  (is (char= #\Z (p:shifted-character #\z)))
-  ;; And the table is a tier-0 value, because on a German or Dvorak layout the
-  ;; shipped answer is wrong and there is no way to derive the right one.
-  (let ((p:*shift-map* (cons '(#\8 . #\() p:*shift-map*)))
-    (is (char= #\( (p:shifted-character #\8))
-        "a config file can move the bracket to where their keyboard has it")))
+  (let ((policy (p:current-policy)))
+    (is (char= #\( (p:shifted-character policy #\9)))
+    (is (char= #\+ (p:shifted-character policy #\=)))
+    (is (char= #\) (p:shifted-character policy #\0)))
+    (is (char= #\_ (p:shifted-character policy #\-)))
+    (is (char= #\? (p:shifted-character policy #\/)))
+    (is (char= #\: (p:shifted-character policy #\;)))
+    (is (char= #\" (p:shifted-character policy #\')))
+    ;; Letters need no table entry.
+    (is (char= #\A (p:shifted-character policy #\a)))
+    (is (char= #\Z (p:shifted-character policy #\z)))
+    ;; And it is layout-aware three ways over, because on a German or French
+    ;; keyboard the shipped answer is wrong and there is no way to derive the
+    ;; right one -- river does the xkb work and does not tell us.
+    (let ((p:*shift-map* (cons '(#\8 . #\() (p:current-shift-map))))
+      (is (char= #\( (p:shifted-character policy #\8))
+          "a config file can move the bracket to where their keyboard has it"))
+    (let ((p:*keyboard-layout* "de") (p:*shift-map* nil))
+      (is (char= #\( (p:shifted-character policy #\8))
+          "and naming a shipped layout is enough on its own")
+      (is (char= #\/ (p:shifted-character policy #\7))
+          "the German digit row is genuinely different, not a US table"))
+    (is (member "fr" (p:shift-map-names) :test #'string=)
+        "the shipped layouts are discoverable rather than folklore")))
 
 ;;; --------------------------------------------- what river is told about
 

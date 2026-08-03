@@ -294,6 +294,129 @@ becoming an empty pane the user never asked for"))
             (c:leaf-window (first (c:children copy))))
         "there is only ever one of a window")))
 
+(test copy-node-keeps-weights-and-selection
+  ;; THE ORDER OF THE COPY-NODE-SLOTS METHODS IS LOAD-BEARING.  The CONTAINER
+  ;; method inserts the children, and inserting a child into a split
+  ;; *recomputes its weights* -- so a SPLIT method that ran before it would
+  ;; have its weights immediately overwritten with the mean.  PROGN combination
+  ;; is declared :MOST-SPECIFIC-LAST precisely so base-class state is filled in
+  ;; first and the subclass gets the last word.
+  (let* ((split (c:make-split :horizontal (list (leaf-with "a") (leaf-with "b")
+                                                (leaf-with "c"))
+                              '(5 2 1)))
+         (copy (c:copy-node split)))
+    (is (equal '(5 2 1) (c:weights copy))
+        "a copied split keeps its proportions rather than being re-equalized"))
+  (let* ((stack (c:make-stack (leaves 4) 2))
+         (copy (c:copy-node stack)))
+    (is (= 2 (c:container-selection copy))
+        "and a copied stack is still showing the same child")))
+
+;;; ------------------------- a container kind addressed by something else
+;;;
+;;; The RING in test-surface.lisp subclasses SEQUENTIAL-CONTAINER, so it is
+;;; addressed by integer index like everything in the core.  This one is not:
+;;; it subclasses CONTAINER *directly* and is addressed by keyword, which is
+;;; the shape the lattice's GRID has and the shape every one of the core's
+;;; TYPECASEs silently mishandled.
+;;;
+;;; Six methods, exactly as the protocol advertises.  Nothing else.
+
+(defclass pigeonhole (c:container)
+  ((slots :initform (make-hash-table :test #'eq) :accessor pigeonhole-slots))
+  (:documentation
+   "A container addressed by keyword, from outside the core.
+
+Deliberately as unlike a SPLIT as the protocol permits: sparse, unordered until
+asked, and addressed by something that is not a number.  If the core's generic
+operations are really generic, this participates in all of them without a
+single method beyond the six below."))
+
+(defmethod c:container-addresses ((p pigeonhole))
+  (sort (loop for key being the hash-keys of (pigeonhole-slots p) collect key)
+        #'string< :key #'symbol-name))
+
+(defmethod c:child-at ((p pigeonhole) address)
+  (and (symbolp address) (gethash address (pigeonhole-slots p))))
+
+(defmethod (setf c:child-at) (node (p pigeonhole) address)
+  (setf (gethash address (pigeonhole-slots p)) node))
+
+(defmethod c:insert-child ((p pigeonhole) address node)
+  (setf (gethash address (pigeonhole-slots p)) node)
+  p)
+
+(defmethod c:remove-child ((p pigeonhole) address)
+  (let ((node (gethash address (pigeonhole-slots p))))
+    (remhash address (pigeonhole-slots p))
+    node))
+
+(defmethod c:container-count ((p pigeonhole))
+  (hash-table-count (pigeonhole-slots p)))
+
+(defun a-pigeonhole ()
+  "A pigeonhole holding two windows at keyword addresses."
+  (let ((p (make-instance 'pigeonhole)))
+    (c:insert-child p :first (leaf-with "x"))
+    (c:insert-child p :second (leaf-with "y"))
+    p))
+
+(test copy-node-is-total-over-container-kinds
+  ;; THE DEEPEST BUG THIS SUITE COVERS, and it was invisible for the life of
+  ;; the project.  COPY-NODE was a DEFUN dispatching by TYPECASE on the three
+  ;; core classes, so a kind that subclassed CONTAINER directly matched no
+  ;; clause and came back carrying props and a label and *nothing else* -- no
+  ;; children at all.  Silently.  No error, no warning.
+  ;;
+  ;; It was exported, documented and tested -- against the core kinds only, so
+  ;; the suite actively certified the broken function.  This is that hole.
+  ;;
+  ;; Note that PIGEONHOLE defines no COPY-NODE-SLOTS method of its own: the
+  ;; whole point is that walking CONTAINER-ADDRESSES and INSERT-CHILDing a copy
+  ;; is correct for a kind nobody has heard of.
+  (let* ((bag (a-pigeonhole))
+         (copy (c:copy-node bag)))
+    (is (= 2 (c:container-count copy))
+        "every child came across, through the protocol and nothing else")
+    (is (equal '("x" "y")
+               (mapcar #'c:window-app-id (c:node-windows copy)))
+        "and landed at the right addresses")
+    (is (not (eq (c:child-at bag :first) (c:child-at copy :first)))
+        "structurally copied, not shared")
+    (is (eq (c:leaf-window (c:child-at bag :first))
+            (c:leaf-window (c:child-at copy :first)))
+        "but the windows in it are the same windows")))
+
+(test a-foreign-kind-answers-the-whole-protocol
+  ;; The generics the core grew so that it would stop asking TYPEP.
+  (let ((bag (a-pigeonhole)))
+    (is-false (c:container-alternatives-p bag)
+              "it shows everything at once, so it is not a workspace list")
+    (is-false (c:container-splits-along-p bag :horizontal)
+              "and it does not divide space, so a split must not join it")
+    (is-false (c:node-empty-p bag))
+    (is-true (c:node-empty-p (make-instance 'pigeonhole)))
+    (is (equal (c:node-signature bag) (c:node-signature bag))
+        "it signs consistently, so undo can tell whether it changed")
+    (is (equal '(:second) (c:node-path-to bag (c:child-at bag :second)))
+        "and a path into it is a path like any other")))
+
+(test node-signature-notices-what-undo-needs-to-notice
+  ;; Undo keeps a snapshot only when the tree actually changed, and this is the
+  ;; test of "actually changed".  A focus move must not register; a resize must.
+  (let* ((root (c:make-split :horizontal (list (leaf-with "a") (leaf-with "b"))))
+         (before (c:node-signature root)))
+    (is (equal before (c:node-signature root))
+        "the same tree signs the same twice")
+    (c:adjust-weight root 0 1/4)
+    (is (not (equal before (c:node-signature root)))
+        "a resize is a change, so it is undoable"))
+  (let* ((stack (c:make-stack (leaves 3) 0))
+         (before (c:node-signature stack)))
+    (setf (c:container-selection stack) 2)
+    (is (not (equal before (c:node-signature stack)))
+        "and so is switching a tab")))
+
 (test props-are-per-node
   (let ((n (c:make-leaf)))
     (is (null (c:prop n :missing)))

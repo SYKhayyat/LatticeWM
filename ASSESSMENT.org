@@ -1,0 +1,765 @@
+#+TITLE: LatticeWM — Production Readiness Assessment
+#+DATE: 2026-08-01
+#+OPTIONS: toc:2 num:t
+
+* Verdict
+
+LatticeWM is an unusually well-built piece of Common Lisp with a genuinely
+good architecture and a serious testing culture, and it is *not* ready to be
+somebody's daily driver.
+
+The gap is not craftsmanship. It is that the project has been developed and
+verified almost entirely against constructed state rather than against a live
+compositor, and the defects that survive are concentrated precisely where
+constructed state cannot reach: process startup, multi-output, the
+render/emit path, and the packaged artefact.
+
+Two of those defects are release blockers in the strict sense — the shipped
+binary cannot start cleanly on a machine that is not the author's, and the
+shipped sample configuration cannot load on a machine where the build tree
+has been deleted. Both are small fixes. Neither is visible to any test or
+gate that currently exists, and that is the finding underneath the findings.
+
+*Recommended status:* pre-release / suitable for use by its author and by
+people willing to read Lisp backtraces. Not suitable for a general
+tiling-WM audience, and not suitable for packaging, until §2 blockers and
+§3 serious defects are closed.
+
+** Baseline verified for this assessment
+
+Measured, not quoted from the README:
+
+| SBCL                  | 2.6.3                                       |
+| ~make test~           | 782 checks, 782 pass, 0 fail, 0 skip        |
+| ~make gates~          | 8 gates, ALL GATES PASS                     |
+| gate 1 (compile)      | clean — 0 warnings, no undefined references |
+
+That is a real result and it should be said plainly: a 6000-line CLOS
+program that compiles with zero warnings and no undefined references, and
+carries 782 passing checks, is well above the median for this category of
+software. Everything below is written against that baseline, not in
+ignorance of it.
+
+** What is genuinely good
+
+Stated first because an assessment that only lists defects mis-describes the
+artefact.
+
+- *The build gates are the best idea in the repository.* Executable
+  architecture rules — "the core runs without the lattice", "every event we
+  handle exists on the interface we handle it for" — catch a class of decay
+  that review does not. Gate 8 in particular exists because a real bug
+  (~river_output_v1~ has no ~:name~ event, so every output was anonymous for
+  the life of the project) was invisible to gate 1, gate 5, and the whole
+  test suite. Turning that lesson into a gate rather than a fix is the right
+  instinct.
+- *~on-events~ derives its declaration from its own ~case~ clauses*
+  (~src/runtime/server.lisp:58~), so the declaration and the handler cannot
+  drift. The ~load-time-value~ note explaining why a plain call would
+  register nothing in a gate's image is exactly the kind of comment that
+  earns its place.
+- *The sequence discipline* (~src/wire/sequence.lisp~) encodes a protocol
+  rule that river would otherwise enforce by disconnecting you, and encodes
+  it at the wrapper layer where it cannot be forgotten.
+- *Policy defaults live on ~POLICY~, not on ~CONVENTIONAL-POLICY~.* This is
+  subtle and correct: it means a user can specialize ~CONVENTIONAL-POLICY~
+  and still reach the shipped behaviour through ~call-next-method~. Most
+  projects get this backwards and trap their users.
+- *Pure tree surgery* returning ~(values new-root new-path)~ makes the model
+  layer trivially testable, and the test suite takes full advantage.
+- *Docstrings that explain why, including admissions of past bugs.*
+  ~src/runtime/server.lisp:217-225~ documents the ~current-window~ /
+  ~focused-window~ distinction by describing the bug it caused. That is
+  better documentation than most projects produce. (It is also, per §3.4,
+  still wrong in one place — which is the strongest possible argument that
+  the distinction needs to stop being a convention and start being a type.)
+
+* Blockers
+
+Two. Both prevent the packaged artefact from working on a clean machine.
+
+** B1 — The binary cannot fail to start; it falls into the SBCL debugger
+
+*Files:* ~src/runtime/main.lisp:177~, ~src/policy/log.lisp:60-75~
+
+~start~ calls ~(wl:wl-display-connect)~ with no guard. With no
+~WAYLAND_DISPLAY~ set — a session-manager misconfiguration, a race with the
+compositor, a user running the binary from a TTY to check it exists — wayflan
+fails inside ~merge-pathnames~ with a type error rather than a connection
+error.
+
+The unhandled condition reaches ~install-debugger-hook~, whose entire purpose
+is to prevent the process from entering the debugger. It logs, prints a
+backtrace, then:
+
+#+begin_src lisp
+(let ((restart (find-restart 'abandon)))
+  (if restart (invoke-restart restart) (abort)))
+#+end_src
+
+There is no ~ABANDON~ restart at this point in startup, so it calls ~abort~.
+~abort~ with no ~ABORT~ restart active signals ~SB-INT:SIMPLE-CONTROL-ERROR~
+— *from inside the debugger hook*, which is exactly the situation the hook
+was written to prevent. Observed:
+
+#+begin_example
+[error] unhandled: The value NIL is not of type (OR STRING PATHNAME ...)
+0: (MERGE-PATHNAMES NIL NIL) [external]
+1: (XYZ.SHUNTER.WAYFLAN.CLIENT:WL-DISPLAY-CONNECT NIL)
+2: (LATTICEWM/RUNTIME:START :SWANK-PORT NIL :CONFIG T :RESTORE T)
+...
+debugger invoked on a SB-INT:SIMPLE-CONTROL-ERROR: No restart ABORT is active.
+restarts: 0: [ABORT] Exit from the current thread.
+0]
+#+end_example
+
+A window manager launched by a session file now sits at a ~0]~ prompt on a
+terminal nobody is reading, holding the session open. This is the single
+worst failure mode available to this class of program.
+
+*Fix:* the hook's terminal branch must be ~(sb-ext:exit :code 1 :abort t)~,
+which cannot itself signal. Separately, ~start~ should catch connection
+failure and exit with a diagnostic naming ~WAYLAND_DISPLAY~.
+
+*Severity of the second half:* note that the hook is the last line of defence
+for *every* unhandled condition in the program, not just this one. As long as
+it can signal, any bug anywhere reaches the debugger instead of the log.
+
+** B2 — The shipped sample configuration cannot load on an installed system
+
+*Files:* ~src/runtime/config.lisp:301~, ~tools/image.lisp:21~, ~install.sh~
+
+~sample-config~ emits a configuration containing:
+
+#+begin_src lisp
+(asdf:load-system "lattice")
+#+end_src
+
+But:
+
+- ~tools/image.lisp~ builds the release image from ~"latticewm"~ and
+  ~"swank"~ only. ~lattice~ is not in the image.
+- ~install.sh~ installs the binary, the session script, the ~.desktop~ file,
+  the man page, and ~doc/*.txt~. It does not install ~lattice.asd~ or the
+  ~lattice/~ directory.
+
+So on any machine where the build tree has been removed — i.e. any machine
+that installed from a package — the default configuration fails at load. The
+failure then routes through B1.
+
+This did not surface during development because ASDF finds ~lattice.asd~ in
+the source tree, which is still present on the author's machine. I confirmed
+the mechanism directly: the sample config loads from an installed-style
+location *only because* the build tree exists.
+
+*Fix:* either build ~lattice~ into the image (it is the flagship extension
+example; there is a good argument it belongs there), or install ~lattice.asd~
+and ~lattice/~ to a data directory and add that directory to
+~asdf:*central-registry*~ at startup. Either way ~make image~ and
+~install.sh~ must agree with ~sample-config~, and a gate should assert it.
+
+* Serious defects
+
+Correctness bugs that will be hit in normal use.
+
+** S1 — ~copy-node~ silently discards foreign container kinds
+
+*File:* ~src/model/node.lisp:472-490~
+
+#+begin_src lisp
+(defun copy-node (node)
+  (let ((new (make-instance (class-of node))))
+    (setf (props new) (copy-list (props node))
+          (node-label new) (node-label node))
+    (typecase node
+      (leaf   (setf (leaf-window new) ...))
+      (split  (setf (split-axis new) ... (weights new) ... (children new) ...))
+      (stack  (setf (stack-selected new) ... (children new) ...))
+      (sequential-container (setf (children new) ...)))
+    new))
+#+end_src
+
+~GRID~ (~lattice/grid.lisp:89~) subclasses ~c:container~ directly, not
+~sequential-container~. It therefore matches *no clause*. ~copy-node~ returns
+a bare ~(make-instance 'grid)~ carrying props and a label and nothing else —
+no children, no column tracks, no row tracks, no viewport. Silently. No
+error, no warning.
+
+This is the deepest finding in the assessment, because ~copy-node~ is a
+~defun~ dispatching on concrete classes sitting in the middle of a layer
+whose entire advertised contract is that container kinds are open and
+dispatch through generics. The container protocol has ~child-at~,
+~insert-child~, ~container-addresses~, ~simplify-node~ — nine generics — and
+then this one function decides structure by ~typecase~.
+
+Even for a foreign kind that *did* subclass ~sequential-container~, the copy
+would lose that class's own slots, because only ~props~ and ~node-label~ are
+copied generically.
+
+*Mitigating:* nothing in ~src/~ or ~lattice/~ currently calls ~copy-node~.
+Only ~tests/test-tree.lisp:288~ does. So this is not live today.
+
+*Not mitigating:* it is exported (~src/package.lisp:134~), documented, and
+tested — a public API. Its obvious uses are exactly the ones users will
+reach for: undo, layout snapshots, cloning a workspace. Each of those,
+written by a user against the documented extension surface, silently
+destroys their grid. And ~test-tree.lisp~ tests it only against core kinds,
+so the test suite actively certifies the broken function.
+
+*Fix:* make it ~(defgeneric copy-node (node))~ with a default method that
+copies via ~container-addresses~/~insert-child~, and let kinds specialize.
+The gate to add: "every exported core function that walks a tree does so
+through the container protocol."
+
+** S2 — ~send-to-workspace~ into an empty workspace duplicates the window
+
+*File:* ~src/runtime/verbs.lisp:369-374~
+
+#+begin_src lisp
+(multiple-value-bind (r) (c:tree-remove-at (c:world-root *world*)
+                                           from :simplify nil)
+  (declare (ignore r))
+  (c:tree-replace-at (c:world-root *world*) (list index) node))
+#+end_src
+
+~tree-remove-at~ is pure: it returns ~(values removed new-root new-path)~ and
+mutates nothing. This binds ~r~ to the *removed node*, ignores it, discards
+the new root entirely, and then calls ~tree-replace-at~ on the *original*
+~(c:world-root *world*)~ — which still contains the node at ~from~.
+
+The removal never happens. Sending a window to an empty workspace leaves it
+in both places. The compare against ~remove-pane~ (~verbs.lisp:110~), which
+correctly binds ~(removed root landed)~, shows the intended shape.
+
+*Fix:* thread the new root through, i.e.
+~(multiple-value-bind (removed root landed) ... (tree-replace-at root ...))~,
+and repair the cursor from ~landed~.
+
+** S3 — Border colors are not pre-multiplied; the two color paths disagree
+
+*File:* ~src/wire/wrappers.lisp:330~
+
+~river-window-management-v1.xml:620-621~ specifies:
+
+#+begin_quote
+The color is defined by four 32-bit RGBA values. Unless specified in another
+protocol extension, the RGBA values use pre-multiplied alpha.
+#+end_quote
+
+~color-component~ scales each channel independently and does not multiply RGB
+by alpha. Every border drawn with alpha < 1.0 is therefore too bright, and
+increasingly so as alpha falls.
+
+The inconsistency is the sharper problem: ~argb~ (~src/runtime/surface.lisp:83~)
+*does* premultiply, and its docstring explains why ("getting it wrong shows
+up as a halo around everything rather than as an error"). So the same policy
+color returned from ~border-color~ produces two different pixels depending on
+whether it lands on a border or on an overlay. An extension author has no
+single answer to "what is a color in this program".
+
+*Fix:* premultiply in ~color-component~, and state the convention once, in
+the policy docstring for ~border-color~: colors are straight alpha, the wire
+layer premultiplies.
+
+** S4 — A focused floating window draws with the unfocused border color
+
+*File:* ~src/runtime/emit.lisp:349-350~
+
+#+begin_src lisp
+(p:border-color policy (c:make-leaf window)
+                (eq window (current-window)))
+#+end_src
+
+~current-window~ is the *cursor's* window. ~focused-window~ is the window
+with keyboard focus. ~src/runtime/server.lisp:217-225~ documents that these
+differ *exactly when a floating window is focused* — and this code path is
+~emit-floats~, which runs only for floating windows.
+
+So the predicate is false for the very window it is about. A focused float
+gets the unfocused border. The one case the distinction exists for is the one
+case that gets it wrong.
+
+This is the second time this distinction has produced a bug; the docstring
+was written about the first. That is strong evidence it should not remain a
+naming convention. Consider making the focused-ness of a leaf a value
+computed once per relayout and passed down, rather than a predicate each call
+site re-derives.
+
+** S5 — Multi-output is claimed and does not work
+
+*Files:* ~src/runtime/server.lisp:227-238~, ~src/runtime/cursor.lisp:48~,
+~src/runtime/echo.lisp:24~
+
+~README.org:11~ lists multi-monitor support. ~README.org:246~ admits it has
+never been executed on multi-monitor hardware. The code agrees with line 246.
+
+- ~current-output~ locates the output by intersecting each output's rect with
+  the *cursor's window's* rect. When the cursor sits on a deliberately empty
+  pane — an ordinary, first-class state in this model — ~window~ is ~NIL~,
+  the loop matches nothing, and it falls through to ~(first (all-outputs))~.
+  On a two-monitor setup, an empty pane is always reported as being on
+  monitor 1. Also, ~for window = (current-window)~ re-resolves the cursor
+  path on every iteration; it is a loop-invariant written as a loop clause.
+- ~src/runtime/cursor.lisp:48~: ~(let ((output (first (all-outputs))))~ — the
+  empty-pane cursor overlay is hard-wired to monitor 1.
+- ~src/runtime/echo.lisp:24~: ~(defvar *echo-overlay* nil)~ — one global for
+  the whole program, so the echo area exists on exactly one output and stays
+  there when the cursor leaves.
+
+*Fix (documentation, immediately):* remove the multi-monitor claim from
+~README.org:11~ or qualify it to match line 246. Shipping a claim the author
+already knows to be untested is the kind of thing that costs a project its
+credibility on first contact.
+
+*Fix (code):* derive the output from the cursor's *rect* rather than its
+window; key overlays by output.
+
+* Moderate defects
+
+** M1 — Float dimensions bypass the change-diffing that surrounds them
+
+*File:* ~src/runtime/emit.lisp:339~
+
+#+begin_src lisp
+(push (list window (c:rect-w placed) (c:rect-h placed))
+      (server-pending-dimensions *server*))
+#+end_src
+
+Every neighbouring emission in the same function is wrapped in
+~when-changed~ — ~:shown~, ~:position~, ~:borders~ all consult
+~server-emitted~. This one does not, so every float re-proposes identical
+dimensions on every relayout.
+
+The ~emitted~ table's own docstring (~server.lisp:109-114~) explains the cost:
+"River processes every request we send before it can answer input, so
+re-sending a hundred identical positions on every keystroke is not free."
+This path is the exception to the rule the table exists to enforce.
+
+** M2 — State is saved only at clean shutdown
+
+*File:* ~src/runtime/state.lisp:212~
+
+~save-state-soon~ is defined and never called anywhere in ~src/~ or
+~tools/~. The only save is ~save-state-if-needed~ at ~main.lisp:150~, on the
+shutdown path. Any crash, any ~kill -9~, any compositor exit loses the
+session layout.
+
+Given B1 — where an unhandled condition reaches the debugger rather than an
+orderly exit — the crash path is a plausible path, and it is precisely the
+path with no save. Either wire ~save-state-soon~ into the dirty-tracking that
+already exists, or delete it.
+
+** M3 — Window rules silently ignore unknown keys
+
+*File:* ~src/policy/lifecycle.lisp~ (~on-window-open~)
+
+The rule plist is consulted for ~:float~, ~:path~, and ~:focus~. Any other
+key is ignored with no warning. A user who writes ~:floating t~ instead of
+~:float t~ gets a silent no-op and no way to discover why. For a
+configuration surface edited by hand in a language with no schema, unknown-key
+rejection is not optional.
+
+** M4 — ~toggle-float~ clobbers the minimize home path
+
+*Files:* ~src/runtime/verbs.lisp:400~, ~src/runtime/windows.lisp:170-185~
+
+~toggle-float~ writes ~(setf (c:window-home-path window) path)~ before
+floating. But ~unfloat-window~ places the window *at the cursor* and never
+reads ~home-path~ — its docstring says so, so that is a design decision, not
+a bug.
+
+The consequence is that the write is dead on the float path, and worse, it
+*overwrites* the home path that ~on-minimize~ (~lifecycle.lisp:117~) stored
+and that ~on-restore~ (~lifecycle.lisp:138~) depends on. Minimize a window,
+float and unfloat something, restore: the restore no longer knows where home
+was.
+
+The asymmetry is also worth revisiting on its own terms — restore returns you
+home, unfloat does not — since the argument in ~on-restore~'s docstring
+("landing back where you were is the difference between minimize being useful
+and being a way to lose a window") applies verbatim to unfloating.
+
+** M5 — Three dead slots that serialize into the state file
+
+- ~src/model/world.lisp:34~ — ~output.scale~, never read. There is no HiDPI
+  support; this slot advertises one.
+- ~src/model/world.lisp:56~ — ~floating-window.node~, never read.
+- ~src/model/window.lisp:59~ — ~window.tags~ / ~window-tags~, never read and
+  exported at ~package.lisp:154~. There is no tag-based workflow.
+
+Dead slots in a *persisted, human-readable* state file are worse than dead
+slots in memory: they become de-facto API, and a user who sets ~tags~ in a
+state file or a rule will reasonably expect it to do something.
+
+** M6 — ~should-float-p~ over-floats
+
+*File:* ~src/policy/conventional.lisp:594-603~
+
+Anything reporting equal min and max size hints is floated. A number of
+GTK and Qt applications set fixed hints on their main window, or set them
+transiently during startup before the real size is known. The user-visible
+result is a main application window that arrives floating for no reason the
+user can see, and no diagnostic explaining the decision.
+
+At minimum this deserves a size threshold (a fixed-size window the size of
+the screen is not a dialog) and a log line at debug level naming the hint
+that triggered it.
+
+* Missing features
+
+Assessed against what a person switching from i3, sway, or Hyprland expects
+to find, not against an abstract ideal.
+
+** Blocking for daily use
+
+- *Pointer-driven window management.* No click-to-focus, no drag-to-move or
+  drag-to-resize for floats, no click-to-raise. ~warp-pointer~ exists;
+  nothing consumes pointer input for management. Floating windows are
+  keyboard-only, which is not how anyone uses floating windows.
+- *Output hotplug.* Nothing handles a monitor being added or removed at
+  runtime. Combined with §S5, docking a laptop is unexplored territory.
+- *HiDPI / fractional scale.* The ~scale~ slot is dead (M5). On a scaled
+  output, everything the WM draws itself — echo area, cursor overlay,
+  coordinate overlay, drawn map — is rendered at the wrong size.
+- *Layer-shell clients.* ~river-layer-shell-v1~ is bound for the WM's *own*
+  surfaces. There is no support for third-party panels, bars, notification
+  daemons, or wallpaper setters, which is most of the ecosystem a tiling WM
+  user assembles around it.
+
+** Expected, absent
+
+- *Session lock integration* (~ext-session-lock-v1~) — no screen locker will
+  work correctly.
+- *Idle inhibit* — video playback will not prevent blanking.
+- *An IPC / control socket.* The only external control surface is SWANK.
+  See §7.1 — that is not a substitute, it is a liability.
+- *A scratchpad in the i3 sense* — there is a minimize/restore scratchpad
+  list, but no named scratchpads and no summon-by-name.
+- *Layout undo.* Notable because the pure tree surgery makes it nearly free:
+  every operation already returns a new root, so keeping a bounded ring of
+  previous roots is a dozen lines. Its absence is surprising given the
+  design that enables it.
+- *XWayland-specific handling* — no window-type awareness for X11 clients
+  beyond what river surfaces generically.
+- *Touch and gesture input* — absent entirely.
+- *Log file and rotation.* ~*log-stream*~ defaults to ~*error-output*~
+  (~src/policy/log.lisp:27~). Launched from a ~.desktop~ file, that goes
+  nowhere a user can find, which means the diagnostics written for B1 are
+  invisible exactly when they are needed.
+- *~--check-config~ / dry-run.* A configuration error currently manifests as
+  a failed session. There is no way to validate a config before logging in.
+
+** Documentation and packaging gaps
+
+- ~install.sh~ installs ~doc/*.txt~, but the extension guide is
+  ~doc/EXTENDING.org~. Users get the wrong documentation.
+- ~README.org:27~ claims "six gates, 570 tests". There are eight gates and
+  782 checks. Both numbers are stale in the direction of understating the
+  project, which is unusual, but stale numbers are stale numbers and one of
+  the eight gates is load-bearing for a claim in §7.
+- No man page or installed documentation for the configuration API at all —
+  the entire extension surface is documented only in the source tree.
+
+* Extensibility
+
+The extension story is the most ambitious part of the project and mostly
+delivers. It is documented as three tiers, gated (gate 3, gate 4), and
+exercised by the test suite (~TIER-1~, ~TIER-2~, ~TIER-3~,
+~A-CONTAINER-KIND-THE-CORE-NEVER-HEARD-OF-WORKS-EVERYWHERE~). The ~lattice~
+system is a real proof: 1529 lines, 19 methods, zero core edits, and gate 4
+proves the core still runs without it.
+
+What follows are the places the promise leaks.
+
+** E1 — The core dispatches on concrete classes where it promises generics
+
+~copy-node~ (§S1) is the flagship case. A second: ~insert-child :after~ on
+~split~ (~src/model/node.lisp:290~) inlines the mean-weight formula rather
+than calling the ~insertion-weight~ generic that exists for exactly this. A
+policy that specializes ~insertion-weight~ is silently ignored on that path.
+
+Both are the same failure: an extension point was designed, and then a
+concrete implementation was written next to it that does not go through it.
+A gate could catch this class — "no ~typecase~ / ~etypecase~ on node classes
+outside the class definitions themselves."
+
+** E2 — Two hook systems
+
+The project documents ~defhook~ / ~add-hook~ / ~run-hooks~, and gate 7
+verifies that every declared hook is run and every run hook is declared —
+eight of each, balanced. Good.
+
+But ~src/runtime/echo.lisp~ registers ~echo-reserved-edges~ by pushing the
+*symbol* onto ~p:*reserve-hooks*~, a plain special variable outside that
+mechanism entirely. So there are two ways to hook, one of which is gated and
+documented and one of which is not. A user reading ~EXTENDING.org~ will not
+find the second, and gate 7 cannot see it.
+
+** E3 — Built-in overlays are globals and therefore not extensible
+
+~*echo-overlay*~ (~echo.lisp:24~) is a single global. A user cannot add a
+second overlay of that kind, cannot replace the built-in one through the
+policy, and cannot have one per output (§S5). The overlay machinery in
+~src/runtime/surface.lisp~ is well-factored — ~overlay~ is a class,
+~ensure-overlay~ is generic-friendly — and then the two shipped consumers
+each pin themselves to one global instance.
+
+** E4 — Extension points that are special variables instead of generics
+
+- ~*not-repeatable*~ (~src/policy/commands.lisp~) — a denylist keyed on
+  command name. An extension adding a non-repeatable command must ~push~ onto
+  a global rather than answer a generic. It also cannot express
+  "non-repeatable under these circumstances."
+- ~*shift-map*~ (~src/policy/keys.lisp~) — a hard-coded US-layout shift
+  table. There is no XKB layout awareness and no generic to override. A user
+  on a Dvorak, AZERTY, or QWERTZ layout cannot express shifted bindings
+  correctly and has no supported way to fix it. For a program whose key
+  handling is otherwise this carefully built, this is a significant hole.
+
+** E5 — Fonts are data, but adding one is undocumented
+
+"A font is data and the policy picks it" is a good design and is tested. But
+~src/policy/font.lisp~ is generated and explicitly excluded from gate 6's
+line count, and there is no documented procedure for producing a new one. The
+extension point exists; the on-ramp does not.
+
+** E6 — One monolithic policy protocol
+
+~POLICY~ is a single class carrying 53 generics — layout, appearance, motion,
+floating, spawning, lifecycle, keys. A user who wants only a custom layout
+must still be a ~POLICY~ and inherit the entire surface. There is no
+~layout-policy~ / ~appearance-policy~ / ~motion-policy~ separation, so every
+extension takes on the whole contract whether it uses it or not. See §7.4.
+
+* Usability
+
+** U1 — SWANK on port 4005, by default, unauthenticated
+
+~src/runtime/session.lisp~ starts a SWANK server on 4005. Anything that can
+reach that port has arbitrary code execution as the logged-in user, with no
+authentication step.
+
+For a development tool this is normal and excellent. For a window manager
+that ships as a session binary and starts before the user has done anything,
+it is a default that will surprise people, and it is the kind of surprise
+that ends up in a CVE database rather than a bug tracker. The value is real —
+live redefinition of a running WM is genuinely one of this project's best
+properties, and two tests exist for it. But it should be opt-in, bound to
+localhost explicitly, and documented as what it is.
+
+** U2 — ~current-window~ versus ~focused-window~
+
+Discussed under §S4 as a bug. As a usability matter: the distinction is a
+naming convention enforced by nothing, it has caused at least two bugs, and
+it is invisible at the call site. Every command that acts on "the window"
+must pick correctly and no mechanism helps. Users writing their own commands
+will get it wrong more often than the author did.
+
+** U3 — The magic 4 in ~resize~
+
+~src/runtime/verbs.lisp:213~: ~(c:adjust-weight container address (* delta 4))~.
+
+The user passes an amount; it is multiplied by an undocumented constant to
+become a weight delta. Nothing tells the user what unit they are typing, and
+the constant appears in no documentation and no option. Either make it an
+option via ~define-option~ or document the unit.
+
+** U4 — Deliberately empty panes are unusual and under-explained
+
+A ~LEAF~ may legitimately hold no window, ~current-window~ returns ~NIL~ as
+"an ordinary state and not an error", and ~clear~ is a distinct verb from
+~close~ for this reason. This is a genuinely good model and it is genuinely
+unlike i3, sway, dwm, or Hyprland, where a pane without a window does not
+exist.
+
+It is also load-bearing for correctness — §S5's ~current-output~ bug is
+precisely a failure to handle it — and every user-written command must
+account for it. It deserves to be the first thing ~README.org~ explains about
+the model, not a detail discovered from a docstring.
+
+** U5 — One object, three names
+
+~STACK~ is tabs, workspaces, and the Z-axis. Collapsing them is defensible
+and the docstring argues the case well. But the user-facing vocabulary does
+not collapse: the echo area renders ~[2/5]~ for workspaces
+(~src/policy/appearance.lisp:496~) while the identical object is a tab strip
+elsewhere, and "move this window to workspace 3" and "move to tab 3" being
+one command is either elegant or confusing depending entirely on whether the
+user has read the design document.
+
+** U6 — The Makefile assumes a toolchain the repo's own shell does not provide
+
+~make test~ fails with ~sbcl: command not found~ inside the project's nix
+shell; it works only after locating SBCL in the nix store and putting it on
+~PATH~ by hand. A contributor's first command is the one that fails.
+
+* SOLID
+
+** 7.1 Single responsibility
+
+Three files carry more than one reason to change:
+
+| File                          | Lines | Responsibilities                                                                                        |
+|-------------------------------+-------+---------------------------------------------------------------------------------------------------------|
+| ~src/runtime/session.lisp~    |   687 | registry binding, hook attachment, both sequence runners, capture-key arming, the watchdog, SWANK, cross-thread dispatch |
+| ~src/policy/conventional.lisp~|   747 | every default for every generic — layout, colors, motion, floating, spawning, options                    |
+| ~src/policy/appearance.lisp~  |   731 | font data, echo composition, keymap hints, drawing                                                        |
+
+~session.lisp~ is the one that matters: SWANK and the watchdog have nothing
+to do with the manage/render sequence runners, and the sequence runners are
+the most delicate code in the program. They deserve their own file where they
+can be read without scrolling past a REPL server.
+
+The other two are large but coherent — "the shipped defaults" and "how things
+look" are arguably single responsibilities. Splitting ~conventional.lisp~
+along generic groups would also make §E6 natural.
+
+** 7.2 Open/closed
+
+The strongest and weakest axis simultaneously.
+
+Open where it counts: policy generics with zero methods in
+~protocol.lisp~ (gate 2 enforces documentation for all 53), defaults on
+~POLICY~ so subclasses can chain, ~PROPS~ plists on every user-visible
+object, a container protocol that a foreign kind can implement, and gate 4
+proving the core runs without the lattice.
+
+Closed where it promises not to be: ~copy-node~'s ~typecase~ (§S1),
+~insert-child :after~'s inlined weight formula (§E1), ~*not-repeatable*~ and
+~*shift-map*~ as globals (§E4), overlays as globals (§E3).
+
+The pattern in every case is the same and worth stating as a rule for the
+project: *when an extension point exists, nothing may implement its behaviour
+except through it.* Two of the four could be caught by a gate.
+
+** 7.3 Liskov
+
+Generally respected, with one exception worth naming: ~lattice-policy~
+subclasses ~conventional-policy~ and overrides ~cell-rects~ with a sign
+convention inverted relative to the parent's. A caller holding a
+~conventional-policy~ reference and receiving a ~lattice-policy~ gets
+coordinates that mean something different. It works because nothing calls it
+generically; it is still a subclass changing the meaning of an inherited
+contract rather than its implementation.
+
+** 7.4 Interface segregation
+
+The clearest violation. ~POLICY~ is one 53-generic interface. Every
+extension implements ~POLICY~ regardless of what it actually customizes, and
+every new generic added to ~POLICY~ widens the surface every existing
+extension nominally implements.
+
+The container protocol shows the project already knows how to do this — nine
+focused generics, implementable independently, which is why ~GRID~ works.
+Applying the same treatment to ~POLICY~ — splitting into layout, appearance,
+motion, and lifecycle protocols with ~POLICY~ as the class that happens to
+implement all four — would cost little and would make §E6 disappear.
+
+** 7.5 Dependency inversion
+
+Good at the layer level, weak at the call level.
+
+The package comment (~src/package.lisp~) establishes CORE ← POLICY ←
+RUNTIME and WIRE ← RUNTIME, with POLICY never depending on WIRE, and gates 3
+and 4 hold the line. ~warp-pointer~ (~server.lisp:157~) exists specifically
+so extensions do not reach into ~LATTICEWM/WIRE~, and the docstring says so.
+That is dependency inversion applied deliberately.
+
+Within the runtime, though, nearly everything reaches for globals rather than
+receiving what it needs: ~*server*~, ~*world*~, ~*echo-overlay*~,
+~*log-stream*~, ~*sequence*~. ~current-output~, ~current-window~,
+~current-leaf~, ~all-outputs~, ~all-windows~ are all global reads with no
+injectable alternative.
+
+This is the root cause of the assessment, and the codebase states it better
+than I can. ~src/runtime/server.lisp:34-36~, explaining how the missing
+~river_output_v1~ ~:name~ handler survived for the life of the project:
+
+#+begin_quote
+The tests pass because they construct state rather than receive it.
+#+end_quote
+
+That sentence explains B1, S2, S4, S5, M1, and M2. Every one of them lives in
+code that can only be tested by assembling globals, so every one of them was
+tested — if at all — against an arrangement the author chose rather than one
+river produced. The 782 checks are real and valuable, and they are checks on
+the model and the policy, which are the parts written as pure functions.
+
+* Testing and gates
+
+** T1 — ~make test~ does not test the lattice
+
+~tools/test.lisp:4~ loads ~"latticewm/tests"~ only. The ~lattice~ system —
+1529 lines, the flagship tier-3 extension, the proof that the extension story
+works — has no tests executed by ~make test~. The headline "782 checks"
+covers the core.
+
+** T2 — Two of the eight gates cannot fail
+
+Gates 3 and 6 compute and print numbers and never call ~fail~:
+
+#+begin_example
+---- gate 3: the lattice touches no core -----------------------
+  lattice/: 1529 lines, 19 defmethods
+  (the numbers are the gate; a large lattice re-implementing
+   geometry passes the letter and fails the point)
+
+---- gate 6: the runtime-to-policy line ratio ------------------
+  runtime (wire + runtime)              3702 lines
+  policy  (model + policy + lattice)    4715 lines
+  ratio                                 1.27   healthy
+#+end_example
+
+Gate 3's own parenthetical admits it. These are reports, and useful ones, but
+"ALL GATES PASS" reads as eight assertions when it is six assertions and two
+measurements. Either give them thresholds or print them under a different
+heading.
+
+** T3 — No test exercises a real compositor
+
+Every test constructs state. There is no integration test that connects to a
+running river — even a headless one — and drives a manage sequence. That is
+understandable (it is genuinely hard) and it is also the single highest-value
+thing that could be added, because it is the only category of test that would
+have caught B1, S4, S5, or M1.
+
+A minimal version is achievable: run river with a headless backend under
+~WLR_BACKENDS=headless~, connect, open two windows via a test client, assert
+on the emitted requests. Even one such test would convert an entire class of
+defect from invisible to caught.
+
+* Recommended order of work
+
+1. *B1* — debugger hook must ~sb-ext:exit~, and ~start~ must handle
+   connection failure. One-line fix each, removes the worst failure mode.
+2. *B2* — make ~make image~, ~install.sh~, and ~sample-config~ agree. Add a
+   gate.
+3. *S2, S3, S4* — three localized correctness bugs, each a few lines.
+4. *README claims* — remove or qualify multi-monitor (§S5); fix the stale
+   gate and test counts.
+5. *U1* — make SWANK opt-in.
+6. *M1, M2, M3, M4, M5* — the moderate set; none is large.
+7. *S1 / E1* — make ~copy-node~ generic before a user builds undo on it, and
+   add the "no ~typecase~ on node classes" gate.
+8. *T3* — one headless-river integration test. This is the item that changes
+   the project's trajectory rather than its defect count.
+9. *S5 code* — real multi-output: per-output overlays, cursor-rect-derived
+   output.
+10. *E6 / 7.4* — split ~POLICY~ into focused protocols.
+11. Pointer-driven management, hotplug, HiDPI, layer-shell clients — the
+    feature work that stands between this and a general-audience WM.
+
+* Closing
+
+The distance between what this project is and what it needs to be is smaller
+than the length of this document suggests. Items 1–5 are perhaps a day's
+work and move it from "cannot start on a clean machine" to "honest about
+itself and usable by careful people". Items 6–8 are a week and move it to
+defensible.
+
+What this codebase has that most do not is a demonstrated instinct for
+turning a bug into a gate — the ~river_output_v1~ ~:name~ episode produced
+gate 8 rather than a patch. The recommendation that matters most is to apply
+that same instinct to the category of bug this assessment found: defects that
+live where the tests construct state instead of receiving it. One headless
+integration test is worth more than the next two hundred unit checks.

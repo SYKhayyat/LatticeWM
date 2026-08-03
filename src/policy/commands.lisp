@@ -18,6 +18,16 @@
 
 (defclass command ()
   ((name :initarg :name :reader command-name)
+   (symbol :initarg :symbol :initform nil :reader command-symbol
+           :documentation
+           "The Lisp symbol the command was defined as, which is not always the
+name it is registered under.
+
+A handful of good command names are Common Lisp symbols we may not redefine —
+`close' is the one that bites — and one, `split', collides with a class in
+LATTICEWM/CORE.  So `(split :horizontal)' typed at a prompt fails with `the
+function SPLIT is undefined', which is true and unhelpful.  Keeping the symbol
+lets the error say what to type instead.")
    (function :initarg :function :accessor command-function)
    (lambda-list :initarg :lambda-list :initform '() :reader command-lambda-list)
    (documentation :initarg :documentation :initform nil
@@ -99,6 +109,7 @@ told."
        (setf (gethash ,string *commands*)
              (make-instance 'command
                             :name ,string
+                            :symbol ',symbol
                             :function #',symbol
                             :lambda-list ',lambda-list
                             :interactive ',interactive
@@ -120,13 +131,54 @@ told."
   "The last repeatable command run, as (NAME . ARGUMENTS).  See the REPEAT
 command.")
 
-(defparameter *not-repeatable* '("repeat" "run-command-by-name")
-  "Commands that REPEAT should look straight through.
+(define-option *not-repeatable* '("repeat" "run-command-by-name" "undo" "redo")
+  "Commands that REPEAT should look straight through, by name.
 
-Two of them, for one reason each.  `repeat' itself, because repeating a repeat
-is a fixed point and not a useful one.  And `run-command-by-name', because what
-you meant by pressing `.' after M-x is the command M-x ran — the prompt was how
-you said it, not what you said.")
+Four of them, for two reasons.  `repeat' itself, because repeating a repeat is
+a fixed point and not a useful one; `run-command-by-name', because what you
+meant by pressing `.' after M-x is the command M-x ran — the prompt was how you
+said it, not what you said; and undo and redo, because `.' after an undo means
+`do that thing again', and the thing you did was not undoing.
+
+This is the *data* behind COMMAND-REPEATABLE-P, which is the extension point.
+A denylist of names cannot express `not repeatable under these circumstances',
+so a command that should be repeatable when it acted and not when it declined
+is a method on the generic rather than an entry here.")
+
+(defmethod command-repeatable-p ((policy input-policy) command arguments)
+  "Anything not named in *NOT-REPEATABLE*."
+  (declare (ignore arguments))
+  (not (member (command-name command) *not-repeatable* :test #'string=)))
+
+(defvar *command-wrappers* '()
+  "Functions of (COMMAND ARGUMENTS THUNK) wrapped around every command run.
+
+Each receives the command object, the arguments it was given, and a thunk that
+runs the rest of the chain; whatever it returns is what RUN-COMMAND returns.
+Innermost last, so a wrapper added later runs outside the ones before it.
+
+*This is advice, and it is the seam a whole class of extension needs.*  Layout
+undo is built on it — see runtime/history.lisp, which snapshots the tree around
+every command and keeps the snapshot only when the tree actually changed.  A
+key-logger, a per-command timer, a `record this session' feature and a modal
+layer that vetoes commands are all the same shape.
+
+It is deliberately a list of functions rather than a generic: wrappers
+*compose*, and two of them should not have to know about each other.  That is a
+hook's shape — but a hook cannot wrap, because RUN-HOOKS runs everything and
+returns nothing.  This is the third shape, and there is exactly one of it."
+  )
+
+(defun add-command-wrapper (function)
+  "Wrap FUNCTION around every command run.  Idempotent on symbols."
+  (setf *command-wrappers*
+        (cons function (remove function *command-wrappers*)))
+  function)
+
+(defun remove-command-wrapper (function)
+  "Stop wrapping FUNCTION around commands."
+  (setf *command-wrappers* (remove function *command-wrappers*))
+  nil)
 
 (defun run-command (name &rest arguments)
   "Look NAME up and run it with ARGUMENTS.
@@ -137,11 +189,19 @@ message and a working window manager rather than a broken session."
   (let ((command (find-command name)))
     (cond
       ((null command) (logmsg :warn "no such command: ~a" name) nil)
-      (t (let ((string (command-name command)))
-           (unless (member string *not-repeatable* :test #'string=)
-             (setf *last-command* (cons string arguments)))
-           (guarded (format nil "command ~a" string)
-             (apply (command-function command) arguments)))))))
+      (t
+       (let ((string (command-name command)))
+         (when (guarded "command-repeatable-p"
+                 (command-repeatable-p (current-policy) command arguments))
+           (setf *last-command* (cons string arguments)))
+         (labels ((invoke (wrappers)
+                    (if (null wrappers)
+                        (guarded (format nil "command ~a" string)
+                          (apply (command-function command) arguments))
+                        (guarded (format nil "wrapper around ~a" string)
+                          (funcall (first wrappers) command arguments
+                                   (lambda () (invoke (rest wrappers))))))))
+           (invoke *command-wrappers*)))))))
 
 ;;; -------------------------------------------------- interactive arguments
 ;;;

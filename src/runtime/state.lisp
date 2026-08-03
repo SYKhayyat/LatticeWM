@@ -37,8 +37,23 @@ a reader that does not know :OUTPUTS ignores it and a reader that does gets NIL
 from a file written before it existed.  Bumping for that would throw away
 everybody's layout once to protect against nothing.")
 
-(defun serialize-node (node)
-  "NODE as a readable s-expression.
+;;; ------------------------------------------------- serialization, as a protocol
+;;;
+;;; SERIALIZE-NODE WAS A TYPECASE AND THE LATTICE PAID FOR IT.  A GRID matched
+;;; no clause, so it fell to the `unknown' branch: the plane, the viewport, the
+;;; column widths and every name a user had given a cell were dropped on every
+;;; restart, and what came back was a flat split of whatever windows had been
+;;; in it.  The flagship extension could not survive the thing persistence
+;;; exists for.
+;;;
+;;; So it is two generics.  A container kind writes itself and reads itself
+;;; back, the core knows only that a node has a *tag* and a plist, and the
+;;; `unknown' branch goes back to meaning what it says: a kind that is genuinely
+;;; not loaded right now.
+
+(defgeneric serialize-node (node)
+  (:documentation
+   "NODE as a readable s-expression: a tag keyword followed by a plist.
 
 Windows become their river identifier, which is the only part of a window that
 means anything across a restart.
@@ -52,64 +67,113 @@ elements were conses.  The weights *are* a cons, so they came back as a child,
 and every restart grew a spurious empty pane at the front of every split.  The
 tree was subtly wrong in a way that looked like a layout bug rather than a
 parsing one.  Naming the fields costs eight characters and makes that class of
-mistake unavailable."
-  (typecase node
-    (c:leaf
-     (list :leaf :window (let ((window (c:leaf-window node)))
-                           (and window (c:window-identifier window)))
-                 :label (c:node-label node)))
-    (c:split
-     (list :split :axis (c:split-axis node)
-                  :weights (copy-list (c:weights node))
-                  :children (mapcar #'serialize-node (c:children node))))
-    (c:stack
-     (list :stack :selected (c:stack-selected node)
-                  :children (mapcar #'serialize-node (c:children node))))
-    (t
-     ;; A container kind we do not know — an extension's.  Record what it was
-     ;; and what was in it, so that a reload degrades to the contents rather
-     ;; than losing them, and so a human reading the file can see what
-     ;; happened.
-     (list :unknown :type (string (type-of node))
-                    :children (when (c:container-p node)
-                                (loop for address in (c:container-addresses node)
-                                      for child = (c:child-at node address)
-                                      when child collect (serialize-node child)))))))
+mistake unavailable.
 
-(defun deserialize-node (form index)
-  "Rebuild a node from FORM, looking windows up in INDEX by identifier."
-  (unless (consp form) (return-from deserialize-node (c:make-leaf)))
-  (let ((plist (rest form)))
-    (flet ((kids ()
-             (mapcar (lambda (child) (deserialize-node child index))
-                     (getf plist :children))))
-      (case (first form)
-        (:leaf
-         (let* ((identifier (getf plist :window))
-                (leaf (c:make-leaf (and identifier (gethash identifier index)))))
-           (setf (c:node-label leaf) (getf plist :label))
-           leaf))
-        (:split
-         (let ((children (kids)))
-           (if children
-               (c:make-split (or (getf plist :axis) :horizontal) children
-                             (let ((weights (getf plist :weights)))
-                               (when (= (length weights) (length children))
-                                 weights)))
-               (c:make-leaf))))
-        (:stack
-         (let ((children (kids)))
-           (if children
-               (c:make-stack children (or (getf plist :selected) 0))
-               (c:make-stack (list (c:make-leaf)) 0))))
-        ;; A container an extension owned and that is not loaded now.  Keep the
-        ;; windows; lose only the arrangement.
-        (:unknown
-         (let ((children (kids)))
-           (cond ((null children) (c:make-leaf))
-                 ((null (rest children)) (first children))
-                 (t (c:make-split :horizontal children)))))
-        (t (c:make-leaf))))))
+A container kind adds one method here and one DESERIALIZE-NODE method, and its
+users' layouts survive a restart.  Use a namespaced tag — :LATTICE/GRID — so
+two extensions cannot collide."))
+
+(defgeneric deserialize-node (tag plist index)
+  (:documentation
+   "Rebuild the node TAG names from PLIST, looking windows up in INDEX.
+
+TAG is the keyword SERIALIZE-NODE wrote, and is dispatched on with an EQL
+specializer, so adding a kind is adding a method rather than editing a CASE.
+INDEX maps river window identifiers to live WINDOWs; an identifier that is not
+in it belongs to a window that no longer exists and yields an empty pane.
+
+The method on T is the one that matters for forward compatibility: a file
+written by an image that had an extension loaded, read by one that does not,
+keeps the windows and loses only the arrangement."))
+
+(defun serialize-children (node)
+  "Every child of NODE, serialized, in container order.
+
+Through the container protocol, so a sparse coordinate-addressed kind is walked
+correctly by a function that has never heard of coordinates."
+  (when (c:container-p node)
+    (loop for address in (c:container-addresses node)
+          for child = (c:child-at node address)
+          when child collect (serialize-node child))))
+
+(defun deserialize-children (plist index)
+  "The :CHILDREN of PLIST, rebuilt."
+  (mapcar (lambda (child) (read-node child index)) (getf plist :children)))
+
+(defun read-node (form index)
+  "Rebuild a node from FORM.  The entry point; DESERIALIZE-NODE is the protocol.
+
+A malformed form is an empty pane rather than an error: a state file is
+untrusted input the moment somebody edits it by hand, and the whole point of
+the file is to be readable enough to edit."
+  (if (and (consp form) (keywordp (first form)))
+      (or (guarded "deserialize"
+            (deserialize-node (first form) (rest form) index))
+          (c:make-leaf))
+      (c:make-leaf)))
+
+(defmethod serialize-node ((node c:leaf))
+  (list :leaf :window (let ((window (c:leaf-window node)))
+                        (and window (c:window-identifier window)))
+              :label (c:node-label node)))
+
+(defmethod deserialize-node ((tag (eql :leaf)) plist index)
+  (let* ((identifier (getf plist :window))
+         (leaf (c:make-leaf (and identifier (gethash identifier index)))))
+    (setf (c:node-label leaf) (getf plist :label))
+    leaf))
+
+(defmethod serialize-node ((node c:split))
+  (list :split :axis (c:split-axis node)
+               :weights (copy-list (c:weights node))
+               :label (c:node-label node)
+               :children (serialize-children node)))
+
+(defmethod deserialize-node ((tag (eql :split)) plist index)
+  (let ((children (deserialize-children plist index)))
+    (if children
+        (let ((split (c:make-split (or (getf plist :axis) :horizontal) children
+                                   (let ((weights (getf plist :weights)))
+                                     (when (= (length weights) (length children))
+                                       weights)))))
+          (setf (c:node-label split) (getf plist :label))
+          split)
+        (c:make-leaf))))
+
+(defmethod serialize-node ((node c:stack))
+  (list :stack :selected (c:container-selection node)
+               :label (c:node-label node)
+               :children (serialize-children node)))
+
+(defmethod deserialize-node ((tag (eql :stack)) plist index)
+  (let* ((children (deserialize-children plist index))
+         (stack (if children
+                    (c:make-stack children (or (getf plist :selected) 0))
+                    (c:make-stack (list (c:make-leaf)) 0))))
+    (setf (c:node-label stack) (getf plist :label))
+    stack))
+
+(defmethod serialize-node ((node c:node))
+  "A kind with no method of its own: record what it was and what was in it.
+
+So a reload degrades to the contents rather than losing them, and so a human
+reading the file can see what happened rather than finding windows missing."
+  (list :unknown :type (string (type-of node))
+                 :label (c:node-label node)
+                 :children (serialize-children node)))
+
+(defmethod deserialize-node ((tag t) plist index)
+  "A kind this image does not have a method for.  Keep the windows.
+
+This is the forward-compatibility path and it fires for two different reasons
+that want the same answer: a tag from an extension that is not loaded right
+now, and a tag from a newer version of one that is.  Both mean `somebody else
+knows what this shape was'; neither means `throw the windows away'."
+  (declare (ignore tag))
+  (let ((children (deserialize-children plist index)))
+    (cond ((null children) (c:make-leaf))
+          ((null (rest children)) (first children))
+          (t (c:make-split :horizontal children)))))
 
 (defun output-workspaces ()
   "Which workspace each output is showing, by output name.
@@ -148,7 +212,7 @@ problem, which is what makes it worth a paragraph."
                              (eql wanted (c:prop output :workspace)))
                            outputs))
           (setf (c:prop (first outputs) :workspace) wanted
-                (c:stack-selected stack) wanted)
+                (c:container-selection stack) wanted)
           (logmsg :debug "no output was showing workspace ~d; ~a is now"
                   (1+ wanted) (or (c:output-name (first outputs)) "the output")))))))
 
@@ -191,7 +255,7 @@ be."
         (dolist (window (all-windows))
           (when (c:window-identifier window)
             (setf (gethash (c:window-identifier window) index) window)))
-        (let ((root (deserialize-node (getf form :root) index)))
+        (let ((root (read-node (getf form :root) index)))
           ;; Anything we are managing that the file did not mention has to go
           ;; somewhere, or it would be invisible and unreachable.
           (let ((restored (c:node-windows root)))
@@ -205,20 +269,52 @@ be."
                 (guarded "replace unlisted window"
                   (p:on-window-open (p:current-policy) *world* window)))))
           (restore-output-workspaces (getf form :outputs))
+          ;; The restored tree replaced whatever the configuration file built,
+          ;; so a policy that requires a shape gets its chance here.  See the
+          ;; hook's own documentation for the failure this exists for.
+          (run-hooks :layout-restored)
           (logmsg :info "restored layout from ~a" path)
           (mark-dirty)
           t)))))
 
+(p:define-option *save-interval-seconds* 5
+  "How long the layout may sit changed before it is written out.
+
+Not zero, because a layout change happens a hundred times a second while a
+resize key is held and a hundred file writes would be absurd.  Not large,
+because everything between the last write and a crash is lost.  Five seconds is
+the point where the writes are invisible and the loss is a shrug.
+
+NIL saves only at a clean shutdown, which is what this program used to do —
+SAVE-STATE-SOON existed, was documented, and was called from nowhere at all, so
+any crash, any kill -9 and any compositor exit lost the session layout.")
+
+(defvar *last-save* 0
+  "Internal-real-time of the last write, for the interval.")
+
 (defun save-state-soon ()
-  "Schedule a save.
+  "Note that the layout has changed and should be written before long.
 
-Debounced by simply marking the world and letting the next idle moment in the
-event loop do the write: a layout change can happen a hundred times a second
-while a resize key is held, and a hundred file writes would be absurd."
-  (setf (c:prop *world* :needs-save) t))
+Debounced: this marks the world and the event loop does the write at its next
+idle moment, at most once per *SAVE-INTERVAL-SECONDS*.
 
-(defun save-state-if-needed ()
-  "Write the state out if anything has changed since the last write."
-  (when (c:prop *world* :needs-save)
-    (setf (c:prop *world* :needs-save) nil)
-    (save-state)))
+MARK-DIRTY calls this, which is the whole fix.  A window manager that saves
+only at a clean shutdown loses the layout on exactly the paths where you most
+want it back — and given a debugger hook that used to exit rather than unwind,
+the crash path was reachable and had no save on it at all."
+  (when *world* (setf (c:prop *world* :needs-save) t))
+  nil)
+
+(defun save-state-if-needed (&key force)
+  "Write the state out if it has changed and enough time has passed."
+  (when (and *world* (c:prop *world* :needs-save))
+    (let ((now (get-internal-real-time))
+          (interval (and *save-interval-seconds*
+                         (* *save-interval-seconds*
+                            internal-time-units-per-second))))
+      (when (or force
+                (null interval)
+                (>= (- now *last-save*) interval))
+        (setf (c:prop *world* :needs-save) nil
+              *last-save* now)
+        (save-state)))))

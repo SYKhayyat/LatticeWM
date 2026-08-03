@@ -256,10 +256,30 @@ set changes, or overlapping windows flicker between frames."
     (emit-floats policy)
     (emit-render-order (nreverse shown))))
 
+(defun leaf-focus-state (path cursor)
+  "What kind of focus the pane at PATH has: T, :CURSOR, or NIL.
+
+Three states rather than two, and the third one is what a focused float costs.
+Focus is a *place* (D18) and a float is deliberately not in the tree, so while a
+float has the keyboard the cursor is still somewhere — and drawing that pane as
+though it had the keyboard is a lie, while drawing it as though it were any
+other pane loses the only indication of where dismissing the float returns you.
+
+  T        this pane holds the cursor and the keyboard
+  :CURSOR  this pane holds the cursor; a float has the keyboard
+  NIL      neither
+
+:CURSOR is truthy, so a policy method written against the old two-state
+argument keeps behaving exactly as it did.  A method that wants the third
+colour tests for the keyword."
+  (cond ((not (c:path-equal path cursor)) nil)
+        ((c:world-focused-float *world*) :cursor)
+        (t t)))
+
 (defun emit-window-visible (policy window node path rect cursor)
   "Show WINDOW at RECT, with the border and clip its policy asks for."
   (let* ((proxy (c:window-proxy window))
-         (focusedp (c:path-equal path cursor))
+         (focusedp (leaf-focus-state path cursor))
          (placed (place-rect policy node rect window)))
     (setf (c:window-rect window) placed)
     (when-changed (window :shown t)
@@ -271,17 +291,8 @@ set changes, or overlapping windows flicker between frames."
             (w:node-set-position river-node (c:rect-x placed) (c:rect-y placed))))))
     ;; Borders.  Also the only decoration a focused *empty* pane could have —
     ;; but an empty pane has no window, so the cursor there is drawn by the
-    ;; overlay instead; see runtime/overlay.lisp.
-    (let ((width (guarded "border-width" (p:border-width policy node focusedp))))
-      (multiple-value-bind (r g b a)
-          (guarded "border-color" (p:border-color policy node focusedp))
-        (when (and width r)
-          (when-changed (window :borders (list width r g b a))
-            (guarded "set_borders"
-              (w:window-set-borders proxy w:+edges-all+ width
-                                    (w:color-component r) (w:color-component g)
-                                    (w:color-component b)
-                                    (w:color-component a)))))))
+    ;; overlay instead; see runtime/cursor.lisp.
+    (emit-borders policy window node focusedp)
     ;; Content clipping: the viewport edge, rendered by the compositor.
     (let ((clip (guarded "clip-rect" (p:clip-rect policy node placed))))
       (when-changed (window :clip (and clip (list (c:rect-x clip) (c:rect-y clip)
@@ -295,6 +306,40 @@ set changes, or overlapping windows flicker between frames."
               ;; A clip box covering everything is how you turn clipping off.
               (w:window-set-content-clip-box proxy 0 0 (c:rect-w placed)
                                              (c:rect-h placed))))))))
+
+(defun emit-borders (policy window node focusedp)
+  "Ask the policy for WINDOW's border and send it, diffed, premultiplied.
+
+ONE FUNCTION, CALLED FROM BOTH PLACES, and that is the point.  The tiled path
+and the floating path each had their own copy of this, they disagreed about
+which predicate meant `focused', and one of them did not premultiply.  Two
+copies of a decision are two chances to get it wrong and one of them will."
+  (let ((proxy (c:window-proxy window)))
+    (when proxy
+      (let ((width (guarded "border-width" (p:border-width policy node focusedp))))
+        (multiple-value-bind (r g b a)
+            (guarded "border-color" (p:border-color policy node focusedp))
+          (when (and width r)
+            (when-changed (window :borders (list width r g b a))
+              (multiple-value-bind (wire-r wire-g wire-b wire-a)
+                  (w:premultiplied-rgba r g b (or a 1.0))
+                (guarded "set_borders"
+                  (w:window-set-borders proxy w:+edges-all+ width
+                                        wire-r wire-g wire-b wire-a))))))))))
+
+(defun window-focused-p (window)
+  "True when WINDOW is the one the keyboard is talking to.
+
+THE ONE PREDICATE, because there were two and they disagreed exactly where it
+mattered.  CURRENT-WINDOW is *the cursor's* window; FOCUSED-WINDOW is the one
+with keyboard focus; they differ precisely when a floating window is focused —
+and the float-drawing path asked CURRENT-WINDOW, so a focused float was drawn
+with the unfocused border.  The single case the distinction exists for was the
+single case that got it wrong, for the second time.
+
+Every call site that means \"is this the window the user is typing into\" asks
+this and nothing else."
+  (and window (eq window (focused-window))))
 
 (defun place-rect (policy node rect window)
   "Where WINDOW actually goes inside the RECT it was assigned.
@@ -335,8 +380,15 @@ with the window it belongs to."
               (setf (c:window-rect window) placed)
               (when-changed (window :shown t)
                 (guarded "show" (w:window-show proxy)))
-              (push (list window (c:rect-w placed) (c:rect-h placed))
-                    (server-pending-dimensions *server*))
+              ;; Diffed like everything around it.  This was the one emission
+              ;; in the file that was not, so every float re-proposed identical
+              ;; dimensions on every relayout — and river processes every
+              ;; request we send before it can answer input, which is the whole
+              ;; reason the diff table exists.
+              (when-changed (window :float-dimensions
+                                    (list (c:rect-w placed) (c:rect-h placed)))
+                (push (list window (c:rect-w placed) (c:rect-h placed))
+                      (server-pending-dimensions *server*)))
               (let ((river-node (window-river-node window)))
                 (when river-node
                   (when-changed (window :position (list (c:rect-x placed)
@@ -344,19 +396,24 @@ with the window it belongs to."
                     (guarded "set_position"
                       (w:node-set-position river-node (c:rect-x placed)
                                            (c:rect-y placed))))))
-              (multiple-value-bind (r g b a)
-                  (guarded "border-color"
-                    (p:border-color policy (c:make-leaf window)
-                                    (eq window (current-window))))
-                (let ((width (p:border-width policy (c:make-leaf window) nil)))
-                  (when (and r width)
-                    (when-changed (window :borders (list width r g b a))
-                      (guarded "set_borders"
-                        (w:window-set-borders proxy w:+edges-all+ width
-                                              (w:color-component r)
-                                              (w:color-component g)
-                                              (w:color-component b)
-                                              (w:color-component a)))))))))))))
+              ;; The float's own leaf, kept on the float record rather than
+              ;; made fresh each time: BORDER-COLOR is handed a node, and a
+              ;; node that is a different object on every relayout cannot carry
+              ;; a prop, cannot be compared, and cannot be the thing a
+              ;; window-rule hung a colour on.
+              (emit-borders policy window (float-leaf float)
+                            (window-focused-p window))))))))
+
+(defun float-leaf (float)
+  "The LEAF standing for FLOAT, made once and kept.
+
+A floating window is deliberately not in the tree, but every appearance generic
+takes a *node* — so the float needs one to be asked about.  Making a throwaway
+(C:MAKE-LEAF WINDOW) at each call site meant the node identity changed on every
+relayout, which quietly cost the float every per-node facility the rest of the
+system has: props, labels, and any rule that identified it."
+  (or (c:float-node float)
+      (setf (c:float-node float) (c:make-leaf (c:float-window float)))))
 
 (defun emit-render-order (tiled)
   "Order every visible node, bottom to top: tiled, then floats, then overlays.

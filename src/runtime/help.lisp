@@ -19,18 +19,22 @@
 
 (in-package #:latticewm/runtime)
 
-(defvar *help-overlay* nil)
-
 (defun draw-help-overlay ()
-  "Draw the keymap, or hide it."
-  (let ((output (first (all-outputs))))
+  "Draw the keymap on the output the cursor is on, and hide it on the others.
+
+Not on every output: a help screen is something you are *reading*, and a copy
+of it on the monitor you are not looking at is a monitor you cannot use.  Not
+on a fixed output either, which is what it used to be — on a two-monitor
+desktop Super+/ then drew the keymap on monitor 1 whichever monitor you were
+working on, so the answer to `what do the keys do' appeared somewhere you were
+not looking."
+  (let ((output (current-output)))
+    (hide-overlays :help :except (and *help-visible* output))
     (unless (and *help-visible* output *server*)
-      (when *help-overlay* (overlay-hide *help-overlay*))
       (return-from draw-help-overlay nil))
-    (unless *help-overlay*
-      (setf *help-overlay* (make-instance 'overlay :name "help")))
-    (let* ((area (c:output-rect output))
-           (canvas (ensure-overlay *help-overlay* (c:rect-w area) (c:rect-h area))))
+    (let* ((overlay (overlay-for :help output))
+           (area (c:output-rect output))
+           (canvas (ensure-overlay overlay (c:rect-w area) (c:rect-h area))))
       (when canvas
         (let* ((customp (consp *help-visible*))
                (entries (if customp (cdr *help-visible*) (p:help-entries (policy) p:*keymap*)))
@@ -108,7 +112,7 @@
                                          Any key closes this."
                                     (length entries))))
                        key-color :scale p:*help-scale*))
-        (overlay-commit *help-overlay* :rect area)))))
+        (overlay-commit overlay :rect area)))))
 
 (defcommand help ()
   "Show every key binding on screen, with what it does.

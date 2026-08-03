@@ -1,0 +1,274 @@
+;;;; runtime/seats.lisp --- Seats: keyboards, bindings, and reading a key.
+;;;;
+;;;; A seat is a keyboard, a pointer and a keyboard focus.  On every ordinary
+;;;; machine there is exactly one, and the code is written for several anyway
+;;;; because the protocol is and the cost is a LOOP.
+;;;;
+;;;; RIVER DOES THE XKB WORK AND WE DO NOT.  river_seat_v1 has no keyboard
+;;;; binding mechanism at all; the separate river-xkb-bindings-v1 protocol
+;;;; takes a keysym and a modifier bitfield and sends `pressed'.  So there is
+;;;; no libxkbcommon here, no keymap file descriptor, no xkb state machine and
+;;;; no wl_keyboard plumbing — an entire subsystem every other window manager
+;;;; has to carry, deleted by a protocol decision somebody else made well.
+;;;;
+;;;; WHAT REMAINS IS HARDER THAN IT LOOKS: *reading text*.  River delivers keys
+;;;; to the focused window and gives the window manager only what it asked for,
+;;;; so reading a line means binding every key you might read and enabling
+;;;; those bindings for exactly as long as you are reading.  Three things ever
+;;;; want that — a prompt, an empty pane, and a half-entered chord — and they
+;;;; share one mechanism because they are one question: *should the next
+;;;; keypress belong to the window manager rather than to a window?*  Having
+;;;; three answers to one question is how they come to disagree.
+
+(in-package #:latticewm/runtime)
+
+
+(defun attach-seat (proxy)
+  "Register a seat, and give it its keyboard bindings."
+  (let ((seat (make-instance 'seat :proxy proxy)))
+    (push seat (server-seats *server*))
+    (on-events (proxy "river_seat_v1")
+                (:pointer-position
+                 (setf (seat-pointer-x seat) (first arguments)
+                       (seat-pointer-y seat) (second arguments))
+                 ;; The spec is explicit that a pointer move alone must not
+                 ;; start a manage sequence, so focus-follows-mouse cannot be
+                 ;; driven from here without asking for one.
+                 (when p:*focus-follows-mouse* (pointer-moved seat)))
+                ;; River tells us which window the pointer is over, including
+                ;; the borders it draws and the input regions of decoration
+                ;; surfaces -- none of which a hit test against our own layout
+                ;; rectangles knows about.  So this is both cheaper and more
+                ;; correct than the geometry we were doing ourselves.
+                (:pointer-enter
+                 (on-pointer-enter seat (window-of-proxy (first arguments))))
+                (:pointer-leave (on-pointer-leave seat))
+                ;; Not a button event: river's own rationale is that a window
+                ;; manager needs to know when to focus and when to raise, and
+                ;; that exposing every pointer event to answer it would be
+                ;; mechanism where policy belongs.  So this one clause is
+                ;; click-to-focus for the mouse, for touch and for a stylus.
+                (:window-interaction
+                 (on-window-interaction seat (window-of-proxy (first arguments))))
+                ;; Cumulative motion since the drag began -- see POINTER-OP.
+                (:op-delta
+                 (apply-pointer-delta seat (first arguments) (second arguments)))
+                (:op-release (end-pointer-op seat))
+                ;; There was a (:MODIFIERS ...) clause here.  river_seat_v1
+                ;; has no such event -- the real one is modifiers_update on
+                ;; river_xkb_bindings_seat_v1, and it needs a modifiers_watch
+                ;; request to opt in, which nothing sends.  So it never fired,
+                ;; SEAT-MODIFIERS was never written, and nothing read it
+                ;; either.  Removed rather than wired up: inventing the feature
+                ;; would be answering a gate instead of listening to it.
+                (t nil))
+    (attach-layer-shell-seat seat)
+    (when (server-bindings *server*)
+      (setf (seat-bindings-seat seat)
+            (w:bindings-get-seat (server-bindings *server*) proxy))
+      (on-events ((seat-bindings-seat seat) "river_xkb_bindings_seat_v1")
+        (:ate-unbound-key (handle-unbound-key (first arguments)))
+        (t nil))
+      ;; Registration itself is fine here, but ENABLE is window-management
+      ;; state and is therefore manage-sequence-only.  A seat arrives during
+      ;; the initial roundtrip, when no sequence is in progress, so the work is
+      ;; deferred to the first manage sequence.
+      ;;
+      ;; This is the sequence discipline doing exactly what it was built for:
+      ;; it caught the violation at the point of use, before any bytes reached
+      ;; the wire, instead of letting river kill the connection with
+      ;; sequence_order and leaving a hang to debug.
+      (setf (server-bindings-dirty *server*) t))
+    ;; Pointer bindings are on river_seat_v1 itself rather than on the xkb
+    ;; bindings protocol, so they exist even where keybindings do not.
+    (setf (server-bindings-dirty *server*) t)
+    (logmsg :info "seat appeared")
+    seat))
+
+(defun pointer-moved (seat)
+  "Focus follows the pointer, if that is turned on."
+  (let* ((policy (p:current-policy))
+         (path (guarded "pointer-focus"
+                 (p:pointer-focus policy *world*
+                                  (seat-pointer-x seat) (seat-pointer-y seat)))))
+    (when (and path (not (c:path-equal path (current-path))))
+      (p:jump-cursor policy *world* path)
+      (mark-dirty))))
+
+;;; --------------------------------------------------------- keybindings
+
+(defun register-bindings (seat)
+  "Ask river for every key the keymap binds, including chord prefixes.
+
+Must be called inside a manage sequence: river_xkb_binding_v1.enable is
+window-management state."
+  (let ((bindings (server-bindings *server*)))
+    (unless bindings (return-from register-bindings nil))
+    (dolist (entry (p:bindable-keys))
+      (let ((key (car entry)))
+        (unless (gethash key (seat-bound-keys seat))
+          (let ((binding (guarded "get_xkb_binding"
+                           (w:bindings-get-xkb-binding
+                            bindings (seat-proxy seat) (car key) (cdr key)))))
+            (when binding
+              (setf (gethash key (seat-bound-keys seat)) binding)
+              (push (let ((key key))
+                      (progn
+                        (load-time-value
+                         (declare-handled-events "river_xkb_binding_v1"
+                                                 '(:pressed))
+                         t)
+                        (lambda (event &rest arguments)
+                          (declare (ignore arguments))
+                          (with-abandon
+                            (case event
+                              (:pressed (when (handle-key key) (after-command)))
+                              (t nil))))))
+                    (wl:wl-proxy-hooks binding))
+              (guarded "enable binding" (w:binding-enable binding)))))))
+    (logmsg :info "~d key~:p bound" (hash-table-count (seat-bound-keys seat)))))
+
+(defun rebind-keys ()
+  "Re-register bindings after the keymap changed at a REPL.
+
+This is what makes a keymap edit take effect without a restart, and it is why
+DEFINE-KEY does not need to know about the compositor.  The work is deferred
+to the next manage sequence, because that is the only place it is legal — so
+this is safe to call from anywhere, including a SWANK thread."
+  (when *server*
+    (setf (server-bindings-dirty *server*) t)
+    (request-manage)))
+
+(defun cursor-on-empty-pane-p ()
+  "True when the cursor rests on a deliberately empty pane and no float has
+the keyboard."
+  (let ((leaf (current-leaf)))
+    (and leaf (c:leaf-empty-p leaf) (null (c:world-focused-float *world*)))))
+
+(defparameter +capture-keys+
+  (append
+   ;; Printable ASCII, twice: once bare and once with Shift.  The second copy
+   ;; is not redundant and its absence is a bug you would find by trying to
+   ;; type a bracket.  River matches a binding on keysym *and* modifiers, and
+   ;; the keysym xkb produces for Shift+9 on a US layout is `parenleft' with
+   ;; Shift still in the modifier set — so a binding for parenleft with no
+   ;; modifiers never fires, and M-: could not read a single open bracket.
+   ;; Doing it by mask rather than by guessing which characters are shifted on
+   ;; which layout is what makes this work on a Dvorak or a German keyboard.
+   (loop for code from #x20 to #x7e
+         append (list (cons code '()) (cons code '(:shift))))
+   ;; The keys that move and delete rather than type.
+   (loop for keysym in '(#xff08 #xff09 #xff0d #xff1b #xff8d #xffff
+                         #xff51 #xff52 #xff53 #xff54 #xff50 #xff57)
+         collect (cons keysym '()))
+   ;; The readline chords, which are what fingers do at a prompt without being
+   ;; asked.  Bound only for as long as a prompt is up, so C-w still means
+   ;; close-tab to the browser underneath.
+   (loop for letter across "abdefgknpuwy"
+         collect (cons (char-code letter) '(:ctrl))))
+  "Every key the window manager may want to read directly, with its modifiers.
+
+Bound once, enabled only while something is reading — see ARM-CAPTURE.  Two
+hundred-odd bindings sounds like a lot and is one round trip at startup; the
+alternative is not being able to read text at all, because river delivers keys
+to the focused *window* and gives us only what we asked for.")
+
+(defun capture-wanted-p ()
+  "Is anything currently waiting to read a key directly?
+
+Two things ever are: a prompt in the echo area, and DESIGN D19's empty pane.
+*Three* things are, since a submap joined them.  They share the machinery
+because they are the same question — *should the next keypress belong to the
+window manager rather than to a window?* — and having three answers to one
+question is how they end up disagreeing.
+
+The submap was the one that got this wrong.  Its keys were registered with
+river permanently instead of only while it was pending, so river ate them
+always and the window manager acted on them never."
+  (or (reading-p) (cursor-on-empty-pane-p) *pending-keymap*))
+
+(defun ensure-capture-bindings (seat)
+  "Create the capture bindings, once."
+  (let ((bindings (server-bindings *server*)))
+    (when (and bindings (null (c:prop seat :capture-bindings)))
+      (setf (c:prop seat :capture-bindings)
+            (loop for (keysym . modifiers) in +capture-keys+
+                  for binding = (guarded "get_xkb_binding"
+                                  (w:bindings-get-xkb-binding
+                                   bindings (seat-proxy seat) keysym modifiers))
+                  when binding
+                    collect (progn
+                              (push (let ((keysym keysym) (modifiers modifiers))
+                                      (lambda (event &rest arguments)
+                                        (declare (ignore arguments))
+                                        (with-abandon
+                                          (when (eq event :pressed)
+                                            (handle-captured-key keysym modifiers)))))
+                                    (wl:wl-proxy-hooks binding))
+                              (cons (cons keysym modifiers) binding))))))
+  (c:prop seat :capture-bindings))
+
+(defun handle-captured-key (keysym modifiers)
+  "A key arrived because we had asked for it.  Decide what it meant."
+  (let ((character (when (<= #x20 keysym #x7e)
+                     (let ((base (code-char keysym)))
+                       ;; River sends the *unshifted* keysym with Shift in the
+                       ;; modifier set, so the shifted glyph is ours to work
+                       ;; out.  See *SHIFT-MAP*.
+                       (if (member :shift modifiers)
+                           (p:shifted-character (p:current-policy) base)
+                           base)))))
+    (cond
+      ((reading-p) (prompt-key keysym modifiers character))
+      ;; A chord is waiting for its second key.  HANDLE-KEY already knows what
+      ;; to do with one; it just needs to be given the key, which is the whole
+      ;; of what ate_unbound_key cannot tell us.
+      (*pending-keymap* (handle-key (cons keysym modifiers)))
+      ;; A chord in an empty pane is not a request to open an editor.  The
+      ;; empty pane's table is single printable keys, and letting Ctrl through
+      ;; would make C-c there mean whatever `c' means.
+      ((and (cursor-on-empty-pane-p) (null modifiers))
+       (spawn-for-empty-pane character))
+      (t nil))))
+
+(defun arm-capture ()
+  "Enable or disable the capture bindings to match what is being read.
+
+Manage sequence only: enable and disable are window-management state.  Diffed,
+because this runs on every manage sequence and there are ninety-eight of them."
+  (let* ((seat (primary-seat))
+         (bindings-seat (and seat (seat-bindings-seat seat))))
+    (when bindings-seat
+      (when *pending-keymap*
+        (guarded "ensure_next_key_eaten"
+          (w:bindings-seat-ensure-next-key-eaten bindings-seat)))
+      (let ((wanted (capture-wanted-p)))
+        (ensure-capture-bindings seat)
+        (unless (eq wanted (c:prop seat :capture-armed))
+          (setf (c:prop seat :capture-armed) wanted)
+          (loop for (nil . binding) in (c:prop seat :capture-bindings)
+                do (guarded "capture binding"
+                     (if wanted (w:binding-enable binding)
+                         (w:binding-disable binding)))))))))
+
+(defun spawn-for-empty-pane (character)
+  "Run the command CHARACTER names, if the cursor is still on an empty pane.
+
+DESIGN D19: while the cursor rests on an empty pane, an unbound printable key
+is looked up in a table -- e opens an editor, t a terminal -- so the empty pane
+is a spawn menu with no menu.
+
+THE DESIGN GUESSED THE MECHANISM WRONG AND THE ANSWER IS BETTER THAN ITS
+FALLBACK.  D19 rests on ate_unbound_key and asks whether it carries the keysym,
+ruling that if it does not, only a single-default mode is possible and the table
+dies.  Measured against the shipped protocol, ate_unbound_key has *no arguments
+at all*.  But binding the keys ourselves and enabling them conditionally gets
+the keysym, keeps the table, and never intercepts a key that would have gone to
+an application -- because the binding is not enabled then."
+  (when (and character (cursor-on-empty-pane-p))
+    (let ((command (guarded "key-unbound"
+                     (p:key-unbound (p:current-policy) *world* character))))
+      (when command
+        (logmsg :debug "empty pane: ~a -> ~a" character command)
+        (run-command command)
+        (after-command)))))

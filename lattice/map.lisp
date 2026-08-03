@@ -73,8 +73,6 @@ option exists to let you choose.")
 Dimmer than the coordinate, because the coordinate is what you are navigating
 by and the contents are what confirm you picked the right cell.")
 
-(defvar *map-overlay* nil)
-
 (defun map-mode-p (grid rect)
   "Should the plane be drawn rather than rendered, at this size?"
   (and grid (plusp *map-threshold*)
@@ -105,19 +103,27 @@ still does the only thing it knows how to do."
           (t (format nil "~a +~d" (first names) (1- (length names)))))))
 
 (defun draw-map ()
-  "Draw the plane, when the cells are too small to be worth rendering."
+  "Draw the plane on every output whose cells are too small to render.
+
+Per output, because the decision is per output: two monitors of different sizes
+showing the same viewport cross the threshold at different zoom levels, and the
+one with room for real windows should keep them."
+  (dolist (output (r:all-outputs))
+    (p:guarded "map" (draw-map-on output))))
+
+(defun draw-map-on (output)
+  "Draw the plane on OUTPUT, or take the map down there."
   (let* ((grid (current-grid))
-         (output (first (r:all-outputs)))
-         (policy (p:current-policy)))
+         (policy (p:current-policy))
+         (overlay (r:overlay-for :lattice/map output)))
     (unless (and grid output (typep policy 'lattice-policy))
-      (return-from draw-map nil))
+      (r:overlay-hide overlay)
+      (return-from draw-map-on nil))
     (let ((area (p:outer-rect policy output)))
       (unless (map-mode-p grid area)
-        (when *map-overlay* (r:overlay-hide *map-overlay*))
-        (return-from draw-map nil))
-      (unless *map-overlay*
-        (setf *map-overlay* (make-instance 'r:overlay :name "map")))
-      (let ((canvas (r:ensure-overlay *map-overlay* (c:rect-w (c:output-rect output))
+        (r:overlay-hide overlay)
+        (return-from draw-map-on nil))
+      (let ((canvas (r:ensure-overlay overlay (c:rect-w (c:output-rect output))
                                       (c:rect-h (c:output-rect output)))))
         (when canvas
           (r:canvas-fill canvas (apply #'r:argb *map-background*))
@@ -159,6 +165,6 @@ still does the only thing it knows how to do."
                                        (max 0 (floor (- (c:rect-w box) 12)
                                                      (r:text-width "m"))))
                                       (apply #'r:argb *map-detail-color*)))))
-          (r:overlay-commit *map-overlay* :rect (c:output-rect output)))))))
+          (r:overlay-commit overlay :rect (c:output-rect output)))))))
 
 (r:add-hook :draw-overlays 'draw-map)

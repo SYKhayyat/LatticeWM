@@ -165,7 +165,7 @@ This file is pure — no policy, no globals — so the decision arrives as a
 function rather than as a generic, the same way %SIMPLIFY-UPWARDS takes
 ALLOW-COLLAPSE rather than calling SHOULD-COLLAPSE-P.  The runtime passes one
 derived from JOIN-EXISTING-SPLIT-P; this is what everything else gets."
-  (and (typep parent 'split) (eq (split-axis parent) axis)))
+  (and (container-p parent) (container-splits-along-p parent axis)))
 
 (defun tree-split-at (root path new-node
                       &key (axis :horizontal) (side :after) weights
@@ -287,7 +287,7 @@ destination path out from under us — the classic bug in this operation."
            (setf root (tree-replace-at root (repair-path root from) moving))
            (values root (or (node-path-to root moving) (repair-path root from))))
           ;; An empty pane simply becomes the thing.
-          ((and (typep destination 'leaf) (leaf-empty-p destination))
+          ((empty-pane-p destination)
            (setf root (tree-replace-at root to moving))
            (setf root (%simplify-upwards root source-parent))
            (values root (or (node-path-to root moving) (repair-path root to))))
@@ -348,12 +348,13 @@ Returns (values NEW-ROOT NEW-PATH-OF-MOVED-SUBTREE)."
            (values root (or (node-path-to root moving) (repair-path root from))))
           (t
            (let ((occupant (child-at target address)))
-             (if (and occupant (not (and (typep occupant 'leaf)
-                                         (leaf-empty-p occupant))))
-                 (insert-child target address moving)
-                 (if occupant
-                     (setf (child-at target address) moving)
-                     (insert-child target address moving))))
+             (cond
+               ;; An empty pane at the destination is a place somebody made
+               ;; for something: fill it rather than pushing it aside.
+               ((empty-pane-p occupant)
+                (setf (child-at target address) moving))
+               (occupant (insert-child target address moving))
+               (t (insert-child target address moving))))
            (when simplify
              (setf root (%simplify-upwards root (parent-path from))))
            (values root (or (node-path-to root moving)

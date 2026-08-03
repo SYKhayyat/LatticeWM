@@ -43,7 +43,7 @@ sequence it is in."
   ;; place in the system where that risk is real.
   (load-time-value
    (declare-handled-events "river_window_v1"
-    '(:app-id :title :identifier :parent :dimensions :dimensions-hint :decoration-hint :closed :fullscreen-requested :exit-fullscreen-requested :minimize-requested :maximize-requested :unmaximize-requested))
+    '(:app-id :title :identifier :parent :dimensions :dimensions-hint :decoration-hint :closed :fullscreen-requested :exit-fullscreen-requested :minimize-requested :maximize-requested :unmaximize-requested :pointer-move-requested :pointer-resize-requested :show-window-menu-requested :unreliable-pid :presentation-hint))
    t)
   (lambda (event &rest arguments)
     (with-abandon
@@ -77,6 +77,30 @@ sequence it is in."
         (:unmaximize-requested
          (guarded "inform_unmaximized"
            (w:window-inform-unmaximized (c:window-proxy window))))
+        ;; Somebody grabbed the window's own titlebar or corner.  Clients that
+        ;; draw their own decorations ask for this through xdg-shell and river
+        ;; forwards it; ignoring it makes a GTK titlebar inert, which reads as
+        ;; the window manager being broken rather than as a policy.
+        (:pointer-move-requested
+         (on-client-move-request window (seat-of-proxy (first arguments))))
+        (:pointer-resize-requested
+         (on-client-resize-request window (seat-of-proxy (first arguments))
+                                   (second arguments)))
+        ;; A right-click on a client-side titlebar.  There is no window menu to
+        ;; put up -- every operation it would offer is a command with a key --
+        ;; so the honest answer is to say what the keys are, in the one place
+        ;; the program can talk.
+        (:show-window-menu-requested
+         (notify "window menu: ~a float  ~a fullscreen  ~a close"
+                 (or (p:keys-running (p:current-policy) "toggle-float") "?")
+                 (or (p:keys-running (p:current-policy) "toggle-fullscreen") "?")
+                 (or (p:keys-running (p:current-policy) "close") "?")))
+        ;; Advisory and unreliable by its own name, and useful anyway: it is
+        ;; the only way to tell two windows of the same application apart when
+        ;; writing a rule.
+        (:unreliable-pid (setf (c:prop window :pid) (first arguments)))
+        (:presentation-hint (setf (c:prop window :presentation-hint)
+                                  (first arguments)))
         (t (logmsg :debug "window event ~s ~s" event arguments))))))
 
 (defun detach-window (window)
@@ -167,8 +191,21 @@ nothing."
     (mark-dirty)
     window))
 
+(p:define-option *unfloat-returns-home* t
+  "Put an unfloated window back where it was floated from, if that place survives.
+
+T is the symmetry with minimize and restore, and the argument ON-RESTORE's
+docstring makes applies verbatim: \"landing back where you were is the
+difference between minimize being useful and being a way to lose a window\".
+Floating something to look at it and then putting it back is the same gesture,
+and it had the opposite behaviour — unfloat dropped the window at the cursor,
+wherever that happened to be by then.
+
+NIL restores the old behaviour: an unfloated window lands at the cursor, which
+is what you want if you use floating as a way of *moving* windows around.")
+
 (defun unfloat-window (window)
-  "Put a floating window back into the tree, at the cursor."
+  "Put a floating window back into the tree — where it came from, or at the cursor."
   (let ((float (c:float-of-window *world* window)))
     (when (eq float (c:world-focused-float *world*))
       (setf (c:world-focused-float *world*) nil)))
@@ -177,9 +214,22 @@ nothing."
         (c:window-floating-p window) nil)
   (let* ((policy (p:current-policy))
          (leaf (c:make-leaf window))
-         (here (current-leaf))
-         (landed (p:place-node policy *world* leaf (current-path)
-                               (if (and here (c:leaf-empty-p here)) :fill :split))))
+         (home (and *unfloat-returns-home* (c:prop window :float-home-path)))
+         (target (and home (c:resolve-path (c:world-root *world*) home)))
+         (landed
+           (cond
+             ;; The pane it was floated out of is still there and still empty:
+             ;; it is still yours.
+             ((c:empty-pane-p target)
+              (setf (c:world-root *world*)
+                    (c:tree-replace-at (c:world-root *world*) home leaf))
+              home)
+             (t
+              (let ((here (current-leaf)))
+                (p:place-node policy *world* leaf (current-path)
+                              (if (and here (c:leaf-empty-p here))
+                                  :fill :split)))))))
+    (setf (c:prop window :float-home-path) nil)
     (mark-dirty)
     (p:jump-cursor policy *world* landed)
     landed))
@@ -233,9 +283,20 @@ somewhere other than where the highlight is."
   (let ((seat (primary-seat))
         (window (c:world-focus-window *world*)))
     (when seat
-      (unless (eq window (seat-focused seat))
-        (setf (seat-focused seat) window)
-        (guarded "focus"
-          (if (and window (c:window-proxy window) (c:window-live-p window))
-              (w:seat-focus-window (seat-proxy seat) (c:window-proxy window))
-              (w:seat-clear-focus (seat-proxy seat))))))))
+      (cond
+        ;; A layer surface has taken exclusive focus — a screen locker.  The
+        ;; protocol says every focus request we make is ignored until it
+        ;; clears, so sending them anyway is a window manager fighting a locker
+        ;; for the keyboard on every manage sequence and losing, quietly,
+        ;; forever.  Forgetting what we last focused is deliberate: when the
+        ;; lock clears we want to re-send focus rather than believe a cached
+        ;; value the compositor never honoured.
+        ((layer-shell-holds-keyboard-p seat)
+         (setf (seat-focused seat) nil))
+        ((eq window (seat-focused seat)) nil)
+        (t
+         (setf (seat-focused seat) window)
+         (guarded "focus"
+           (if (and window (c:window-proxy window) (c:window-live-p window))
+               (w:seat-focus-window (seat-proxy seat) (c:window-proxy window))
+               (w:seat-clear-focus (seat-proxy seat)))))))))

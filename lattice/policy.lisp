@@ -308,23 +308,35 @@ coloured thing."
          ;; — but if the unfocused ones are also saturated then everything
          ;; looks highlighted and nothing does, which is what the first
          ;; attempt at this looked like.
-         (multiple-value-bind (hr hg hb)
-             (hsv-to-rgb (coordinate-hue address)
-                         (if focusedp 0.45 0.55)
-                         (if focusedp 1.0 0.30))
-           (let ((mix (* *coordinate-tint* (if focusedp 0.55 1.0))))
-             (values (+ (* r (- 1 mix)) (* hr mix))
-                     (+ (* g (- 1 mix)) (* hg mix))
-                     (+ (* b (- 1 mix)) (* hb mix))
-                     a))))))))
+         ;;
+         ;; Three states, not two: FOCUSEDP is :CURSOR when a floating window
+         ;; has the keyboard and this cell still holds the cursor.  It gets a
+         ;; brightness between the two, because it is between the two — you
+         ;; need to see which cell the dialog will drop you back into.
+         (let ((keyboardp (eq focusedp t))
+               (cursorp (eq focusedp :cursor)))
+           (multiple-value-bind (hr hg hb)
+               (hsv-to-rgb (coordinate-hue address)
+                           (cond (keyboardp 0.45) (cursorp 0.50) (t 0.55))
+                           (cond (keyboardp 1.00) (cursorp 0.60) (t 0.30)))
+             (let ((mix (* *coordinate-tint*
+                           (cond (keyboardp 0.55) (cursorp 0.75) (t 1.0)))))
+               (values (+ (* r (- 1 mix)) (* hr mix))
+                       (+ (* g (- 1 mix)) (* hg mix))
+                       (+ (* b (- 1 mix)) (* hb mix))
+                       a)))))))))
 
 (defmethod p:border-width ((policy lattice-policy) node focusedp)
-  "A thicker border on the focused cell.
+  "A thicker border on the cell that has the keyboard.
 
 Colour alone is not enough at a glance across a 3x2 view, and a border that is
-merely brighter can lose to a bright application behind it.  Thickness cannot."
+merely brighter can lose to a bright application behind it.  Thickness cannot.
+
+(EQ FOCUSEDP T) rather than a truth test: :CURSOR means a float has the
+keyboard, and thickening the cell underneath it would claim the keystrokes are
+going there."
   (let ((base (call-next-method)))
-    (if (and focusedp (c:prop node :lattice/address)) (+ base 2) base)))
+    (if (and (eq focusedp t) (c:prop node :lattice/address)) (+ base 2) base)))
 
 ;;; ==================================================================
 ;;; MOTION — the one that makes the whole thing feel like a place
@@ -363,10 +375,49 @@ instead: the spreadsheet Ctrl+Arrow idiom, and DESIGN D3's modified motion."
                             direction reference rects)
   "Arriving at the plane from outside — from another workspace, say.
 
-Lands on the cell nearest the viewport origin, or geometrically when there is
-something to be geometric about."
-  (declare (ignore direction reference rects))
-  (c:default-address grid))
+A *directional* arrival is motion, and motion answers structurally: the cell
+nearest the viewport origin.  Motion cannot in fact reach a plane from outside
+one, since MOTION-ESCAPES-P traps it, but a container that answers only half
+the protocol is a trap of its own.
+
+A *non-directional* arrival is the interesting one, and it is what switching
+workspace is: you are stepping from one plane to the plane behind it, and the
+question 'where do I land?' has no structural answer — only a design one.
+*WORKSPACE-ENTRY* is that decision.
+
+THIS MUTATES, WHICH AN ACCESSOR MAY NOT AND AN ARRIVAL MAY.  Landing on a cell
+that does not exist yet creates it, and pans the viewport so you can see it, on
+exactly the argument STEP-ADDRESS already makes: the plane is infinite, so the
+cell always exists in principle and arriving is what brings it into being.  The
+directional branch touches nothing, which is what keeps speculative motion
+queries free of side effects."
+  (declare (ignore reference rects))
+  (if direction
+      (c:default-address grid)
+      (let ((address (workspace-entry-cell grid)))
+        (cond ((null address) (c:default-address grid))
+              (t (ensure-cell grid address)
+                 (ensure-visible grid address)
+                 address)))))
+
+(defmethod p:on-focus-change ((policy lattice-policy) world old new)
+  "Remember which cell each plane was left standing in.
+
+Per *plane*, on the plane's own PROPS, rather than one global 'last cell' —
+because the fact worth keeping is 'workspace 3 was left at (2,-1)', and a
+single global slot answers a question nobody asked.  This is what
+*WORKSPACE-ENTRY* :REMEMBERED reads, and it costs one PROP write per focus
+change.
+
+CALL-NEXT-METHOD is not optional: the motion layer's method is what maintains
+the focus history that :MRU close-focus consults, and shadowing it would break
+a feature two layers away with no visible connection to the lattice."
+  (let ((chain (c:resolve-chain (c:world-root world) new)))
+    (loop for node in chain
+          for address in new
+          when (typep node 'grid)
+            do (setf (c:prop node :lattice/last-cell) address)))
+  (call-next-method))
 
 (defmethod p:motion-escapes-p ((policy lattice-policy) (grid grid) direction)
   "Motion never leaves the plane, because the plane has no edge.
@@ -443,6 +494,189 @@ screen of nothing, while every number in the model was correct.  It took a
 screenshot to see."
   (cell (- (cell-x anchor) (floor (1- cols) 2))
         (- (cell-y anchor) (ceiling (1- rows) 2))))
+
+;;; ==================================================================
+;;; THE Z AXIS — infinitely many planes, one behind another
+;;; ==================================================================
+;;;
+;;; The workspace list has always been infinite: it is a STACK at the root of
+;;; the tree, a stack grows, and WORKSPACE 40 on a machine with three makes
+;;; forty.  What it was not was *made of planes*.
+;;;
+;;; ENABLE wraps the workspaces that exist when it runs.  Every workspace made
+;;; afterwards came from one of four sites in the core that each built an empty
+;;; pane by hand, so workspace 7 was a pane on a machine whose first six were
+;;; planes — no error, no log line, and invisible until somebody went there and
+;;; found that Super+minus did nothing.  The plane was a wrapper applied once,
+;;; not the shape of a workspace.
+;;;
+;;; MAKE-WORKSPACE is the core's answer, and this section is the lattice's.
+;;; With it, "infinite workspaces of lattices one behind another" is not an
+;;; arrangement you set up — it is the shape of the thing, permanently, and it
+;;; costs one method.
+
+(defvar *default-viewport* (cons 1 1)
+  "The zoom ENABLE was called with, as (COLUMNS . ROWS).
+
+Remembered so that a workspace created three hours later is born the same shape
+as the ones created at startup.  Not an option: it is a record of what the
+configuration already said, and a user who wants to change it has
+*NEW-WORKSPACE-ZOOM* to say so with.")
+
+(p:define-option *new-workspace-zoom* :inherit
+  "The viewport a newly created plane is born with.
+
+  :INHERIT      the same zoom as the plane you are standing on, falling back to
+                whatever ENABLE was called with.  The default, and the one that
+                makes the planes read as *stacked*: stepping back a workspace
+                changes what you are looking at and not how much of it.
+  (COLS . ROWS) exactly that, every time — (1 . 1) for 'every new workspace
+                starts zoomed in on one cell'.
+
+Zoom is a view control (D7), so this is a statement about where you arrive, not
+about the layout you arrive in.  Nothing is laid out differently for it.")
+
+(p:define-option *new-workspace-origin* :inherit
+  "Where a newly created plane's viewport sits.
+
+  :INHERIT   the same origin as the plane you are standing on.  The default.
+             Two planes at the same origin with the same zoom are literally one
+             behind the other: the same window of coordinates, a different
+             plane under it.
+  :ORIGIN    always (0,0), so every plane starts at the same well-known place.
+  (X . Y)    exactly that cell.
+
+Pairs with *WORKSPACE-ENTRY*: this decides what the new plane shows, that
+decides which cell you stand in on it.  :INHERIT and :ALIGNED together are the
+stacked-planes reading of a workspace switch; :ORIGIN and :ORIGIN are the
+'every workspace is its own world' reading.  Both ship, per DESIGN P1.")
+
+(p:define-option *new-workspace-cells* nil
+  "Cells a new plane starts with, as a list of (X . Y) conses.
+
+NIL — the default — means one empty cell at the origin the plane was given,
+which is DESIGN D19's starting state repeated per plane.  A list makes every
+new workspace start pre-divided:
+
+    (setf *new-workspace-cells* (list (cell 0 0) (cell 1 0)))
+
+Cells, not windows.  A cell is a place; what goes in it is a spawn, and this
+option deliberately cannot open anything — that is what the :WORKSPACE-CHANGED
+hook is for.")
+
+(p:define-option *workspace-entry* :remembered
+  "Which cell you land in when you arrive on a plane from outside it.
+
+  :REMEMBERED  the cell you were last standing in on *that* plane, falling
+               back to :ALIGNED on a plane you have never visited.  The
+               default, and the one that makes a workspace feel like a room
+               you left rather than a room you are shown into.
+  :ALIGNED     the same coordinate you are standing on now.  The literal
+               reading of 'one behind the other': the planes share a coordinate
+               space and switching moves you along Z with X and Y untouched.
+  :ORIGIN      always (0,0).
+  :OCCUPIED    the first occupied visible cell — the behaviour before this
+               option existed, and the only one of the four that never creates
+               a cell by arriving.
+
+The first three create the cell they name if it is not there yet, which is
+STEP-ADDRESS's rule and not a new one: on an infinite plane every cell exists
+in principle, and arriving is what brings it into being.")
+
+(defun cursor-grid (world)
+  "The innermost plane the cursor is inside, or NIL.
+
+Ancestor search rather than a fixed depth, so a plane nested inside a split
+inside another plane answers correctly — see CURRENT-GRID, which is this with
+the world already supplied."
+  (when world
+    (let* ((root (c:world-root world))
+           (chain (c:resolve-chain root (c:world-cursor world))))
+      (loop for node in (reverse (or chain (list root)))
+            when (typep node 'grid) return node))))
+
+(defun cursor-cell (world)
+  "The cell address the cursor is standing in, or NIL."
+  (when world
+    (let* ((root (c:world-root world))
+           (path (c:world-cursor world))
+           (chain (c:resolve-chain root path)))
+      (loop for node in chain
+            for address in path
+            when (typep node 'grid) return address))))
+
+(defun workspace-entry-cell (grid)
+  "The cell a non-directional arrival at GRID lands on, or NIL for 'ask the
+container'.
+
+NIL rather than a coordinate for :OCCUPIED, because 'the first occupied visible
+cell' is a question only the grid can answer and re-deriving it here would be a
+second implementation of DEFAULT-ADDRESS waiting to disagree with the first."
+  (let ((world r:*world*))
+    (case *workspace-entry*
+      (:remembered (or (c:prop grid :lattice/last-cell)
+                       (cursor-cell world)
+                       (cell 0 0)))
+      (:aligned (or (cursor-cell world) (cell 0 0)))
+      (:origin (cell 0 0))
+      (:occupied nil)
+      ;; An unrecognised value is a typo in a configuration file, and the
+      ;; useful response to a typo is the shipped behaviour plus a log line —
+      ;; not a workspace switch that signals.
+      (t (r:logmsg :warn "lattice: *workspace-entry* is ~s, which is not one of ~
+                          :remembered :aligned :origin :occupied; using :remembered"
+                   *workspace-entry*)
+         (or (c:prop grid :lattice/last-cell) (cursor-cell world) (cell 0 0))))))
+
+(defun new-workspace-viewport (world)
+  "The (COLS . ROWS) and origin a plane created now should be born with.
+
+Returns (values COLS ROWS ORIGIN)."
+  (let* ((here (cursor-grid world))
+         (viewport (and here (grid-viewport here)))
+         (zoom (if (and (consp *new-workspace-zoom*)
+                        (integerp (car *new-workspace-zoom*))
+                        (integerp (cdr *new-workspace-zoom*)))
+                   *new-workspace-zoom*
+                   (if viewport
+                       (cons (viewport-cols viewport) (viewport-rows viewport))
+                       *default-viewport*)))
+         (origin (cond ((and (consp *new-workspace-origin*)
+                             (integerp (car *new-workspace-origin*))
+                             (integerp (cdr *new-workspace-origin*)))
+                        *new-workspace-origin*)
+                       ((eq *new-workspace-origin* :origin) (cell 0 0))
+                       (viewport (cell (cell-x (viewport-origin viewport))
+                                       (cell-y (viewport-origin viewport))))
+                       (t (cell 0 0)))))
+    (values (max 1 (car zoom)) (max 1 (cdr zoom)) origin)))
+
+(defmethod p:make-workspace ((policy lattice-policy) world index)
+  "A workspace is a plane.  Always, and not only the ones ENABLE happened to see.
+
+This one method is the entire Z axis.  Everything else that 'infinite
+workspaces of lattices one behind another' needs was already true: the
+workspace list is a stack and grows on demand, a stack shows one child at a
+time, SERIALIZE-NODE writes planes and reads them back, and switching is a
+verb the core already had.  What was missing was that the *default shape of a
+new workspace* was not a policy decision, so it could not be the lattice's.
+
+INDEX is ignored by the shipped answer — every plane is born alike — and is
+passed because a method that wants 'workspace 1 is the wide one' should not
+have to count the stack to find out which one it is being asked about."
+  (declare (ignore index))
+  (multiple-value-bind (cols rows origin) (new-workspace-viewport world)
+    ;; The cell list is computed rather than left to MAKE-GRID's default,
+    ;; because that default is a cell at (0,0) — the right guess for a plane
+    ;; nobody has told anything to, and the wrong one for a plane whose
+    ;; viewport starts at (4,-2), which would open showing a hole.
+    (let* ((cells (or (remove-if-not #'consp *new-workspace-cells*)
+                      (list origin)))
+           (grid (make-grid :cols cols :rows rows
+                            :cells (loop for address in cells
+                                         collect (cons address (c:make-leaf))))))
+      (setf (viewport-origin (grid-viewport grid)) origin)
+      grid)))
 
 (defun set-zoom (grid index &key (focus nil))
   "Move the viewport to rung INDEX of the ladder, anchored near FOCUS.

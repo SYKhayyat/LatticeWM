@@ -8,21 +8,17 @@
 Searches the cursor's ancestor chain rather than assuming the plane sits at
 any particular depth, so a grid nested inside a split inside another grid
 works — which is not a feature anybody asked for, but is free, and its being
-free is the sign the container abstraction is right."
-  (let* ((root (c:world-root r:*world*))
-         (path (c:world-cursor r:*world*))
-         (chain (c:resolve-chain root path)))
-    (loop for node in (reverse (or chain (list root)))
-          when (typep node 'grid) return node)))
+free is the sign the container abstraction is right.
+
+CURSOR-GRID with the world supplied.  Two names for one walk because the
+commands here always mean the live world and the policy methods are handed one,
+and a policy method reaching for R:*WORLD* is how a method stops working in a
+test."
+  (cursor-grid r:*world*))
 
 (defun current-cell ()
   "The address of the cell the cursor is in, or NIL."
-  (let* ((root (c:world-root r:*world*))
-         (path (c:world-cursor r:*world*))
-         (chain (c:resolve-chain root path)))
-    (loop for node in chain
-          for address in path
-          when (typep node 'grid) return address)))
+  (cursor-cell r:*world*))
 
 (defun grid-path ()
   "The path of the enclosing grid, or NIL."
@@ -330,7 +326,7 @@ made by walking across it is litter rather than intent.  This is the broom."
 (defun enable (&key (cols 1) (rows 1) (keys t))
   "Switch the running window manager over to the lattice.  Live.
 
-    (asdf:load-system \"lattice\")
+    (load-extension \"lattice\")
     (lattice:enable)
 
 Wraps each existing workspace in a grid, installs the lattice policy, binds
@@ -338,12 +334,57 @@ the lattice keys, and relays out.  Every window you have open stays open and
 stays where it was, because nothing about them changed — a workspace that was
 a split tree becomes cell (0,0) of a plane whose other cells are empty.
 
+AND EVERY WORKSPACE MADE AFTERWARDS IS A PLANE TOO, which is not the same
+statement and used not to be true.  This wraps what exists; P:MAKE-WORKSPACE,
+answered by LATTICE-POLICY, is what makes a *new* workspace a plane — so
+'infinite workspaces of lattices one behind another' is the permanent shape of
+the thing rather than an arrangement that stops at whatever was open when this
+was called.  See *NEW-WORKSPACE-ZOOM*, *NEW-WORKSPACE-ORIGIN* and
+*WORKSPACE-ENTRY* for what a new plane is born looking at, and where you land
+on it.
+
 This is the whole extensibility claim, executed: a new container kind, a new
 layout model, a new set of commands, and a live switch, with no edit to
-anything under src/ and no restart."
-  (let* ((world r:*world*)
-         (root (c:world-root world)))
-    (setf p:*policy* (make-instance 'lattice-policy))
+anything under src/ and no restart.
+
+*Safe to call before there is a world*, which is not a hypothetical: it is what
+`latticewm --check-config' does, and what a REPL does when somebody evaluates
+their configuration file by hand before starting anything.  The policy and the
+keys are installed either way; the tree surgery waits for a tree.  Without this
+the shipped starter configuration -- which offers exactly these two lines --
+reported an error under the very tool written to check configurations."
+  (setf p:*policy* (make-instance 'lattice-policy))
+  ;; Remembered before anything else, so that a workspace created hours later
+  ;; is born the same shape as the ones created here.  Without it, ENABLE's
+  ;; COLS and ROWS described a moment rather than a session, and workspace 7
+  ;; opened at a zoom nobody had asked for.
+  (setf *default-viewport* (cons (max 1 cols) (max 1 rows)))
+  (when keys (install-lattice-keys))
+  ;; And again after a saved layout is restored, because that replaces the tree
+  ;; wholesale — including the planes this call just made.  Enabling the
+  ;; lattice from a configuration file and then having the restore quietly
+  ;; unwrap it is exactly the failure :LAYOUT-RESTORED was declared for.
+  (r:add-hook :layout-restored 'rewrap-after-restore)
+  (let ((world r:*world*))
+    (unless world
+      (r:logmsg :info "lattice policy installed; no world yet, so nothing to wrap")
+      (return-from enable :policy-only))
+    (enable-in world :cols cols :rows rows)))
+
+(defun rewrap-after-restore ()
+  "Put the planes back after a saved layout replaced the tree.
+
+Idempotent: ENABLE-IN wraps only workspaces that are not already planes, so a
+state file written by a version that *does* save the grid — every version since
+SERIALIZE-NODE became a protocol — comes back already correct and this does
+nothing at all."
+  (let ((world r:*world*))
+    (when (and world (typep p:*policy* 'lattice-policy))
+      (enable-in world))))
+
+(defun enable-in (world &key (cols 1) (rows 1))
+  "Wrap every workspace of WORLD in a plane, and relayout."
+  (let ((root (c:world-root world)))
     ;; Wrap each workspace that is not already a plane.
     (if (typep root 'c:stack)
         (loop for index from 0 below (c:container-count root)
@@ -358,7 +399,6 @@ anything under src/ and no restart."
                            :cells (list (cons (cell 0 0) root))))))
     (setf (c:world-cursor world)
           (c:repair-path (c:world-root world) (c:world-cursor world)))
-    (when keys (install-lattice-keys))
     (tag-cell-parity)
     (r:relayout :force t)
     (r:logmsg :info "lattice enabled: ~dx~d viewport" cols rows)
@@ -454,7 +494,7 @@ over it would be the wrong way round."
     (ignore-errors (use-package '#:lattice package)))
   package)
 
-;; Do it on load, so that `asdf:load-system "lattice"' is the whole of the
+;; Do it on load, so that `(load-extension "lattice")' is the whole of the
 ;; installation and `lattice:enable' is genuinely optional.
 (eval-when (:load-toplevel :execute)
   (install-vocabulary))

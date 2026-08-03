@@ -372,6 +372,141 @@ occupied cell, never into the plane behind")
           "motion right goes to the next CELL of the same plane, never to the
 plane behind it — a workspace boundary is a wall and a cell boundary is not"))))
 
+;;; ================================== the Z axis, once the world is running
+;;;
+;;; The test above proves a *stack of grids* behaves.  These prove the stack
+;;; stays made of grids — which it did not, for the life of the extension.
+;;; ENABLE wrapped the workspaces that existed when it ran, and every workspace
+;;; created afterwards was an empty pane, because the four sites in the core
+;;; that grow the workspace list each built one by hand.  Nothing failed.  You
+;;; simply arrived on workspace 7 and found that zoom did nothing.
+
+(defmacro with-lattice-world ((&rest bindings) &body body)
+  "A live world with the lattice enabled, and no compositor.
+
+Commands are safe to call: MARK-DIRTY no-ops without a server, so a verb
+changes the model and stops, which is exactly the half under test."
+  `(let* ((r:*world* (c:make-world))
+          (world r:*world*)
+          (p:*policy* (make-instance 'p:conventional-policy))
+          ,@bindings)
+     (declare (ignorable world))
+     (l:enable :keys nil)
+     ,@body))
+
+(test every-workspace-born-after-enable-is-a-plane-too
+  (with-lattice-world ()
+    (r::workspace 4)
+    (let ((stack (c:world-root world)))
+      (is (= 4 (c:container-count stack))
+          "asking for workspace 4 on a world with one made the other three")
+      (dotimes (index 4)
+        (is (typep (c:child-at stack index) 'l:grid)
+            "workspace ~d is a plane, not a pane" (1+ index))))))
+
+(test new-workspace-and-a-window-sent-past-the-end-make-planes-as-well
+  ;; The other two of the four sites.  Each used to build its own empty pane,
+  ;; which is how three of them come to disagree with the fourth.
+  (with-lattice-world ()
+    (r::new-workspace)
+    (is (typep (c:child-at (c:world-root world) 1) 'l:grid)
+        "NEW-WORKSPACE makes a plane")
+    (p:on-window-open p:*policy* world (t*::win "a"))
+    (r::send-to-workspace 5)
+    (let ((stack (c:world-root world)))
+      (is (= 5 (c:container-count stack)))
+      (is (typep (c:child-at stack 4) 'l:grid)
+          "and so does sending a window past the end of the list"))))
+
+(test a-window-sent-to-another-plane-lands-in-a-cell-of-it
+  ;; NOT beside it.  SEND-TO-WORKSPACE used to address the workspace *node*,
+  ;; so the destination plane became one half of a split and the window the
+  ;; other — viewport, column widths, names and all, demoted to half a screen.
+  (with-lattice-world ()
+    (p:on-window-open p:*policy* world (t*::win "a"))
+    (p:on-window-open p:*policy* world (t*::win "b"))
+    (r::send-to-workspace 2)
+    (let* ((stack (c:world-root world))
+           (there (c:child-at stack 1)))
+      (is (typep there 'l:grid) "the destination is still a plane")
+      (is (equal '("b") (mapcar #'c:window-app-id (c:node-windows there)))
+          "and the window is inside it")
+      (is (equal '("a") (mapcar #'c:window-app-id
+                                (c:node-windows (c:child-at stack 0))))
+          "and is no longer where it came from — sent, not copied"))))
+
+(test a-new-plane-is-born-behind-the-one-you-are-standing-on
+  ;; "One behind the other", literally: same zoom, same window of coordinates,
+  ;; a different plane under it.
+  (with-lattice-world ((l:*new-workspace-zoom* :inherit)
+                       (l:*new-workspace-origin* :inherit))
+    (let ((here (l:current-grid)))
+      (l:goto-cell (l:cell 5 -1))
+      (l:set-zoom here 3 :focus (l:current-cell))   ; a rung with room in it
+      (let ((origin (l:viewport-origin (l:grid-viewport here))))
+        (r::workspace 2)
+        (let* ((there (c:child-at (c:world-root world) 1))
+               (viewport (l:grid-viewport there)))
+          (is (= 3 (l:viewport-cols viewport)) "same zoom")
+          (is (= 2 (l:viewport-rows viewport)))
+          (is (l:cell-equal origin (l:viewport-origin viewport))
+              "the same window of coordinates — behind the plane you were on,
+not beside it")
+          (is (equal (list 1 (l:cell 5 -1)) (c:world-cursor world))
+              "and you are standing at the coordinate you were already at")
+          (is-true (c:child-at there (l:cell 5 -1))
+                   "on a cell that exists, rather than one at (0,0) off the
+edge of a view that starts somewhere else"))))))
+
+(test a-fixed-zoom-and-origin-override-the-plane-you-came-from
+  (with-lattice-world ((l:*new-workspace-zoom* (cons 2 2))
+                       (l:*new-workspace-origin* (l:cell 0 0)))
+    (setf (l:viewport-origin (l:grid-viewport (l:current-grid))) (l:cell 9 9))
+    (r::workspace 2)
+    (let ((viewport (l:grid-viewport (c:child-at (c:world-root world) 1))))
+      (is (= 2 (l:viewport-cols viewport)))
+      (is (= 2 (l:viewport-rows viewport)))
+      (is (l:cell-equal (l:cell 0 0) (l:viewport-origin viewport))))))
+
+(test switching-workspaces-keeps-your-coordinate-when-asked-to
+  ;; *WORKSPACE-ENTRY* :ALIGNED — the planes share a coordinate space and
+  ;; switching moves you along Z with X and Y untouched.
+  (with-lattice-world ((l:*workspace-entry* :aligned))
+    (l:goto-cell (l:cell 2 1))
+    (r::workspace 2)
+    (is (equal (list 1 (l:cell 2 1)) (c:world-cursor world))
+        "you are on the plane behind, at the coordinate you were already on")
+    (is-true (c:child-at (c:child-at (c:world-root world) 1) (l:cell 2 1))
+             "and arriving created the cell, exactly as walking there would")))
+
+(test a-plane-remembers-the-cell-you-left-it-standing-in
+  (with-lattice-world ((l:*workspace-entry* :remembered))
+    (r::workspace 2)
+    (l:goto-cell (l:cell 3 0))
+    (r::workspace 1)
+    (r::workspace 2)
+    (is (equal (list 1 (l:cell 3 0)) (c:world-cursor world))
+        "a workspace is a room you left, not a room you are shown into")))
+
+(test workspace-entry-occupied-is-the-old-behaviour-and-still-available
+  (with-lattice-world ((l:*workspace-entry* :occupied)
+                       (l:*new-workspace-origin* :origin))
+    (l:goto-cell (l:cell 4 4))
+    (r::workspace 2)
+    (is (equal (list 1 (l:cell 0 0)) (c:world-cursor world))
+        "the container is asked, and answers with its first occupied visible
+cell — where you were standing is not consulted and no cell is created by
+arriving")))
+
+(test disabling-the-lattice-goes-back-to-plain-workspaces
+  ;; MAKE-WORKSPACE is answered by the *policy*, so the shape of a new
+  ;; workspace follows the policy in force rather than a flag set once.
+  (with-lattice-world ()
+    (l:disable)
+    (r::workspace 2)
+    (is (not (typep (c:child-at (c:world-root world) 1) 'l:grid))
+        "with the conventional policy back, a new workspace is a plain pane")))
+
 (test a-plane-can-be-nested-inside-a-split
   ;; Not a feature anybody asked for.  It is free, and its being free is the
   ;; evidence that the container abstraction is at the right level.
@@ -520,3 +655,95 @@ is exactly when to switch *ZOOM-MODE* to :FIXED"))))
         (l:set-zoom grid rung :focus focus)
         (is-true (l:viewport-contains-p (l:grid-viewport grid) focus)
                  "focus ~a stays visible at rung ~d" (l:cell-string focus) rung)))))
+
+;;; ==================================================================
+;;; THE PLANE SURVIVES BEING COPIED AND BEING SAVED
+;;; ==================================================================
+;;;
+;;; Two protocols the grid used to fall straight through, with one cause: both
+;;; COPY-NODE and SERIALIZE-NODE were TYPECASEs over the three core kinds, and
+;;; a GRID subclasses CONTAINER directly, so it matched no clause in either.
+;;;
+;;; The consequences were not subtle and were completely silent.  A copy came
+;;; back with no cells at all — which is why layout undo could not have been
+;;; built before this was fixed, since every undo would have destroyed the
+;;; plane.  And a save came back as a flat split of whatever windows had been
+;;; in it: the viewport, the track sizes and every name a user had given a cell
+;;; were dropped on *every restart*.  The flagship extension could not survive
+;;; the one thing persistence exists for.
+
+(test a-grid-copies-with-everything-on-it
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 2 -1)) (leaf "b")
+          (c:child-at grid (l:cell -3 4)) (leaf "c"))
+    (setf (l:col-width grid 2) 3
+          (l:row-height grid -1) 2)
+    (l:set-zoom grid 3 :focus (l:cell 0 0))
+    (let ((copy (c:copy-node grid)))
+      (is (= 3 (c:container-count copy))
+          "every cell came across; the old COPY-NODE returned an empty grid")
+      (is (equal '("a" "b" "c")
+                 (sort (remove nil (mapcar #'c:window-app-id
+                                           (c:node-windows copy)))
+                       #'string<))
+          "with the windows still in them")
+      (is (= 3 (l:col-width copy 2)) "column tracks survived")
+      (is (= 2 (l:row-height copy -1)) "row tracks survived")
+      (is (= (l:viewport-cols (l:grid-viewport grid))
+             (l:viewport-cols (l:grid-viewport copy)))
+          "and the zoom level survived")
+      (is (not (eq (l:grid-viewport grid) (l:grid-viewport copy)))
+          "as a copy rather than as the same object -- panning the copy must
+not pan the original, which is the whole reason undo needs this")
+      (is (not (eq (c:child-at grid (l:cell 0 0)) (c:child-at copy (l:cell 0 0))))
+          "cells are copied structurally")
+      (is (eq (c:leaf-window (c:child-at grid (l:cell 0 0)))
+              (c:leaf-window (c:child-at copy (l:cell 0 0))))
+          "and the windows in them are shared, because there is only one of those"))))
+
+(test a-grid-round-trips-through-the-state-file
+  (let ((grid (grid-of))
+        (index (make-hash-table :test #'equal)))
+    (let ((a (t*::win "a")) (b (t*::win "b")))
+      (setf (c:window-identifier a) "ia" (c:window-identifier b) "ib")
+      (setf (gethash "ia" index) a (gethash "ib" index) b)
+      (setf (c:child-at grid (l:cell 0 0)) (c:make-leaf a)
+            (c:child-at grid (l:cell -2 3)) (c:make-leaf b))
+      (setf (c:node-label (c:child-at grid (l:cell -2 3))) "notes")
+      (setf (l:col-width grid -2) 5/2)
+      (l:set-zoom grid 2 :focus (l:cell 0 0))
+      (let* ((form (r:serialize-node grid))
+             (back (r:read-node form index)))
+        (is (typep back 'l:grid)
+            "it came back as a plane rather than as a split of its contents")
+        (is (= 2 (c:container-count back)))
+        (is (eq a (c:leaf-window (c:child-at back (l:cell 0 0))))
+            "matched to the live window by river's identifier")
+        (is (eq b (c:leaf-window (c:child-at back (l:cell -2 3))))
+            "including at a negative coordinate, which is most of the plane")
+        (is (equal "notes" (c:node-label (c:child-at back (l:cell -2 3))))
+            "and the name somebody gave the cell survived, which is DESIGN D1's
+third addressing layer and the one humans actually remember")
+        (is (= 5/2 (l:col-width back -2)) "column tracks survived")
+        (is (equal (l:viewport-origin (l:grid-viewport grid))
+                   (l:viewport-origin (l:grid-viewport back)))
+            "and you are looking at the same part of the plane you left")
+        ;; And the file has to survive being written and read as text, which is
+        ;; what it actually is.
+        (let ((*package* (find-package :keyword)))
+          (is (equal form (read-from-string (prin1-to-string form)))
+              "the form is readable, because the state file is a file"))))))
+
+(test a-grid-a-reader-does-not-know-keeps-its-windows
+  ;; The other direction: a layout saved with the lattice loaded, read back by
+  ;; an image that does not have it.  The arrangement is lost -- there is
+  ;; nothing else it could be -- and the windows must not be.
+  (let ((index (make-hash-table :test #'equal))
+        (a (t*::win "a")))
+    (setf (gethash "ia" index) a)
+    (let ((node (r:deserialize-node :some-extension/kind
+                                    '(:children ((:leaf :window "ia")))
+                                    index)))
+      (is (equal '("a") (mapcar #'c:window-app-id (c:node-windows node)))
+          "the window survived a container kind this image has never heard of"))))

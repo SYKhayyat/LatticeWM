@@ -18,6 +18,12 @@
 ;;;; moves a subtree into a container already moves a window to a workspace.
 ;;;; "Infinite workspaces of lattices one behind another" is this stack with
 ;;;; grids in it.
+;;;;
+;;;; The stack is infinite for free — a stack grows, so workspace 40 on a
+;;;; machine with three makes forty.  What is *in* it is a policy decision and
+;;;; is asked of P:MAKE-WORKSPACE, at every one of the four sites that grow the
+;;;; list.  Nothing here may build a workspace by hand: the sentence above is
+;;;; only true while the grids keep arriving, and they arrive from there.
 
 (in-package #:latticewm/core)
 
@@ -54,7 +60,17 @@ moves, hides when the node hides, and is clipped by the node's clip box.  That
 is what \"a floating window inside a window\" means here, and it costs one
 slot.")
    (node :initform nil :accessor float-node
-         :documentation "The river node, cached by the runtime.")
+         :documentation
+         "The LEAF that stands for this float when a policy is asked about it.
+
+A floating window is deliberately not in the tree, and every appearance generic
+— BORDER-COLOR, BORDER-WIDTH, CLIP-RECT — takes a *node*.  So a float needs one
+to be asked about, and it has to be the *same* node every time: the emitter used
+to make a throwaway leaf per relayout, which meant the float silently had no
+identity at all.  It could not carry a PROP, could not be compared, and could
+not be the thing a window rule hung a colour on.
+
+Made on demand by RUNTIME:FLOAT-LEAF and kept for the life of the float.")
    (props :initform '() :accessor props))
   (:documentation
    "A window that is positioned by hand rather than tiled.
@@ -151,17 +167,24 @@ reason to leave focus on the last window."
 
 Nothing in the core requires the root to be a stack of workspaces; this is a
 convenience for the commands that assume the shipped shape, and every one of
-them tolerates NIL."
+them tolerates NIL.
+
+The test is CONTAINER-ALTERNATIVES-P rather than (TYPEP ROOT 'STACK), because
+what makes something a workspace list is that it holds alternatives of which
+one is current — not that it is the particular class the core ships for that.
+An extension whose root container answers the alternatives protocol gets the
+whole workspace vocabulary for free, which is the point of having one."
   (let ((root (world-root world)))
-    (when (typep root 'stack) root)))
+    (when (and (container-p root) (container-alternatives-p root)) root)))
 
 (defun workspace-path (world)
   "The path of the current workspace — the first element of the cursor, as a
 one-element path — or the empty path when the root is not a workspace stack."
-  (if (world-workspaces world)
-      (list (or (first (world-cursor world))
-                (stack-selected (world-root world))))
-      '()))
+  (let ((workspaces (world-workspaces world)))
+    (if workspaces
+        (list (or (first (world-cursor world))
+                  (container-selection workspaces)))
+        '())))
 
 (defun current-workspace (world)
   "The node of the workspace the cursor is in, or the root."

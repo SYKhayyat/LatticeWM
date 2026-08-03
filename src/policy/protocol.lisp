@@ -53,7 +53,100 @@
 (defgeneric policy-name (policy)
   (:documentation "A short human-readable name for POLICY, shown in status output."))
 
-(defclass policy ()
+;;; ==================================================================
+;;; THE SIX PROTOCOLS
+;;; ==================================================================
+;;;
+;;; POLICY USED TO BE ONE INTERFACE WITH FIFTY-THREE GENERICS ON IT, and that
+;;; was the clearest interface-segregation failure in the program.  A user who
+;;; wanted only a custom *layout* still had to be a POLICY and nominally
+;;; implement everything — motion, appearance, spawning, key handling — and
+;;; every generic added to POLICY widened the surface every existing extension
+;;; was answering for.
+;;;
+;;; The container protocol shows this project already knew how to do it: nine
+;;; focused generics, implementable independently, which is exactly why GRID
+;;; works.  This is the same treatment applied to the other side.
+;;;
+;;; Nothing breaks and nothing moves.  POLICY inherits all six, so a method on
+;;; POLICY or on CONVENTIONAL-POLICY still specialises correctly and still
+;;; reaches the shipped default with CALL-NEXT-METHOD.  What changes is that
+;;; the *defaults* now live on the narrow class, so a mixin implementing one
+;;; protocol is a real thing you can write:
+;;;
+;;;     (defclass tall (layout-policy) ())
+;;;     (defmethod layout-children ((p tall) (c split) rect) ...)
+;;;     (defclass mine (tall conventional-policy) ())
+;;;     (setf *policy* (make-instance 'mine))
+;;;
+;;; `tall' answers for layout and for nothing else, which is both what it does
+;;; and now what it says.
+
+(defclass layout-policy ()
+  ()
+  (:documentation
+   "How a rectangle is divided, and what the result looks like on screen.
+
+LAYOUT-CHILDREN, LAYOUT-NODE, WINDOW-DIMENSIONS, GRAVITY, GAPS, VISIBLE-P,
+RENDER-ORDER, CLIP-RECT, OUTPUT-CONTENT, RESERVED-SPACE, OUTER-RECT.
+
+The one protocol most people who write an extension are actually after.  Every
+layout model this window manager will ever have is a set of methods on these."))
+
+(defclass appearance-policy ()
+  ()
+  (:documentation
+   "What the window manager draws for itself: colours, fonts, and text.
+
+BORDER-WIDTH, BORDER-COLOR, ECHO-CONTENT, KEYS-HINT, FONT-FOR, and the five
+generics that turn the live keymap and command registry into rows of text.
+
+Separate from layout because they change for entirely different reasons: a
+theme is not a tiling model, and somebody writing one should not have to
+implement the other."))
+
+(defclass motion-policy ()
+  ()
+  (:documentation
+   "Where the cursor goes.
+
+STEP-ADDRESS, ENTRY-ADDRESS, MOTION-ESCAPES-P, FOCUS-AFTER-REMOVE,
+ON-FOCUS-CHANGE, POINTER-FOCUS.
+
+The smallest and most self-contained of the six, and the one whose defaults are
+most often exactly right — which is why it is worth being able to inherit them
+without inheriting anything else."))
+
+(defclass structure-policy ()
+  ()
+  (:documentation
+   "Where things go when the tree changes: spawning, splitting, joining, sizing.
+
+SPAWN-TARGET, SPLIT-AXIS-FOR, NEW-CHILD-SIDE, SHOULD-COLLAPSE-P,
+MOVE-INTO-OCCUPIED, INSERTION-WEIGHT, CONTAINER-AXIS, EQUALIZE-CONTAINER,
+RESIZE-CONTAINER, TAB-SIBLINGS, JOIN-EXISTING-SPLIT-P, STACK-VISIBLE-ADDRESS,
+CONTAINER-LABEL."))
+
+(defclass lifecycle-policy ()
+  ()
+  (:documentation
+   "What happens when a window arrives, leaves, minimizes or floats.
+
+ON-WINDOW-OPEN, ON-WINDOW-CLOSE, SHOULD-FLOAT-P, DEFAULT-FLOAT-RECT,
+ON-MINIMIZE, ON-RESTORE, WINDOW-CAPABILITIES, DECORATION-MODE,
+WINDOW-RULE-FOR."))
+
+(defclass input-policy ()
+  ()
+  (:documentation
+   "What a key, a click or a drag means.
+
+ON-KEY, KEY-UNBOUND, POINTER-DRAG-RECT, POINTER-RESIZE-EDGES,
+SHIFTED-CHARACTER, COMMAND-REPEATABLE-P, COMPLETE-CANDIDATES,
+ARGUMENT-TYPE-FOR."))
+
+(defclass policy (layout-policy appearance-policy motion-policy
+                  structure-policy lifecycle-policy input-policy)
   ((%name :initarg :name :initform "policy" :accessor policy-name)
    (props :initform '() :accessor policy-props
           :documentation "Extension state, as on a node.  See CORE:PROPS."))
@@ -64,7 +157,12 @@ A policy is a *layout model plus a set of behavioural choices*, and it is an
 object rather than a pile of special variables so that two of them can exist
 at once — which is what lets the lattice ship as a subclass rather than as a
 patch.  It carries almost no state: the tree holds the state, the policy holds
-the opinions."))
+the opinions.
+
+It implements all six protocols above, which is what makes `a policy' one thing
+you can hold rather than six you have to assemble — and what keeps every
+existing method, worked example and extension specialising on POLICY exactly as
+correct as it was."))
 
 (defvar *policy* nil
   "The policy in force.  Bound to a CONVENTIONAL-POLICY at startup.
@@ -85,62 +183,9 @@ text mentions neither the policy nor the fact that none was ever made, and the
 right answer is available and obvious."
   (or *policy* (setf *policy* (make-instance 'conventional-policy))))
 
-;;; --------------------------------------------------------- tier-0 options
-
-(defvar *options* (make-hash-table :test #'eq)
-  "NAME -> (list VARIABLE DEFAULT DOCUMENTATION).  See DEFINE-OPTION.")
-
-(defmacro define-option (name default &body (documentation))
-  "Declare a tier-0 configuration value: a variable a user edits, nothing more.
-
-    (define-option *gaps* 0
-      \"Pixels of empty space left between adjacent panes.\")
-
-This is a DEFPARAMETER plus a registration, so that the extension-surface
-document can list every knob without anyone maintaining a second list of them.
-DESIGN.org's tier table calls tier 0 'edit a DEFPARAMETER, no restart, and the
-only tier available to a non-programmer' — so every P1 fork in the design must
-appear here rather than as a branch buried in a method."
-  (check-type documentation string)
-  (let ((key (intern (string-trim "*" (symbol-name name)) :keyword)))
-    `(progn
-       (defparameter ,name ,default ,documentation)
-       (setf (gethash ,key *options*) (list ',name ,default ,documentation))
-       ',name)))
-
-(defun option (name)
-  "The current value of tier-0 option NAME, a keyword."
-  (let ((entry (gethash name *options*)))
-    (when entry (symbol-value (first entry)))))
-
-(defun (setf option) (value name)
-  (let ((entry (gethash name *options*)))
-    (unless entry (error "No such option: ~s" name))
-    (setf (symbol-value (first entry)) value)))
-
-(defun option-default (name)
-  "The value option NAME shipped with."
-  (second (gethash name *options*)))
-
-(defun option-documentation (name)
-  "The docstring of option NAME."
-  (third (gethash name *options*)))
-
-(defun option-boundp (name)
-  "True when NAME names a registered option."
-  (nth-value 1 (gethash name *options*)))
-
-(defun all-options ()
-  "Every registered tier-0 option, as (KEYWORD VARIABLE VALUE DEFAULT DOC),
-sorted by name."
-  (let ((out '()))
-    (maphash (lambda (key entry)
-               (destructuring-bind (variable default documentation) entry
-                 (push (list key variable (symbol-value variable)
-                             default documentation)
-                       out)))
-             *options*)
-    (sort out #'string< :key (lambda (row) (symbol-name (first row))))))
+;;; Tier-0 options — the registry, DEFINE-OPTION and friends — live in
+;;; policy/options.lisp, which loads before policy/log.lisp because logging is
+;;; itself configurable and logging must exist before anything can signal.
 
 ;;; ==================================================================
 ;;; LAYOUT — how a rectangle is divided
@@ -205,11 +250,26 @@ lattice cells than between splits within a cell."))
 
 (defgeneric border-width (policy node focusedp)
   (:documentation
-   "Border thickness in pixels for NODE, drawn by the compositor."))
+   "Border thickness in pixels for NODE, drawn by the compositor.
+
+FOCUSEDP takes the same three values BORDER-COLOR's does."))
 
 (defgeneric border-color (policy node focusedp)
   (:documentation
    "The border colour for NODE, as (values R G B A), each 0.0 to 1.0.
+
+*COLOURS ON THIS SURFACE ARE STRAIGHT ALPHA.*  You write the colour you mean —
+half-transparent blue is (0.4 0.65 1.0 0.5) — and the wire layer premultiplies
+at the boundary, because river's set_borders takes premultiplied RGBA and
+nobody wants to write colours that way.  The same rule holds for every colour
+option in the system, so one value can be used for a border and for the echo
+area and produce the same pixel in both.  See W:COLOR-COMPONENT, which is the
+one place the multiplication happens.
+
+FOCUSEDP is three-valued: T when NODE has the keyboard, :CURSOR when it holds
+the cursor while a floating window has the keyboard, and NIL otherwise.
+:CURSOR is truthy, so a method written as though this were a boolean is still
+correct — it simply cannot tell the middle state apart.
 
 Note this is also the only decoration an *empty focused pane* can have, and an
 empty pane that does not obviously have the cursor reads as a broken keyboard
@@ -380,12 +440,73 @@ to abort the motion."))
   (:documentation
    "Which path, if any, does the pointer at (X, Y) name?
 
-Returns a path or NIL.  Used by focus-follows-mouse, which is off by default
-and is one of the shipped worked examples."))
+Returns a path or NIL.  Used by focus-follows-mouse over *empty* panes, which
+river cannot report because an empty pane holds no window for the pointer to
+enter.  Where there is a window, river's own pointer_enter is authoritative and
+is used instead — it knows about borders and decoration input regions, which a
+hit test against layout rectangles does not."))
+
+(defgeneric pointer-drag-rect (policy world kind start dx dy edges)
+  (:documentation
+   "Where a dragged window goes, given the rectangle it started from.
+
+KIND is :MOVE or :RESIZE.  START is the window's rectangle when the drag began,
+DX and DY are the pointer's *cumulative* motion since then, and EDGES is the
+set of edges being dragged for a resize — a list drawn from :TOP, :BOTTOM,
+:LEFT and :RIGHT.  Returns a RECT.
+
+WORLD is handed in because snapping needs to know where the output edges are,
+and a policy method may not go looking for the runtime's globals to find out.
+
+*Cumulative, not incremental*, and every method has to be written that way.
+River sends the total motion since the operation started, so the correct
+computation is always START plus the total — never `the current rectangle plus
+the last delta', which accumulates rounding and drifts badly whenever the
+pointer leaves the screen and comes back.
+
+Specialize this for snapping, for edge resistance, for a grid, or to make a
+resize keep its aspect ratio."))
+
+(defgeneric pointer-resize-edges (policy window x y)
+  (:documentation
+   "Which edges of WINDOW a resize started at (X, Y) should move.
+
+Returns a list drawn from :TOP, :BOTTOM, :LEFT and :RIGHT, and never both of an
+opposing pair.  The shipped rule is the quadrant the pointer is in, which is
+what makes a Super+right-drag near the top-left corner move that corner rather
+than the bottom-right one — the thing every floating window manager does and
+nobody has ever had to be taught."))
 
 ;;; ==================================================================
 ;;; STRUCTURE — where things go
 ;;; ==================================================================
+
+(defgeneric make-workspace (policy world index)
+  (:documentation
+   "The node a workspace that has just come into existence contains.
+
+INDEX is the position it will occupy, counting from zero.  WORLD is the world
+it is being added to, so a method may look at what is already there — the
+workspace beside it, its viewport, the outputs.
+
+Called from every one of the four places the workspace list grows: switching to
+a workspace that is not there yet, NEW-WORKSPACE, sending a window past the end
+of the list, and a monitor appearing with no workspace of its own.  There is no
+fifth, and a new one must call this rather than build a node.
+
+*This generic is what makes \"infinite workspaces of lattices one behind
+another\" true rather than nearly true.*  The list has always grown on demand —
+a stack grows, so infinity costs nothing — but each of those four sites built
+the same empty pane by hand.  So a lattice installed at startup covered the
+workspaces that existed at startup and nothing after it: workspace 7 was a
+plain pane on a machine whose first six were planes, silently, and only
+somebody who went there could find out.  The plane was not the default shape of
+a workspace; it was a wrapper applied once.
+
+The shipped answer is one empty pane, which is DESIGN D19's starting state: a
+place with nothing in it, where typing a key spawns something.  *NEW-WORKSPACE*
+changes that without a method.  The lattice answers with a fresh plane, and
+that single method is the whole of the Z axis."))
 
 (defgeneric spawn-target (policy world window)
   (:documentation
@@ -456,6 +577,22 @@ directly, and a TYPEP is not an extension point.  A container kind from
 outside the core that divides space in exactly the way a split does was
 invisible to RESIZE, EQUALIZE, EQUALIZE-ALL and TAB, and no method anywhere
 could say otherwise.  Answer this and all four work."))
+
+(defgeneric resize-container (policy container address amount)
+  (:documentation
+   "Grow CONTAINER's child at ADDRESS by AMOUNT of the container's total.
+
+AMOUNT is a signed fraction: 1/20 means one twentieth wider, -1/20 one
+twentieth narrower, and the space comes from — or goes to — the adjacent child,
+so no other divider moves.  True when something changed.
+
+The unit is *the container's total*, not a pixel count and not a weight, and
+that is the whole reason this is a generic rather than a call to ADJUST-WEIGHT.
+Weights are a SPLIT's representation; a container kind that divides space some
+other way — a strip with fixed column widths, a grid with track sizes — has no
+weights to adjust and was silently unresizable.  The shipped method translates
+the fraction into a weight transfer; a kind from outside translates it into
+whatever it keeps."))
 
 (defgeneric equalize-container (policy container)
   (:documentation
@@ -633,6 +770,39 @@ The default returns NIL, letting the command bound to KEY run.  Specializing
 this is how a modal layer — a resize mode, a vi-style submap — intercepts
 everything without unbinding anything."))
 
+(defgeneric shifted-character (policy character)
+  (:documentation
+   "What CHARACTER becomes with Shift held.
+
+*THIS EXISTS BECAUSE RIVER SENDS THE UNSHIFTED KEYSYM.*  What arrives for
+Shift+9 on a US keyboard is keysym `9' with Shift in the modifier set, not
+`parenleft' — so the shifted glyph cannot be derived, it has to be declared.
+Typing (+ 1 2) into M-: produced `9= 1 20' until this existed.
+
+A GENERIC, and that matters more than it looks.  The shipped table is US
+layout and *there is no way for it not to be*: river does the xkb work and does
+not tell us the shifted keysym.  So on a German, French or Dvorak keyboard the
+shipped answer is simply wrong — and before this was a generic, a user on one
+of those had no supported way to fix it beyond replacing a global table by
+hand.  Now there are three ways, in increasing order of effort: set
+*KEYBOARD-LAYOUT* to one of the shipped tables, add a table with
+REGISTER-SHIFT-MAP, or write this method.
+
+Falls back to CHAR-UPCASE, which is right for every alphabet SBCL knows and
+harmless for anything a table does not mention."))
+
+(defgeneric command-repeatable-p (policy command arguments)
+  (:documentation
+   "Should REPEAT be able to run COMMAND with ARGUMENTS again?
+
+The shipped answer consults *NOT-REPEATABLE*, a list of names — which is where
+this behaviour used to live *entirely*, as a global an extension had to PUSH
+onto rather than answer.  Two things were wrong with that: an extension adding
+a non-repeatable command had to mutate somebody else's variable, and the list
+form cannot express `not repeatable under these circumstances', which is the
+interesting case.  A command that is repeatable when it acted and not when it
+declined is one method here and is inexpressible in a denylist."))
+
 (defgeneric key-unbound (policy world keysym)
   (:documentation
    "An unbound key was pressed while the cursor rests on an empty pane.
@@ -696,6 +866,25 @@ The default is its SELECTED slot.  Overriding this is how you get a stack that
 shows two children side by side at wide sizes and one at narrow — a
 responsive tab bar, in nine lines."))
 
+(defgeneric container-role (policy world container)
+  (:documentation
+   "What CONTAINER *is* to the user right now: :WORKSPACES, :TABS, or NIL.
+
+STACK IS ONE OBJECT WITH THREE NAMES, and collapsing them is defensible — it is
+why 'move this window to workspace 3' and 'move this window to tab 3' needed no
+second implementation.  What does not collapse is the *vocabulary*: the echo
+area rendered [2/5] for a workspace list while the identical object was a tab
+strip one level down, and a user who had not read the design document was
+looking at the same three characters meaning two different things.
+
+So the model stays collapsed and the words stop being.  The shipped rule is
+positional and is the one nobody has to be taught: the alternatives container
+at the *root* is the workspace list, and any other is a tab strip.  A policy
+whose root is not a workspace list answers NIL and the vocabulary goes quiet
+rather than lying.
+
+Returns a keyword; CONTAINER-ROLE-NAME turns it into a word."))
+
 (defgeneric container-label (policy container)
   (:documentation
    "A short human-readable name for CONTAINER, or NIL.
@@ -707,12 +896,38 @@ overlay.  Defaults to the node's LABEL slot when one was set."))
 ;;; INTROSPECTION — the surface describes itself
 ;;; ==================================================================
 
+(defparameter +policy-protocols+
+  '(policy layout-policy appearance-policy motion-policy
+    structure-policy lifecycle-policy input-policy)
+  "Every class an extension-surface generic may dispatch its first argument on.
+
+The list exists so that POLICY-GENERIC-P can ask about the whole *lineage*
+rather than about one class.  Adding a seventh protocol means adding it here
+and to POLICY's superclasses, and nothing else changes.")
+
+(defun policy-lineage-p (class)
+  "True when CLASS is somewhere on the policy lineage.
+
+Either direction counts, and that is the point.  A method specialised on
+CONVENTIONAL-POLICY is *below* POLICY; a default specialised on LAYOUT-POLICY
+is *above* it.  Both are extension-surface methods, and a test written only one
+way round loses one of them — which, when the defaults moved onto the six
+protocol classes, would have emptied the generated extension-surface document
+and made gate 2 pass over nothing at all."
+  (and (classp class)
+       (some (lambda (name)
+               (let ((protocol (find-class name nil)))
+                 (and protocol
+                      (or (subtypep class protocol)
+                          (subtypep protocol class)))))
+             +policy-protocols+)))
+
 (defun policy-generic-p (symbol)
   "True when SYMBOL names an extension-surface generic.
 
 The test is structural rather than a maintained list: a generic function
-exported from this package whose first required argument is specialized on
-POLICY somewhere.  A list would drift; this cannot."
+exported from this package with a method whose first required argument is
+specialized somewhere on the policy lineage.  A list would drift; this cannot."
   (and (symbolp symbol)
        (fboundp symbol)
        (typep (fdefinition symbol) 'generic-function)
@@ -720,9 +935,7 @@ POLICY somewhere.  A list would drift; this cannot."
            :external)
        (let ((gf (fdefinition symbol)))
          (some (lambda (method)
-                 (let ((first (first (closer-mop:method-specializers method))))
-                   (and (classp first)
-                        (subtypep first (find-class 'policy)))))
+                 (policy-lineage-p (first (closer-mop:method-specializers method))))
                (closer-mop:generic-function-methods gf)))))
 
 (defun classp (x)

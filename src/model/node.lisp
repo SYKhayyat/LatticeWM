@@ -199,9 +199,105 @@ like a haunting.
 Policy's ENTRY-ADDRESS is the richer question — it knows the direction you
 arrived from — and it is what ordinary navigation uses."))
 
+(defgeneric container-alternatives-p (container)
+  (:documentation
+   "True when CONTAINER holds *alternatives* — a set of children of which one
+is current — rather than a division of space.
+
+A STACK answers T; that is what makes it simultaneously tabs, workspaces and
+the Z axis.  A SPLIT and the lattice's GRID answer NIL, because every one of
+their children is on screen at once.
+
+This generic exists because four places in the runtime asked (TYPEP CONTAINER
+'STACK) directly, and a TYPEP is not an extension point: a container kind from
+outside the core that holds alternatives in exactly the way a stack does was
+invisible to TAB-NEXT, UNTAB, and the whole workspace vocabulary, and no method
+anywhere could say otherwise.  Answer this and all of them work.
+
+Paired with CONTAINER-SELECTION, which is how the current one is read and
+written."))
+
+(defgeneric container-selection (container)
+  (:documentation
+   "Which address of an alternatives container is current, or NIL.
+
+Meaningful only where CONTAINER-ALTERNATIVES-P is true.  Settable, and setting
+it is what switching a tab or a workspace *is*."))
+
+(defgeneric (setf container-selection) (address container)
+  (:documentation "Make ADDRESS the current alternative of CONTAINER."))
+
+(defgeneric container-splits-along-p (container axis)
+  (:documentation
+   "True when CONTAINER divides its space along AXIS.
+
+The structural half of policy's CONTAINER-AXIS, and it is here rather than only
+there because model/surgery.lisp is pure — it may not reach for a policy — and
+TREE-SPLIT-AT's default join rule needs the answer.  A container kind that
+divides space the way a split does answers this and joins splits correctly
+without the core having heard of it."))
+
+(defgeneric node-signature (node)
+  (:documentation
+   "A readable value that changes exactly when NODE's arrangement does.
+
+Compared with EQUAL.  What counts as `the arrangement' is up to each kind, and
+that is the point: a split's weights are part of its arrangement and a stack's
+selection is part of its, while neither has any business in the other's answer.
+
+Used by layout undo to tell a structural change from a mere focus move, so
+that a bounded ring of previous trees does not fill up with entries that differ
+in nothing.  A container kind that keeps state of its own — a viewport, a set
+of track sizes — should add it here, or its users will find that undo skips
+straight past the operation they wanted back."))
+
+(defgeneric copy-node (node)
+  (:documentation
+   "A structural copy of NODE and everything under it.
+
+Windows are shared, not duplicated — there is only ever one of those.  PROPS
+are copied one level deep, so an extension's plist survives but a mutable value
+inside it is shared.
+
+A GENERIC, AND THE REASON IS THE DEEPEST FINDING THIS FILE HAS RECORDED.  It
+was a DEFUN dispatching on concrete classes by TYPECASE, sitting in the middle
+of a layer whose entire advertised contract is that container kinds are open.
+A kind that subclassed CONTAINER directly — the lattice's GRID does — matched no
+clause, so the copy came back carrying props and a label and *nothing else*: no
+children, no tracks, no viewport.  Silently.  No error, no warning.
+
+Nothing in the core called it, which is why it survived; but it is exported,
+documented and tested, and its obvious uses are exactly the ones a user reaches
+for — undo, layout snapshots, cloning a workspace.  Each of those, written
+against the documented extension surface, silently destroyed a grid.
+
+Add a kind by adding a COPY-NODE-SLOTS method, not by editing this."))
+
+(defgeneric copy-node-slots (new old)
+  (:method-combination progn :most-specific-last)
+  (:documentation
+   "Copy OLD's own state into the fresh NEW.  Every class contributes.
+
+PROGN combination, *most specific last*, so the methods run base-class-first:
+NODE copies props and label, CONTAINER copies the children through the
+container protocol, and only then does SPLIT copy the weights that inserting
+those children just recomputed.  Getting that order the other way round is a
+copy whose weights are silently all equal.
+
+Adding a container kind means adding one method here, and inheriting the
+CONTAINER method means the children are already handled."))
+
 (defun container-p (x)
   "True when X is a container."
   (typep x 'container))
+
+(defun empty-pane-p (node)
+  "True when NODE is a leaf holding no window — DESIGN D17's deliberate slack.
+
+Named rather than open-coded because the test appeared eleven times across four
+layers and it is a *concept*: an empty pane is a place somebody made for
+something, and every verb that fills one has to be able to say so."
+  (and (typep node 'leaf) (null (leaf-window node))))
 
 ;;; Generic fallbacks that hold for every container.
 
@@ -218,6 +314,75 @@ arrived from — and it is what ordinary navigation uses."))
 
 (defmethod default-address ((c container))
   (first (container-addresses c)))
+
+(defmethod container-alternatives-p ((c container))
+  "Most containers show every child at once."
+  (declare (ignore c))
+  nil)
+
+(defmethod container-selection ((c container))
+  "A container with no notion of a current child has none."
+  (declare (ignore c))
+  nil)
+
+(defmethod (setf container-selection) (address (c container))
+  "Ignored where there is no selection to set, rather than an error: the verbs
+walk up parent chains asking, and a protocol that signals at the first
+container that does not care is a protocol with a trap in it."
+  (declare (ignore c))
+  address)
+
+(defmethod container-splits-along-p ((c container) axis)
+  "Most containers do not divide space along any axis."
+  (declare (ignore c axis))
+  nil)
+
+(defmethod node-signature ((node node))
+  "A plain node is itself and nothing else."
+  (node-id node))
+
+(defmethod node-signature ((node leaf))
+  "A leaf is its identity and what is in it — so filling an empty pane counts."
+  (list (node-id node) (leaf-window node)))
+
+(defmethod node-signature ((c container))
+  "Identity, which child is current, and every child's own answer."
+  (list* (node-id c)
+         (container-selection c)
+         (loop for address in (container-addresses c)
+               for child = (child-at c address)
+               collect (cons address (and child (node-signature child))))))
+
+(defmethod copy-node ((node node))
+  "A fresh instance of NODE's own class, filled in by COPY-NODE-SLOTS.
+
+MAKE-INSTANCE on (CLASS-OF NODE) rather than on a fixed class is what makes
+this work for a kind the core has never heard of; COPY-NODE-SLOTS is what makes
+it work *correctly* for one."
+  (let ((new (make-instance (class-of node))))
+    (copy-node-slots new node)
+    new))
+
+(defmethod copy-node-slots progn ((new node) (old node))
+  "What every node has: an extension plist and an optional name.
+
+The id is deliberately *not* copied — a copy is a different node, and two
+nodes with one id would break every lookup that uses it."
+  (setf (props new) (copy-list (props old))
+        (node-label new) (node-label old)))
+
+(defmethod copy-node-slots progn ((new container) (old container))
+  "The children, through the container protocol and nothing else.
+
+This is the method that makes COPY-NODE total over container kinds.  It walks
+CONTAINER-ADDRESSES and INSERT-CHILDs a copy of each child at the same address,
+which is exactly the contract every container already answers — so a sparse
+coordinate-addressed grid, an ordered split and a strip that scrolls all copy
+correctly here and none of them is named."
+  (dolist (address (container-addresses old))
+    (let ((child (child-at old address)))
+      (when child
+        (insert-child new address (copy-node child))))))
 
 ;;; ------------------------------------------------- sequential containers
 
@@ -287,19 +452,66 @@ a container kind an extension invented."))
                                        (copy-list weights)
                                        (make-list n :initial-element 1)))))
 
+(defvar *insertion-weight-function* nil
+  "A function of (SPLIT ADDRESS) answering a newly inserted child's weight.
+
+NIL means DEFAULT-INSERTION-WEIGHT, which is the mean of the existing weights.
+The policy layer sets this to a closure over its own INSERTION-WEIGHT generic
+at load time, which is the whole point: the extension point existed, and the
+concrete implementation sitting next to it did not go through it, so a policy
+that specialised INSERTION-WEIGHT was silently ignored on the insertion path
+that matters most.
+
+This is the same shape as SPLIT-JOIN-PREDICATE and for the same reason:
+model/ is pure and must not reach for a policy, so a decision that belongs to
+policy crosses the line as a function rather than as a call.")
+
+(defun default-insertion-weight (split address)
+  "The shipped rule: the mean of SPLIT's existing weights.
+
+So inserting into an evenly-split container keeps it even, and inserting into a
+lopsided one does not hand the newcomer a surprising share."
+  (declare (ignore address))
+  (let ((existing (weights split)))
+    (if existing (/ (reduce #'+ existing) (length existing)) 1)))
+
+(defun insertion-weight-for (split address)
+  "What weight a child inserted at ADDRESS of SPLIT should get.
+
+Asks *INSERTION-WEIGHT-FUNCTION* first and falls back to the shipped rule when
+there is none, when it signals, or when it answers something that is not a
+positive number — because a weight of zero or NIL is a pane with no size, and
+degrading to a sane layout beats obeying a broken policy exactly."
+  (let ((answer (when *insertion-weight-function*
+                  (ignore-errors (funcall *insertion-weight-function* split address)))))
+    (if (and (realp answer) (plusp answer))
+        answer
+        (default-insertion-weight split address))))
+
 (defmethod insert-child :after ((c split) address node)
   (declare (ignore node))
-  ;; Keep WEIGHTS parallel to CHILDREN.  A new child takes the average of the
-  ;; existing weights, so inserting into an evenly-split container keeps it
-  ;; even and inserting into a lopsided one does not hand the newcomer a
-  ;; surprising share.
+  ;; Keep WEIGHTS parallel to CHILDREN, with the newcomer's share decided by
+  ;; the extension point rather than inlined here.
   (let* ((existing (weights c))
-         (share (if existing
-                    (/ (reduce #'+ existing) (length existing))
-                    1))
+         (share (insertion-weight-for c address))
          (i (max 0 (min (or address (length existing)) (length existing)))))
     (setf (weights c)
           (append (subseq existing 0 i) (list share) (subseq existing i)))))
+
+(defmethod container-splits-along-p ((c split) axis)
+  (eq (split-axis c) axis))
+
+(defmethod node-signature ((s split))
+  "The container's answer, plus the weights — so a resize is undoable."
+  (list* (copy-list (weights s)) (call-next-method)))
+
+(defmethod copy-node-slots progn ((new split) (old split))
+  "The axis and the weights.
+
+*After* the CONTAINER method has inserted the children, because inserting them
+recomputed the weights — which is why COPY-NODE-SLOTS runs most-specific-last."
+  (setf (split-axis new) (split-axis old)
+        (weights new) (copy-list (weights old))))
 
 (defmethod remove-child :around ((c split) address)
   (let ((kid (call-next-method)))
@@ -417,6 +629,37 @@ you started and exactly where typing a key spawns something (D19)."
   "The selected child.  Focus repair must never land on a hidden tab."
   (stack-selected s))
 
+(defmethod container-alternatives-p ((s stack))
+  "A stack is the alternatives container.  This is what tabs, workspaces and
+the Z axis all are."
+  (declare (ignore s))
+  t)
+
+(defmethod container-selection ((s stack))
+  (stack-selected s))
+
+(defmethod (setf container-selection) (address (s stack))
+  "Set the shown child, clamped into range.
+
+Clamped rather than checked because every caller is arithmetic on a count that
+may have changed under it — `next tab' after a tab closed, a restored workspace
+index from a file written when there were more of them — and a stack showing
+its last child is a better answer to all of those than a condition."
+  (let ((n (container-count s)))
+    (setf (stack-selected s)
+          (if (and (integerp address) (plusp n))
+              (max 0 (min address (1- n)))
+              0))))
+
+(defmethod copy-node-slots progn ((new stack) (old stack))
+  "Which child is showing.  After the children, for the same reason SPLIT's
+weights are: inserting them moved the selection."
+  (setf (stack-selected new) (stack-selected old)))
+
+(defmethod copy-node-slots progn ((new leaf) (old leaf))
+  "The window, shared rather than duplicated — there is only ever one of those."
+  (setf (leaf-window new) (leaf-window old)))
+
 ;;; -------------------------------------------------------------- traversal
 
 (defun map-nodes (function root &key (order :pre))
@@ -457,34 +700,31 @@ this is structural traversal, not rendering."
   (find-node-if (lambda (n) (and (typep n 'leaf) (eq (leaf-window n) window)))
                 root))
 
-(defun node-empty-p (node)
-  "True when NODE holds no windows at all.
+(defgeneric node-empty-p (node)
+  (:documentation
+   "True when NODE holds no windows at all.
 
 An empty *leaf* is a deliberate object (D17); an empty *container* is usually
-debris, and this is how the collapse rules find it."
-  (etypecase node
-    (leaf (leaf-empty-p node))
-    (container (every (lambda (addr)
-                        (let ((kid (child-at node addr)))
-                          (or (null kid) (node-empty-p kid))))
-                      (container-addresses node)))))
+debris, and this is how the collapse rules find it.
 
-(defun copy-node (node)
-  "A structural copy of NODE and everything under it.
+A generic rather than an ETYPECASE so that a container kind whose emptiness
+means something of its own — a strip that keeps a scroll position, a grid that
+has been named — can say so."))
 
-Windows are shared, not duplicated — there is only ever one of those.  PROPS
-are copied one level deep, so an extension's plist survives but a mutable
-value inside it is shared."
-  (let ((new (make-instance (class-of node))))
-    (setf (props new) (copy-list (props node))
-          (node-label new) (node-label node))
-    (typecase node
-      (leaf (setf (leaf-window new) (leaf-window node)))
-      (split (setf (split-axis new) (split-axis node)
-                   (weights new) (copy-list (weights node))
-                   (children new) (mapcar #'copy-node (children node))))
-      (stack (setf (stack-selected new) (stack-selected node)
-                   (children new) (mapcar #'copy-node (children node))))
-      (sequential-container
-       (setf (children new) (mapcar #'copy-node (children node)))))
-    new))
+(defmethod node-empty-p ((node node))
+  "A node that is not a container and holds nothing we know about is empty."
+  (declare (ignore node))
+  t)
+
+(defmethod node-empty-p ((node leaf))
+  (leaf-empty-p node))
+
+(defmethod node-empty-p ((node container))
+  (every (lambda (address)
+           (let ((kid (child-at node address)))
+             (or (null kid) (node-empty-p kid))))
+         (container-addresses node)))
+
+;;; COPY-NODE is a generic and its methods are beside the classes they copy —
+;;; see COPY-NODE-SLOTS above.  Nothing is left here, deliberately: a second
+;;; place that knows how to copy a node is how the first one went stale.

@@ -24,6 +24,12 @@
   `(prog1 (progn ,@body)
      (mark-dirty)))
 
+;;; Undo is *not* wrapped around each verb here.  It is installed once, around
+;;; RUN-COMMAND, in runtime/history.lisp -- so it covers every command in the
+;;; system including the ones a user writes, and no verb has to remember to opt
+;;; in.  A verb that changes nothing records nothing, because the check is on
+;;; the tree's signature rather than on which function was called.
+
 (defun policy () (p:current-policy))
 
 ;;; ============================================================== motion
@@ -181,21 +187,27 @@ comes to you."
 
 ;;; ================================================================ resize
 
-(defcommand (resize-pane "resize") (direction &optional (amount 1/20))
+(defcommand (resize-pane "resize") (direction &optional (amount p:*resize-amount*))
   "Grow the focused pane DIRECTION by AMOUNT of its container's total.
 
-Resizing is a *transfer* between two adjacent weights rather than an
+AMOUNT is a *fraction of the container*: 1/20 makes the pane one twentieth of
+the container wider and its neighbour one twentieth narrower.  That is what the
+sentence above always claimed and what the code now does — it used to multiply
+by an undocumented constant 4, which happened to be right only when the
+container held exactly four children, and named no unit anywhere.
+
+Resizing is a *transfer* between two adjacent children rather than an
 assignment, so dragging one divider never disturbs the divider beyond it —
 which is the single most common complaint about tiling resize.
 
-Because weights are relative, this behaves identically at every zoom level and
-on every monitor, and needs to know nothing about pixels."
+Because the shares are relative, this behaves identically at every zoom level
+and on every monitor, and needs to know nothing about pixels."
   (with-relayout
     (let* ((root (c:world-root *world*))
            (path (current-path))
            (axis (c:direction-axis direction))
            (sign (c:direction-sign direction)))
-      ;; Find the nearest ancestor split that runs along this axis: pressing
+      ;; Find the nearest ancestor that divides space along this axis: pressing
       ;; "wider" inside a vertical split means widening the column that split
       ;; is in, which is what the user meant and what they would have had to
       ;; navigate out to do by hand.
@@ -207,10 +219,10 @@ on every monitor, and needs to know nothing about pixels."
                         ;; At the far edge there is no neighbour on that side,
                         ;; so the transfer has to go the other way to mean
                         ;; anything.
-                        (delta (if (and (= address last) (plusp sign))
+                        (delta (if (and (eql address last) (plusp sign))
                                    (- amount)
                                    (* sign amount))))
-                   (c:adjust-weight container address (* delta 4)))
+                   (p:resize-container (policy) container address delta))
                  (return t)))))
 
 (defcommand equalize ()
@@ -255,50 +267,90 @@ works on one works on the other."
             (p:jump-cursor (policy) *world*
                            (c:node-path-to root stack))))))))
 
+(defun enclosing-alternatives (&optional (path (current-path)))
+  "The nearest container at or above PATH that holds alternatives, and its path.
+
+Returns (values CONTAINER PATH) or NIL.  `Alternatives' rather than `stack'
+because that is the property the verbs need — a set of children of which one is
+current — and a container kind from outside the core that has it should get
+tabbing and workspace switching without the core having heard of it.  Asking
+(TYPEP CONTAINER 'C:STACK) here made all four of those verbs blind to any such
+kind, and no method anywhere could say otherwise."
+  (let ((root (c:world-root *world*)))
+    (loop for depth from (length path) downto 0
+          for prefix = (subseq path 0 depth)
+          for container = (c:resolve-path root prefix)
+          when (and (c:container-p container)
+                    (c:container-alternatives-p container))
+            do (return (values container prefix)))))
+
 (defcommand tab-next (&optional (step 1))
   "Show the next tab of the nearest enclosing stack.
 
 Also how you switch workspaces, because a workspace list *is* a stack — see
 NEXT-WORKSPACE, which is this command aimed at the root."
   (with-relayout
-    (let* ((root (c:world-root *world*))
-           (path (current-path)))
-      (loop for depth from (length path) downto 1
-            for container = (c:resolve-path root (subseq path 0 (1- depth)))
-            when (typep container 'c:stack)
-              do (let ((n (c:container-count container)))
-                   (when (plusp n)
-                     (setf (c:stack-selected container)
-                           (mod (+ (c:stack-selected container) step) n))
-                     (p:jump-cursor (policy) *world*
-                                    (c:repair-path root
-                                                   (subseq path 0 (1- depth))))))
-                 (return t)))))
+    (multiple-value-bind (container prefix) (enclosing-alternatives)
+      (when container
+        (let ((n (c:container-count container)))
+          (when (plusp n)
+            (setf (c:container-selection container)
+                  (mod (+ (or (c:container-selection container) 0) step) n))
+            (p:jump-cursor (policy) *world*
+                           (c:repair-path (c:world-root *world*) prefix))
+            t))))))
 
 (defcommand tab-previous ()
   "Show the previous tab of the nearest enclosing stack."
   (tab-next -1))
 
 (defcommand untab ()
-  "Dissolve the nearest enclosing stack back into a split."
+  "Dissolve the nearest enclosing stack back into a split.
+
+Every child becomes a pane side by side, which is the inverse of TAB: the
+alternatives stop being alternatives and all become visible at once."
   (with-relayout
-    (let* ((root (c:world-root *world*))
-           (path (current-path)))
-      (loop for depth from (length path) downto 1
-            for container = (c:resolve-path root (subseq path 0 (1- depth)))
-            when (typep container 'c:stack)
-              do (let ((split (c:make-split :horizontal (c:children container))))
-                   (setf (c:world-root *world*)
-                         (c:tree-replace-at root (subseq path 0 (1- depth)) split))
-                   (p:jump-cursor (policy) *world*
-                                  (c:repair-path (c:world-root *world*) path)))
-                 (return t)))))
+    (multiple-value-bind (container prefix) (enclosing-alternatives)
+      (when container
+        (let* ((children (loop for address in (c:container-addresses container)
+                               for child = (c:child-at container address)
+                               when child collect child))
+               (split (c:make-split :horizontal children)))
+          (when children
+            (setf (c:world-root *world*)
+                  (c:tree-replace-at (c:world-root *world*) prefix split))
+            (p:jump-cursor (policy) *world*
+                           (c:repair-path (c:world-root *world*) (current-path)))
+            t))))))
 
 ;;; =========================================================== workspaces
 
 (defun workspace-stack ()
   "The workspace container, or NIL if the root is not one."
   (c:world-workspaces *world*))
+
+(defun fresh-workspace (index)
+  "What a workspace at INDEX is made of, as the policy answers it.
+
+Never (C:MAKE-LEAF) at a call site.  A workspace's contents are a policy
+decision — it is how the lattice makes every workspace a plane — and four
+sites each building their own empty pane is how three of them come to disagree
+with the fourth.  See P:MAKE-WORKSPACE."
+  (or (guarded "make-workspace" (p:make-workspace (policy) *world* index))
+      (c:make-leaf)))
+
+(defun grow-workspaces-to (stack index)
+  "Make sure workspace INDEX exists, creating every workspace up to it.
+
+This is where 'infinite workspaces' is actually implemented, and it is four
+lines because a stack grows: asking for workspace 40 on a machine with three
+makes 40, and every one of them is whatever the policy says a workspace is.
+
+Returns the node now at INDEX."
+  (loop while (<= (c:container-count stack) index)
+        do (let ((next (c:container-count stack)))
+             (c:insert-child stack next (fresh-workspace next))))
+  (c:child-at stack index))
 
 (defcommand workspace (number)
   "Switch to workspace NUMBER, creating it and any before it if needed.
@@ -316,24 +368,23 @@ grows."
           (output (current-output))
           (index (max 0 (1- number))))
       (when stack
-        (loop while (<= (c:container-count stack) index)
-              do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
+        (grow-workspaces-to stack index)
         ;; The *output* changes workspace, not the world.  With one monitor
         ;; these are the same statement; with two they are emphatically not,
         ;; and treating them as the same is how a second monitor ends up
         ;; mirroring the first.
         (when output (setf (c:prop output :workspace) index))
-        (setf (c:stack-selected stack) index)
+        (setf (c:container-selection stack) index)
         (p:jump-cursor (policy) *world* (list index))
         (run-hooks :workspace-changed index)
-        (notify "workspace ~d" (1+ index))))))
+        (notify "~a ~d" (p:world-role-name *world* stack) (1+ index))))))
 
 (defcommand next-workspace (&optional (step 1))
   "Switch to the next workspace, wrapping."
   (with-relayout
     (let ((stack (workspace-stack)))
       (when stack
-        (workspace (1+ (mod (+ (c:stack-selected stack) step)
+        (workspace (1+ (mod (+ (c:container-selection stack) step)
                             (max 1 (c:container-count stack)))))))))
 
 (defcommand previous-workspace ()
@@ -345,40 +396,75 @@ grows."
   (with-relayout
     (let ((stack (workspace-stack)))
       (when stack
-        (let ((index (1+ (c:stack-selected stack))))
-          (c:insert-child stack index (c:make-leaf))
-          (setf (c:stack-selected stack) index)
+        (let ((index (1+ (c:container-selection stack))))
+          (c:insert-child stack index (fresh-workspace index))
+          (setf (c:container-selection stack) index)
           (p:jump-cursor (policy) *world* (list index))
           (run-hooks :workspace-changed index)
-          (notify "workspace ~d" (1+ index)))))))
+          (notify "~a ~d" (p:world-role-name *world* stack) (1+ index)))))))
 
 (defcommand send-to-workspace (number &key (follow nil))
   "Move the focused pane to workspace NUMBER, counting from one.
 
-This is TREE-TRANSPLANT and nothing else — because a workspace is a container
-and a pane is a subtree, 'send to workspace' needed no code of its own."
+This is TREE-MOVE and nothing else — because a workspace is a container and a
+pane is a subtree, 'send to workspace' needed no code of its own.
+
+IT LANDS ON A *PLACE INSIDE* THE WORKSPACE, NOT ON THE WORKSPACE.  The
+difference is invisible while a workspace is a single pane and destructive the
+moment it is anything else.  It used to address the workspace node, which was
+right for the empty leaf the core ships and wrong for every richer shape: send
+a window to a lattice workspace and the whole *plane* became one half of a
+split, viewport and all, with the window as the other half.  A plane is not a
+pane and must not be treated as one by anything that can also be handed a pane.
+
+DESCEND-TO-LEAF with no direction is the question actually being asked — 'where
+inside this thing does a non-directional arrival go?' — and it is answered by
+ENTRY-ADDRESS, per container kind.  A leaf answers with itself, so the core
+behaviour is unchanged to the character.  A grid answers with a cell, which is
+how a window sent to another plane arrives in a cell of it rather than beside
+it.  Neither this command nor the core knows which happened.
+
+THE EMPTY-WORKSPACE PATH USED TO DUPLICATE THE WINDOW, and it is worth writing
+down because the shape of the mistake recurs.  Every surgery function in
+model/ is *pure*: it returns (values REMOVED NEW-ROOT NEW-PATH) and mutates
+nothing above the subtree it was handed.  The old code bound only the first
+value, ignored it, discarded the new root entirely, and then called
+TREE-REPLACE-AT on the *original* root — which still contained the node at
+FROM.  So the removal never happened and the window ended up in both
+workspaces, live in two places at once.
+
+Callers that ignore a surgery function's second value have a bug they have not
+noticed yet; this one had it for the life of the command."
   (with-relayout
     (let ((stack (workspace-stack))
           (from (current-path))
           (index (max 0 (1- number))))
       (when (and stack (> (length from) 1))
-        (loop while (<= (c:container-count stack) index)
-              do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
-        (let* ((target (c:child-at stack index))
-               (node (current-node)))
+        (let* ((workspace (grow-workspaces-to stack index))
+               ;; The path is rebuilt from the *node* rather than written as
+               ;; (LIST INDEX), because the workspace stack is only the root by
+               ;; convention and a configuration that nests it would make the
+               ;; literal wrong in a way nothing would report.
+               (to (or (guarded "descend-to-leaf"
+                         (p:descend-to-leaf
+                          (policy) workspace
+                          (c:node-path-to (c:world-root *world*) workspace) nil))
+                       (list index))))
           (multiple-value-bind (root landed)
-              (if (and (typep target 'c:leaf) (c:leaf-empty-p target))
-                  (multiple-value-bind (r) (c:tree-remove-at (c:world-root *world*)
-                                                             from :simplify nil)
-                    (declare (ignore r))
-                    (c:tree-replace-at (c:world-root *world*) (list index) node))
-                  (c:tree-move (c:world-root *world*) from
-                               (c:node-path-to (c:world-root *world*) target)))
+              ;; One call for both cases: TREE-MOVE already rules that an empty
+              ;; pane simply becomes the thing moved, so 'the target is empty'
+              ;; needs no branch here and never needed one.
+              (c:tree-move (c:world-root *world*) from to
+                           :join (p:move-into-occupied (policy) *world* from to))
             (setf (c:world-root *world*) root)
-            (if follow
-                (progn (setf (c:stack-selected stack) index)
-                       (p:jump-cursor (policy) *world* landed))
-                (p:repair-cursor (policy) *world* from))))))))
+            (cond
+              (follow
+               (setf (c:container-selection stack) index)
+               (p:jump-cursor (policy) *world* landed))
+              (t
+               (p:repair-cursor (policy) *world* from)
+               (notify "sent to ~a ~d" (p:world-role-name *world* stack) (1+ index))))
+            landed))))))
 
 ;;; ============================================== floating, fullscreen, etc.
 
@@ -397,7 +483,13 @@ only supplies the initial guess, and this is how you overrule it."
                 (leaf (c:leaf-holding root window))
                 (path (and leaf (c:node-path-to root leaf))))
            (when path
-             (setf (c:window-home-path window) path)
+             ;; ON ITS OWN SLOT, NOT ON HOME-PATH.  This used to write
+             ;; C:WINDOW-HOME-PATH, which is where ON-MINIMIZE records where a
+             ;; window came from and what ON-RESTORE reads.  So minimizing a
+             ;; window, then floating and unfloating anything at all, then
+             ;; restoring, put the restored window somewhere it had never been
+             ;; — one verb quietly overwriting another's memory.
+             (setf (c:prop window :float-home-path) path)
              (multiple-value-bind (removed new-root landed)
                  (c:tree-remove-at root path :focus-path (current-path))
                (declare (ignore removed))

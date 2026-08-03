@@ -89,9 +89,45 @@ DesktopNames=river
 EOF
 
 [ -f "$root/doc/latticewm.1" ] && install -m644 "$root/doc/latticewm.1" "$man/latticewm.1"
-for file in EXTENSION-SURFACE.txt COMMANDS.txt OPTIONS.txt KEYS.txt; do
-    [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$share/$file"
+[ -f "$root/doc/latticewm-config.5" ] &&
+    { mkdir -p "$prefix/share/man/man5"
+      install -m644 "$root/doc/latticewm-config.5" "$prefix/share/man/man5/latticewm-config.5"; }
+
+# The generated references, and the extension guide.  EXTENDING.org was the one
+# document users needed and the one document this loop did not copy, because it
+# matched *.txt and the guide is an .org file.
+mkdir -p "$share/doc"
+for file in EXTENSION-SURFACE.txt COMMANDS.txt OPTIONS.txt KEYS.txt \
+            EXTENDING.org; do
+    [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$share/doc/$file"
 done
+for file in README.org INSTALL.org FINDINGS.org DESIGN.org; do
+    [ -f "$root/$file" ] && install -m644 "$root/$file" "$share/doc/$file"
+done
+
+# The lattice, as source, so that an installed system can load it.
+#
+# The binary already contains it, so this is not how it is normally loaded --
+# it is here so that the sources are readable beside the machine that runs
+# them, which is the whole argument for shipping a Lisp program, and so that
+# `(load-extension "lattice")' works even in an image built without it.
+# LATTICEWM/RUNTIME:DATA-DIRECTORIES is the other half: it puts this directory
+# on ASDF's registry at startup.
+if [ -f "$root/lattice.asd" ]; then
+    install -m644 "$root/lattice.asd" "$share/lattice.asd"
+    mkdir -p "$share/lattice"
+    for file in "$root"/lattice/*.lisp; do
+        [ -f "$file" ] && install -m644 "$file" "$share/lattice/$(basename "$file")"
+    done
+fi
+
+# The examples, for the same reason: they are documentation that runs.
+if [ -d "$root/examples" ]; then
+    mkdir -p "$share/examples"
+    for file in "$root"/examples/*.lisp; do
+        [ -f "$file" ] && install -m644 "$file" "$share/examples/$(basename "$file")"
+    done
+fi
 
 # The starter configuration, only if there is not one already.  Overwriting
 # somebody's init.lisp during an upgrade would be unforgivable.
@@ -107,6 +143,7 @@ say "installed:"
 say "  $bin/latticewm"
 say "  $bin/latticewm-session"
 say "  $sessions/latticewm.desktop"
+say "  $share/            (the lattice, the examples and the documentation)"
 say ""
 
 case "$prefix" in

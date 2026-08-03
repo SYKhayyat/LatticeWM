@@ -131,7 +131,7 @@ A role is a keyword rather than a subclass so that an extension can invent
 one -- a widget the core has never heard of asks FONT-FOR with its own
 keyword and inherits the default answer for free."))
 
-(defmethod font-for ((policy policy) role)
+(defmethod font-for ((policy appearance-policy) role)
   (declare (ignore role))
   (or (find-font *ui-font*) *default-font*))
 
@@ -477,7 +477,7 @@ Shown in the status line until the keymap has been opened once.  Derived from
 the smallest set somebody cannot work the machine without -- open something,
 split it, move between the pieces, close one, and find everything else."))
 
-(defmethod keys-hint ((policy policy) world)
+(defmethod keys-hint ((policy appearance-policy) world)
   (declare (ignore world))
   (when (and *keys-hint* (not *keymap-ever-opened*))
     (let ((mod (string-capitalize (string *modifier*))))
@@ -485,15 +485,22 @@ split it, move between the pieces, close one, and find everything else."))
                    ~a+/ all keys"
               mod mod mod mod mod))))
 
-(defmethod echo-content ((policy policy) world)
+(defmethod echo-content ((policy appearance-policy) world)
   "The shipped echo area: workspace, place, contents, counts, last message."
   (let* ((root (c:world-root world))
          (workspaces (c:world-workspaces world))
          (window (c:world-focus-window world))
          (leaf (c:world-leaf-at world))
          (segments '()))
+    ;; NAMED, NOT JUST NUMBERED.  This used to render a bare [2/5], and the
+    ;; identical three characters appeared for a *tab strip* one level down —
+    ;; so one object with three names showed the same badge for two of them and
+    ;; a user who had not read the design document had no way to tell which.
+    ;; The model stays collapsed; the vocabulary stops being.
     (when workspaces
-      (push (cons (format nil "[~d/~d]" (1+ (c:stack-selected workspaces))
+      (push (cons (format nil "~a ~d/~d"
+                          (world-role-name world workspaces :policy policy)
+                          (1+ (c:container-selection workspaces))
                           (c:container-count workspaces))
                   :normal)
             segments))
@@ -599,7 +606,7 @@ offering it, because it looks like a bug rather than like a list that goes on."
 ;;; WELCOME-ROWS is the one worth being embarrassed about: it was written two
 ;;; sessions after the ruling and still shipped as a DEFUN.
 
-(defmethod binding-description ((policy policy) target)
+(defmethod binding-description ((policy appearance-policy) target)
   "A short description of what a key does.
 
 Prefers the command's own docstring — its first line, which is written to be
@@ -621,7 +628,7 @@ informative thing available."
          ((null text) (format nil "~{~(~a~)~^ ~}" target))
          (t (substitute-arguments text command (rest target))))))))
 
-(defmethod help-entries ((policy policy) keymap)
+(defmethod help-entries ((policy appearance-policy) keymap)
   "Every binding as (KEYS . DESCRIPTION), sorted for reading.
 
 Bindings that do the same thing are merged onto one row, because the shipped
@@ -647,7 +654,7 @@ an alphabet."
                               description))
           #'string< :key #'cdr)))
 
-(defmethod keys-running ((policy policy) name)
+(defmethod keys-running ((policy appearance-policy) name)
   "Every key bound to the command called NAME, as a printable string.
 
 Emacs's `where-is', folded into describe-command because the question `what
@@ -660,7 +667,7 @@ asked at the same moment."
                       collect (key-to-string key))))
     (when keys (format nil "~{~a~^, ~}" (sort keys #'string<)))))
 
-(defmethod command-help-rows ((policy policy) command)
+(defmethod command-help-rows ((policy appearance-policy) command)
   "COMMAND's documentation, its arguments and its keys, as overlay rows."
   (let ((rows '())
         (keys (keys-running policy (command-name command))))
@@ -690,7 +697,7 @@ asked at the same moment."
           rows)
     (nreverse rows)))
 
-(defmethod welcome-rows ((policy policy))
+(defmethod welcome-rows ((policy appearance-policy))
   "The important keys, as overlay rows.
 
 Deliberately about a dozen entries.  The full keymap is one key away and is a

@@ -17,8 +17,18 @@
 (require :asdf)
 (require :sb-introspect)
 
+;; The lattice goes in.  It is the flagship worked example, the starter
+;; configuration offers to enable it, and an image that did not contain it
+;; could only load it from a build tree — which is not present on any machine
+;; that installed from a package.  Gate 9 asserts that this line, install.sh
+;; and SAMPLE-CONFIG continue to agree.
+;;
+;; Loading it is not enabling it: LATTICE:ENABLE is what changes the policy,
+;; and gate 4 still proves the core runs with the lattice absent, because gate
+;; 4 runs in an image that never loads this file.
 (handler-bind ((warning #'muffle-warning))
   (asdf:load-system "latticewm")
+  (asdf:load-system "lattice")
   (asdf:load-system "swank"))
 
 ;; Merge identical string constants — docstrings are the bulk of this image and

@@ -9,12 +9,33 @@ itself.
 [[file:doc/echo-area.png]]
 
 It tiles the way you expect — recursive splits, tabs, workspaces, floating,
-multi-monitor — and then lets you change any of it while it is running, without
-a restart and without a rebuild.
+multi-monitor, pointer drag-and-resize, panels and status bars — and then lets
+you change any of it while it is running, without a restart and without a
+rebuild.
 
 #+begin_quote
 There has never been a Common Lisp Wayland window manager. This is one.
 #+end_quote
+
+* The one idea to read first
+
+*A pane may deliberately hold no window, and that is not a degenerate case —
+it is how you place slack.*
+
+This is genuinely unlike i3, sway, dwm or Hyprland, where a pane without a
+window does not exist. Here:
+
+- you split a pane and leave one side empty, and the window occupies the rest.
+  That is the resize idiom;
+- focus is a *place*, not a window. It can rest on an empty pane, and Wayland
+  keyboard focus is *derived* from where it rests rather than stored;
+- so =close= (take the pane with it) and =clear= (empty it, leave it standing)
+  are two different verbs rather than one verb with a mode;
+- and standing in an empty pane, typing =t= opens a terminal, =e= an editor.
+  The empty pane is a spawn menu with no menu.
+
+Everything else in the model follows from that, including a few things that
+look surprising until you have read it. It is worth the thirty seconds.
 
 * Install
 
@@ -24,7 +45,8 @@ a requirement. Per-distribution package names are in [[file:INSTALL.org][INSTALL
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, six gates, 570 tests
+make               # build, ten gates, 1000+ checks
+make check         # the above, plus a real river driven headlessly
 make run           # river nested in the session you are already in — try it here first
 #+end_src
 
@@ -86,9 +108,27 @@ letters are what you use on your hundredth.
 | =Super+m=           | minimize (=Shift+Super+m= restores)  |
 | =Super+w=           | tab this pane (=Shift+Super+w= untabs) |
 | =Super+[= / =Super+]= | previous / next tab                 |
+| =Super+z=           | undo the last layout change (=Shift+Super+z= redoes) |
+| =Super+-=           | show/hide a named scratchpad (=Shift+Super+-= puts one away) |
+| =Super+t=           | tag this window (=Shift+Super+t= jumps to a tag) |
 
 Minimize leaves the tiling tree rather than collapsing it, so restoring puts
-the window back where it was.
+the window back where it was. Floating and unfloating do the same, so looking
+at something and putting it back is symmetric.
+
+*Undo is a layout undo.* It restores the arrangement, and it cannot un-quit an
+application — a window that has closed since is simply absent from the tree
+that comes back. =Super+? u= lists what it would walk through.
+
+** The pointer
+
+| =Super=+drag        | move a window (a tiled one floats first) |
+| =Super=+right-drag  | resize it, from the corner you grabbed   |
+| click               | focus, and raise if it is floating       |
+| a titlebar drag     | honoured, for clients that draw their own |
+
+No *unmodified* button is bound, deliberately: a window manager that grabs
+plain left-click cannot be used with any application.
 
 ** Workspaces
 
@@ -98,6 +138,14 @@ the window back where it was.
 | =Super+PageUp= / =PageDown= | previous / next workspace   |
 
 Workspaces are one-based, so the key and the number on it agree.
+
+*There is no limit and there is no configured count.* The workspace list is a
+stack at the root of the layout tree, and a stack grows: asking for one that is
+not there makes it, and every one before it. =Super+x workspace 40= works on a
+machine that has three. What a new workspace *contains* is a setting
+(~*new-workspace*~) and, more usefully, a policy decision — which is how the
+lattice makes every workspace a plane rather than only the ones that existed
+when it loaded.
 
 ** Launching
 
@@ -119,6 +167,9 @@ documented, and reachable:
 | =Super+? c= | show a command's documentation and the keys that run it     |
 | =Super+? o= | what is this setting, what did it ship as, and why          |
 | =Super+? s= | change a setting, now, without a file or a restart          |
+| =Super+? u= | what would undo walk back through?                          |
+| =Super+? t= | which windows are tagged what?                              |
+| =Super+? p= | what is on the named scratchpads?                           |
 
 Pressing a chord's first key lists what the second can be. Completion is
 prefix, then substring, then subsequence — so =wsp= finds =send-to-workspace=.
@@ -133,7 +184,7 @@ you can only backspace out of is one you stop using.
 Optional, and off by default. Add to =~/.config/latticewm/init.lisp=:
 
 #+begin_src lisp
-(asdf:load-system "lattice")
+(load-extension "lattice")
 (lattice:enable)
 #+end_src
 
@@ -143,6 +194,21 @@ and past that it becomes a drawn map. Motion runs straight through a cell
 boundary as though it were not there.
 
 | [[file:doc/coordinate-overlay.png][Cells and coordinates]] | [[file:doc/drawn-map.png][The drawn map at deep zoom]] |
+
+*Infinitely many planes, one behind another.* Every workspace is a plane — not
+just the ones open when you enabled it — so the workspace keys are a third axis
+through a stack of infinite planes, and =Super+PageUp= / =PageDown= walk it.
+Four settings say what that feels like:
+
+| ~*new-workspace-zoom*~   | a new plane's zoom. ~:inherit~ — the one you were on |
+| ~*new-workspace-origin*~ | where its view starts. ~:inherit~ — *directly behind* the plane you left |
+| ~*new-workspace-cells*~  | cells it is born with. ~nil~ — one, in view |
+| ~*workspace-entry*~      | which cell you land on: ~:remembered~ (where you left that plane), ~:aligned~ (the coordinate you are on now), ~:origin~, ~:occupied~ |
+
+The defaults read the phrase literally: same zoom, same window of coordinates,
+and you keep your place. Set ~*workspace-entry*~ to ~:aligned~ and
+~*new-workspace-origin*~ to ~:inherit~ for pure Z-axis movement — X and Y never
+change, only which plane is under you.
 
 The lattice is the project's own experiment on itself: it is a *separate ASDF
 system* that depends on the policy package and nothing else, and a CI gate
@@ -161,6 +227,29 @@ latticewm --list-commands     # every command
 
 Anything you can set in the file you can also set live with =Super+? s=, and
 =Shift+Super+c= reloads the file without restarting.
+
+** Keyboard layout
+
+River does the xkb work and does not tell us the *shifted* keysym, so the
+shifted glyph has to be declared rather than derived. If you are not on a US
+keyboard, this is the one line to set before the prompt is typeable:
+
+#+begin_src lisp
+(setf *keyboard-layout* "de")   ; us, uk, de, fr, dvorak, colemak
+#+end_src
+
+=(shift-map-names)= lists what is registered, and =register-shift-map= adds one
+in three lines.
+
+** Panels, bars and lockers
+
+Anything using =wlr-layer-shell= works: waybar, yambar, mako, swaybg, swaync,
+and every screen locker. LatticeWM binds river's layer-shell protocol, lays
+windows out inside the area panels have left themselves, and stops sending
+keyboard focus while a locker holds it.
+
+That last part is not a nicety. Without it a window manager re-focuses a window
+underneath the lock screen on every manage sequence, forever.
 
 ** Fonts
 
@@ -210,21 +299,60 @@ wmeval '(length (all-windows))'
 wmeval '(setf *gaps* 8)' '(relayout :force t)'
 #+end_src
 
+* Scripting it
+
+There is a control socket — a Unix socket in =$XDG_RUNTIME_DIR=, mode 0600 —
+and the binary is its own client:
+
+#+begin_src sh
+latticewm --eval '(workspace 3)'
+latticewm --eval '(setf *gaps* 8)' --eval '(relayout :force t)'
+latticewm --eval '(mapcar #'window-app-id (all-windows))'
+#+end_src
+
+Forms run in the window manager's own thread, so they may touch the compositor.
+The protocol is *write a form, read a line*, so anything that can open a socket
+can drive it.
+
+A SWANK server is available too and is *off by default*: it offers arbitrary
+code execution over TCP with no authentication step, which is right for a
+development tool and wrong for something that starts before you have done
+anything. Turn it on with =--swank-port 4005=, and it binds to loopback.
+
+#+begin_src sh
+latticewm --check-config    # load your init.lisp, report problems, exit
+#+end_src
+
+Run that *before* logging out. A configuration error otherwise manifests as a
+failed session, which is the worst possible moment to find one.
+
 * Development
 
 #+begin_src sh
 make          # build, gates, tests
 make test     # the unit suite alone
+make integration  # a real river, headless, driven for two seconds
+make check    # all of the above -- what CI should run
 make run      # river nested inside your current session
 make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Six CI gates run on every build: zero compiler warnings under =safety 3=; every
-policy generic documented; the lattice touching no core; the core running with
-the lattice absent; codegen counts matching the pinned protocol XML; and the
-runtime-to-policy line ratio, reported as a number rather than pass/fail. The
+Ten CI gates run on every build: zero compiler warnings under =safety 3=; every
+policy generic and command documented; the lattice touching no core, within a
+line budget and above a method floor; the core running with the lattice absent;
+codegen counts matching the pinned protocol XML; the runtime-to-policy line
+ratio above a floor; every declared hook run and every run hook declared; every
+event handled existing on the interface it is handled for; the image, the
+installer and the shipped configuration agreeing about where an extension
+lives; and no container kind named by class outside its own definition. The
 reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
+
+=make integration= is the one that is different in kind. It runs river on a
+headless backend, connects to it as the ordinary Wayland client this program
+is, opens a window and asserts on what comes back — because every other check
+in the project *constructs* state, and the bugs that survive live exactly where
+constructed state cannot reach. It found one on its first run.
 
 * Documentation
 
@@ -236,16 +364,30 @@ reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
 * Status
 
-Working, and used on bare metal. Not yet announced.
+Working, and used on bare metal.
 
 Verified on real hardware: keybindings including shifted keys, the minibuffer,
 spawning, closing, splits, floating, the empty-pane spawn, persistence, and
 the lattice — walking cell to cell across an infinite plane, carrying windows
 between cells, and zooming out to a grid.
 
-*Multi-monitor is the exception.* It is written and has never been executed
-against a second display. [[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of what is
-verified and what is merely written.
+Verified against a *headless river* on every run of =make check=: connecting,
+version negotiation, receiving an output and its size, a complete manage and
+render sequence, the shared-memory overlay path, and a real client window being
+announced, placed and sized.
+
+*Multi-monitor is written and has been executed against one display.* The
+per-output work — deriving the current output from the cursor's rectangle
+rather than its window, one overlay per output rather than one globally, and
+hotplug releasing what an unplugged monitor held — is done and is unit-tested,
+and the two-monitor arrangement itself has not been sat in front of. Nothing is
+claimed here that is not either tested or stated as untested;
+[[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of which is which.
+
+Other things that are honestly newer than the rest: HiDPI scaling of what the
+window manager draws itself, the layer-shell path that panels and screen
+lockers use, and pointer drag-resize. All three are exercised by the test
+suite; none has years behind it.
 
 * License
 

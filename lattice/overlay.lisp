@@ -38,9 +38,6 @@
 Below it the label is a larger fraction of the cell than the cell's contents
 are, which is the point at which an orientation aid becomes clutter.")
 
-(defvar *overlay* nil)
-(defvar *overlay-dirty* '() "Rectangles drawn last time, to be cleared.")
-
 (defun overlay-wanted-p (grid rect)
   "Should the coordinate overlay be drawn at all right now?
 
@@ -68,31 +65,42 @@ coordinate is still one keystroke away in the echo area."
         (cell-string address))))
 
 (defun draw-coordinate-overlay ()
-  "Label every visible cell.  Called from the runtime's :DRAW-OVERLAYS hook."
+  "Label every visible cell, on every output.
+
+Called from the runtime's :DRAW-OVERLAYS hook.  Per output because the labels
+have to land on the cells they name, and the cells are wherever the layout put
+them — a single surface pinned to the first output drew the second monitor's
+coordinates onto the first, at positions that meant nothing there."
+  (dolist (output (r:all-outputs))
+    (p:guarded "coordinates" (draw-coordinate-overlay-on output))))
+
+(defun draw-coordinate-overlay-on (output)
+  "Label the visible cells lying on OUTPUT."
   (let* ((grid (current-grid))
-         (output (first (r:all-outputs)))
-         (policy (p:current-policy)))
+         (policy (p:current-policy))
+         (overlay (r:overlay-for :lattice/coordinates output)))
     (unless (and output (typep policy 'lattice-policy))
-      (return-from draw-coordinate-overlay nil))
+      (return-from draw-coordinate-overlay-on nil))
     (unless (overlay-wanted-p grid (p:outer-rect policy output))
-      (when *overlay* (r:overlay-hide *overlay*))
-      (setf *overlay-dirty* '())
-      (return-from draw-coordinate-overlay nil))
-    (unless *overlay*
-      (setf *overlay* (make-instance 'r:overlay :name "coordinates")))
+      (r:overlay-hide overlay)
+      (setf (c:prop overlay :dirty) '())
+      (return-from draw-coordinate-overlay-on nil))
     (let* ((area (p:outer-rect policy output))
-           (canvas (r:ensure-overlay *overlay* (c:rect-w (c:output-rect output))
+           (canvas (r:ensure-overlay overlay (c:rect-w (c:output-rect output))
                                      (c:rect-h (c:output-rect output)))))
       (when canvas
         ;; Clear only what we drew last time.  A full-screen clear is two
-        ;; million writes for a few dozen small labels.
-        (dolist (rect *overlay-dirty*) (r:canvas-fill canvas 0 rect))
-        (setf *overlay-dirty* '())
+        ;; million writes for a few dozen small labels.  The record lives on
+        ;; this overlay rather than in a global, so two outputs cannot clear
+        ;; each other's rectangles.
+        (dolist (rect (c:prop overlay :dirty)) (r:canvas-fill canvas 0 rect))
+        (setf (c:prop overlay :dirty) '())
         (let ((background (apply #'r:argb *overlay-background*))
               (foreground (apply #'r:argb *overlay-foreground*))
               (origin-x (c:rect-x (c:output-rect output)))
               (origin-y (c:rect-y (c:output-rect output)))
-              (current (current-cell)))
+              (current (current-cell))
+              (drawn '()))
           (loop for (address . rect) in (cell-rects policy grid area)
                 when (and (c:child-at grid address)
                           (>= (c:rect-w rect) *overlay-min-cell*))
@@ -113,7 +121,8 @@ coordinate is still one keystroke away in the echo area."
                        (r:canvas-text canvas (+ (c:rect-x box) 5)
                                       (+ (c:rect-y box) 3) text foreground
                                       :scale *overlay-scale*)
-                       (push box *overlay-dirty*))))
-        (r:overlay-commit *overlay* :rect (c:output-rect output))))))
+                       (push box drawn)))
+          (setf (c:prop overlay :dirty) drawn))
+        (r:overlay-commit overlay :rect (c:output-rect output))))))
 
 (r:add-hook :draw-overlays 'draw-coordinate-overlay)

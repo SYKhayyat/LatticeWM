@@ -129,6 +129,19 @@ wins."
     (define-key keymap (format nil "~an" mod) '("new-workspace"))
     (define-key keymap (format nil "~apagedown" mod) '("next-workspace"))
     (define-key keymap (format nil "~apageup" mod) '("previous-workspace"))
+    ;; --- undoing ----------------------------------------------------------
+    ;; The keys every program has used for this for thirty years.  Undo is a
+    ;; *layout* undo — it puts the arrangement back and cannot un-quit an
+    ;; application — and saying so is the command's own docstring's job.
+    (define-key keymap (format nil "~az" mod) '("undo"))
+    (define-key keymap (format nil "~az" shift) '("redo"))
+    ;; --- named scratchpads and tags ---------------------------------------
+    ;; Both prompt for a name, which is the point: one key reaches any number
+    ;; of them, rather than one key per scratchpad as i3 needs.
+    (define-key keymap (format nil "~aminus" mod) '("scratchpad-toggle"))
+    (define-key keymap (format nil "~aminus" shift) '("scratchpad-put"))
+    (define-key keymap (format nil "~at" mod) '("tag-window"))
+    (define-key keymap (format nil "~at" shift) '("jump-to-tag"))
     ;; --- launching --------------------------------------------------------
     (define-key keymap (format nil "~ab" mod) '("browser"))
     (define-key keymap (format nil "~ao" mod) '("editor"))
@@ -152,6 +165,9 @@ wins."
       (define-key help-map "a" '("apropos-command"))
       (define-key help-map "o" '("describe-option"))
       (define-key help-map "s" '("set-option"))
+      (define-key help-map "u" '("undo-history"))
+      (define-key help-map "t" '("list-tags"))
+      (define-key help-map "p" '("list-scratchpads"))
       (define-key keymap (format nil "~aquestion" shift) help-map))
     (define-key keymap (format nil "~ac" shift) '("reload-config"))
     (define-key keymap (format nil "~ar" shift) '("restart-wm"))
@@ -170,6 +186,107 @@ wins."
 (defun config-file ()
   "The user's init.lisp."
   (merge-pathnames "init.lisp" (config-directory)))
+
+;;; ------------------------------------------------- where extensions live
+;;;
+;;; A SHIPPED CONFIGURATION THAT ONLY LOADS ON THE AUTHOR'S MACHINE IS NOT A
+;;; SHIPPED CONFIGURATION.  The starter init.lisp offers to load the lattice;
+;;; the lattice is an ASDF system; ASDF finds a system by finding its .asd on a
+;;; path.  During development that path is the build tree, which is why nothing
+;;; noticed — and on any machine that installed from a package the build tree
+;;; is not there, so the default configuration failed at load and the failure
+;;; routed straight into the startup path.
+;;;
+;;; Two halves fix it and both are needed.  install.sh copies lattice.asd and
+;;; lattice/ into $PREFIX/share/latticewm/, and this registers that directory
+;;; with ASDF before the configuration file is read.  A build gate now asserts
+;;; that the image, the installer and the sample configuration agree.
+
+(defun executable-directory ()
+  "The directory the running binary is in, or NIL.
+
+Used to find $PREFIX/share/latticewm/ relative to $PREFIX/bin/latticewm, which
+is what makes a relocatable install — a home-directory prefix, a store path, a
+tarball unpacked anywhere — find its own data without being told where it is."
+  (ignore-errors
+   (let ((argv0 (first sb-ext:*posix-argv*)))
+     (when argv0
+       (let ((path (or (probe-file argv0)
+                       (probe-file (merge-pathnames argv0 (uiop:getcwd))))))
+         (when path (make-pathname :name nil :type nil :defaults path)))))))
+
+(defun data-directories ()
+  "Every directory that may hold installed LatticeWM data, best first.
+
+The order is the order of decreasing specificity, and each entry is here
+because it is where somebody actually installs things:
+
+  $LATTICEWM_DATA          said explicitly, wins over everything
+  ~/.config/latticewm/     a user's own systems, alongside their init.lisp
+  ../share/latticewm/      relative to the binary: a relocatable install
+  $PREFIX/share/latticewm/ the two conventional system prefixes
+  $LATTICEWM_ROOT          the build tree, for `make run' and for a REPL"
+  (remove nil
+          (list (uiop:getenv-absolute-directory "LATTICEWM_DATA")
+                (config-directory)
+                (let ((bin (executable-directory)))
+                  (when bin (merge-pathnames "../share/latticewm/" bin)))
+                #p"/usr/local/share/latticewm/"
+                #p"/usr/share/latticewm/"
+                (uiop:getenv-absolute-directory "LATTICEWM_ROOT"))))
+
+(defun register-data-registry ()
+  "Put every existing data directory on ASDF's central registry.
+
+Called from START before the configuration file is read, so that
+(asdf:load-system \"lattice\") in a configuration file works on a machine where
+the build tree was never present.  Existing entries are not disturbed and
+nothing is added twice, so this is safe to call again from a REPL after
+installing something new."
+  (let ((added '()))
+    (dolist (directory (data-directories) (nreverse added))
+      (let ((probe (ignore-errors (probe-file directory))))
+        (when (and probe (not (member probe asdf:*central-registry*
+                                      :test #'equal)))
+          (push probe asdf:*central-registry*)
+          (push probe added)
+          (logmsg :debug "extensions may be loaded from ~a" probe))))))
+
+(defun extension-loaded-p (name)
+  "True when the ASDF system NAME is already in this image.
+
+Checked before loading, because the shipped image *contains* the lattice — it
+is the flagship worked example and it costs a megabyte — so asking ASDF to load
+it again would send it looking for an .asd it does not need."
+  (or (and (find-package (string-upcase name)) t)
+      (and (asdf:registered-system name) t)))
+
+(defcommand load-extension (name)
+  "Load an extension system by name, from wherever it is installed.
+
+    (load-extension \"lattice\")
+
+Prefer this to a bare (asdf:load-system ...) in a configuration file: it knows
+where an *installed* LatticeWM keeps its systems, it does nothing when the
+system is already in the image, and it reports a failure as a message rather
+than as an error that stops the rest of your configuration from loading."
+  (:interactive :string)
+  (cond
+    ((extension-loaded-p name)
+     (logmsg :info "~a is already loaded" name)
+     t)
+    (t
+     (register-data-registry)
+     (handler-case
+         (progn (asdf:load-system name)
+                (logmsg :info "loaded extension ~a" name)
+                t)
+       (error (condition)
+         (notify "could not load ~a: ~a" name condition)
+         (logmsg :error "could not load extension ~a: ~a~%~
+                         looked in: ~{~a~^, ~}"
+                 name condition (data-directories))
+         nil)))))
 
 (defun load-config (&optional (path (config-file)))
   "Load the user's configuration, if there is one.
@@ -296,8 +413,27 @@ particular program."
 
 ;;; ------------------------------------------------------ the lattice
 ;;; The infinite 2D plane of cells, with zoom and pan.  It is a separate system
-;;; and loading it is opt-in.
+;;; and enabling it is opt-in.  It ships inside the binary, so LOAD-EXTENSION
+;;; usually has nothing to do; it is still the right thing to write, because it
+;;; also finds an extension installed beside your init.lisp.
 
-;; (asdf:load-system \"lattice\")
+;; (load-extension \"lattice\")
 ;; (lattice:enable)
+
+;;; Every workspace is then a plane — including the ones you make later — so
+;;; the workspace keys walk a stack of infinite planes, one behind another.
+;;; Where a new plane starts, and where you land on it:
+;;
+;; (setf lattice:*new-workspace-zoom* :inherit)    ; the zoom you were at
+;; (setf lattice:*new-workspace-origin* :inherit)  ; directly behind this one
+;; (setf lattice:*workspace-entry* :aligned)       ; keep X and Y, change plane
+
+;;; ------------------------------------------------------- your own systems
+;;; Anything you drop in ~~/.config/latticewm/ as an ASDF system is findable by
+;;; name.  So a configuration that has outgrown one file becomes:
+;;;
+;;;     ~~/.config/latticewm/my-desktop.asd
+;;;     ~~/.config/latticewm/my-desktop/...
+;;;
+;; (load-extension \"my-desktop\")
 "))

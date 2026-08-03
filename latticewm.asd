@@ -16,7 +16,10 @@
   :version "0.1.0"
   :defsystem-depends-on ("wayflan-client")
   :depends-on ("wayflan-client" "alexandria" "closer-mop" "bordeaux-threads"
-               (:require "sb-introspect") (:require "sb-posix"))
+               (:require "sb-introspect") (:require "sb-posix")
+               ;; The control socket.  In SBCL itself, so this costs a REQUIRE
+               ;; and no dependency anybody has to keep alive.
+               (:require "sb-bsd-sockets"))
   :serial t
   :components
   ((:module "src"
@@ -44,15 +47,27 @@
      (:module "policy"
       :serial t
       :components
-      (;; log first: GUARDED is the boundary every policy method is called
+      (;; options first: logging is configurable, and DEFINE-OPTION is what
+       ;; makes a value discoverable rather than merely settable.
+       (:file "options")
+       ;; log second: GUARDED is the boundary every policy method is called
        ;; behind, so it has to exist before the first one is written.
        (:file "log")
        (:file "protocol")
        ;; hooks needs DEFINE-OPTION from protocol and GUARDED from log.
        (:file "hooks")
+       ;; conventional first: it defines the class and every tier-0 value the
+       ;; methods below read.
        (:file "conventional")
+       (:file "layout")
+       ;; motion is the *algorithm*; defaults-motion is the set of answers the
+       ;; shipped containers give it.
        (:file "motion")
+       (:file "defaults-motion")
+       (:file "structure")
+       (:file "defaults-lifecycle")
        (:file "lifecycle")
+       (:file "input")
        (:file "surface")
        (:file "commands")
        ;; keys before appearance: the status-line and which-key
@@ -76,6 +91,11 @@
        (:file "echo")
        (:file "help")
        (:file "cursor")
+       ;; layer before pointer: APPLY-KEYBOARD-FOCUS asks whether a layer
+       ;; surface holds the keyboard, and a locker holding it must win over
+       ;; anything the pointer just did.
+       (:file "layer")
+       (:file "pointer")
        ;; config comes before verbs because it declares the program defaults
        ;; the launcher commands use, and after keys because it installs the
        ;; default keymap.
@@ -85,8 +105,25 @@
        (:file "welcome")
        (:file "emit")
        (:file "windows")
+       ;; The session, split along its reasons to change.  Order is by
+       ;; dependency and each step is deliberate: the loop before the things
+       ;; that drive it, the connection last because it binds the globals every
+       ;; one of them then uses.
+       (:file "sequence")
+       (:file "swank")
+       (:file "outputs")
+       (:file "seats")
        (:file "session")
+       ;; ipc after session: the control socket runs forms in the window
+       ;; manager's thread, and the queue that makes that possible is there.
+       (:file "ipc")
+       ;; history before verbs: undo installs itself as a command wrapper, and
+       ;; a verb defined before the wrapper exists is still covered — the
+       ;; wrapper is consulted at call time — but reading them in this order is
+       ;; how the relationship is meant to be understood.
+       (:file "history")
        (:file "verbs")
+       (:file "tags")
        (:file "state")
        (:file "main")))))))
 

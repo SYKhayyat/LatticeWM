@@ -29,28 +29,35 @@ instead of it.
 
 * The short version
 
-*The thesis held, with two qualifications and one bug.*
+*The thesis held, with three qualifications and one bug.*
 
-The lattice is 1,049 lines in four files, of which 16 are ~defmethod~ forms.
-It specialises *seven* generics that the core already declared, adds one new
-container class, and needed *two* edits under =src/=. Neither changed a behaviour; one was an
-omitted export and one made a protocol operation total that had been partial.
+The lattice is 1,941 lines in six files, of which 26 are ~defmethod~ forms. It
+specialises *eleven* policy generics and *two* persistence generics that the
+core already declared, adds one new container class, and needed *two* edits
+under =src/= to exist at all. Neither changed a behaviour; one was an omitted
+export and one made a protocol operation total that had been partial.
 
 A *third* core edit came later, from writing the worked examples rather than
 from the lattice, and it is the most important of the three — see
-[[#edit-3][core edit 3]]. All three are the same species: the extension surface
-was correct for the author and incomplete for a stranger, in ways that only
-being a stranger revealed.
+[[#edit-3][core edit 3]]. A *fourth* came later still, from *using* the thing
+for an afternoon rather than from writing it: the default shape of a new
+workspace was not a decision anything could take part in, so the lattice
+covered the workspaces that existed when it loaded and no others. See
+[[#edit-4][core edit 4]], which is the sharpest of the four because nothing
+failed.
+
+All four are the same species: the extension surface was correct for the author
+and incomplete for a stranger, in ways that only being a stranger revealed.
 
 | Measure | Value |
 |---------+-------|
-| Lines in =lattice/= | 1,049 (268 model, 322 policy, 410 commands, 49 package) |
-| ~defmethod~ forms | 16 |
-| Core generics specialised | 7 |
+| Lines in =lattice/= | 1,941 (386 model, 697 policy, 500 commands, 298 map and overlay, 60 package) |
+| ~defmethod~ forms | 26 |
+| Core generics specialised | 13 (11 policy, 2 persistence) |
 | New container classes | 1 |
-| *Core files edited* | *3* (two for the lattice, one for the examples) |
+| *Core files edited* | *7* (two for the lattice, two for the examples, four for the workspace decision, one shared) |
 | *Core behaviours changed* | *0* |
-| Core bugs exposed by extending | 1 |
+| Core bugs exposed by extending | 3 |
 
 Gate 3 asks for the line and method counts precisely because it is satisfiable
 in bad faith — push everything through ~props~ and ~&rest~ arguments and the
@@ -59,39 +66,53 @@ is three hundred lines of methods is the thesis holding. One that is two
 thousand lines re-implementing geometry is the thesis failing while wearing the
 gate's uniform."
 
-1,049 lines is above three hundred, so the honest question is what the extra
-lines are. They are: the plane's own data structure (268), which nobody claimed
-would come free; the zoom and pan *commands* (410), which are user-facing verbs
-rather than layout mechanism; and 322 lines of policy of which the substance is
-seven methods and the rest is the reasoning behind them. *No geometry is
-re-implemented.* The lattice calls ~divide-rect~, ~tree-move~, ~tree-swap~,
-~tree-transplant~, ~repair-path~ and ~find-motion-target~ and defines none of
-them.
+1,941 lines is well above three hundred, so the honest question is what the
+extra lines are. They are: the plane's own data structure (386), which nobody
+claimed would come free; the zoom, pan and jump *commands* (500), which are
+user-facing verbs rather than layout mechanism; the coordinate overlay and the
+minimap (298), which are two of the three orientation aids DESIGN names as the
+mitigation for its own biggest risk and are drawing code, not layout; and 697
+lines of policy of which the substance is eleven methods and the rest is the
+reasoning behind them. *No geometry is re-implemented.* The lattice calls
+~divide-rect~, ~tree-move~, ~tree-swap~, ~tree-transplant~, ~repair-path~,
+~descend-to-leaf~ and ~find-motion-target~ and defines none of them.
 
-* The seven generics the lattice specialises
+* The eleven policy generics the lattice specialises
 
-This is the whole of the layout and navigation change.
+This is the whole of the layout, navigation and workspace change.
 
 | Generic | What the lattice makes it mean |
 |---------+--------------------------------|
 | ~layout-children~ | place the visible cells on a coordinate plane |
 | ~step-address~ | move one cell, bringing empty cells into being on arrival |
-| ~entry-address~ | arriving at a plane from outside lands on its default cell |
+| ~entry-address~ | arriving at a plane from outside lands per ~*workspace-entry*~ |
 | ~motion-escapes-p~ | *never* — the plane has no edge (D6) |
 | ~clip-rect~ | crop a cell overhanging the viewport, per ~set_content_clip_box~ |
 | ~gaps~ | cell gaps are wider than split gaps |
-| ~border-color~ | tint by coordinate parity, the cheapest orientation aid |
+| ~border-color~ | tint by coordinate hue, the cheapest orientation aid |
+| ~border-width~ | thicken the cell holding the keyboard |
+| ~keys-hint~ | teach the two facts about cells nothing else can |
+| ~on-focus-change~ | remember which cell each plane was left standing in |
+| ~make-workspace~ | *a workspace is a plane* — the entire Z axis, in one method |
 
-Plus nine methods on the *container protocol* — ~container-addresses~,
+Plus ~serialize-node~ and ~deserialize-node~, so a plane survives a restart.
+
+~make-workspace~ is the one that arrived last and matters most, because it is
+the difference between the lattice being an arrangement you set up and being
+the shape of the system. See [[#edit-4][core edit 4]].
+
+Plus twelve methods on the *container protocol* — ~container-addresses~,
 ~child-at~, ~(setf child-at)~, ~insert-child~, ~remove-child~,
-~container-count~, ~default-address~, ~simplify-node~, ~print-object~ — which
-is the cost of being a container at all and is the number the experiment was
-really measuring.
+~container-count~, ~default-address~, ~simplify-node~,
+~container-alternatives-p~, ~container-splits-along-p~, ~copy-node-slots~,
+~print-object~ — which is the cost of being a container at all and is the
+number the experiment was really measuring.
 
-*Nine methods is what it costs to teach this window manager about an infinite
-plane.* Everything else — motion, layout recursion, tree surgery, focus repair,
-persistence, the commands that move windows between cells — works without
-knowing the lattice exists.
+*Twelve methods is what it costs to teach this window manager about an infinite
+plane, and a thirteenth makes every workspace one.* Everything else — motion,
+layout recursion, tree surgery, focus repair, persistence, the commands that
+move windows between cells, and the fact that the workspace list was already
+infinite — works without knowing the lattice exists.
 
 * Core edit 1 — a missing export
 
@@ -147,6 +168,72 @@ something, it shows only one thing, and it cannot overlap.
 Checked against the rest of the surface after the fact: ~step-address~,
 ~entry-address~, ~motion-escapes-p~ and ~gaps~ already had ~container~-general
 or ~t~-general methods. ~layout-children~ was the only gap.
+
+* Core edit 4 — the *default shape of a new workspace* was not a decision
+:PROPERTIES:
+:CUSTOM_ID: edit-4
+:END:
+
+*File:* =src/policy/protocol.lisp=, =src/policy/structure.lisp=,
+=src/runtime/verbs.lisp=, =src/policy/layout.lisp=. *Change:* a new generic,
+~make-workspace (policy world index)~, and the four sites that grow the
+workspace list now ask it instead of building a node.
+
+*This is the sharpest finding in the file, because nothing failed.*
+
+The requirement is "infinite workspaces of lattices one behind another". Both
+halves looked done. The workspace list is a ~stack~ at the root of the tree and
+a stack grows, so ~workspace 40~ on a machine with three makes forty — infinity
+cost nothing, exactly as designed. And ~lattice:enable~ wraps every workspace in
+a ~grid~, so the workspaces are planes. A test asserted a stack of grids
+behaves. It passed. It had always passed.
+
+What no test asked was whether the stack *stays* made of grids. It did not.
+~enable~ wraps the workspaces that exist at the moment it runs; every workspace
+created afterwards came from one of four places in =src/= that each wrote
+~(c:make-leaf)~ inline. So on a machine that enables the lattice at startup and
+then presses Super+7, workspace 7 is a plain pane on a system whose first six
+are planes. No error. No log line. Zoom simply does nothing when you get there,
+and the natural conclusion is that zoom is broken.
+
+*The shape of the mistake:* a wrapper applied once was standing in for a
+default. "Every workspace is a plane" and "every workspace that existed at 09:00
+is a plane" are different claims, and the code could only express the second
+while the documentation, the tests and the author all read it as the first.
+
+*Why the extension could not fix it from outside.* There was no generic to
+specialise. The lattice can change what a workspace *looks like*, how motion
+crosses it, how it is drawn, saved, copied and clipped — but not what one *is*
+when the core makes a new one, because the core did not make new ones through
+anything. Four inline constructor calls are not an extension point, and they are
+invisible as a gap precisely because each is one obviously-correct line.
+
+*The generalisable rule, and it is the one this whole file keeps rediscovering
+from new directions:* /a default that an extension cannot replace is not a
+default, it is a hard-coded value with good manners./ Core edit 2 found a
+protocol operation that was partial; this one found a decision that was never a
+protocol operation at all. Partial operations announce themselves —
+~no-applicable-method~ is loud. A missing one announces nothing, ever, and is
+found only by someone using the system long enough to create a workspace after
+startup.
+
+*Two more things fell out of it, and both were latent bugs of the same
+species.*
+
+~send-to-workspace~ addressed the workspace *node*. Right for the empty leaf the
+core ships, wrong for anything richer: sending a window to a lattice workspace
+made the whole plane one half of a split — viewport, column widths and cell
+names demoted to half a screen — and it had been that way for as long as both
+features existed. It descends with ~descend-to-leaf~ now, which is the question
+it was always asking, and which each container kind already knew how to answer.
+The core path is unchanged to the character, because a leaf descends to itself.
+
+~ensure-workspaces-for-outputs~ had the same inline constructor, so plugging in
+a second monitor after startup produced a pane beside a plane.
+
+*Cost:* one generic, one method, one option (~*new-workspace*~), four call sites
+that got shorter. The lattice's half is a single ~defmethod~ — and that method,
+not any amount of new machinery, is the entire Z axis.
 
 * Core edit 3 — the shipped defaults were on the class users specialise
 

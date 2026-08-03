@@ -21,7 +21,6 @@
 
 (in-package #:latticewm/runtime)
 
-(defvar *echo-overlay* nil)
 (defun notify (format &rest arguments)
   "Say something in the echo area, and log it.
 
@@ -45,16 +44,24 @@ most urgent thing, and otherwise the status line is the policy's to fill."
         (t (guarded "echo-content" (p:echo-content (p:current-policy) world)))))
 
 (defun draw-echo-area (world output)
-  "Draw and place the echo area along the bottom of OUTPUT."
-  (unless (and p:*echo-area* *server* output)
-    (when *echo-overlay* (overlay-hide *echo-overlay*))
-    (return-from draw-echo-area nil))
-  (unless *echo-overlay*
-    (setf *echo-overlay* (make-instance 'overlay :name "echo")))
+  "Draw and place the echo area along the bottom of OUTPUT.
+
+ONE PER OUTPUT.  It used to be one global surface for the whole program, so on
+a two-monitor desktop the status line existed on exactly one screen and stayed
+there when the cursor left — which is the one piece of permanent orientation
+this window manager has, absent from the monitor you were looking at."
+  (let ((overlay (overlay-for :echo output)))
+    (unless (and p:*echo-area* *server* output)
+      (overlay-hide overlay)
+      (return-from draw-echo-area nil))
+    (draw-echo-area-on world output overlay)))
+
+(defun draw-echo-area-on (world output overlay)
+  "Draw the echo area for OUTPUT into OVERLAY."
   (let* ((area (c:output-rect output))
          (height (max (+ 6 (text-height :scale p:*echo-scale*)) p:*echo-height*))
          (width (c:rect-w area))
-         (canvas (ensure-overlay *echo-overlay* width height)))
+         (canvas (ensure-overlay overlay width height)))
     (when canvas
       (canvas-fill canvas (apply #'argb p:*echo-background*))
       (let* ((pen 8)
@@ -102,7 +109,7 @@ most urgent thing, and otherwise the status line is the policy's to fill."
                                               (:dim dim)
                                               (t normal))
                                             :scale p:*echo-scale*)))))
-      (overlay-commit *echo-overlay*
+      (overlay-commit overlay
                       :rect (c:make-rect (c:rect-x area)
                                          (if (eq p:*echo-position* :top)
                                              (c:rect-y area)
@@ -128,10 +135,14 @@ most urgent thing, and otherwise the status line is the policy's to fill."
 ;; rather than under it.
 ;;
 ;; By name, not as a lambda.  A lambda here is a fresh object every time this
-;; file is loaded, so PUSHNEW cannot recognise the one already on the list, and
+;; file is loaded, so ADD-HOOK cannot recognise the one already on the list, and
 ;; reloading echo.lisp into a running window manager reserved the strip twice —
 ;; the echo area silently ate a second strip of the screen with nothing drawn
 ;; in it.  Registering the symbol makes the reload idempotent and makes
 ;; redefining the function take effect, which is the whole point of being able
 ;; to reload the file at all.
-(pushnew 'echo-reserved-edges p:*reserve-hooks*)
+;;
+;; Through ADD-HOOK, like everything else.  This used to push onto a special
+;; variable that the hook mechanism knew nothing about, so the program had two
+;; ways to hook and gate 7 could only see one of them.
+(add-hook :reserve-space 'echo-reserved-edges)

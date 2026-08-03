@@ -52,34 +52,179 @@ this."
       (repair-cursor policy world)
       new-path)))
 
-(defmethod on-window-open ((policy policy) world (window c:window))
+;;; ==================================================================
+;;; WINDOW RULES — the declarative escape hatch
+;;; ==================================================================
+;;;
+;;; A rule is a plist of overrides consulted once, when a window appears.  It
+;;; exists for people who do not want to write methods; the method is still
+;;; there underneath for people who do.
+;;;
+;;; UNKNOWN KEYS ARE REJECTED OUT LOUD, and that is not pedantry.  The plist
+;;; used to be consulted for :FLOAT, :PATH and :FOCUS and *silently ignore
+;;; everything else* — including :WORKSPACE, :FULLSCREEN and :BORDER-COLOR,
+;;; which the generic's own docstring listed as recognised.  So a rule that
+;;; named a documented key did nothing, and a rule with a typo in it —
+;;; :FLOATING for :FLOAT — did nothing, with no error, no warning and no way to
+;;; discover why.  For a configuration surface edited by hand in a language
+;;; with no schema, unknown-key rejection is not optional.
+
+(defparameter +window-rule-keys+
+  '(:float :workspace :path :focus :fullscreen :minimize
+    :border-color :border-width :decoration :capabilities :tags :label)
+  "Every key a window rule may set.  Anything else is a typo, said out loud.")
+
+(defun check-window-rule (rule window)
+  "Complain about any key of RULE that means nothing, and return RULE.
+
+Named in the complaint: the key, the window it was about, and the keys that do
+exist — because the whole failure mode this prevents is somebody staring at a
+rule that looks right."
+  (loop for (key nil) on rule by #'cddr
+        unless (member key +window-rule-keys+)
+          do (logmsg :warn "window rule for ~a: ~s is not a rule key, so it ~
+                            does nothing.~%  Known keys: ~{~s~^ ~}"
+                     (or (c:window-app-id window) "a window")
+                     key +window-rule-keys+))
+  rule)
+
+(define-option *window-rules* '()
+  "Declarative per-window overrides, as a list of (MATCH . OVERRIDES).
+
+MATCH is a plist selecting windows; OVERRIDES is a plist of what to do with
+them.  The first rule that matches wins, so put the specific ones first.
+
+    (setf *window-rules*
+          '(((:app-id \"pavucontrol\")           :float t)
+            ((:app-id \"firefox\")               :workspace 2)
+            ((:title-contains \"Picture-in\")    :float t :border-color (1 0.4 0 1))
+            ((:parent t)                         :float t)))
+
+MATCH keys:
+
+    :app-id           the app id, exactly, ignoring case
+    :app-id-contains  a substring of it
+    :title            the title, exactly, ignoring case
+    :title-contains   a substring of it
+    :parent           T for windows river reports as having a parent
+
+OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+: :float, :workspace, :path,
+:focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
+:capabilities, :tags and :label.
+
+This is the tier-0 half of window placement.  The tier-1 half is a method on
+WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
+are supported and this one requires no Lisp beyond a quoted list.")
+
+(defun window-matches-rule-p (window match)
+  "True when WINDOW satisfies every clause of MATCH."
+  (loop for (key value) on match by #'cddr
+        always (case key
+                 (:app-id (and (c:window-app-id window)
+                               (string-equal value (c:window-app-id window))))
+                 (:app-id-contains
+                  (and (c:window-app-id window)
+                       (search value (c:window-app-id window) :test #'char-equal)
+                       t))
+                 (:title (and (c:window-title window)
+                              (string-equal value (c:window-title window))))
+                 (:title-contains
+                  (and (c:window-title window)
+                       (search value (c:window-title window) :test #'char-equal)
+                       t))
+                 (:parent (eq (and (c:window-parent-window window) t)
+                              (and value t)))
+                 (t (progn
+                      (logmsg :warn "window rule: ~s is not a match key" key)
+                      nil)))))
+
+(defmethod window-rule-for ((policy lifecycle-policy) (window c:window))
+  "The first rule in *WINDOW-RULES* whose match clause fits WINDOW."
+  (loop for entry in *window-rules*
+        when (and (consp entry) (window-matches-rule-p window (first entry)))
+          return (check-window-rule (rest entry) window)))
+
+(defun apply-window-rule-appearance (rule window)
+  "Put a rule's *appearance* overrides where the appearance generics find them.
+
+On the window's PROPS rather than in slots, because a colour for one window is
+exactly the kind of state DESIGN D20 predicted an extension would want and the
+core has no business carrying permanently.  BORDER-COLOR and BORDER-WIDTH read
+them back."
+  (loop for (key value) on rule by #'cddr
+        do (case key
+             (:border-color (setf (c:prop window :border-color) value))
+             (:border-width (setf (c:prop window :border-width) value))
+             (:decoration (setf (c:prop window :decoration) value))
+             (:capabilities (setf (c:prop window :capabilities) value))
+             (:tags (setf (c:window-tags window)
+                          (if (listp value) value (list value))))
+             (:label (setf (c:prop window :label) value))))
+  window)
+
+(defmethod on-window-open ((policy lifecycle-policy) world (window c:window))
   "Place a newly appeared window and, by default, focus it.
 
 The float decision comes first and short-circuits everything: a floated window
 is never in the tree, so there is no placement to make.  Returning NIL tells
-the runtime that no tiled path exists."
-  (let ((rule (window-rule-for policy window)))
+the runtime that no tiled path exists.
+
+Every documented rule key is honoured here, which took three of them from
+`listed in the docstring' to `does something'."
+  (let ((rule (guarded "window-rule-for" (window-rule-for policy window))))
+    (apply-window-rule-appearance rule window)
     ;; A declarative rule wins over the computed guess, so that people who do
-    ;; not want to write methods still get the escape hatch.
-    (when (getf rule :float)
-      (setf (c:window-floating-p window) t))
-    (when (and (not (getf rule :float))
-               (should-float-p policy window))
-      (setf (c:window-floating-p window) t))
+    ;; not want to write methods still get the escape hatch.  MEMBER rather
+    ;; than GETF, so that an explicit (:float nil) can *stop* a window floating
+    ;; that SHOULD-FLOAT-P would have floated — which is the whole reason to
+    ;; write the rule for half the applications people write rules for.
+    (setf (c:window-floating-p window)
+          (if (member :float rule)
+              (and (getf rule :float) t)
+              (and (guarded "should-float-p" (should-float-p policy window)) t)))
+    (when (getf rule :fullscreen)
+      (setf (c:window-fullscreen-p window) t))
     (cond
       ((c:window-floating-p window) nil)
       (t
        (multiple-value-bind (path disposition) (spawn-target policy world window)
-         (let* ((path (or (getf rule :path) path))
+         ;; :WORKSPACE names a workspace by the number written on the key that
+         ;; reaches it, so it counts from one like every other workspace in the
+         ;; system.  Resolved before :PATH, which is absolute and wins.
+         (let* ((path (or (getf rule :path)
+                          (workspace-rule-path world (getf rule :workspace))
+                          path))
+                (disposition (if (or (getf rule :path) (getf rule :workspace))
+                                 (if (c:empty-pane-p (c:resolve-path
+                                                      (c:world-root world) path))
+                                     :fill
+                                     :split)
+                                 disposition))
                 (leaf (c:make-leaf window))
                 (landed (place-node policy world leaf path disposition)))
+           (when (getf rule :minimize)
+             (on-minimize policy world window)
+             (return-from on-window-open landed))
            (when (if (member :focus rule)
                      (getf rule :focus)
                      *focus-new-windows*)
              (jump-cursor policy world landed))
            landed))))))
 
-(defmethod on-window-close ((policy policy) world (window c:window)
+(defun workspace-rule-path (world number)
+  "The path of workspace NUMBER, counting from one, growing the list to reach it.
+
+NIL when NUMBER is not a number or the root is not a workspace container, which
+is the honest answer for a rule naming a workspace in a policy that has none."
+  (when (integerp number)
+    (let ((stack (c:world-workspaces world))
+          (index (max 0 (1- number))))
+      (when stack
+        (loop while (<= (c:container-count stack) index)
+              do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
+        (c:first-leaf-path (c:child-at stack index) (list index))))))
+
+(defmethod on-window-close ((policy lifecycle-policy) world (window c:window)
                             path)
   "Take the window's pane out with it, and let its sibling grow.
 
@@ -99,7 +244,7 @@ a mode would make you remember which one you were in."
       (let ((landed (focus-after-remove policy world path suggested)))
         (setf (c:world-cursor world) (c:repair-path new-root landed))))))
 
-(defmethod on-minimize ((policy policy) world (window c:window))
+(defmethod on-minimize ((policy lifecycle-policy) world (window c:window))
   "Take the window out of the tree entirely and put it on the scratchpad.
 
 The stated requirement, honoured literally: *minimized windows leave the
@@ -124,7 +269,7 @@ where it was if that place still exists."
     (pushnew window (c:world-scratchpad world))
     window))
 
-(defmethod on-restore ((policy policy) world (window c:window))
+(defmethod on-restore ((policy lifecycle-policy) world (window c:window))
   "Bring a window back from the scratchpad.
 
 To the slot it was minimized from when that slot still exists, and to the
@@ -150,7 +295,7 @@ lose a window."
                                      :fill :split))))
          (jump-cursor policy world landed))))))
 
-(defmethod key-unbound ((policy policy) world keysym)
+(defmethod key-unbound ((policy input-policy) world keysym)
   "Typing in an empty pane spawns something there.  DESIGN D19.
 
 Returns the *name* of a command to run, or NIL — deliberately not running it,

@@ -1,0 +1,201 @@
+.TH LATTICEWM\-CONFIG 5 "2026-08-02" "LatticeWM 0.1.0" "File Formats"
+.SH NAME
+latticewm\-config \- configuring and extending LatticeWM
+.SH SYNOPSIS
+.I ~/.config/latticewm/init.lisp
+.SH DESCRIPTION
+LatticeWM is configured by a file of plain Common Lisp, read in the
+.B LATTICEWM/USER
+package \(em which inherits the model, the policy surface and the runtime, so
+nothing in it needs a package prefix.
+.PP
+.B latticewm \-\-write\-config
+writes a commented starter file.
+.B latticewm \-\-check\-config
+loads it, reports every problem, and exits non\-zero if there were any; run
+that before logging out rather than after.
+.PP
+An error in the file is logged and startup continues.  A window manager that
+refused to run because of a typo in its configuration would leave you with no
+way to fix the typo.
+.PP
+*This page is a map, not a reference.*  The reference is generated from the
+running program and cannot go stale:
+.PP
+.RS
+.B latticewm \-\-list\-options
+.br
+.B latticewm \-\-list\-commands
+.br
+.B latticewm \-\-list\-keys
+.br
+.B latticewm \-\-extension\-surface
+.RE
+.PP
+Every option and every generic carries a paragraph explaining what it decides
+and what turning it off costs you.  Those paragraphs are the specification.
+.SH THE FOUR TIERS
+.TP
+.B Tier 0 \(em a value
+.B (setf *gaps* 8)
+\&.  No restart, and the only tier available to somebody who does not write
+Lisp.  Every fork the design argued about appears here as a value rather than
+as a branch buried in a method.
+.TP
+.B Tier 1 \(em a method
+.B (defmethod gaps ((p conventional-policy) container) 8)
+\&.  One decision changed.  Specialize on
+.BR conventional\-policy ,
+not on a protocol class: the shipped defaults are on the protocol classes, and
+yours must be more specific or it replaces rather than extends them.  Use
+.B call\-next\-method
+when you mean \(lqthe usual thing, plus this\(rq.
+.TP
+.B Tier 2 \(em a method plus state
+Every node, window, output and overlay carries a
+.B props
+plist.  Use it rather than adding a slot to a class you do not own.
+.TP
+.B Tier 3 \(em a new class
+A new container kind, or a whole policy.  The lattice is one of each and is a
+separate ASDF system that touches no core file; a build gate asserts that on
+every build.
+.SH THE SIX PROTOCOLS
+.B policy
+is not one interface.  It is a class implementing six, and the shipped defaults
+live on the narrow ones \(em so a mixin that answers for exactly one is a real
+thing you can write and says what it is.
+.TP
+.B layout\-policy
+How a rectangle is divided, and what is shown.
+.TP
+.B appearance\-policy
+Colours, fonts, and what the status line says.
+.TP
+.B motion\-policy
+Where the cursor goes.
+.TP
+.B structure\-policy
+Where things go when the tree changes.
+.TP
+.B lifecycle\-policy
+Windows arriving, leaving, floating, minimizing.
+.TP
+.B input\-policy
+What a key, a click or a drag means.
+.SH THE VALUES PEOPLE CHANGE FIRST
+.TP
+.B *terminal* *editor* *browser* *file-manager*
+What the launcher commands run.
+.TP
+.B *modifier*
+The modifier every default binding hangs off, :SUPER by default.  Change this
+one value and the whole keymap moves with it.
+.TP
+.B *keyboard-layout*
+\(lqus\(rq, \(lquk\(rq, \(lqde\(rq, \(lqfr\(rq, \(lqdvorak\(rq or
+\(lqcolemak\(rq.  River does the xkb work and does not tell us the
+.I shifted
+keysym, so the shifted glyph has to be declared rather than derived.  If you
+are not on a US keyboard this is the one line to set before the prompt is
+typeable.
+.TP
+.B *gaps* *outer-gaps* *border-width*
+.TP
+.B *focused-border-color* *unfocused-border-color* *cursor-border-color*
+Four straight\-alpha floats each.  You write the colour you mean and the wire
+layer premultiplies.
+.TP
+.B *spawn-mode* *split-axis* *focus-after-close*
+Where a new window goes, how a fresh split is cut, and where the cursor lands
+after a close.
+.TP
+.B *window-rules*
+Declarative per\-window overrides, matched on app id, title or parent, and
+setting any of float, workspace, path, focus, fullscreen, minimize, border
+colour, border width, decoration, capabilities, tags or label.  An unknown key
+is reported rather than ignored.
+.SH KEYS
+A binding names a command as a
+.I string,
+so redefining the command later takes effect without rebinding the key.
+.PP
+.RS
+.B (define\-key *keymap* "Super+Return" '("terminal"))
+.RE
+.PP
+Both
+.B +
+and
+.B \-
+separate a chord, and the usual aliases work: super/mod4/logo, ctrl/control/C,
+alt/mod1/meta/M.  Binding a key to a
+.B keymap
+makes it a chord prefix; pressing the prefix alone lists what the second key
+can be.
+.SH HOOKS
+A generic decides
+.I what happens
+\(em one answer wins, and the return value matters.  A hook notices
+.I that something happened
+\(em every function runs, and nobody is in charge.  If you want a hook's return
+value, you wanted a method.
+.PP
+.RS
+.B (add\-hook :window\-opened 'note\-the\-window)
+.RE
+.PP
+.B Give the function a name and add the symbol,
+not
+.B #'the\-function
+and not a lambda.  A function object is a snapshot: redefining the function
+afterwards leaves the hook calling the old one, and adding it again adds a
+second copy.  A symbol has neither problem.
+.PP
+.B (all\-hooks)
+lists every declared hook with its documentation.  One of them,
+.BR :reserve\-space ,
+is additive: each function answers how much of an output to keep clear and the
+answers are summed, so two status bars each get their strip.
+.SH THE CONTROL SOCKET
+A Unix socket in
+.BR $XDG_RUNTIME_DIR ,
+mode 0600, reachable only by the user who owns the session.  The binary is its
+own client:
+.PP
+.RS
+.B latticewm \-\-eval '(workspace 3)'
+.RE
+.PP
+Forms run in the window manager's own thread, so they may touch the compositor.
+The protocol is write a form, read a line, so anything that can open a socket
+can drive it.
+.PP
+A SWANK server is available and is
+.B off by default
+\(em see
+.B *swank\-port*
+and
+.BR *swank\-interface* .
+It offers arbitrary code execution with no authentication step, which is right
+for a development tool and wrong for something that starts before the user has
+done anything.
+.SH FILES
+.TP
+.I ~/.config/latticewm/init.lisp
+The configuration file.
+.TP
+.I ~/.config/latticewm/
+Also on ASDF's registry, so an extension of your own dropped here as a system
+is loadable by name with
+.BR (load\-extension "name") .
+.TP
+.I PREFIX/share/latticewm/
+Installed extensions, examples and documentation.
+.SH SEE ALSO
+.BR latticewm (1)
+.PP
+.I PREFIX/share/latticewm/doc/EXTENDING.org
+is the guide, with worked examples.
+.SH AUTHOR
+Shaul Khayyat.

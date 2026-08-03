@@ -41,6 +41,22 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: "firefox"
   The web browser the `browser' command runs.
 
+*CLICK-TO-FOCUS*
+  value:   T
+  default: T
+  Clicking a window moves the cursor to it.
+  
+  On by default, because a pointer that can point at a window but not focus it is
+  a pointer that does not work.  Driven by river's window_interaction event
+  rather than by watching buttons, so it covers touch and tablet input too.
+
+*CLICK-TO-RAISE*
+  value:   T
+  default: T
+  Clicking a floating window puts it on top of the other floats.
+  
+  Only floats: tiled windows do not overlap, so raising one means nothing.
+
 *COLLAPSE-DEGENERATE-SPLITS*
   value:   T
   default: T
@@ -48,6 +64,20 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   
   T is Emacs's behaviour and keeps the tree shallow.  NIL is i3's, where an
   emptied container persists and can be filled again.
+
+*CURSOR-BORDER-COLOR*
+  value:   (0.28 0.42 0.62 1.0)
+  default: (0.28 0.42 0.62 1.0)
+  Border colour of the pane holding the cursor while a *float* has the keyboard.
+  
+  Between the focused and the unfocused colour, deliberately, because that is
+  exactly what the state is.  Focus is a place and a floating window is not in
+  the tree, so while a dialog has the keyboard the cursor is still standing
+  somewhere — and you need to be able to see where, because that is where
+  dismissing the dialog puts you back.
+  
+  Set it equal to *UNFOCUSED-BORDER-COLOR* if you would rather the tree went
+  completely quiet while a float is up.
 
 *CURSOR-SIZE*
   value:   24
@@ -178,10 +208,39 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   Float windows that river reports as having a parent — dialogs, file
   pickers and similar.
 
+*FLOAT-FIXED-SIZE-LIMIT*
+  value:   (900 . 700)
+  default: (900 . 700)
+  The largest a fixed-size window may be and still be floated for it.
+  
+  A window that pins its minimum and maximum size to the same value is announcing
+  that it is a dialog — and that signal is right often enough to be the second
+  half of the shipped floating rule.  It is also *wrong* for a class of
+  application, which is why there is a limit here:
+  
+    * a number of GTK and Qt programs set fixed hints on their **main** window;
+    * several set them transiently during startup, before the real size is known.
+  
+  The user-visible result was a main application window arriving floating for no
+  reason the user could see and no diagnostic explaining the decision.  A
+  fixed-size window the size of the screen is not a dialog, and this is where
+  that gets said.  Set it to NIL to float every fixed-size window, or to
+  (0 . 0) to float none of them.
+
 *FLOAT-FRACTION*
   value:   3/5
   default: 3/5
   Fraction of the output a floated window takes when it has no opinion.
+
+*FLOAT-ON-DRAG*
+  value:   T
+  default: T
+  Dragging a *tiled* window with the move binding floats it first.
+  
+  The alternative is that the drag does nothing, which is worse than either
+  answer: the window is under the pointer, the pointer is moving, and the screen
+  is not changing.  Set this to NIL to make the move binding apply only to
+  windows that are already floating.
 
 *FOCUS-AFTER-CLOSE*
   value:   :STAY
@@ -255,6 +314,63 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: 100
   How many past entries each minibuffer history ring keeps.
 
+*HONOUR-CLIENT-MOVE-REQUESTS*
+  value:   T
+  default: T
+  Let a window start its own drag when you grab its titlebar.
+  
+  Clients that draw their own decorations ask for this through xdg-shell and
+  river forwards the request.  Refusing it makes a GTK application's titlebar
+  inert, which reads as the window manager being broken rather than as a policy.
+
+*HONOUR-EXCLUSIVE-ZONES*
+  value:   T
+  default: T
+  Lay windows out inside the area panels have left, rather than over them.
+  
+  T is what everybody means by having a status bar: the bar takes its strip and
+  the tiled windows use the rest.  NIL gives the full output to the layout and
+  lets the panel float above it, which is occasionally what somebody wants for a
+  transparent overlay bar and is otherwise a bug report waiting to happen.
+  
+  The area comes from the compositor — river subtracts every layer surface's
+  exclusive zone and tells us what is left — so this works for any panel, on any
+  edge, at any size, with no per-panel configuration and nothing to keep in sync.
+
+*IPC-SOCKET*
+  value:   T
+  default: T
+  Listen on a Unix domain socket for forms to evaluate.
+  
+  T uses the default path — $XDG_RUNTIME_DIR/latticewm-$WAYLAND_DISPLAY.sock — a
+  string or pathname names one, and NIL turns it off entirely.
+  
+  On by default, and safe to be: a Unix socket in the runtime directory is
+  reachable only by the user who owns the session, which is the same boundary the
+  Wayland socket beside it draws.  It is what SWANK should have been and is not.
+
+*IPC-TIMEOUT-SECONDS*
+  value:   10
+  default: 10
+  How long a single form may run before the socket gives up waiting.
+  
+  The client gets an answer either way, which is the point: a form that wedges
+  the window manager should produce a message on the terminal that asked, rather
+  than a shell that hangs forever with no indication of which side is stuck.
+
+*KEYBOARD-LAYOUT*
+  value:   "us"
+  default: "us"
+  Which shift map to use, by name.  See (SHIFT-MAP-NAMES).
+  
+  Shipped: "us", "uk", "de", "fr", "dvorak" and "colemak".  A list of
+  (UNSHIFTED . SHIFTED) pairs may be given directly, and REGISTER-SHIFT-MAP adds
+  a named one.
+  
+  This is the one setting somebody outside the United States has to change before
+  the minibuffer can be typed into, so it is a tier-0 value with a table behind
+  it rather than a constant behind a function.
+
 *KEYS-HINT*
   value:   T
   default: T
@@ -274,6 +390,50 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   A status line is the one place that cannot be dismissed by accident.  So the
   essentials live there until Super+/ has been pressed once, at which point the
   hint has done its job and goes away by itself rather than nagging forever.
+
+*LOG-FILE*
+  value:   :DEFAULT
+  default: :DEFAULT
+  Where to write the log, as a pathname — or :DEFAULT, or NIL.
+  
+    :DEFAULT   $XDG_STATE_HOME/latticewm/latticewm.log
+    a pathname that file
+    NIL        do not open a file; write to *LOG-STREAM*, which is stderr
+  
+  THIS DEFAULTS TO A FILE ON PURPOSE, and the reason is the failure it was
+  written for.  Launched from a .desktop entry at a login screen, stderr goes
+  somewhere no user can find — so the diagnostics written for exactly that
+  situation were invisible at exactly the moment they were needed.  A window
+  manager that fails to start and says why into a void has not said why.
+  
+  Everything still goes to stderr as well when stderr is a terminal, so running
+  it by hand from a shell behaves the way you expect.
+
+*LOG-KEEP*
+  value:   3
+  default: 3
+  How many rotated log files to keep beside the current one.
+  
+  They are named latticewm.log.1 and so on, oldest discarded.  Three is enough
+  to cover the session before last, which is as far back as anybody has ever
+  looked.
+
+*LOG-LEVEL*
+  value:   :INFO
+  default: :INFO
+  How much to say: :DEBUG, :INFO, :WARN, :ERROR, or NIL for silence.
+  
+  :DEBUG is verbose enough to follow every placement decision and is what to
+  turn on before reporting anything.
+
+*LOG-MAX-BYTES*
+  value:   2097152
+  default: 2097152
+  Rotate the log file once it passes this many bytes.  NIL never rotates.
+  
+  A window manager runs for weeks and logs a line per relayout at :DEBUG, so an
+  unrotated log is a slow disk leak.  Two megabytes is a few days of ordinary
+  use and a couple of hours of debugging.
 
 *MANAGE-TIMEOUT-SECONDS*
   value:   5
@@ -378,6 +538,46 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   default: :AFTER
   Which side of the existing pane a new sibling lands on: :AFTER or :BEFORE.
 
+*NEW-WORKSPACE*
+  value:   :EMPTY
+  default: :EMPTY
+  What a workspace contains at the moment it comes into existence.
+  
+    :EMPTY      one empty pane.  DESIGN D19's starting state, and the shipped
+                answer: a place with nothing in it, where typing a key spawns
+                something.
+    a FUNCTION  called with (WORLD INDEX); whatever node it returns is the new
+                workspace.  Returning NIL falls back to :EMPTY rather than
+                putting a hole in the workspace list.
+  
+  Two values and not a vocabulary of ten.  Anything a further keyword could have
+  named, a two-line lambda names better and in the user's own words:
+  
+      (setf *new-workspace*
+            (lambda (world index)
+              (declare (ignore world index))
+              (c:make-split :horizontal (list (c:make-leaf) (c:make-leaf)))))
+  
+  Specialize MAKE-WORKSPACE instead when the answer belongs to a *policy* rather
+  than to a person — that is what the lattice does, and it is why every workspace
+  born after `lattice:enable' is a plane rather than a pane.
+
+*NOT-REPEATABLE*
+  value:   ("repeat" "run-command-by-name" "undo" "redo")
+  default: ("repeat" "run-command-by-name" "undo" "redo")
+  Commands that REPEAT should look straight through, by name.
+  
+  Four of them, for two reasons.  `repeat' itself, because repeating a repeat is
+  a fixed point and not a useful one; `run-command-by-name', because what you
+  meant by pressing `.' after M-x is the command M-x ran — the prompt was how you
+  said it, not what you said; and undo and redo, because `.' after an undo means
+  `do that thing again', and the thing you did was not undoing.
+  
+  This is the *data* behind COMMAND-REPEATABLE-P, which is the extension point.
+  A denylist of names cannot express `not repeatable under these circumstances',
+  so a command that should be repeatable when it acted and not when it declined
+  is a method on the generic rather than an entry here.
+
 *OUTER-GAPS*
   value:   0
   default: 0
@@ -395,38 +595,82 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   
   Set to NIL if you would rather have the allocation happen once.
 
+*POINTER-BINDINGS*
+  value:   ((:MOVE :BTN-LEFT (:SUPER)) (:RESIZE :BTN-RIGHT (:SUPER)))
+  default: ((:MOVE :BTN-LEFT (:SUPER)) (:RESIZE :BTN-RIGHT (:SUPER)))
+  Which button, with which modifiers, starts which interactive operation.
+  
+  A list of (OPERATION BUTTON MODIFIERS).  OPERATION is :MOVE or :RESIZE — or
+  anything an extension has taught POINTER-DRAG-RECT about.  BUTTON is a keyword
+  from +POINTER-BUTTONS+ or a raw event code, and MODIFIERS is written the way a
+  key binding's is.
+  
+  Super+drag to move and Super+right-drag to resize is the convention every
+  floating window manager has used for thirty years, and it is chosen here for
+  the reason it was chosen there: it works anywhere in the window, so you never
+  have to hit a title bar or a five-pixel corner.
+  
+  Note what is deliberately absent: a *bare* left-drag binding.  A window manager
+  that grabs unmodified left-click cannot be used with any application, and the
+  mistake is easy to make because it looks like it works right up until you try
+  to select text.
+
+*POINTER-RESIZE-MINIMUM*
+  value:   (120 . 80)
+  default: (120 . 80)
+  The smallest a window may be dragged to, as (WIDTH . HEIGHT) in pixels.
+  
+  Not zero, because a window dragged down to nothing cannot be dragged back —
+  its corner is no longer anywhere the pointer can reach.
+
+*POINTER-SNAP*
+  value:   12
+  default: 12
+  Snap a dragged window to within this many pixels of an output edge.
+  
+  Zero turns it off.  Twelve gives the behaviour where a window dropped near an
+  edge lines up with it exactly, which is the one piece of drag polish that is
+  worth having and the one people notice is missing.
+
+*RESIZE-AMOUNT*
+  value:   1/20
+  default: 1/20
+  How much one press of the resize key moves a divider.
+  
+  A fraction of the container: 1/20 is five percent of the pane's parent, which
+  is about the smallest step that is visible in one press and the largest that
+  does not overshoot.  RESIZE takes it as an optional argument, so a binding can
+  ask for a coarser one without changing this.
+
+*SAVE-INTERVAL-SECONDS*
+  value:   5
+  default: 5
+  How long the layout may sit changed before it is written out.
+  
+  Not zero, because a layout change happens a hundred times a second while a
+  resize key is held and a hundred file writes would be absurd.  Not large,
+  because everything between the last write and a crash is lost.  Five seconds is
+  the point where the writes are invisible and the loss is a shrug.
+  
+  NIL saves only at a clean shutdown, which is what this program used to do —
+  SAVE-STATE-SOON existed, was documented, and was called from nowhere at all, so
+  any crash, any kill -9 and any compositor exit lost the session layout.
+
 *SHIFT-MAP*
-  value:   ((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
-            (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
-            (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
-            (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
-            (#\` . #\~))
-  default: ((#\1 . #\!) (#\2 . #\@) (#\3 . #\#) (#\4 . #\$) (#\5 . #\%)
-            (#\6 . #\^) (#\7 . #\&) (#\8 . #\*) (#\9 . #\() (#\0 . #\))
-            (#\- . #\_) (#\= . #\+) (#\[ . #\{) (#\] . #\}) (#\\ . #\|)
-            (#\; . #\:) (#\' . #\") (#\, . #\<) (#\. . #\>) (#\/ . #\?)
-            (#\` . #\~))
-  What a key produces when Shift is held, for keys that are not letters.
+  value:   NIL
+  default: NIL
+  An explicit shift map, overriding *KEYBOARD-LAYOUT*, or NIL to use it.
   
-  *This exists because river sends the unshifted keysym.*  The design assumed
-  the opposite -- that xkb would produce `parenleft' for Shift+9 and river would
-  pass it through with Shift still in the modifier set -- and bound every
-  printable keysym twice, bare and shifted, on that reasoning.  Measured against
-  a real keyboard on bare metal, what arrives for Shift+9 is keysym `9' with
-  Shift set, so the prompt inserted a nine.  Typing (+ 1 2) into M-: produced
-  `9= 1 20', which is a symbol called 9= and an unbound-variable error.
+  Kept because it was the documented way to do this and configurations in the
+  wild will have set it.  Prefer *KEYBOARD-LAYOUT*, which names a whole layout
+  rather than requiring you to write one out:
   
-  Letters need no entry: CHAR-UPCASE is right for every alphabet SBCL knows,
-  and it is the fallback.
+      (setf *keyboard-layout* "de")
   
-  *This table is US-layout and there is no way for it not to be.*  River does
-  the xkb work and does not tell us the shifted keysym, so the shifted glyph
-  cannot be derived -- it has to be declared.  Which is exactly why this is a
-  tier-0 option rather than a constant: on a German or Dvorak layout the shipped
-  answer is wrong, and being wrong in a value somebody can edit is a different
-  kind of wrong from being wrong in a function nobody can reach.
+  To adjust a shipped layout rather than replace it, append to it:
   
-      (setf *shift-map* (append '((#8 . #() (#9 . #))) *shift-map*))
+      (setf *shift-map* (append '((#\8 . #\() (#\9 . #\)))
+                                (find-shift-map "us")))
 
 *SHOW-EMPTY-PANES*
   value:   T
@@ -468,6 +712,39 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   as you go three deep, and everybody's first configuration change in the
   fixed-axis window managers is to add a 'split the other way' binding.
 
+*SWANK-INTERFACE*
+  value:   "127.0.0.1"
+  default: "127.0.0.1"
+  Which address SWANK binds to when it is on.
+  
+  Loopback, explicitly, rather than whatever the default happens to be — because
+  `whatever the default happens to be' for a REPL that executes arbitrary code is
+  not a thing to leave to a library's changing mind.  Set it to "0.0.0.0" if you
+  genuinely want a REPL reachable from the network and understand that this hands
+  your session to anybody who can route to it.
+
+*SWANK-PORT*
+  value:   NIL
+  default: NIL
+  The TCP port SWANK listens on, or NIL for no SWANK server.
+  
+  *OFF BY DEFAULT, AND THAT IS A DELIBERATE CHANGE FROM 4005.*  SWANK offers
+  arbitrary code execution as the logged-in user with no authentication step, and
+  it used to start unconditionally, before the user had done anything, in a
+  program that ships as a session binary.  For a development tool that is normal
+  and excellent; for a default it is the kind of surprise that ends up in a CVE
+  database rather than in a bug tracker.
+  
+  Nothing is lost by having it off.  The control socket in runtime/ipc.lisp is on
+  by default and is reachable only by the user who owns the session, so scripting
+  still works out of the box; and turning SWANK on is one line in a config file
+  or one flag:
+  
+      latticewm --swank-port 4005
+      (setf *swank-port* 4005)   ; in init.lisp
+  
+  See also *SWANK-INTERFACE*, which decides who may reach it.
+
 *TERMINAL*
   value:   "foot"
   default: "foot"
@@ -488,6 +765,39 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
       (setf *ui-font* "ter-124n")
   
   Per-role control is one method rather than one option -- see FONT-FOR.
+
+*UNDO-COALESCE-SECONDS*
+  value:   0.6
+  default: 0.6
+  Merge repeated changes made within this long into one undo step.
+  
+  Holding the resize key produces forty tree changes a second, and forty undo
+  steps to get back across one drag is not undo, it is a rewind button.  NIL
+  records every change separately.
+
+*UNDO-DEPTH*
+  value:   32
+  default: 32
+  How many previous layouts to keep.  0 turns undo off entirely.
+  
+  Thirty-two is far more than anybody walks back through and costs a few hundred
+  kilobytes at the very most, because a snapshot is a tree of a few dozen nodes
+  and the windows in it are shared rather than copied.
+
+*UNFLOAT-RETURNS-HOME*
+  value:   T
+  default: T
+  Put an unfloated window back where it was floated from, if that place survives.
+  
+  T is the symmetry with minimize and restore, and the argument ON-RESTORE's
+  docstring makes applies verbatim: "landing back where you were is the
+  difference between minimize being useful and being a way to lose a window".
+  Floating something to look at it and then putting it back is the same gesture,
+  and it had the opposite behaviour — unfloat dropped the window at the cursor,
+  wherever that happened to be by then.
+  
+  NIL restores the old behaviour: an unfloated window lands at the cursor, which
+  is what you want if you use floating as a way of *moving* windows around.
 
 *UNFOCUSED-BORDER-COLOR*
   value:   (0.22 0.22 0.26 1.0)
@@ -538,4 +848,34 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   Once only, and it writes a marker under $XDG_STATE_HOME so it never appears
   again.  Set this to NIL to suppress it entirely; M-x welcome shows it on
   demand either way.
+
+*WINDOW-RULES*
+  value:   NIL
+  default: NIL
+  Declarative per-window overrides, as a list of (MATCH . OVERRIDES).
+  
+  MATCH is a plist selecting windows; OVERRIDES is a plist of what to do with
+  them.  The first rule that matches wins, so put the specific ones first.
+  
+      (setf *window-rules*
+            '(((:app-id "pavucontrol")           :float t)
+              ((:app-id "firefox")               :workspace 2)
+              ((:title-contains "Picture-in")    :float t :border-color (1 0.4 0 1))
+              ((:parent t)                         :float t)))
+  
+  MATCH keys:
+  
+      :app-id           the app id, exactly, ignoring case
+      :app-id-contains  a substring of it
+      :title            the title, exactly, ignoring case
+      :title-contains   a substring of it
+      :parent           T for windows river reports as having a parent
+  
+  OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+: :float, :workspace, :path,
+  :focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
+  :capabilities, :tags and :label.
+  
+  This is the tier-0 half of window placement.  The tier-1 half is a method on
+  WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
+  are supported and this one requires no Lisp beyond a quoted list.
 

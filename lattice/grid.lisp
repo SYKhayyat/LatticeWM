@@ -206,6 +206,124 @@ widths and the names."
     (setf (viewport-origin (grid-viewport grid)) (cell 0 0)))
   grid)
 
+(defmethod c:container-alternatives-p ((grid grid))
+  "Every visible cell is on screen at once, so a grid is not alternatives."
+  (declare (ignore grid))
+  nil)
+
+(defmethod c:container-splits-along-p ((grid grid) axis)
+  "A grid divides space along *both* axes, but it is not a split and a fresh
+split must never join it.
+
+Answering NIL is the honest answer to the question TREE-SPLIT-AT is asking —
+`should a new pane become a sibling of this container's children?' — because a
+cell's neighbours are addressed by coordinate, not by index, and inserting a
+sibling into a plane means nothing."
+  (declare (ignore grid axis))
+  nil)
+
+;;; ---------------------------------------------------- copying and saving
+;;;
+;;; TWO PROTOCOLS THE GRID USED TO FALL THROUGH, WITH THE SAME CAUSE.  Both
+;;; COPY-NODE and SERIALIZE-NODE were TYPECASEs over the three core kinds, so a
+;;; GRID matched no clause: a copy came back with no cells at all, and a save
+;;; came back as a flat split of whatever windows had been in it.  The whole
+;;; plane — the viewport, the track sizes, every name a user had given a cell —
+;;; was silently dropped on every restart.
+;;;
+;;; Both are generics now.  These are the four methods that cost.
+
+(defun copy-viewport (viewport)
+  "A fresh viewport with the same origin and the same zoom."
+  (make-instance 'viewport
+                 :origin (cell (cell-x (viewport-origin viewport))
+                               (cell-y (viewport-origin viewport)))
+                 :cols (viewport-cols viewport)
+                 :rows (viewport-rows viewport)))
+
+(defun copy-table (table)
+  "A shallow copy of a hash table, keeping its test."
+  (let ((new (make-hash-table :test (hash-table-test table)
+                              :size (max 1 (hash-table-count table)))))
+    (maphash (lambda (key value) (setf (gethash key new) value)) table)
+    new))
+
+(defmethod c:copy-node-slots progn ((new grid) (old grid))
+  "The plane's own state.  The cells themselves arrived through the container
+method, which walked CONTAINER-ADDRESSES and INSERT-CHILDed a copy of each —
+so nothing here has to know that a cell address is a coordinate."
+  (setf (grid-viewport new) (copy-viewport (grid-viewport old))
+        (grid-col-widths new) (copy-table (grid-col-widths old))
+        (grid-row-heights new) (copy-table (grid-row-heights old))
+        (grid-names new) (copy-table (grid-names old))))
+
+(defmethod r:serialize-node ((grid grid))
+  "The plane as a readable form, under a namespaced tag.
+
+Cells are written as (X Y FORM) triples rather than as a plist keyed by a cons,
+because a cons key printed and read back is fine but reads badly, and the point
+of this file is that a human can open it."
+  (list :lattice/grid
+        :label (c:node-label grid)
+        :viewport (let ((viewport (grid-viewport grid)))
+                    (list :x (cell-x (viewport-origin viewport))
+                          :y (cell-y (viewport-origin viewport))
+                          :cols (viewport-cols viewport)
+                          :rows (viewport-rows viewport)))
+        :columns (let ((out '()))
+                   (maphash (lambda (x w) (push (list x w) out))
+                            (grid-col-widths grid))
+                   (sort out #'< :key #'first))
+        :rows (let ((out '()))
+                (maphash (lambda (y h) (push (list y h) out))
+                         (grid-row-heights grid))
+                (sort out #'< :key #'first))
+        :cells (let ((out '()))
+                 (dolist (address (c:container-addresses grid))
+                   (let ((child (c:child-at grid address)))
+                     (when child
+                       (push (list (cell-x address) (cell-y address)
+                                   (r:serialize-node child))
+                             out))))
+                 (nreverse out))))
+
+(defmethod r:deserialize-node ((tag (eql :lattice/grid)) plist index)
+  "Rebuild the plane, cell by cell.
+
+Every field is optional and every one degrades: a file written by an older
+version, or edited by hand into something not quite right, produces a plane
+with fewer facts rather than an error.  SIMPLIFY-NODE at the end guarantees the
+result is a valid grid — at least one cell — whatever came out of the file."
+  (let ((grid (make-instance 'grid)))
+    (setf (c:node-label grid) (getf plist :label))
+    (let ((viewport (getf plist :viewport)))
+      (when viewport
+        (setf (grid-viewport grid)
+              (make-instance 'viewport
+                             :origin (cell (or (getf viewport :x) 0)
+                                           (or (getf viewport :y) 0))
+                             :cols (max 1 (or (getf viewport :cols) 1))
+                             :rows (max 1 (or (getf viewport :rows) 1))))))
+    (loop for entry in (getf plist :columns)
+          when (and (consp entry) (realp (first entry)) (realp (second entry)))
+            do (setf (col-width grid (first entry)) (second entry)))
+    (loop for entry in (getf plist :rows)
+          when (and (consp entry) (realp (first entry)) (realp (second entry)))
+            do (setf (row-height grid (first entry)) (second entry)))
+    (loop for entry in (getf plist :cells)
+          when (and (consp entry) (= 3 (length entry)))
+            do (destructuring-bind (x y form) entry
+                 (setf (gethash (cell x y) (grid-cells grid))
+                       (r:read-node form index))))
+    ;; Names are derived rather than stored: a cell's name is its node's label,
+    ;; and keeping a second copy in the grid's own table is how the two come to
+    ;; disagree after a rename.
+    (maphash (lambda (address node)
+               (let ((label (c:node-label node)))
+                 (when label (setf (gethash label (grid-names grid)) address))))
+             (grid-cells grid))
+    (c:simplify-node grid)))
+
 ;;; ------------------------------------------------------------- cell access
 
 (defun ensure-cell (grid address)

@@ -89,9 +89,9 @@ The whole of it:
 
 Three rules, and the third is the one that bites:
 
-1. *Specialize on ~conventional-policy~*, not on ~policy~. The shipped defaults
-   are on ~policy~; yours must be more specific or it replaces rather than
-   extends them.
+1. *Specialize on ~conventional-policy~*, not on a protocol class. The shipped
+   defaults are on the six protocol classes ~policy~ inherits; yours must be
+   more specific or it replaces rather than extends them.
 2. *Use ~call-next-method~* when you mean "the usual thing, plus this". It is
    the common case.
 3. *Do not reimplement the caller.* If you find yourself copying a shipped
@@ -125,9 +125,40 @@ Paste it into a REPL and the *next* window obeys it. Nothing restarted.
 | ~border-color~ / ~border-width~ / ~gaps~ | how it looks |
 | ~key-unbound~ | typing in an empty pane |
 
-There are 37 in all. ~wmeval --surface~ prints every one with its contract and
-with the methods that currently answer it — including yours, which is how you
-check that your file was actually loaded.
+~wmeval --surface~ prints every one with its contract and with the methods that
+currently answer it — including yours, which is how you check that your file
+was actually loaded. Do not count them from this table; ask.
+
+** The six protocols
+
+~policy~ is not one interface. It is a class that implements six, and the
+shipped defaults live on the *narrow* ones:
+
+| Protocol | What it answers |
+|----------+-----------------|
+| ~layout-policy~ | how a rectangle is divided, and what is shown |
+| ~appearance-policy~ | colours, fonts, and what the status line says |
+| ~motion-policy~ | where the cursor goes |
+| ~structure-policy~ | where things go when the tree changes |
+| ~lifecycle-policy~ | windows arriving, leaving, floating, minimizing |
+| ~input-policy~ | what a key, a click or a drag means |
+
+Which means a mixin that answers for *one* of them is a real thing you can
+write, and it says what it is:
+
+#+begin_src lisp
+(defclass tall (layout-policy) ())
+
+(defmethod layout-children ((p tall) (c split) rect)
+  ...)
+
+(defclass mine (tall conventional-policy) ())
+(setf *policy* (make-instance 'mine))
+#+end_src
+
+~tall~ answers for layout and for nothing else. Before the split it would have
+nominally implemented all fifty-eight generics, and every generic added to
+~policy~ afterwards would have widened what it was answering for.
 
 * Tier 2 — methods that need to remember something
 
@@ -214,7 +245,42 @@ charge. If you want a hook's return value, you wanted a method.
 #+end_src
 
 ~:startup :shutdown :window-opened :window-closed :focus-changed
-:layout-changed :workspace-changed :draw-overlays~.
+:layout-changed :workspace-changed :draw-overlays :reserve-space
+:output-added :output-removed :pointer-op~. ~(all-hooks)~ is authoritative.
+
+*One hook's return value matters*, and it is the exception that proves the
+rule. ~:reserve-space~ asks how much of an output to keep clear, each function
+answers ~(TOP RIGHT BOTTOM LEFT)~ in pixels, and the answers are *added
+together* — so two status bars each get their strip and the second does not
+have to know about the first:
+
+#+begin_src lisp
+(defun my-bar-edges (output) (declare (ignore output)) (list 28 0 0 0))
+(add-hook :reserve-space 'my-bar-edges)
+#+end_src
+
+That used to be a special variable outside the hook mechanism entirely, so the
+program had two ways to hook and only one of them was documented or gated.
+
+** Wrapping every command
+
+Neither a generic nor a hook: *advice*. A function of ~(command arguments
+thunk)~ that runs around every command in the system, including ones you wrote.
+
+#+begin_src lisp
+(defun time-commands (command arguments thunk)
+  (declare (ignore arguments))
+  (let ((start (get-internal-real-time)))
+    (prog1 (funcall thunk)
+      (logmsg :debug "~a took ~d ms" (command-name command)
+              (round (- (get-internal-real-time) start) 1000)))))
+(add-command-wrapper 'time-commands)
+#+end_src
+
+Layout undo is built on this and nothing else — it snapshots the tree around
+every command and keeps the snapshot only when the tree actually changed. A
+session recorder, a modal layer that vetoes commands, and a per-command timer
+are all the same shape.
 
 *Give the function a name and add the symbol, not ~#'the-function~ and not a
 lambda.* The list holds whatever you give it, and a function object is a

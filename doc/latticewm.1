@@ -44,13 +44,47 @@ has broken something.
 .B \-\-no\-restore
 Start with an empty layout instead of the one saved at the last exit.
 .TP
+.B \-\-check\-config
+Load the configuration file, report every problem in it, and exit non-zero if
+there were any.  Run this
+.I before
+logging out: a configuration error otherwise manifests as a failed session,
+which is the worst possible moment to find one.
+.TP
+.BI \-\-eval " FORM"
+Evaluate
+.I FORM
+inside an already-running LatticeWM, over its control socket, and print the
+result.  May be given more than once, in which case the forms run in order.
+See
+.BR latticewm\-config (5).
+.TP
+.B \-\-no\-ipc
+Do not open the control socket.
+.TP
 .BI \-\-swank\-port " N"
-Listen for a SLIME/SWANK connection on port
-.IR N ,
-4005 by default.  0 disables it.
+Start a SLIME/SWANK server on port
+.IR N .
+.B Off by default.
+SWANK offers arbitrary code execution as the logged\-in user with no
+authentication step; it is a superb development tool and a poor default for a
+session binary.  When it is on it binds to the loopback interface \(em see
+.B *swank\-interface*
+in
+.BR latticewm\-config (5).
 .TP
 .BI \-\-log\-level " LEVEL"
 One of debug, info, warn, error or none.
+.TP
+.BI \-\-log\-file " PATH"
+Write the log to
+.IR PATH ,
+or to stderr alone if
+.I PATH
+is \(oq\-\(cq.  The default is
+.IR ~/.local/state/latticewm/latticewm.log ,
+rotated at two megabytes, because a window manager started from a login screen
+has a stderr nobody can find.
 .TP
 .B \-\-list\-options
 Print every configuration value with its default and its documentation.
@@ -93,11 +127,35 @@ The configuration file.  Plain Common Lisp, read in the LATTICEWM/USER package.
 Errors in it are logged and do not stop startup.
 .TP
 .I ~/.local/state/latticewm/state.lisp
-The saved layout, written at exit and restored at startup.
+The saved layout, written every few seconds while it is changing and restored
+at startup.
+.TP
+.I ~/.local/state/latticewm/latticewm.log
+The log, rotated at two megabytes.  See
+.BR \-\-log\-file .
+.TP
+.I $XDG_RUNTIME_DIR/latticewm\-$WAYLAND_DISPLAY.sock
+The control socket, mode 0600.  See
+.BR \-\-eval .
+.TP
+.I PREFIX/share/latticewm/
+Installed extensions, examples and documentation.  This directory is on ASDF's
+registry at startup, so
+.B (load\-extension "name")
+in a configuration file finds anything installed here.
 .SH ENVIRONMENT
 .TP
 .B XDG_CONFIG_HOME
 Where the configuration directory is looked for, if set.
+.TP
+.B XDG_STATE_HOME
+Where the saved layout, the log and the first\-run marker go.
+.TP
+.B XDG_RUNTIME_DIR
+Where the control socket goes.
+.TP
+.B LATTICEWM_DATA
+An extra directory to look for installed extensions in, ahead of every other.
 .SH EXAMPLES
 Run it nested inside an existing Wayland session, which is a real compositor
 and a real protocol and needs no second machine:
@@ -109,9 +167,16 @@ and a real protocol and needs no second machine:
 Change something on the running desktop, from a shell:
 .PP
 .RS
-.B wmeval '(setf *gaps* 8)' '(relayout :force t)'
+.B latticewm \-\-eval '(setf *gaps* 8)' \-\-eval '(relayout :force t)'
+.RE
+.PP
+Check a configuration change without logging out to find out:
+.PP
+.RS
+.B latticewm \-\-check\-config
 .RE
 .SH SEE ALSO
+.BR latticewm\-config (5),
 .BR river (1),
 .BR sbcl (1)
 .PP

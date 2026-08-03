@@ -123,6 +123,12 @@ LatticeWM commands.
 (focus-tiled)
   Take keyboard focus off any floating window and give it back to the cursor.
 
+(gather-tag name)
+  Bring every window tagged NAME to the workspace you are on.
+  
+  The `set up my project' verb: tag the four windows once, and afterwards one
+  keystroke collects them wherever they have drifted to.
+
 (goto-named-cell)
   Type a name and jump to whatever has it.
   
@@ -134,6 +140,28 @@ LatticeWM commands.
   
   Built from the live keymap and each command's own docstring, so it includes
   anything you bound yourself and cannot go out of date.  Any key dismisses it.
+
+(jump-to-tag name)
+  Go to the window carrying tag NAME, wherever it is.
+  
+  A minimized one is restored first, which is what makes a tag and a named
+  scratchpad the same feature seen twice.
+
+(list-scratchpads)
+  Show every named scratchpad and what is on it.
+
+(list-tags)
+  Show every tag and the windows carrying it.
+
+(load-extension name)
+  Load an extension system by name, from wherever it is installed.
+  
+      (load-extension "lattice")
+  
+  Prefer this to a bare (asdf:load-system ...) in a configuration file: it knows
+  where an *installed* LatticeWM keeps its systems, it does nothing when the
+  system is already in the image, and it reports a failure as a message rather
+  than as an error that stops the rest of your configuration from loading.
 
 (load-font command)
   Load a PSF console font from a path and use it everywhere.
@@ -194,6 +222,9 @@ LatticeWM commands.
 (raise-float)
   Put the focused floating window on top of the other floats.
 
+(redo)
+  Undo an undo.
+
 (reload-config)
   Re-read the configuration file.
   
@@ -211,15 +242,21 @@ LatticeWM commands.
   Emacs's C-x z, vi's `.', and the reason a command that took three prompts to
   say is one keystroke to say twice.
 
-(resize direction &optional (amount 1/20))
+(resize direction &optional (amount *resize-amount*))
   Grow the focused pane DIRECTION by AMOUNT of its container's total.
   
-  Resizing is a *transfer* between two adjacent weights rather than an
+  AMOUNT is a *fraction of the container*: 1/20 makes the pane one twentieth of
+  the container wider and its neighbour one twentieth narrower.  That is what the
+  sentence above always claimed and what the code now does — it used to multiply
+  by an undocumented constant 4, which happened to be right only when the
+  container held exactly four children, and named no unit anywhere.
+  
+  Resizing is a *transfer* between two adjacent children rather than an
   assignment, so dragging one divider never disturbs the divider beyond it —
   which is the single most common complaint about tiling resize.
   
-  Because weights are relative, this behaves identically at every zoom level and
-  on every monitor, and needs to know nothing about pixels.
+  Because the shares are relative, this behaves identically at every zoom level
+  and on every monitor, and needs to know nothing about pixels.
 
 (resize-float direction &optional (pixels 40))
   Grow or shrink the focused floating window DIRECTION.
@@ -246,11 +283,56 @@ LatticeWM commands.
   and that is what lets the keymap be the commands you use often rather than the
   only ones that exist.
 
+(scratchpad-put name)
+  Put the focused window away under a name, to be summoned by that name later.
+  
+  i3's named scratchpad.  The existing minimize is a flat most-recently-hidden
+  list, so `bring back my music player' means restoring things one at a time
+  until it turns up; with a name it is one keystroke, and the same keystroke puts
+  it away again.
+
+(scratchpad-show name)
+  Summon the window on the scratchpad called NAME.
+
+(scratchpad-toggle name)
+  Summon the NAME scratchpad, or put it away again if it is already up.
+  
+  One key, both directions.  That is the whole point of a scratchpad: the
+  terminal you consult twenty times an hour should cost one keystroke each way
+  and should never need to be found.
+
 (send-to-workspace number &key (follow nil))
   Move the focused pane to workspace NUMBER, counting from one.
   
-  This is TREE-TRANSPLANT and nothing else — because a workspace is a container
-  and a pane is a subtree, 'send to workspace' needed no code of its own.
+  This is TREE-MOVE and nothing else — because a workspace is a container and a
+  pane is a subtree, 'send to workspace' needed no code of its own.
+  
+  IT LANDS ON A *PLACE INSIDE* THE WORKSPACE, NOT ON THE WORKSPACE.  The
+  difference is invisible while a workspace is a single pane and destructive the
+  moment it is anything else.  It used to address the workspace node, which was
+  right for the empty leaf the core ships and wrong for every richer shape: send
+  a window to a lattice workspace and the whole *plane* became one half of a
+  split, viewport and all, with the window as the other half.  A plane is not a
+  pane and must not be treated as one by anything that can also be handed a pane.
+  
+  DESCEND-TO-LEAF with no direction is the question actually being asked — 'where
+  inside this thing does a non-directional arrival go?' — and it is answered by
+  ENTRY-ADDRESS, per container kind.  A leaf answers with itself, so the core
+  behaviour is unchanged to the character.  A grid answers with a cell, which is
+  how a window sent to another plane arrives in a cell of it rather than beside
+  it.  Neither this command nor the core knows which happened.
+  
+  THE EMPTY-WORKSPACE PATH USED TO DUPLICATE THE WINDOW, and it is worth writing
+  down because the shape of the mistake recurs.  Every surgery function in
+  model/ is *pure*: it returns (values REMOVED NEW-ROOT NEW-PATH) and mutates
+  nothing above the subtree it was handed.  The old code bound only the first
+  value, ignored it, discarded the new root entirely, and then called
+  TREE-REPLACE-AT on the *original* root — which still contained the node at
+  FROM.  So the removal never happened and the window ended up in both
+  workspaces, live in two places at once.
+  
+  Callers that ignore a surgery function's second value have a bug they have not
+  noticed yet; this one had it for the life of the command.
 
 (set-option name value)
   Change a configuration value, now, without restarting anything.
@@ -311,6 +393,13 @@ LatticeWM commands.
 (tab-previous)
   Show the previous tab of the nearest enclosing stack.
 
+(tag-window name)
+  Give the focused window a tag, so it can be found by name.
+  
+  A tag travels with the window rather than with the place, which is what makes
+  it useful: `jump to mail' finds your mail client wherever it has ended up,
+  across workspaces, across cells, and after any amount of rearranging.
+
 (terminal)
   Open a terminal.  Bound to `t' in an empty pane by default.
 
@@ -329,8 +418,28 @@ LatticeWM commands.
 (unanchor-float)
   Pin the focused floating window to the output instead of to a pane.
 
+(undo)
+  Put the layout back the way it was before the last thing that changed it.
+  
+  Windows are not closed or opened by this — only their arrangement is restored,
+  because a window manager cannot un-quit an application and pretending otherwise
+  would be worse than not offering it.  A window that has closed since is simply
+  absent from the tree that comes back.
+  
+  REDO takes you forward again, and anything you do after an undo abandons the
+  forward branch, which is what every editor does.
+
+(undo-history)
+  Show what UNDO would walk back through.
+
 (untab)
   Dissolve the nearest enclosing stack back into a split.
+  
+  Every child becomes a pane side by side, which is the inverse of TAB: the
+  alternatives stop being alternatives and all become visible at once.
+
+(untag-window name)
+  Take a tag off the focused window.
 
 (welcome)
   Show the handful of keys worth knowing before anything else.

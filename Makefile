@@ -15,6 +15,31 @@
 LISP        ?= sbcl
 PREFIX      ?= $(HOME)/.local
 
+# A CONTRIBUTOR'S FIRST COMMAND SHOULD NOT BE THE ONE THAT FAILS.  `make test'
+# used to end in `sbcl: command not found' with no further comment, including
+# inside this project's own nix shell when it had not been entered — which is
+# the single most likely state for somebody who has just cloned it.
+#
+# So: check for the compiler once, and if it is missing say the three things
+# that actually help.  This costs one `command -v' per make invocation.
+HAVE_LISP := $(shell command -v $(LISP) 2>/dev/null)
+ifeq ($(HAVE_LISP),)
+define MISSING_LISP
+
+  $(LISP) is not on your PATH, so nothing here can build.
+
+  LatticeWM needs SBCL.  Three ways, in order of least surprise:
+
+    nix-shell                  this project pins SBCL *and* river
+    sudo apt install sbcl      or dnf / pacman / zypper -- see INSTALL.org
+    make LISP=/path/to/sbcl    if you have one somewhere else
+
+  Everything else, including `make test' and `make gates', works once one
+  of those is true.
+
+endef
+endif
+
 # Three ways for the dependencies to be present, and the build cares about
 # none of them: WAYFLAN_SRC is exported by shell.nix, ./.deps is what
 # bootstrap.sh fills, and a distro package or a personal quicklisp is already
@@ -27,38 +52,64 @@ endif
 RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-interactive \
                  --load tools/prelude.lisp
 
-.PHONY: all deps build gates test image release bench run run-bare surface config install uninstall clean distclean help
+.PHONY: all deps toolchain build gates test integration check image release bench \
+        run run-bare surface config install uninstall clean distclean help
 
 all: build gates test
+
+# Every target that runs Lisp depends on this, so the diagnostic above is what
+# a person without SBCL sees rather than a shell error from four levels down.
+toolchain:
+ifeq ($(HAVE_LISP),)
+	@$(info $(MISSING_LISP))
+	@exit 1
+else
+	@:
+endif
 
 # Idempotent, and skipped entirely when the dependencies are already visible —
 # so this is safe to run first on a strange machine and free on a familiar one.
 deps:
 	@./bootstrap.sh
 
-build:
+build: toolchain
 	@$(RUN) --load tools/build.lisp
 
 gates: build
 	@$(RUN) --load tools/gates.lisp
 
-test:
+test: toolchain
 	@$(RUN) --load tools/test.lisp
+
+# THE ONE TEST THAT RECEIVES STATE RATHER THAN CONSTRUCTING IT.  Runs river on
+# a headless backend, connects to it as the ordinary Wayland client this
+# program is, opens a window, and asserts on what comes back.  About two
+# seconds, no screen, no graphics card.
+#
+# It found a real bug on its first run — pointer bindings enabled through the
+# wrong interface, silent, Super+drag doing nothing — which is the whole
+# argument for it existing.  Skips with a message when river is absent; set
+# LATTICEWM_REQUIRE_INTEGRATION=1 to make that a failure instead.
+integration: toolchain
+	@$(RUN) --load tools/integration.lisp
+
+# What CI should run, and what to run before pushing.
+check: build gates test integration
 
 # save-lisp-and-die does not cost live redefinition: the dumped core retains
 # the compiler, so SWANK connects and DEFMETHOD still works at runtime.  This
 # is StumpWM's shipping model and it is proven.
-image:
+image: toolchain
 	@LATTICEWM_COMPRESS=0 $(RUN) --load tools/image.lisp
 	@ls -lh latticewm
 
 # The shipping image: zstd-compressed, 13 MB against 190, for ~350 ms of
 # one-time startup.
-release:
+release: toolchain
 	@$(RUN) --load tools/image.lisp
 	@ls -lh latticewm
 
-bench:
+bench: toolchain
 	@$(RUN) --load tools/bench.lisp
 
 # River is a wlroots compositor and wlroots has a Wayland backend, so river

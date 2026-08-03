@@ -279,6 +279,19 @@ place holds no window there is nothing for Wayland focus to be.")
   ;; keyboard bindings
   (alias binding-enable river-xkb-binding-v1.enable)
   (alias binding-disable river-xkb-binding-v1.disable)
+  ;; pointer bindings.  A SEPARATE INTERFACE WITH A SEPARATE ENABLE, and the
+  ;; reason this alias exists is that the first version of the pointer code
+  ;; called BINDING-ENABLE on a river_pointer_binding_v1 -- which is a type
+  ;; error inside the generated marshaller, caught by GUARDED, logged to a
+  ;; stderr nobody reads, and otherwise silent.  Super+drag simply did nothing.
+  ;;
+  ;; Nothing in the unit suite could see it: the suite constructs state, and a
+  ;; proxy is not something you can construct.  The headless-river integration
+  ;; test found it on its first run, which is the entire argument for having
+  ;; one.
+  (alias pointer-binding-enable river-pointer-binding-v1.enable
+         "Enable a pointer binding.  Manage sequence only.")
+  (alias pointer-binding-disable river-pointer-binding-v1.disable)
   (alias binding-set-layout-override river-xkb-binding-v1.set-layout-override)
   (alias bindings-get-seat river-xkb-bindings-v1.get-seat)
   (alias bindings-get-xkb-binding river-xkb-bindings-v1.get-xkb-binding)
@@ -327,13 +340,54 @@ is also what DESIGN D19's typing-in-an-empty-pane rests on.")
 capslock and numlock — are deliberately not in the protocol, because a locked
 modifier in a binding makes no sense.")
 
-(defun color-component (value)
-  "Convert a 0.0-to-1.0 colour component to the 32-bit unsigned value river
-wants.
+;;; ------------------------------------------------------------- colour
+;;;
+;;; THERE IS ONE ANSWER TO "WHAT IS A COLOUR IN THIS PROGRAM", and this is it:
+;;;
+;;;   *A colour on the policy surface is four straight-alpha floats in [0,1].
+;;;    Every layer that puts pixels anywhere premultiplies at its own boundary.*
+;;;
+;;; It has to be stated once and obeyed everywhere, because it was not.  The
+;;; overlay path (RUNTIME:ARGB) premultiplied, with a docstring explaining that
+;;; getting it wrong shows up as a halo around everything; the border path did
+;;; not.  So the same colour returned from BORDER-COLOR produced two different
+;;; pixels depending on whether it landed on a border or on the echo area, and
+;;; every border with alpha below 1.0 was too bright — increasingly so as the
+;;; alpha fell.  An extension author had no single answer to give.
+;;;
+;;; river-window-management-v1.xml, on set_borders: "The color is defined by
+;;; four 32-bit RGBA values.  Unless specified in another protocol extension,
+;;; the RGBA values use pre-multiplied alpha."
 
-River's set_borders takes four 32-bit RGBA values with pre-multiplied alpha.
-Nobody wants to write colours that way, so the policy surface uses floats and
-the conversion happens here — once, at the boundary, rather than in every
-theme anybody ever writes."
+(defun clamp-unit (value)
+  "VALUE as a float in [0,1].  Anything unreadable becomes 0.0.
+
+Tolerant on purpose: a colour comes from a policy method, which is user code,
+and a theme with a typo in it should produce a wrong colour rather than take
+down the manage sequence that was drawing a border."
+  (let ((number (if (realp value) (float value 1.0) 0.0)))
+    (max 0.0 (min 1.0 number))))
+
+(defun color-component (value &optional (alpha 1.0))
+  "One straight-alpha component as the 32-bit unsigned value river wants.
+
+ALPHA premultiplies it, per the protocol.  Passing no alpha means 1.0, which is
+the identity — so an opaque colour reads the same as it always did, and the
+alpha channel itself is written by passing it as VALUE with no second argument.
+
+Nobody wants to write colours premultiplied, so the policy surface uses
+straight-alpha floats and the conversion happens here: once, at the boundary,
+rather than in every theme anybody ever writes."
   (max 0 (min #xffffffff
-              (round (* (max 0.0 (min 1.0 (float value))) #xffffffff)))))
+              (round (* (clamp-unit value) (clamp-unit alpha) #xffffffff)))))
+
+(defun premultiplied-rgba (r g b &optional (a 1.0))
+  "Four straight-alpha floats as the four premultiplied words set_borders wants.
+
+Returns (values R G B A).  This is the only correct way to hand a policy colour
+to set_borders, and it exists as one function so that there is exactly one
+place where the multiplication either happens or does not."
+  (values (color-component r a)
+          (color-component g a)
+          (color-component b a)
+          (color-component a)))

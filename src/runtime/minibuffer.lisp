@@ -553,7 +553,8 @@ will simply answer a question about itself."
                          (setf latticewm/user::$ value)
                          (notify "~a" (truncate-text (prin1-to-string value) 200))
                          (after-command))
-                     (error (condition) (notify "~a" condition)))))
+                     (error (condition)
+                       (notify "~a" (explain-evaluation-error condition))))))
                :history "eval"))
 
 (defcommand repeat ()

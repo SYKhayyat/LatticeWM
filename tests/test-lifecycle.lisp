@@ -282,7 +282,7 @@ method."))
            (index (let ((table (make-hash-table :test #'equal)))
                     (dolist (window (c:node-windows (c:world-root world)) table)
                       (setf (gethash (c:window-identifier window) table) window))))
-           (after (funcall (read-from-string "latticewm/runtime::deserialize-node")
+           (after (funcall (read-from-string "latticewm/runtime::read-node")
                            form index)))
       (is (equal before (shape after))
           "the tree came back identical, with no phantom panes")
@@ -306,7 +306,7 @@ method."))
   (let* ((index (make-hash-table :test #'equal))
          (a (win "a")) (b (win "b")))
     (setf (gethash "ia" index) a (gethash "ib" index) b)
-    (let ((node (funcall (read-from-string "latticewm/runtime::deserialize-node")
+    (let ((node (funcall (read-from-string "latticewm/runtime::read-node")
                          '(:unknown :type "GRID"
                            :children ((:leaf :window "ia") (:leaf :window "ib")))
                          index)))
@@ -357,3 +357,174 @@ method."))
       (r::restore-output-workspaces '(("DP-1" . 9)))
       (is (= 1 (c:prop output :workspace))
           "an index past the end of the stack is dropped, not clamped to it"))))
+
+;;; ==================================================================
+;;; WHAT A NEW WORKSPACE IS MADE OF
+;;; ==================================================================
+;;;
+;;; "Infinite workspaces" was always true — the workspace list is a stack and a
+;;; stack grows — and it was true in a way that quietly stopped short: the four
+;;; sites that grow it each built an empty pane by hand, so the *shape* of a new
+;;; workspace was not a decision anything could take part in.  An extension that
+;;; changes what a workspace is could change the ones that existed when it
+;;; loaded and no others.
+;;;
+;;; MAKE-WORKSPACE is the decision, and these are the core's half of it.
+
+(defun conventional-world (&optional (root nil))
+  "A world and a conventional policy, ready for the workspace verbs."
+  (values (if root (c:make-world :root root) (c:make-world))
+          (make-instance 'p:conventional-policy)))
+
+(test asking-for-a-workspace-that-is-not-there-yet-makes-it-and-every-one-before
+  ;; This is the whole of "infinite workspaces", and it is four lines of LOOP.
+  (multiple-value-bind (world policy) (conventional-world)
+    (let ((r::*world* world) (p:*policy* policy))
+      (r::workspace 40)
+      (is (= 40 (c:container-count (c:world-root world))))
+      (is (= 39 (c:container-selection (c:world-root world))))
+      (is (equal '(39) (c:world-cursor world))
+          "and you are standing in the one you asked for"))))
+
+(test a-new-workspace-is-an-empty-pane-unless-something-says-otherwise
+  (multiple-value-bind (world policy) (conventional-world)
+    (is (c:empty-pane-p (p:make-workspace policy world 3))
+        "DESIGN D19's starting state: a place with nothing in it")))
+
+(test new-workspace-can-be-a-function-of-the-world-and-the-index
+  (multiple-value-bind (world policy) (conventional-world)
+    (let ((r::*world* world)
+          (p:*policy* policy)
+          (p:*new-workspace*
+            (lambda (world index)
+              (declare (ignore world))
+              (c:make-split :horizontal
+                            (list (c:make-leaf) (c:make-leaf) (c:make-leaf))
+                            (list 1 1 index)))))
+      (r::workspace 3)
+      (is (equal '(:h (:leaf nil) (:leaf nil) (:leaf nil))
+                 (shape (c:child-at (c:world-root world) 2)))
+          "the workspace is whatever the option returned")
+      (is (equal '(1 1 2) (c:weights (c:child-at (c:world-root world) 2)))
+          "and it was told which workspace it was making"))))
+
+(test a-broken-new-workspace-function-costs-a-log-line-and-not-the-switch
+  ;; This runs on the path that creates the workspace you are in the middle of
+  ;; switching to.  A bad lambda in a configuration file must not be able to
+  ;; leave you nowhere.
+  (multiple-value-bind (world policy) (conventional-world)
+    (let ((r::*world* world)
+          (p:*policy* policy)
+          (p:*new-workspace* (lambda (world index)
+                               (declare (ignore world index))
+                               (error "deliberately broken"))))
+      (finishes (r::workspace 2))
+      (is (c:empty-pane-p (c:child-at (c:world-root world) 1))
+          "the shipped answer, rather than a hole in the workspace list")
+      (is (equal '(1) (c:world-cursor world))
+          "and the switch happened"))))
+
+(test a-window-sent-past-the-end-of-the-workspace-list-lands-in-one-place-only
+  ;; The duplication bug this command used to have, checked at the far end of
+  ;; the growth path rather than the near one.
+  (multiple-value-bind (world policy) (conventional-world)
+    (let ((r::*world* world) (p:*policy* policy))
+      (p:on-window-open policy world (win "a"))
+      (p:on-window-open policy world (win "b"))
+      (r::send-to-workspace 6)
+      (is (= 6 (c:container-count (c:world-root world))))
+      (is (equal '("a" "b")
+                 (sort (mapcar #'c:window-app-id
+                               (c:node-windows (c:world-root world)))
+                       #'string<))
+          "two windows in the world, not three"))))
+
+;;; ==================================================================
+;;; LAYOUT UNDO
+;;; ==================================================================
+;;;
+;;; Nearly free, given the design that enables it — every surgery function
+;;; already returns a new root and COPY-NODE already makes a structural copy —
+;;; and impossible before COPY-NODE became a generic, because the old TYPECASE
+;;; version returned an empty container for any kind it did not know.  An undo
+;;; ring built on that would have destroyed a lattice on every press.
+
+(test undo-and-redo-walk-the-layout-back-and-forward
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (dolist (app '("a" "b")) (p:on-window-open pol world (win app)))
+    (let ((before (shape (c:world-root world)))
+          (snapshot (funcall (find-symbol "SNAPSHOT-LAYOUT" r) "split")))
+      ;; Change the tree, then record what it was.
+      (p:on-window-open pol world (win "c"))
+      (funcall (find-symbol "RECORD-UNDO" r) snapshot)
+      (is (= 1 (length (funcall (find-symbol "UNDO-RING" r))))
+          "a change that changed something is on the ring")
+      (funcall (find-symbol "UNDO" r))
+      (is (equal before (shape (c:world-root world)))
+          "and undo puts the tree back exactly")
+      (funcall (find-symbol "REDO" r))
+      (is (= 3 (length (c:node-windows (c:world-root world))))
+          "and redo takes you forward again"))))
+
+(test undo-records-nothing-when-nothing-changed
+  ;; The signature test, and it is what keeps the ring meaningful: plenty of
+  ;; verbs decline to act -- MOVE at the edge of the world, TAB with no sibling
+  ;; -- and without this, pressing an inert key ten times would fill the ring
+  ;; with ten identical trees and undo would appear not to work.
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (setf (c:prop world :undo-ring) '())
+    (p:on-window-open pol world (win "a"))
+    (let ((snapshot (funcall (find-symbol "SNAPSHOT-LAYOUT" r) "nothing")))
+      ;; A pure focus move: the cursor is not part of the signature.
+      (p:move-cursor pol world :right)
+      (funcall (find-symbol "RECORD-UNDO" r) snapshot)
+      (is (null (funcall (find-symbol "UNDO-RING" r)))
+          "moving the cursor is not a layout change"))))
+
+(test undo-drops-windows-that-closed-while-it-was-waiting
+  ;; An undone tree points at the same live windows -- there is only ever one
+  ;; of those -- but a window that closed in the meantime is gone, and putting
+  ;; a dead one back would leave a pane nothing can ever fill or focus.
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (doomed (win "doomed")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (p:on-window-open pol world doomed)
+    (let ((snapshot (funcall (find-symbol "SNAPSHOT-LAYOUT" r) "before")))
+      (setf (c:window-live-p doomed) nil)
+      (funcall (find-symbol "PRUNE-DEAD-WINDOWS" r)
+               (funcall (find-symbol "LAYOUT-SNAPSHOT-ROOT" r) snapshot))
+      (is (null (c:node-windows
+                 (funcall (find-symbol "LAYOUT-SNAPSHOT-ROOT" r) snapshot)))
+          "the dead window is not put back"))))
+
+;;; ==================================================================
+;;; THE CONTROL SOCKET'S FRAMING
+;;; ==================================================================
+
+(test an-answer-is-always-one-line
+  ;; The wire is one form in, one line out.  Two things produce embedded
+  ;; newlines without being asked: a condition report written as a paragraph,
+  ;; which the good ones here are, and the pretty printer wrapping a long list.
+  ;; Either truncates the answer at a client that reads with READ-LINE -- and
+  ;; the half that is lost is the half saying what to do instead.
+  (let* ((r (find-package "LATTICEWM/RUNTIME"))
+         (one-line (find-symbol "ONE-LINE" r))
+         (restore (find-symbol "RESTORE-NEWLINES" r)))
+    (dolist (text (list "plain"
+                        (format nil "two~%lines")
+                        (format nil "a backslash \\ and a ~%newline")
+                        (format nil "~%~%")
+                        "trailing backslash \\"))
+      (let ((encoded (funcall one-line text)))
+        (is (null (find #\Newline encoded))
+            "~s encodes to a single line" text)
+        (is (string= (remove #\Return text) (funcall restore encoded))
+            "and decodes back to exactly itself")))))

@@ -43,6 +43,20 @@
 ;;; ---------------------------------------------------------------- gate 3
 
 (banner 3 "the lattice touches no core")
+;; GATE 3 USED TO BE A REPORT WEARING A GATE'S UNIFORM.  It computed two
+;; numbers, printed them, and called FAIL under no circumstance whatsoever —
+;; so "ALL GATES PASS" read as eight assertions when it was six assertions and
+;; two measurements, and its own parenthetical admitted as much.
+;;
+;; It has thresholds now, and they are the two failures it was written to
+;; describe: a lattice that has grown into a second core, and a lattice that
+;; passes the letter by pushing everything through PROPS and &rest arguments
+;; until it has almost no methods at all.  Both are stated as numbers because
+;; both are only visible as numbers.
+(defparameter *lattice-line-budget* 2600
+  "Past this, the lattice is a second window manager rather than an extension.")
+(defparameter *lattice-method-floor* 12
+  "Below this, it is not extending through the protocol -- it is going round it.")
 (if (probe-file "lattice.asd")
     (let* ((files (directory "lattice/*.lisp"))
            (lines (reduce #'+ files :key
@@ -54,17 +68,38 @@
                             (lambda (path)
                               (with-open-file (in path)
                                 (loop for line = (read-line in nil) while line
-                                      count (search "(defmethod " line)))))))
-      ;; Gate 3 is satisfiable in bad faith — push everything through PROPS and
-      ;; &rest args and the letter passes while the spirit dies — so PLAN.org
-      ;; requires it to report two numbers alongside pass/fail.  A lattice that
-      ;; is three hundred lines of methods is the thesis holding; one that is
-      ;; two thousand lines re-implementing geometry is the thesis failing
-      ;; while wearing the gate's uniform.
-      (format t "  lattice/: ~d lines, ~d defmethods~%" lines methods)
-      (format t "  (the numbers are the gate; a large lattice re-implementing~%~
-                 \   geometry passes the letter and fails the point)~%"))
-    (format t "  lattice not built yet~%"))
+                                      count (search "(defmethod " line))))))
+           (core-edits
+             ;; The letter of the gate, checked where it is actually
+             ;; expressible: the lattice's own system definition must not
+             ;; claim a component under src/.  Scanning the *source* for the
+             ;; string "src/" is what a first version did, and it flagged four
+             ;; docstrings explaining that the lattice touches no file under
+             ;; src/ — a gate that fails on being told it passes.
+             (with-open-file (in "lattice.asd")
+               (loop for line = (read-line in nil) while line
+                     when (and (search "\"src" line) (search ":file" line))
+                       collect line))))
+      (format t "  lattice/: ~d lines (budget ~d), ~d defmethods (floor ~d)~%"
+              lines *lattice-line-budget* methods *lattice-method-floor*)
+      (when core-edits
+        (fail 3 "lattice.asd claims a component under src/: ~{~a~^ ~}"
+              core-edits))
+      (when (> lines *lattice-line-budget*)
+        (fail 3 "the lattice is ~d lines against a budget of ~d -- ~
+                 an extension this size is a second core, and the thesis is ~
+                 that a container kind costs a few hundred lines"
+              lines *lattice-line-budget*))
+      (when (< methods *lattice-method-floor*)
+        (fail 3 "the lattice has ~d defmethods against a floor of ~d -- ~
+                 an extension that answers almost no generics is going round ~
+                 the protocol rather than through it, which passes the letter ~
+                 of this gate and fails its point"
+              methods *lattice-method-floor*))
+      (unless (or core-edits (> lines *lattice-line-budget*)
+                  (< methods *lattice-method-floor*))
+        (format t "  no core edits, and the numbers are in range~%")))
+    (fail 3 "lattice.asd is missing -- the experiment is not being run"))
 
 ;;; ---------------------------------------------------------------- gate 4
 
@@ -146,16 +181,27 @@
     ;; Hyprland all have a scripting language and are not Emacs; the boundary
     ;; is not the disease, how little of the system lives above it is.
     ;;
-    ;; Not pass/fail.  A number, printed where it cannot be ignored.  Runtime
-    ;; growing faster than policy is the earliest visible symptom of the
-    ;; monolith failure mode, and it shows up weeks before anything else does.
+    ;; A NUMBER *AND* A FLOOR.  It was a number alone, and a number alone
+    ;; cannot fail — so this was the second of the two gates that were
+    ;; measurements wearing a gate's uniform.  The floor is deliberately well
+    ;; below where the project sits, because the point is to catch a *trend*
+    ;; before it becomes a shape: runtime outgrowing policy is the earliest
+    ;; visible symptom of the monolith failure mode, and it shows up weeks
+    ;; before anything else does.
     (format t "  runtime (wire + runtime)~40t~d lines  (font.lisp excluded: generated)~%"
             runtime)
     (format t "  policy  (model + policy + lattice)~40t~d lines~%" policy)
     (format t "  ratio~40t~,2f~a~%" ratio
             (cond ((>= ratio 2.0) "   Emacs-shaped")
                   ((>= ratio 1.0) "   healthy")
-                  (t "   <-- watch this: runtime is outgrowing policy")))))
+                  ((>= ratio 0.8) "   <-- watch this: runtime is outgrowing policy")
+                  (t "   FAILING")))
+    (when (< ratio 0.8)
+      (fail 6 "the runtime-to-policy ratio is ~,2f, below the floor of 0.80.~%~
+               ~4tPLAN.org §extensibility-real: Lisp is not what kept Emacs~%~
+               ~4talive, the *ratio* is.  Something that should have been a~%~
+               ~4tdecision has been written as machinery."
+            ratio))))
 
 ;;; ---------------------------------------------------------------- gate 7
 
@@ -277,6 +323,114 @@
     (if bad
         (fail 8 "~{~%    ~a~}" (reverse bad))
         (format t "  every one of them exists~%"))))
+
+;;; ---------------------------------------------------------------- gate 9
+
+(banner 9 "the image, the installer and the sample config agree")
+;; THE SHIPPED CONFIGURATION USED TO LOAD ONLY ON THE AUTHOR'S MACHINE.
+;;
+;; SAMPLE-CONFIG offered to load the lattice; the lattice is an ASDF system;
+;; ASDF finds a system by finding its .asd on a path.  tools/image.lisp did not
+;; build the lattice into the image and install.sh did not install lattice.asd
+;; or lattice/ anywhere — so on every machine that installed from a package,
+;; the default configuration failed at load, and the failure routed straight
+;; into the startup path.
+;;
+;; Nothing could see it, because during development ASDF finds lattice.asd in
+;; the build tree, which is still there.  That is the whole shape of the bug:
+;; it is invisible to everything except a machine that does not have the source.
+;;
+;; So this gate reads the three files and checks they say the same thing.  It
+;; is text matching, which is crude, and it is the only check that can be made
+;; without actually installing to a clean prefix — which the next gate does.
+(flet ((contains (path text)
+         (and (probe-file path)
+              (with-open-file (in path)
+                (loop for line = (read-line in nil) while line
+                      thereis (search text line))))))
+  (let ((problems '()))
+    (unless (contains "tools/image.lisp" "(asdf:load-system \"lattice\")")
+      (push "tools/image.lisp does not build the lattice into the image" problems))
+    (unless (contains "install.sh" "lattice.asd")
+      (push "install.sh does not install lattice.asd" problems))
+    (unless (contains "install.sh" "EXTENDING.org")
+      (push "install.sh does not install the extension guide" problems))
+    ;; The last two are asked of the *live image* rather than of the text,
+    ;; which is both more direct and immune to a docstring that happens to
+    ;; mention the thing being checked for.
+    (let ((sample (call "latticewm/runtime:sample-config"))
+          (directories (mapcar #'namestring
+                               (call "latticewm/runtime:data-directories"))))
+      (when (search "asdf:load-system" sample)
+        (push "the sample config calls asdf:load-system directly; it should ~
+call LOAD-EXTENSION, which knows where an installed system lives"
+              problems))
+      (unless (search "load-extension" sample)
+        (push "the sample config never mentions LOAD-EXTENSION, so nothing ~
+tells a user how to load one" problems))
+      (unless (some (lambda (path) (search "share/latticewm/" path)) directories)
+        (push "DATA-DIRECTORIES does not look under share/latticewm/, which is ~
+where install.sh puts it" problems)))
+    (if problems
+        (fail 9 "~{~%    ~a~}" (reverse problems))
+        (format t "  image builds it, install.sh ships it, the runtime finds it~%"))))
+
+;;; --------------------------------------------------------------- gate 10
+
+(banner 10 "the core dispatches through the container protocol")
+;; THE RULE THIS ENFORCES, stated as the project's own: *when an extension
+;; point exists, nothing may implement its behaviour except through it.*
+;;
+;; COPY-NODE was a DEFUN dispatching on concrete container classes by TYPECASE,
+;; sitting in the middle of a layer whose entire advertised contract is that
+;; container kinds are open.  A kind that subclassed CONTAINER directly — which
+;; the lattice's GRID does — matched no clause, so the copy came back with no
+;; children at all.  Silently.  SERIALIZE-NODE had the identical shape and the
+;; identical consequence: the whole lattice was dropped on every restart.
+;;
+;; Both are generics now.  This is what stops the third one being written.
+;;
+;; LEAF IS DELIBERATELY EXEMPT.  Asking whether a node is a leaf is not
+;; container-kind dispatch — it is asking whether this is a *place that holds a
+;; window*, which is the terminal of the tree and the one thing every kind
+;; agrees about.  The banned set is the containers: the moment src/ names one
+;; of them by class, some other kind is being silently left out.
+(let ((kinds '("'split" "'stack" "'sequential-container" "'c:split" "'c:stack"
+               "'c:sequential-container" "'grid"))
+      (dispatch '("typecase" "etypecase" "ctypecase"))
+      (exempt '("node.lisp"))
+      (found '()))
+  (dolist (path (directory "src/**/*.lisp"))
+    (let ((name (file-namestring path)))
+      (unless (member name exempt :test #'string=)
+        (with-open-file (in path)
+          (loop for line = (read-line in nil)
+                for number from 1
+                while line
+                do (let ((trimmed (string-left-trim " " line)))
+                     (unless (and (plusp (length trimmed))
+                                  (char= #\; (char trimmed 0)))
+                       ;; A TYPECASE family form naming a container kind.
+                       (when (and (some (lambda (form) (search form line)) dispatch)
+                                  (some (lambda (kind) (search kind line)) kinds))
+                         (push (format nil "~a:~d dispatches on a container kind"
+                                       name number)
+                               found))
+                       ;; Or a TYPEP against one, which is the same mistake
+                       ;; written smaller.
+                       (when (and (search "(typep " line)
+                                  (some (lambda (kind) (search kind line)) kinds))
+                         (push (format nil "~a:~d tests for a container kind ~
+                                            by class"
+                                       name number)
+                               found)))))))))
+  (if found
+      (fail 10 "~{~%    ~a~}~%    ~
+                Ask the protocol instead: CONTAINER-ALTERNATIVES-P, ~
+                CONTAINER-SPLITS-ALONG-P,~%    CONTAINER-SELECTION, or a ~
+                generic of your own with a method per kind."
+            (reverse found))
+      (format t "  no container kind is named by class outside model/node.lisp~%")))
 
 ;;; ---------------------------------------------------------------- verdict
 

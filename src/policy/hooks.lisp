@@ -82,14 +82,22 @@ way out of it, so give it a name first."
   nil)
 
 (defun run-hooks (name &rest arguments)
-  "Call every function on hook NAME with ARGUMENTS.
+  "Call every function on hook NAME with ARGUMENTS, and return their answers.
 
 Each is guarded separately: one broken hook function must not stop the others
 from running, and must certainly not abort whatever the window manager was
-doing when it fired."
-  (dolist (function (gethash name *hooks*))
-    (guarded (format nil "hook ~s" name) (apply function arguments)))
-  nil)
+doing when it fired.  A function that signalled contributes NIL.
+
+THE RETURN VALUE IS FOR THE *ACCUMULATING* HOOKS AND NOTHING ELSE.  A hook
+notices that something happened and its answer is normally meaningless — if you
+find yourself wanting one function's return value, you wanted a method.  But a
+handful of hooks are genuinely additive: two status bars should each get their
+strip of the screen, and the second must not have to know about the first.
+Those read this list.  Everything else ignores it, which is free."
+  (let ((out '()))
+    (dolist (function (gethash name *hooks*) (nreverse out))
+      (push (guarded (format nil "hook ~s" name) (apply function arguments))
+            out))))
 
 (defun all-hooks ()
   "Every declared hook, as (NAME DOCUMENTATION COUNT), sorted by name."
@@ -134,3 +142,43 @@ screen, the lattice's coordinate overlay and map.
 This is the seam a status bar, a notification popup or a minimap attaches to,
 and it is declared here rather than left implicit because it was the one hook
 in the system that nothing documented and four things used.")
+
+(defhook :reserve-space (output) "Run to ask how much of OUTPUT to keep clear.
+
+*The one hook whose return value matters.*  Each function answers
+(TOP RIGHT BOTTOM LEFT) in pixels, and the answers are added together — so two
+status bars each get their strip and the second does not have to know about the
+first.  Anything else, including NIL, contributes nothing.
+
+    (defun my-bar-edges (output)
+      (declare (ignore output))
+      (list 28 0 0 0))
+    (add-hook :reserve-space 'my-bar-edges)
+
+THIS USED TO BE A SPECIAL VARIABLE OUTSIDE THE HOOK MECHANISM ENTIRELY --
+P:*RESERVE-HOOKS*, which you pushed a symbol onto -- so the program had two ways
+to hook, one documented and gated and one neither.  A user reading the
+extension guide could not find the second, and gate 7 could not see it.  There
+is one way now, and this is it.")
+
+(defhook :layout-restored () "Run after a saved layout has replaced the tree.
+
+*The hook a policy with a shape needs.*  Startup order is: make a world, load
+the configuration, run :STARTUP, connect, then restore the saved layout — so
+anything the configuration did to the *tree* is replaced wholesale by whatever
+was on disk.  A policy that requires a shape, as the lattice does, has to be
+given a chance to re-establish it, and this is that chance.
+
+Without it, enabling the lattice in a configuration file wrapped an empty
+world in a plane and then the restored layout quietly threw the plane away —
+so the policy said `lattice' and every cell command answered NIL.")
+
+(defhook :output-added (output) "Run after a monitor has appeared and been
+given a workspace.  For anything that needs a surface or a process per screen.")
+
+(defhook :output-removed (output) "Run after a monitor has gone away and its
+overlays have been released.  The output object is still readable; its proxy is
+already NIL.")
+
+(defhook :pointer-op (kind window) "Run when an interactive pointer operation
+starts or ends.  KIND is :MOVE, :RESIZE or NIL for the end of one.")

@@ -89,6 +89,7 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:seat-op-start-pointer #:seat-op-end #:seat-get-pointer-binding
    #:output-set-presentation-mode
    #:binding-enable #:binding-disable #:binding-set-layout-override
+   #:pointer-binding-enable #:pointer-binding-disable
    #:bindings-get-seat #:bindings-get-xkb-binding
    #:bindings-seat-ensure-next-key-eaten
    #:bindings-seat-cancel-ensure-next-key-eaten
@@ -99,7 +100,8 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:+edges-none+ #:+edge-top+ #:+edge-bottom+ #:+edge-left+ #:+edge-right+
    #:+edges-all+
    #:+cap-window-menu+ #:+cap-maximize+ #:+cap-fullscreen+ #:+cap-minimize+
-   #:+caps-all+ #:+protocol-modifier-bits+ #:color-component))
+   #:+caps-all+ #:+protocol-modifier-bits+
+   #:color-component #:premultiplied-rgba #:clamp-unit))
 
 (defpackage #:latticewm/core
   (:use #:cl)
@@ -131,7 +133,11 @@ deliberately decomposed so that policy can redirect it.")
    #:container-addresses #:child-at #:remove-child #:insert-child
    #:replace-child #:address-equal #:container-count
    #:map-nodes #:find-node-if #:node-leaves #:node-windows #:leaf-holding
-   #:copy-node #:node-empty-p #:simplify-node #:default-address
+   #:copy-node #:copy-node-slots #:node-signature #:node-empty-p #:simplify-node
+   #:default-address #:empty-pane-p
+   #:container-alternatives-p #:container-selection #:container-splits-along-p
+   #:*insertion-weight-function* #:default-insertion-weight
+   #:insertion-weight-for
    ;; paths
    #:resolve-path #:resolve-chain #:path-valid-p #:node-path-to
    #:node-contains-p
@@ -186,14 +192,17 @@ You never edit this package.")
    ;; the tier-0 values themselves.  Every P1 fork in the design is here.
    #:*gaps* #:*outer-gaps* #:*border-width*
    #:*focused-border-color* #:*unfocused-border-color* #:*empty-pane-color*
+   #:*cursor-border-color*
    #:*spawn-mode* #:*split-axis* #:*new-child-side*
    #:*collapse-degenerate-splits* #:*move-into-occupied* #:*focus-after-close*
    #:*float-dialogs* #:*focus-follows-mouse* #:*focus-new-windows*
+   #:*float-fixed-size-limit* #:*window-rules* #:+window-rule-keys+
+   #:window-matches-rule-p #:check-window-rule #:node-window-prop
    #:*empty-pane-keys* #:*float-fraction* #:*smart-gaps*
    ;; --- layout ---------------------------------------------------------
    #:layout-children #:layout-node #:window-dimensions #:gravity
    #:gaps #:border-width #:border-color #:visible-p #:render-order
-   #:clip-rect #:outer-rect #:reserved-space #:*reserve-hooks*
+   #:clip-rect #:outer-rect #:reserved-space #:run-reserve-hooks
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
    #:echo-content
    ;; --- motion and focus -----------------------------------------------
@@ -205,19 +214,28 @@ You never edit this package.")
    ;; --- structure ------------------------------------------------------
    #:spawn-target #:split-axis-for #:new-child-side #:should-collapse-p
    #:move-into-occupied #:insertion-weight
+   ;; what a workspace is made of.  The Z axis of "lattices one behind
+   ;; another" is this generic and nothing else.
+   #:make-workspace #:*new-workspace*
    ;; the split mechanism, as policy rather than as a TYPEP
-   #:container-axis #:equalize-container #:tab-siblings
+   #:container-axis #:equalize-container #:tab-siblings #:resize-container
+   #:*resize-amount*
    #:join-existing-split-p #:split-join-predicate
    ;; logging, and the boundary every policy method is called behind
    #:logmsg #:guarded #:with-abandon #:install-debugger-hook
    #:*log-level* #:*log-stream* #:+log-levels+
+   #:*log-file* #:*log-max-bytes* #:*log-keep* #:*log-to-stderr*
+   #:default-log-file #:resolved-log-file #:close-log-file #:log-backtrace
+   #:log-line #:add-emergency-thunk #:*emergency-thunks*
+   #:run-emergency-thunks
    ;; the command registry.  §extensibility-real: "the command registry
    ;; is a user interface rather than an implementation detail".
    #:defcommand #:command #:find-command #:all-commands #:run-command
-   #:command-name #:command-documentation #:command-function
+   #:command-name #:command-symbol #:command-documentation #:command-function
    #:command-lambda-list #:command-interactive #:command-interactive-p
    #:command-arguments #:*commands* #:undocumented-commands
    #:*last-command* #:*not-repeatable*
+   #:*command-wrappers* #:add-command-wrapper #:remove-command-wrapper
    #:define-argument-type #:argument-type #:argument-type-name
    #:argument-type-prompt #:argument-type-candidates
    #:argument-type-parser #:argument-type-documentation #:*argument-types*
@@ -244,6 +262,12 @@ You never edit this package.")
    #:all-bound-keys
    #:bindable-keys
    #:*shift-map* #:shifted-character #:*warn-on-rebinding*
+   #:*keyboard-layout* #:*shift-maps* #:register-shift-map #:find-shift-map
+   #:shift-map-names #:current-shift-map #:command-repeatable-p
+   ;; the six protocols POLICY implements
+   #:layout-policy #:appearance-policy #:motion-policy
+   #:structure-policy #:lifecycle-policy #:input-policy
+   #:+policy-protocols+ #:policy-lineage-p
    ;; hooks: noticing that something happened
    #:*hooks*
    #:*hook-documentation*
@@ -292,11 +316,16 @@ You never edit this package.")
    #:default-float-rect #:window-rule-for
    ;; --- input ----------------------------------------------------------
    #:key-unbound #:on-key #:pointer-focus
+   #:pointer-drag-rect #:pointer-resize-edges
+   #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
+   #:*click-to-focus* #:*click-to-raise* #:*float-on-drag*
+   #:*honour-client-move-requests* #:*pointer-resize-minimum* #:*pointer-snap*
    ;; --- reading from the user -------------------------------------------
    #:complete-candidates #:argument-type-for #:*argument-naming-convention*
    #:subsequence-match-p #:rank-candidates
    ;; --- stacks / workspaces --------------------------------------------
-   #:stack-visible-address #:container-label
+   #:stack-visible-address #:container-label #:container-role
+   #:container-role-name #:world-role-name
    ;; --- introspection --------------------------------------------------
    #:policy-generic-p #:policy-generics #:extension-surface
    #:print-extension-surface #:undocumented-generics #:generic-description
@@ -316,12 +345,17 @@ You never edit this package.")
    #:all-commands
    #:run-command
    #:command-name
+   #:command-symbol
    #:command-documentation
    #:command-function
    #:command-lambda-list
    #:command-interactive
    #:command-interactive-p
    #:command-arguments
+   #:command-repeatable-p
+   #:*command-wrappers*
+   #:add-command-wrapper
+   #:remove-command-wrapper
    #:*last-command*
    #:*not-repeatable*
    #:*commands*
@@ -395,18 +429,35 @@ keybindings, the command registry, and the session loop.")
    #:*world* #:*server* #:server #:seat #:primary-seat #:server-manager
    #:server-display #:server-seats #:server-running #:seat-proxy
    #:window-of-proxy #:all-windows #:all-outputs #:current-output
+   #:output-at #:output-for-rect #:output-of-window #:output-showing-workspace
+   #:node-rect-now
+   #:overlay-for #:all-overlays #:destroy-overlay #:forget-overlays-for-output
+   #:hide-overlays #:overlay-kind #:overlay-output #:overlay-name
+   #:overlay-visible-p #:destroy-canvas #:canvas-width #:canvas-height
    #:current-node #:current-leaf #:current-window #:current-path
    #:focused-window #:in-wm-thread-p
    #:window-river-node #:guarded #:with-abandon
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
+   ;; pointer-driven management
+   #:start-pointer-op #:end-pointer-op #:apply-pointer-delta
+   #:pointer-op #:pointer-op-kind #:pointer-op-window #:pointer-op-rect
+   #:seat-pointer-op #:seat-pointer-window #:seat-pointer-x #:seat-pointer-y
+   #:window-under-pointer #:focus-window-from-pointer #:seat-of-proxy
+   #:attach-pointer-bindings
+   ;; layer shell: panels, bars, wallpapers and lockers
+   #:*honour-exclusive-zones* #:layer-shell-holds-keyboard-p
+   #:layer-reserved-edges #:set-default-layer-output #:seat-layer-focus
    #:load-config #:config-file #:config-directory #:write-sample-config
+   #:sample-config #:data-directories #:register-data-registry
+   #:extension-loaded-p #:load-extension #:executable-directory
+   #:cannot-start #:connect-to-compositor #:emergency-shutdown
    #:install-default-keymap #:print-options #:print-commands #:print-keymap
    #:main #:all-hooks #:defhook
    ;; commands
    #:defcommand #:command #:find-command #:all-commands #:run-command
-   #:command-name #:command-documentation #:command-function
+   #:command-name #:command-symbol #:command-documentation #:command-function
    #:command-lambda-list #:command-interactive #:*last-command* #:*not-repeatable*
    ;; interactive arguments
    #:define-argument-type #:argument-type #:argument-type-name
@@ -439,6 +490,21 @@ keybindings, the command registry, and the session loop.")
    ;; interns a brand new symbol in LATTICEWM/USER and silently changes
    ;; nothing at all, which is the worst of the three possible outcomes.
    #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
+   #:*unfloat-returns-home* #:*save-interval-seconds*
+   #:*undo-depth* #:*undo-coalesce-seconds* #:*ipc-socket* #:*ipc-timeout-seconds*
+   #:*swank-interface* #:*honour-exclusive-zones*
+   ;; undo
+   #:undo #:redo #:undo-history #:with-undo #:record-undo #:snapshot-layout
+   #:layout-snapshot #:undo-ring #:redo-ring #:restore-snapshot
+   ;; tags and named scratchpads
+   #:tag-window #:untag-window #:jump-to-tag #:gather-tag
+   #:scratchpad-put #:scratchpad-show #:scratchpad-toggle
+   #:list-scratchpads #:list-tags
+   #:all-tags #:windows-tagged #:window-tagged-p #:normalize-tag
+   #:all-scratchpads #:scratchpad-windows #:focus-existing-window
+   ;; the control socket
+   #:start-ipc-server #:stop-ipc-server #:ipc-socket-path #:ipc-evaluate
+   #:call-in-wm-thread-sync #:check-config
    #:*manage-warn-seconds* #:*manage-timeout-seconds*
    ;; hooks, imported from POLICY above and re-exported so that
    ;; `r:add-hook' keeps resolving -- the lattice uses it.
@@ -447,7 +513,9 @@ keybindings, the command registry, and the session loop.")
    ;; state
    #:close-window-later #:run-shutdown-once
    #:on-events #:declare-handled-events #:all-handled-events
-   #:save-state #:load-state #:state-file))
+   #:save-state #:load-state #:save-state-soon #:state-file
+   #:serialize-node #:deserialize-node #:read-node
+   #:serialize-children #:deserialize-children))
 
 (defpackage #:latticewm/user
   (:use #:cl #:latticewm/core #:latticewm/policy #:latticewm/runtime)
