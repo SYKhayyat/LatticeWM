@@ -48,8 +48,11 @@
   ;; them.  Every one of them replaces something that was already a decision;
   ;; none of them adds a knob that did not exist as a hardcoded answer.
   ;;
-  ;; That is the ruling in PLAN §log3 and it is the whole point of gate 6: the
-  ;; ratio moves by code crossing the line, not by the line moving.
+  ;; That is the ruling in PLAN §log3, and it was the whole point of gate 6 as
+  ;; gate 6 then was: the *ratio* moves by code crossing the line, not by the
+  ;; line moving.  The ratio is gone -- it turned out to be movable by moving
+  ;; the line, four times -- but the distinction it was drawing is the right
+  ;; one and this test is where it now lives.
   ;;
   ;; What would still make this wrong is generics arriving one per feature.
   ;; The test to apply before raising it a fourth time: for each of the last
@@ -102,6 +105,30 @@
   ;; Both are boundary corrections rather than features, which is the third
   ;; kind of move and the kind gate 6 exists to encourage.  Neither adds a knob
   ;; that did not exist as a hardcoded answer.
+  ;;
+  ;; SIXTY-FOUR TO SIXTY-FIVE IS THE SIXTH MOVE, AND IT LANDS *ON* THE CEILING
+  ;; RATHER THAN UNDER IT.  The paragraph above said the next generic would
+  ;; have to be a decision somebody made on purpose.  This is that decision,
+  ;; and the accounting it demands is below.
+  ;;
+  ;;   CURSOR-PLACE-NAME   an inline (PROP node :LATTICE/ADDRESS) in the shipped
+  ;;                       ECHO-CONTENT.  Not a hardcoded *answer* -- a
+  ;;                       hardcoded answer belonging to somebody else.  The
+  ;;                       default method in src/policy/appearance.lisp read the
+  ;;                       lattice's private property key off the node and
+  ;;                       destructured the lattice's private cons
+  ;;                       representation of an address, so the core was
+  ;;                       implementing an extension's decision on its behalf.
+  ;;
+  ;; It is the third kind of move again, in its sharpest form: no knob is added,
+  ;; no behaviour changes with or without the lattice loaded, and the count of
+  ;; generics *nobody outside src/ has answered* goes down rather than up --
+  ;; which is the number the new gate 6 prints.  A boundary correction that
+  ;; raises this count while lowering that one is the shape to want.
+  ;;
+  ;; The ceiling stays at sixty-five.  Raising it is now unavoidable for the
+  ;; next generic, whatever it is, which is what a threshold that has been
+  ;; reached is supposed to feel like.
   ;;
   ;; The other surface has a count too, and it is not on this test because it
   ;; is not the same question: see EVERY-CONTAINER-PROTOCOL-GENERIC-IS-DOCUMENTED
@@ -201,6 +228,40 @@ still the wrong symbol."
       (is (= 40 (c:rect-w (third (second wide)))))
       (is (= 50 (c:rect-w (third (second tight))))
           "and no core file was edited to get it"))))
+
+(defclass coordinate-policy (p:conventional-policy) ()
+  (:documentation
+   "A policy that names places its own way instead of by path.  One method.
+
+Written the way the lattice writes it, because for two months the lattice did
+not have to: ECHO-CONTENT's shipped default read :LATTICE/ADDRESS off the
+focused node and destructured the extension's cons representation of an address
+inline, in src/policy/appearance.lisp.  The core was answering an extension's
+question on its behalf, which is why nothing found it -- the extension never
+had to ask, so no gate saw an extension asking."))
+
+(defmethod p:cursor-place-name ((policy coordinate-policy) world)
+  (declare (ignore world))
+  "3,-2")
+
+(test the-name-of-a-place-is-the-policys-to-decide
+  ;; Gate 3 now refuses an extension namespace under src/, and gate 6 counts
+  ;; this generic among the ones answerable from outside.  Neither can show
+  ;; that ECHO-CONTENT actually *consults* the answer, and a seam nothing
+  ;; consults is the failure mode this whole change is about.  So: two
+  ;; policies, one status line, and the difference has to be the method.
+  (let* ((world (fresh-world))
+         (line (lambda (policy)
+                 (format nil "~{~a ~}" (mapcar #'car (p:echo-content policy world))))))
+    (p:on-window-open (policy) world (win "firefox"))
+    (let ((shipped (funcall line (policy)))
+          (outside (funcall line (make-instance 'coordinate-policy))))
+      (is (search "3,-2" outside)
+          "the status line says where you are in the policy's own words")
+      (is (not (search "3,-2" shipped))
+          "and the shipped policy is untouched by the extension's vocabulary")
+      (is (search (format nil "~{~a~^.~}" (c:world-cursor world)) shipped)
+          "whose own answer is the cursor path, which every layout model has"))))
 
 ;;; ------------------------------------------------- tier 2: method plus state
 

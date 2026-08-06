@@ -34,8 +34,8 @@ instead of it.
 
 *The thesis held, with three qualifications and one bug.*
 
-The lattice is 1,941 lines in six files, of which 26 are ~defmethod~ forms. It
-specialises *eleven* policy generics and *two* persistence generics that the
+The lattice is 1,999 lines in six files, of which 28 are ~defmethod~ forms. It
+specialises *twelve* policy generics and *two* persistence generics that the
 core already declared, adds one new container class, and needed *two* edits
 under =src/= to exist at all. Neither changed a behaviour; one was an omitted
 export and one made a protocol operation total that had been partial.
@@ -55,23 +55,37 @@ The *container* protocol — what a new container kind answers, as against what 
 new policy answers — had no membership test, no generated document and no
 documentation gate, and so it had a generic exported and never defined, two
 members declared in the wrong package, and no statement anywhere of its size.
-See [[#edit-5][core edit 5]]. It is the only one of the five that was found by
-asking what the project checks about itself rather than by tripping over
-something.
+See [[#edit-5][core edit 5]]. It was found by asking what the project checks
+about itself rather than by tripping over something.
 
-All five are the same species: the extension surface was correct for the author
-and incomplete for a stranger, in ways that only being a stranger revealed.
+And a *sixth*, which breaks the pattern the first five share and is the reason
+this file needed a sixth heading rather than a footnote. Every edit above is
+something the lattice *asked for* — it tried to do a thing, the surface would
+not let it, and the request is what got written down. Core edit 6 is the
+opposite: the core had already done the lattice's job for it, in
+=src/policy/appearance.lisp=, by reading the extension's private property key
+off a node and destructuring the extension's private representation of an
+address inline. The lattice never had to ask, so nothing was ever written down,
+and *the list you are reading was incomplete for two months without being
+wrong about anything it contained*. See [[#edit-6][core edit 6]].
+
+The first five are one species: the extension surface was correct for the author
+and incomplete for a stranger, in ways that only being a stranger revealed. The
+sixth is a second species, and a worse one, because being a stranger would not
+have revealed it — the surface *worked*, and it worked because the core was
+quietly doing the extension's half of it.
 
 | Measure | Value |
 |---------+-------|
-| Lines in =lattice/= | 1,941 (386 model, 697 policy, 500 commands, 298 map and overlay, 60 package) |
-| ~defmethod~ forms | 26 |
-| Core generics specialised | 13 (11 policy, 2 persistence) |
+| Lines in =lattice/= | 1,999 (427 model, 714 policy, 500 commands, 298 map and overlay, 60 package) |
+| ~defmethod~ forms | 28 |
+| Core generics specialised | 14 (12 policy, 2 persistence) |
 | Container protocol members | 19, of which the lattice answers 13 |
 | New container classes | 1 |
 | *Core files edited* | *7* (two for the lattice, two for the examples, four for the workspace decision, one shared) |
 | *Core behaviours changed* | *0* |
 | Core bugs exposed by extending | 3 |
+| *Core edits the extension never asked for* | *1* (see [[#edit-6][core edit 6]]) |
 
 Gate 3 asks for the line and method counts precisely because it is satisfiable
 in bad faith — push everything through ~props~ and ~&rest~ arguments and the
@@ -80,18 +94,18 @@ is three hundred lines of methods is the thesis holding. One that is two
 thousand lines re-implementing geometry is the thesis failing while wearing the
 gate's uniform."
 
-1,941 lines is well above three hundred, so the honest question is what the
-extra lines are. They are: the plane's own data structure (386), which nobody
+1,999 lines is well above three hundred, so the honest question is what the
+extra lines are. They are: the plane's own data structure (427), which nobody
 claimed would come free; the zoom, pan and jump *commands* (500), which are
 user-facing verbs rather than layout mechanism; the coordinate overlay and the
 minimap (298), which are two of the three orientation aids DESIGN names as the
-mitigation for its own biggest risk and are drawing code, not layout; and 697
-lines of policy of which the substance is eleven methods and the rest is the
+mitigation for its own biggest risk and are drawing code, not layout; and 714
+lines of policy of which the substance is twelve methods and the rest is the
 reasoning behind them. *No geometry is re-implemented.* The lattice calls
 ~divide-rect~, ~tree-move~, ~tree-swap~, ~tree-transplant~, ~repair-path~,
 ~descend-to-leaf~ and ~find-motion-target~ and defines none of them.
 
-* The eleven policy generics the lattice specialises
+* The twelve policy generics the lattice specialises
 
 This is the whole of the layout, navigation and workspace change.
 
@@ -108,8 +122,12 @@ This is the whole of the layout, navigation and workspace change.
 | ~keys-hint~ | teach the two facts about cells nothing else can |
 | ~on-focus-change~ | remember which cell each plane was left standing in |
 | ~make-workspace~ | *a workspace is a plane* — the entire Z axis, in one method |
+| ~cursor-place-name~ | the status line says =3,-2= rather than =0.1.0= |
 
 Plus ~serialize-node~ and ~deserialize-node~, so a plane survives a restart.
+
+~cursor-place-name~ is the newest and is here for an unflattering reason: the
+core used to answer it *for* the lattice. See [[#edit-6][core edit 6]].
 
 ~make-workspace~ is the one that arrived last and matters most, because it is
 the difference between the lattice being an arrangement you set up and being
@@ -531,16 +549,96 @@ project checks about itself and noticing an asymmetry. Those are different
 methods and the second one is cheaper — but it only works on a project that
 already has one good half to compare the other against.
 
+* Core edit 6 — the core doing the extension's job for it
+:PROPERTIES:
+:CUSTOM_ID: edit-6
+:END:
+
+*File:* =src/policy/appearance.lisp=, =lattice/policy.lisp=,
+=src/package.lisp=, =tools/gates.lisp=. *Change:* the echo area asks a generic
+where the cursor is instead of reading the lattice's property key itself.
+*Behaviour changed:* none, with or without the lattice loaded. *Found by:*
+auditing why gate 6 passed, which is the least likely place anybody would have
+looked for it.
+
+*The edit that was already there.* The shipped ~echo-content~ built its
+"place" segment like this:
+
+#+begin_src lisp
+(place (or (and node (c:prop node :lattice/address)
+                (format nil "~d,~d"
+                        (car (c:prop node :lattice/address))
+                        (cdr (c:prop node :lattice/address)))))
+#+end_src
+
+Two things about the extension are compiled into the core there: the property
+key =:lattice/address=, and the fact that an address is a cons of x and y. Both
+are ~lattice/grid.lisp~'s private business, and the second one is the kind of
+private that breaks silently — the day an address becomes a struct, the status
+line stops showing coordinates and nothing fails.
+
+*Why this one is not on the list above.* Every core edit in this file exists
+because the lattice tried to do something and could not. This one is the
+inverse and it is worth stating as a rule, because it generalises past this
+project:
+
+#+begin_quote
+*An extension point can be defeated by the core using it correctly.*
+~echo-content~ was made a generic — in ~4fe8811~, explicitly so that "a lattice
+policy would sensibly add the viewport" — and then the *default method* did the
+lattice's part of the job, so the lattice never overrode it and the generic was
+never exercised from outside. A seam is only a seam if somebody on the other
+side has to reach for it.
+#+end_quote
+
+Every check the project has was satisfied. Gate 2 saw a documented generic.
+The generated extension surface listed it. Gate 3 asked whether the lattice
+touches the core, and it does not — this was the core touching the *lattice*,
+which nothing asked. Gate 6, as it then was, counted lines by directory and
+would have counted these four lines as *policy*, which they are, in the sense
+that has nothing to do with the question. And the behaviour was right: load the
+lattice and the status line shows =3,-2=, because the core had already written
+the code to make it.
+
+*The repair, and the two checks it comes with.* ~cursor-place-name (policy
+world)~ is a generic on the appearance surface; its shipped default answers the
+cursor path, which is the one name every layout model has; the lattice answers
+~cell-string~, four lines, on the outside. Nothing else moved.
+
+Then the checks, because a repair without one is a coincidence:
+
+- *Gate 3 gained the direction it never had.* No file under =src/= may name an
+  extension's private namespace. It scans code with comments and string bodies
+  blanked, so the docstrings that explain the rule — including the one above —
+  cannot satisfy or trip it. That distinction is not pedantry: gate 3's own
+  first version failed on being told it passed.
+- *Gate 6 became the count of generics answered from outside =src/=.* This edit
+  moves it by one, which is the smallest possible demonstration that the number
+  measures the right thing: a boundary correction that changes no behaviour and
+  moves no file still shows up, because a method got written on the outside that
+  was not there before.
+
+*Cost:* one generic, two methods, one export, and about forty lines of gate.
+Zero behaviour changes, zero source files moved.
+
+*What it says about the five above:* they are all things a stranger found by
+being a stranger. This one a stranger could not have found, because from the
+outside the surface worked perfectly — the lattice's status line said the right
+thing. It was only visible from inside, by asking why a *gate* was passing.
+That is the third distinct method in this file, after "write an extension and
+trip over something" and "ask what the project checks about itself", and it is
+the most expensive of the three: it needs somebody to distrust a green build.
+
 * The counts, for gate 3
 
 : lattice/package.lisp     60 lines    0 defmethods
-: lattice/grid.lisp       386 lines   14 defmethods   (the container protocol)
-: lattice/policy.lisp     697 lines   11 defmethods   (layout, motion, colour)
+: lattice/grid.lisp       427 lines   15 defmethods   (the container protocol)
+: lattice/policy.lisp     714 lines   12 defmethods   (layout, motion, colour)
 : lattice/commands.lisp   500 lines    0 defmethods   (18 commands)
 : lattice/map.lisp        170 lines    1 defmethod    (the minimap)
 : lattice/overlay.lisp    128 lines    0 defmethods   (the coordinate overlay)
 : --------------------------------------------------
-: total                 1,941 lines   26 defmethods
+: total                 1,999 lines   28 defmethods
 
 : core files edited              7   (one export, one default method, one
 :                                    class-hierarchy correction, four for

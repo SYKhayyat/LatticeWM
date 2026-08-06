@@ -25,6 +25,83 @@
 (defmacro sym (name) `(read-from-string ,name))
 (defun call (name &rest arguments) (apply (read-from-string name) arguments))
 
+(defparameter *root*
+  (truename (or (uiop:getenv "LATTICEWM_ROOT") *default-pathname-defaults*))
+  "The project.  Gates that ask a *file* a question resolve it against this.")
+
+(defun under (directory path)
+  "True when PATH is a file inside DIRECTORY of the project.
+
+Asked of a truename against the project root rather than by searching the
+namestring for a substring, because a checkout in ~/src/latticewm/ would
+otherwise answer yes to everything."
+  (let ((prefix (namestring (merge-pathnames directory *root*)))
+        (name (namestring (or (ignore-errors (truename path))
+                              (merge-pathnames path *root*)))))
+    (eql 0 (search prefix name))))
+
+(defun relative (path)
+  "PATH written from the project root, so lattice/policy.lisp is not policy.lisp."
+  (let ((root (namestring *root*))
+        (name (namestring (or (ignore-errors (truename path))
+                              (merge-pathnames path *root*)))))
+    (if (eql 0 (search root name)) (subseq name (length root)) name)))
+
+(defun code-of (path)
+  "PATH's text with comment and string contents blanked out.
+
+A GATE MUST NOT BE SATISFIABLE BY BEING TOLD IT PASSES.  Gate 3's first
+version searched the lattice's *source* for \"src/\" and flagged four
+docstrings that said the lattice touches no file under src/.  Every check below
+that greps for a token has that failure mode, and the only fix that stays fixed
+is to stop greps seeing prose: a docstring explaining a rule reads as an empty
+string, so it can neither satisfy a check nor trip one.
+
+Line structure is preserved so the caller can still report a line number, and
+so a multi-line docstring cannot hide a real occurrence on a later line."
+  (let ((text (with-open-file (in path)
+                (let ((buffer (make-string (file-length in))))
+                  (subseq buffer 0 (read-sequence buffer in))))))
+    (let* ((end (length text))
+           (out (copy-seq text))
+           (index 0))
+      (flet ((blank (from to)
+               (loop for i from from below to
+                     unless (char= #\Newline (char text i))
+                       do (setf (char out i) #\Space))))
+        (loop while (< index end)
+              do (let ((c (char text index)))
+                   (cond
+                     ;; A single escape.  #\; is a character literal and #\"
+                     ;; opens nothing; skipping the escaped character is the
+                     ;; whole of what is needed to get both right.
+                     ((char= c #\\) (incf index 2))
+                     ((char= c #\;)
+                      (let ((stop (or (position #\Newline text :start index) end)))
+                        (blank index stop)
+                        (setf index stop)))
+                     ((char= c #\")
+                      (let ((stop (loop with i = (1+ index)
+                                        while (< i end)
+                                        do (cond ((char= (char text i) #\\) (incf i 2))
+                                                 ((char= (char text i) #\") (return i))
+                                                 (t (incf i)))
+                                        finally (return end))))
+                        (blank (1+ index) stop)
+                        (setf index (min end (1+ stop)))))
+                     (t (incf index))))))
+      out)))
+
+(defun code-lines (path)
+  "PATH as (line-number . code) pairs, comments and string bodies removed."
+  (let ((code (code-of path)))
+    (loop with number = 1
+          for start = 0 then (1+ stop)
+          for stop = (position #\Newline code :start start)
+          collect (cons number (subseq code start (or stop (length code))))
+          do (incf number)
+          while stop)))
+
 ;;; ---------------------------------------------------------------- gate 2
 
 (banner 2 "every generic on either surface, and every command, is documented")
@@ -57,7 +134,35 @@
 
 ;;; ---------------------------------------------------------------- gate 3
 
-(banner 3 "the lattice touches no core")
+(banner 3 "the lattice touches no core, and the core names no lattice")
+;; THE SECOND HALF OF THAT TITLE IS NEW, AND IT IS THE DIRECTION THAT BROKE.
+;;
+;; For the whole life of the project this gate asked one question — does the
+;; extension reach into the core? — and the answer was always no.  Nothing
+;; asked the mirror question, and the mirror question had been failing since
+;; the echo area was written: the *shipped default* of ECHO-CONTENT, in
+;; src/policy/appearance.lisp, read :LATTICE/ADDRESS off the focused node and
+;; destructured the extension's private cons representation inline.
+;;
+;; It is worth being exact about why nothing saw it.  It is not a core edit
+;; the lattice asked for, so it never appeared in FINDINGS.org's list.  The
+;; lattice does not touch it, so this gate passed.  It is documented and
+;; dispatches on a policy class, so gate 2 and the extension surface were
+;; happy.  And it *works* — with the lattice loaded the status line shows the
+;; coordinate, which is what everybody wanted, achieved by the core doing the
+;; extension's job for it.  The generic that existed to prove the boundary was
+;; crossed by its own default implementation, in the same file.
+;;
+;; A boundary is two rules, and a project that checks one of them has a
+;; boundary on one side.  CURSOR-PLACE-NAME is the repair; this is the check
+;; that keeps it repaired.
+(defparameter *extension-namespaces* '(":lattice/")
+  "Namespaces that belong to an extension and may not appear in src/.
+
+One entry today.  A second extension adds a second string, and that is the
+whole maintenance burden -- the alternative, deriving the list from what is
+loaded, cannot work here precisely because nothing under src/ is allowed to
+know the extension exists.")
 ;; GATE 3 USED TO BE A REPORT WEARING A GATE'S UNIFORM.  It computed two
 ;; numbers, printed them, and called FAIL under no circumstance whatsoever —
 ;; so "ALL GATES PASS" read as eight assertions when it was six assertions and
@@ -94,12 +199,35 @@
              (with-open-file (in "lattice.asd")
                (loop for line = (read-line in nil) while line
                      when (and (search "\"src" line) (search ":file" line))
-                       collect line))))
+                       collect line)))
+           (reach-ins
+             ;; The mirror, over code only -- CODE-OF blanks comments and
+             ;; string bodies, so this docstring and the ones in
+             ;; appearance.lisp and lattice/policy.lisp that explain the rule
+             ;; are invisible to it.  That is not a nicety: the explanation of
+             ;; why :LATTICE/ADDRESS must not be in src/ has to be allowed to
+             ;; say ":LATTICE/ADDRESS".
+             (loop for path in (directory "src/**/*.lisp")
+                   append (loop for (number . code) in (code-lines path)
+                                when (some (lambda (namespace)
+                                             (search namespace code
+                                                     :test #'char-equal))
+                                           *extension-namespaces*)
+                                  collect (format nil "~a:~d"
+                                                  (relative path) number)))))
       (format t "  lattice/: ~d lines (budget ~d), ~d defmethods (floor ~d)~%"
               lines *lattice-line-budget* methods *lattice-method-floor*)
       (when core-edits
         (fail 3 "lattice.asd claims a component under src/: ~{~a~^ ~}"
               core-edits))
+      (when reach-ins
+        (fail 3 "src/ names an extension's private namespace at ~{~a~^, ~}.~%~
+                 ~4tThe core doing an extension's job for it is still a core~%~
+                 ~4tedit, and it is the kind that never appears on the list~%~
+                 ~4tbecause the extension never had to ask.  Give the~%~
+                 ~4tdecision a generic and let the extension answer it --~%~
+                 ~4tCURSOR-PLACE-NAME is the worked example."
+              reach-ins))
       (when (> lines *lattice-line-budget*)
         (fail 3 "the lattice is ~d lines against a budget of ~d -- ~
                  an extension this size is a second core, and the thesis is ~
@@ -111,9 +239,10 @@
                  the protocol rather than through it, which passes the letter ~
                  of this gate and fails its point"
               methods *lattice-method-floor*))
-      (unless (or core-edits (> lines *lattice-line-budget*)
+      (unless (or core-edits reach-ins (> lines *lattice-line-budget*)
                   (< methods *lattice-method-floor*))
-        (format t "  no core edits, and the numbers are in range~%")))
+        (format t "  no core edits, no reach-ins from src/, ~
+                   and the numbers are in range~%")))
     (fail 3 "lattice.asd is missing -- the experiment is not being run"))
 
 ;;; ---------------------------------------------------------------- gate 4
@@ -213,57 +342,155 @@
 
 ;;; ---------------------------------------------------------------- gate 6
 
-(banner 6 "the runtime-to-policy line ratio")
-(flet ((count-lines (pattern &key (skip '()))
-         ;; Generated files are excluded and named.  The ratio is meant to
-         ;; measure *authored* runtime against authored policy; a vendored font
-         ;; table is neither, and counting 95 lines of hex as runtime would make
-         ;; the number say something it does not mean.  Excluding it is only
-         ;; honest if the exclusion is visible, so it is printed.
-         (reduce #'+ (remove-if (lambda (path)
-                                  (member (file-namestring path) skip
-                                          :test #'string=))
-                                (directory pattern))
-                 :key
-                 (lambda (path)
-                   (with-open-file (in path)
-                     (loop for line = (read-line in nil) while line
-                           unless (or (zerop (length (string-trim " " line)))
-                                      (char= #\; (char (string-left-trim " " line) 0)))
-                             count t))))))
-  (let* ((runtime (+ (count-lines "src/wire/*.lisp")
-                     (count-lines "src/runtime/*.lisp" :skip '("font.lisp"))))
-         (policy (+ (count-lines "src/model/*.lisp")
-                    (count-lines "src/policy/*.lisp")
-                    (count-lines "lattice/*.lisp")))
-         (ratio (if (plusp runtime) (/ (float policy) runtime) 0)))
-    ;; PLAN.org §extensibility-real: Lisp is not what kept Emacs alive, the
-    ;; *ratio* is — 1.3 million lines of Elisp on 400,000 of C, so every
-    ;; feature is a worked example of how to write a feature.  Vim, Neovim and
-    ;; Hyprland all have a scripting language and are not Emacs; the boundary
-    ;; is not the disease, how little of the system lives above it is.
-    ;;
-    ;; A NUMBER *AND* A FLOOR.  It was a number alone, and a number alone
-    ;; cannot fail — so this was the second of the two gates that were
-    ;; measurements wearing a gate's uniform.  The floor is deliberately well
-    ;; below where the project sits, because the point is to catch a *trend*
-    ;; before it becomes a shape: runtime outgrowing policy is the earliest
-    ;; visible symptom of the monolith failure mode, and it shows up weeks
-    ;; before anything else does.
-    (format t "  runtime (wire + runtime)~40t~d lines  (font.lisp excluded: generated)~%"
-            runtime)
-    (format t "  policy  (model + policy + lattice)~40t~d lines~%" policy)
-    (format t "  ratio~40t~,2f~a~%" ratio
-            (cond ((>= ratio 2.0) "   Emacs-shaped")
-                  ((>= ratio 1.0) "   healthy")
-                  ((>= ratio 0.8) "   <-- watch this: runtime is outgrowing policy")
-                  (t "   FAILING")))
-    (when (< ratio 0.8)
-      (fail 6 "the runtime-to-policy ratio is ~,2f, below the floor of 0.80.~%~
-               ~4tPLAN.org §extensibility-real: Lisp is not what kept Emacs~%~
-               ~4talive, the *ratio* is.  Something that should have been a~%~
-               ~4tdecision has been written as machinery."
-            ratio))))
+(banner 6 "how much of the behaviour is answered from outside src/")
+;; THIS GATE USED TO BE THE RUNTIME-TO-POLICY LINE RATIO, AND THE RATIO HAD TO
+;; GO.  It is worth spending the space, because deleting a gate is the thing
+;; this file is least willing to do and the argument had better be good.
+;;
+;; The ratio counted non-blank non-comment lines: src/wire/ + src/runtime/
+;; against src/model/ + src/policy/ + lattice/, floored at 0.80, sitting at
+;; 0.99.  It stood for PLAN §extensibility-real — Lisp is not what kept Emacs
+;; alive, the *ratio* is; 1.3 million lines of Elisp on 400,000 of C, so every
+;; feature is a worked example of how to write a feature.  That argument is
+;; still correct.  It is the measurement that stopped tracking it.
+;;
+;; Three tells, and any one of them would have been enough:
+;;
+;;   * IT PASSED ON ACCOUNTING.  Moving policy/appearance.lisp and
+;;     policy/keys.lisp back to src/runtime/ takes it to 0.76, below the floor.
+;;     Dropping lattice/ — an *optional extension*, in the numerator, that gate
+;;     4 exists to prove the core does not need — takes it to 0.77.  Both, and
+;;     it is 0.56.  The margin over the floor was two files and an extension.
+;;
+;;   * THE FLOOR WAS SET AFTER THE POSITION WAS ARRANGED.  0.80 was written in
+;;     the same session the number was walked from 0.82 to 1.17 by relocation,
+;;     so "deliberately well below where the project sits" described a floor
+;;     placed under a number that had just been pushed up.
+;;
+;;   * THE MOVES WERE MOVES.  Across the four commits that recovered it, two
+;;     reproduce 92-100% of the relocated lines verbatim and add no dispatch
+;;     point at all; the commit whose message says the recovery was "on a real
+;;     change rather than an accounting one" also changed the counting rule,
+;;     and the rule was worth +0.035 of a +0.039 recovery.  Ninety percent of
+;;     the change the message denied being accounting was accounting.
+;;
+;; None of that is dishonesty.  It is what a proxy does once it is cheaper to
+;; satisfy than the property behind it, and a build gate is exactly the place
+;; where that gets rewarded every time.  When the metric and the property
+;; disagree, the tree gets rearranged to fit the metric — and that is a gate
+;; actively shaping where new code is filed, which is worse than no gate.
+;;
+;; SO ASK THE QUESTION THE RATIO WAS A PROXY FOR.  The Emacs claim is not about
+;; where files sit.  It is that most of the system's *behaviour* is expressible
+;; in the extension language, from outside, by somebody who cannot edit the
+;; core.  Gate 3 already contains this check in embryo — it counts the
+;; lattice's DEFMETHODs against a floor, precisely because an extension that
+;; answers almost no generics is going round the protocol.  Generalise it to
+;; the whole surface and it becomes the measurement:
+;;
+;;   how many policy generics have a specialising method defined outside src/,
+;;   and how many such methods are there?
+;;
+;; No file can be moved to change either number.  A method outside src/ is a
+;; method outside src/, and the only way to raise these is to write one.
+;;
+;; The number is much less flattering than 0.99, and that is the point:
+;; 15 of 65 generics have ever been specialised by anything but their own
+;; shipped default.  Fifty carry a docstring and a gate-2 obligation against a
+;; maybe.  That is the real state of the extension surface, and it is now the
+;; number printed on every build instead of a comfortable ratio.
+;;
+;; WHY THIS RUNS AFTER GATE 4 AND NOT BEFORE.  It has to load the lattice and
+;; the worked examples, which are the only things outside src/ that specialise
+;; anything.  Gate 4's whole job is proving the core comes up with the lattice
+;; *absent*, so it has to have already run in a clean image.  The order is
+;; load-bearing; do not move this above it.
+;;
+;; LOADING THE EXAMPLES IS ITSELF A CHECK, and it is one nothing else performs.
+;; Gate 1 compiles latticewm and lattice; the four files under examples/ are
+;; compiled by nothing, and they are what EXTENDING.org tells a stranger to
+;; read first.  A rename in the core that breaks one of them is exactly the bug
+;; that broke lattice/map.lisp when the lattice was not on gate 1's list, found
+;; by a user's config file failing at startup.
+(defparameter *outside-generic-floor* 15
+  "Policy generics with at least one specialising method outside src/.
+
+SET AT THE NUMBER, NOT COMFORTABLY BELOW IT, and that is a deliberate break
+with how the ratio's floor was set.  A floor with slack under it is an
+invitation to spend the slack; this one is a ratchet.  It is safe to be a
+ratchet because the number cannot fall by accident -- there is no rearrangement
+of the tree that lowers it, only the deletion of a method somebody wrote on the
+outside.  Lowering it is therefore a decision, which is what a threshold is
+for.
+
+PLAN.org §generics wrote down the shape and never got it: \"If this list
+reaches thirty, the decomposition has gone wrong in the direction of ceremony.\"
+The list is at sixty-five.  A threshold nobody is ever made to argue with is a
+decoration, and the way to stop that is to leave no slack to spend quietly.")
+
+(defparameter *outside-method-floor* 22
+  "Methods on policy generics defined outside src/.
+
+The second number because the first one alone can be gamed the way gate 3's
+line budget can: one token method per generic answers the count and demonstrates
+nothing.  Together they say breadth *and* depth.")
+
+(handler-bind ((warning #'muffle-warning))
+  (asdf:load-system "lattice"))
+
+(let ((examples (sort (directory "examples/*.lisp") #'string< :key #'namestring))
+      (broken '()))
+  (dolist (path examples)
+    (handler-case (handler-bind ((warning #'muffle-warning)) (load path))
+      (error (condition)
+        (push (format nil "~a: ~a" (relative path) condition) broken))))
+  (when broken
+    (fail 6 "a worked example no longer loads: ~{~%    ~a~}~%    ~
+             examples/ is what EXTENDING.org sends a stranger to read, and ~
+             nothing~%    else in the build compiles it."
+          (reverse broken)))
+  (let* ((generics (call "latticewm/policy:policy-generics"))
+         (outside '()))
+    (dolist (name generics)
+      (let ((files (remove-duplicates
+                    (loop for method in (closer-mop:generic-function-methods
+                                         (fdefinition name))
+                          for source = (ignore-errors
+                                        (sb-introspect:find-definition-source method))
+                          for file = (and source
+                                          (sb-introspect:definition-source-pathname
+                                           source))
+                          ;; A method whose source SBCL cannot name counts as
+                          ;; inside, which is the conservative direction: it
+                          ;; can only make this gate harder to pass.
+                          when (and file (not (under "src/" file)))
+                            collect (relative file))
+                    :test #'string=)))
+        (when files (push (cons name files) outside))))
+    (let ((count (length outside))
+          (methods (reduce #'+ outside :key (lambda (entry) (length (cdr entry))))))
+      (dolist (entry (sort outside #'string< :key (lambda (e) (symbol-name (car e)))))
+        (format t "    ~(~a~)~24t~{~a~^  ~}~%" (car entry) (cdr entry)))
+      (format t "  specialised from outside src/~46t~d of ~d  (floor ~d)~%"
+              count (length generics) *outside-generic-floor*)
+      (format t "  methods answering them from outside src/~46t~d  (floor ~d)~%"
+              methods *outside-method-floor*)
+      (format t "  answered only by their own shipped default~46t~d~%"
+              (- (length generics) count))
+      (when (< count *outside-generic-floor*)
+        (fail 6 "~d policy generic~:p ~:*~[have~;has~:;have~] a specialising ~
+                 method outside src/, against a floor of ~d.~%~
+                 ~4tPLAN.org §extensibility-real: the boundary is not the~%~
+                 ~4tdisease, how little of the system lives above it is.~%~
+                 ~4tSomething that used to be answerable from outside is not."
+              count *outside-generic-floor*))
+      (when (< methods *outside-method-floor*)
+        (fail 6 "~d method~:p on policy generics are defined outside src/, ~
+                 against a floor of ~d.~%~
+                 ~4tThe surface is being demonstrated in fewer places than it~%~
+                 ~4twas.  A generic nobody has answered from outside is a~%~
+                 ~4tdocstring, not an extension point."
+              methods *outside-method-floor*)))))
 
 ;;; ---------------------------------------------------------------- gate 7
 

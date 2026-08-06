@@ -1,30 +1,37 @@
 ;;;; policy/appearance.lisp --- What the window manager draws, as decisions.
 ;;;;
-;;;; GATE 6, AND WHY THIS FILE EXISTS
+;;;; WHY THIS FILE EXISTS
 ;;;;
-;;;; Gate 6 reports (model + policy + lattice) against (wire + runtime), on the
-;;;; argument in PLAN §extensibility-real: Lisp is not what kept Emacs alive,
-;;;; the *ratio* is.  1.3 million lines of Elisp on 400,000 of C means every
-;;;; feature is a worked example of how to write a feature.  Vim, Neovim and
-;;;; Hyprland all have a scripting language and none of them is Emacs; the
-;;;; boundary is not the disease, how little of the system lives above it is.
-;;;;
-;;;; The number went 1.20 -> 0.82 -> 0.80 as the drawing and interaction
-;;;; subsystem was built, and PLAN §log2 left the question open: is gate 6
-;;;; measuring the wrong pair, or is the decomposition failing?  §log3 rules:
-;;;; *neither*.  The widget layer should become extensible, and the ratio
-;;;; should move because code crosses the line — not because the line moves.
-;;;;
-;;;; Gate 6 counts by directory, which is not a flaw in it.  It is the gate
-;;;; insisting the decomposition be real: a DEFINE-OPTION that lives in
-;;;; src/runtime/ is still something a user has to read the runtime to find.
-;;;;
-;;;; So the split here is the Emacs one.  The C core does redisplay primitives;
+;;;; The split here is the Emacs one.  The C core does redisplay primitives;
 ;;;; Elisp decides what goes on the mode line.  Shared-memory buffers, the fd
 ;;;; path, glyph blitting and surface lifecycle stay in src/runtime/.  Colours,
 ;;;; scales, what a status line is made of, how many columns a help screen
 ;;;; uses, and *which font gets drawn for which role* are decisions, and they
 ;;;; live here.
+;;;;
+;;;; THIS HEADER USED TO SAY THAT GATE 6 IS WHY, AND THAT WAS THE PROBLEM.
+;;;;
+;;;; Gate 6 was a line-count ratio — (model + policy + lattice) against (wire +
+;;;; runtime), floored at 0.80 — and it read as a direct measurement of PLAN
+;;;; §extensibility-real: Lisp is not what kept Emacs alive, the *ratio* is.
+;;;; The move that created this file was made partly to satisfy it, and this
+;;;; header said so, and PLAN §log4 through §log6 are three sessions of moving
+;;;; code to make a number go up.
+;;;;
+;;;; The number went up.  Two of those commits reproduce 92-100% of the moved
+;;;; lines verbatim and added no dispatch point at all, and the one that claimed
+;;;; to be "a real change rather than an accounting one" was 90% a change to the
+;;;; counting rule.  A metric that can be satisfied by `git mv' will be, and
+;;;; once it can be, it has stopped measuring anything.  Gate 6 is now the
+;;;; question the ratio was a proxy for and could not ask — how much of the
+;;;; behaviour is expressible from *outside* src/ — which no amount of moving
+;;;; files can change.
+;;;;
+;;;; What survives from the old argument is the argument itself, above.  A
+;;;; DEFINE-OPTION that lives in src/runtime/ is still something a user has to
+;;;; read the runtime to find, and that is true whether or not anything counts
+;;;; the lines.  The moves this file is made of were right for that reason.
+;;;; They were not right because they moved a number.
 
 (in-package #:latticewm/policy)
 
@@ -485,6 +492,31 @@ split it, move between the pieces, close one, and find everything else."))
                    ~a+/ all keys"
               mod mod mod mod mod))))
 
+(defgeneric cursor-place-name (policy world)
+  (:documentation
+   "Where the cursor is, in whatever vocabulary this policy uses for places.
+
+A short string for the status line, never NIL.  The shipped answer is the
+cursor path -- 0.1.0 -- because a path is the one name every layout model has.
+A policy that gives places a better name answers with that instead: the lattice
+returns the cell coordinate, 3,-2.
+
+THIS GENERIC IS THE REPAIR OF A CORE EDIT, and the edit is worth knowing about
+because nothing in the project could see it.  ECHO-CONTENT's default method
+used to read :LATTICE/ADDRESS off the node and destructure the cons itself --
+so the extension's private property key and its private representation of an
+address were both hard-coded into src/policy/, by the shipped default, on the
+argument that the lattice \"would sensibly add the viewport\" to the echo area.
+The lattice never overrode ECHO-CONTENT; it did not have to, because the core
+had already done the work for it.
+
+Gate 3 checks that the lattice touches no core and could not see this, because
+it was the core touching the *lattice*.  It checks both directions now."))
+
+(defmethod cursor-place-name ((policy appearance-policy) world)
+  "The cursor path, dotted: the fallback every layout model can answer."
+  (format nil "~{~a~^.~}" (c:world-cursor world)))
+
 (defmethod echo-content ((policy appearance-policy) world)
   "The shipped echo area: workspace, place, contents, counts, last message."
   (let* ((root (c:world-root world))
@@ -504,16 +536,13 @@ split it, move between the pieces, close one, and find everything else."))
                           (c:container-count workspaces))
                   :normal)
             segments))
-    ;; Where the cursor is, in whatever terms the layout makes available.  The
-    ;; lattice puts a coordinate on the node; without it, the path is the
-    ;; honest answer and is still better than nothing.
-    (let* ((node (c:world-node-at world))
-           (place (or (and node (c:prop node :lattice/address)
-                           (format nil "~d,~d"
-                                   (car (c:prop node :lattice/address))
-                                   (cdr (c:prop node :lattice/address))))
-                      (format nil "~{~a~^.~}" (c:world-cursor world)))))
-      (push (cons place :accent) segments))
+    ;; Where the cursor is, in whatever terms the layout makes available --
+    ;; asked, not assumed.  See CURSOR-PLACE-NAME for what this line used to be
+    ;; and why it is a generic now.
+    (push (cons (or (guarded "cursor-place-name" (cursor-place-name policy world))
+                    "")
+                :accent)
+          segments)
     (push (cons (cond ((null leaf) "")
                       ((c:leaf-empty-p leaf)
                        (format nil "empty -- ~{~a~^ ~} to open"

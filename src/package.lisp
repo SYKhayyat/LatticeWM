@@ -248,7 +248,7 @@ You never edit this package.")
    #:gaps #:border-width #:border-color #:visible-p #:render-order
    #:clip-rect #:outer-rect #:reserved-space #:run-reserve-hooks
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
-   #:echo-content
+   #:echo-content #:cursor-place-name
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change #:focus-target

@@ -208,13 +208,27 @@ Vim has Vimscript and is not Emacs. Neovim has Lua and is not Emacs. Hyprland ha
 of 0.55 and is not Emacs. In all three the core is C or C++ and the scripting sits on
 top. The boundary is not the disease. *How little of the system lives above it* is.
 
-*Therefore the load-bearing metric is the runtime-to-policy line ratio*, and it is
-checked continuously rather than discovered at the end. See gate 6.
+*Therefore the load-bearing metric is how much of the behaviour lives above the
+boundary*, and it is checked continuously rather than discovered at the end. See gate 6.
 
 | Shape | Runtime | Policy | Meaning |
 |-------+---------+--------+---------|
 | Emacs shape | ~500 | ~1,500 | the language bought something real |
 | Vim shape | ~2,000 | ~200 | CLOS paid for, nothing received |
+
+*Amended 2026-08-06.* This section originally read "the load-bearing metric is the
+runtime-to-policy line *ratio*", and the table above is what that meant. The ratio was
+gate 6 for the life of the project and is now deleted; [[#gates][§gates]] item 6 carries
+the argument. The correction is not to the paragraphs above — Emacs' million lines of
+Elisp really are the mechanism, and "how little of the system lives above the boundary"
+really is the disease — it is that *lines by directory* is the wrong reading of "above
+the boundary". A file's directory is a filing decision. What is actually being claimed
+is that a stranger can change the system's behaviour without editing the core, and the
+only direct evidence of that is *methods a stranger wrote*. Counting those instead
+survives the one attack the ratio did not: you cannot move a file into the answer.
+
+Read the table above as illustrative of the argument rather than as the metric. The
+metric is the two numbers in [[#gates][§gates]] item 6.
 
 *The compounding took Emacs decades and this project has fifteen days.* What gets built
 here is the seed, not the advantage. Whether it compounds is entirely a function of other
@@ -292,13 +306,31 @@ defence the project has.
    exit. The extension must be genuinely optional or it is not an extension.
 5. *Codegen counts match the pinned XML.* 8/57/44/10 for window-management, 3/11/5/1
    for xkb. A protocol change becomes a failing build rather than a mystery.
-6. *The runtime-to-policy line ratio is reported on every build.* Not pass/fail, a
-   number, printed where it cannot be ignored. ~src/wire/~ + ~src/runtime/~ against
-   ~src/model/~ + ~src/policy/~ + ~lattice/~. This is the Emacs-shape test from
+6. *How much of the behaviour is answered from outside ~src/~.* Two numbers against two
+   floors: policy generics with at least one specialising method defined outside ~src/~,
+   and the count of such methods. This is the Emacs-shape test from
    [[#extensibility-real][§extensibility-real]] and it is the closest thing to a direct
-   measurement of whether the language decision paid off. Check it on Day 9. Runtime
-   growing faster than policy is the earliest visible symptom of the monolith failure
-   mode, and it shows up weeks before anything else does.
+   measurement of whether the language decision paid off.
+
+   *This was written as the runtime-to-policy line ratio, and the ratio was deleted on
+   2026-08-06.* The plan asked for a number "printed where it cannot be ignored"; it
+   became a number with a floor, because a number alone cannot fail. What neither
+   version could survive is that a ratio of line counts *by directory* is satisfiable by
+   moving files. It was, four times — see [[#log4][§log4]], [[#log5][§log5]],
+   [[#log6][§log6]] — walking 0.82 to 1.17 largely by relocation, two of those commits
+   reproducing 96–100% of the moved lines verbatim with no new dispatch point, one of
+   them recovering 90% of its gain by changing the counting rule while its message denied
+   being an accounting change, and the 0.80 floor set *after* the position had been
+   arranged. Most of those moves were right for other reasons and stay. The metric does
+   not: a gate that is cheaper to satisfy by ~git mv~ than by writing a method will be
+   satisfied that way, and then it is shaping where code is filed rather than measuring
+   anything.
+
+   The replacement asks the question the ratio was a proxy for, and no rearrangement of
+   the tree can move it. It is gate 3's ~defmethod~ floor — "an extension that answers
+   almost no generics is going round the protocol" — generalised from the lattice to the
+   whole surface. It sits at *15 of 65*, which is the honest number and is much less
+   flattering than 0.99.
 
 *Gate 3 is necessary and not sufficient, and this must be said out loud.* It is
 satisfiable in bad faith: make every core generic take ~&rest args~, push all state
@@ -1880,3 +1912,153 @@ asserts that a real river 0.4.6 reported an integer for the output and for a
 client window and that neither is being recorded. It is 165 checks in
 twenty-two sections now. Gate 8 covers the two new handlers by construction:
 both events exist on the interfaces they are handled for, or the gate says so.
+
+* Tenth session — 2026-08-06: the metric that shaped the tree
+:PROPERTIES:
+:CUSTOM_ID: log10
+:END:
+
+Gate 6 was the runtime-to-policy line ratio for the whole life of the project. It is
+gone, replaced by the question it was standing in for. This is the largest single change
+to what the build asserts, so the argument is written out.
+
+** What the ratio actually measured
+
+Non-blank, non-comment lines: ~src/wire/~ + ~src/runtime/~ (minus ~font.lisp~) as the
+denominator, ~src/model/~ + ~src/policy/~ + ~lattice/~ as the numerator, floor 0.80. At
+the commit this session starts from it is 6,783 / 6,772 = *1.0016*.
+
+It passes on two accounting choices and either one alone sinks it. All three recomputed
+by hand under gate 6's own counting rule:
+
+- move ~policy/appearance.lisp~ (510 counted lines) and ~policy/keys.lisp~ (353) back
+  under ~src/runtime/~ — where both were written — and it is 5,920 / 7,635 = *0.7754*;
+- drop ~lattice/~ — 1,457 counted lines of an *optional extension that gate 4 exists to
+  prove the core does not need* — out of the numerator and it is 5,326 / 6,772 = *0.7865*;
+- both, and it is 4,463 / 7,635 = *0.5845*.
+
+The margin over the floor was the two files that were moved last, plus an extension in
+the numerator.
+
+** And the history says the same thing
+
+Four commits recovered it, and the ratio reconstructed under gate 6's own rule at each
+parent and child:
+
+| commit | before → after | what moved | reproduced verbatim |
+|--------+----------------+------------+---------------------|
+| ~0e1d166~ | 0.8196 → 0.8556 | the widget layer starts crossing | 52 of 238 = 22% |
+| ~4fe8811~ | 1.0091 → 1.0130 | 11 lines into policy | a ~defgeneric~ docstring |
+| ~7e1f13b~ | 0.8556 → 1.0107 | ~commands.lisp~, ~log.lisp~ git-detected *renames* | 100% |
+| ~5c3db2e~ | 1.0107 → 1.1653 | ~policy/keys.lisp~ +278, ~runtime/keys.lisp~ −222 | 219 of 237 = 92% |
+
+"Reproduced verbatim" is measured the blunt way, because the blunt way cannot be argued
+with: how many of the lines the commit *added* to the policy side appear, character for
+character after trimming, among the lines the same commit *removed* from the runtime
+side. ~7e1f13b~ is 100% by construction — git detected the files as renames.
+
+And the part that decides it. ~4fe8811~'s message ends "back to 1.01, on a real change
+rather than an accounting one." That commit *also changed the counting rule* — it added
+the ~font.lisp~ skip, in the same diff, four paragraphs above that sentence. Under the
+old rule its parent is 0.9740; under the new rule the *same parent*, unchanged, is
+1.0091. Rule change +0.0351, code change +0.0039, total recovery +0.0390. *Ninety percent
+of the recovery the message explicitly denied being accounting was accounting.*
+
+The exclusion itself is defensible — 95 lines of vendored hex is not authored runtime —
+and it was named in the output, which the commit was right to insist on. What cannot
+stand is claiming the resulting number as evidence of a code change in the same breath.
+(It is also filename-based rather than content-based: ~src/runtime/font.lisp~ carries
+eighteen hand-authored lines that the "generated file" skip removed from the denominator
+for the rest of the gate's life.)
+
+Across all four: two new policy generics, ~echo-content~ and ~font-for~, neither with a
+single specialising method outside ~src/~ — not in ~lattice/~, not in ~examples/~.
+
+The floor tells the same story from the other end. 0.80 was written in the same session
+the number was walked from 0.82 to 1.17 by relocation, so [[file:tools/gates.lisp][the
+comment]] saying it was "deliberately well below where the project sits" described a
+floor placed under a position that had just been arranged.
+
+** The steelman, because it is real
+
+The ratio caught something nothing else could. [[#log5][§log5]] records ~echo-content~
+being a policy generic whose only method lived in the runtime — overridable in principle
+and on the wrong side of the line in fact. Gate 2 sees a documented generic; the tests
+never notice which package a method is in. That is a real catch and nothing else in this
+project would have made it. [[#log4][§log4]] records refusing to game the metric when
+~psf.lisp~ moved it the wrong way, which is the correct response and is on the record.
+And ~5c3db2e~'s central move is right independent of the number: ~modifier-mask~ sat in
+~src/wire/~ and nothing in ~wire~ called it.
+
+*Most of those moves stay.* They were right for the reason
+[[file:src/policy/appearance.lisp][appearance.lisp's header]] now gives — a
+~define-option~ under ~src/runtime/~ is still something a user has to read the runtime to
+find — and that reason does not depend on anything counting the lines. What does not
+survive is the counting.
+
+** The replacement
+
+Gate 3 already contained the check in embryo: it counts the lattice's ~defmethod~ forms
+against a floor, precisely because "an extension that answers almost no generics is going
+round the protocol rather than through it". Generalise that from the lattice to the whole
+surface:
+
+1. policy generics with *at least one specialising method defined outside ~src/~*;
+2. methods on policy generics defined outside ~src/~;
+3. floor both.
+
+No file can be moved to change either. A method outside ~src/~ is a method outside
+~src/~, and the only way to raise these numbers is to write one. It loads ~lattice/~ and
+the four files under ~examples/~ to ask — which runs *after* gate 4, whose whole job is
+proving the core comes up with the lattice absent, and which is itself the first thing in
+the build ever to compile the worked examples.
+
+*The number is 15 of 65, and 22 methods.* Fifty generics have never been answered by
+anything but their own shipped default. That is much less flattering than 0.99, it is the
+real state of the extension surface, and it is now what the build prints.
+
+Both floors are set *at* the number rather than below it. A floor with slack under it is
+an invitation to spend the slack — which is the mistake the 0.80 floor made — and slack
+is unnecessary here because the number cannot fall by accident. There is no rearrangement
+of the tree that lowers it, only the deletion of a method somebody wrote on the outside.
+[[#gates][§gates]] asked for exactly this shape at line 184 and never got it.
+
+** The fifth core edit, which the ratio was hiding in plain sight
+
+~4fe8811~'s argument for making ~echo-content~ a generic was that "a lattice policy would
+sensibly add the viewport". The lattice never overrode it. Instead the *default method*
+reached into the extension's private namespace:
+
+#+begin_src lisp
+;; src/policy/appearance.lisp, as it stood
+(place (or (and node (c:prop node :lattice/address)
+                (format nil "~d,~d"
+                        (car (c:prop node :lattice/address))
+                        (cdr (c:prop node :lattice/address)))))
+#+end_src
+
+The generic created to prove the boundary exists was crossed by its own default
+implementation, in the same file, hard-coding both the extension's property key and its
+cons representation of an address. It is a core edit, it was not on
+[[file:FINDINGS.org][FINDINGS.org]]'s list, and it is the one edit for which an extension
+point already existed.
+
+Nothing could see it, and the reason is exact: it is not a core edit the *lattice* asked
+for, so it never reached the list; the lattice does not touch it, so gate 3 passed; it is
+documented and dispatches on a policy class, so gate 2 and the generated surface were
+happy; and it *works* — with the lattice loaded the status line shows the coordinate,
+achieved by the core doing the extension's job for it.
+
+Fixed at the root rather than at the call site. ~cursor-place-name (policy world)~ is a
+generic; the shipped default answers the cursor path, which every layout model has; the
+lattice answers ~cell-string~, four lines, on the outside. Zero behaviour change either
+way. And gate 3 gained the direction it never had — *no file under ~src/~ may name an
+extension's private namespace* — which is the check that would have caught it on the day.
+It is recorded as [[file:FINDINGS.org::#edit-6][core edit 6]].
+
+** Checked
+
+~make check~: gates, 1,473 unit checks, and 165 integration checks against a real river.
+Both new checks were verified by breaking them on purpose — the reach-in check reports
+the exact file and line, and gate 6 fails on both floors when a single outside method is
+deleted. ~make surface~ regenerated; the surface document says 65 generics.

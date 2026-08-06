@@ -405,15 +405,27 @@ make surface  # regenerate the docs under doc/
 Ten gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
-policy generic and command documented; the lattice touching no core, within a
-line budget and above a method floor; the core running with the lattice absent;
+policy generic and command documented; the lattice touching no core *and no
+core file naming the lattice*, within a line budget and above a method floor;
+the core running with the lattice absent;
 codegen counts *and the protocol versions the program binds* matching the
-pinned XML; the runtime-to-policy line
-ratio above a floor; every declared hook run and every run hook declared; every
+pinned XML; how many policy generics have ever been answered from *outside*
+=src/= staying above a floor; every declared hook run and every run hook declared; every
 event handled existing on the interface it is handled for; the image, the
 installer and the shipped configuration agreeing about where an extension
 lives; and no container kind named by class outside its own definition. The
 reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
+
+Gate 6 used to be the runtime-to-policy *line ratio*, and deleting it is the
+one gate change worth mentioning in a README. A ratio of directory line counts
+can be satisfied by moving files, and over four commits it was: the number was
+walked from 0.82 to 1.17 largely by relocation, two of those commits reproduce
+92–100% of the moved lines verbatim and add no dispatch point, and the floor
+was set after the position had been arranged. What it stood for — that most of
+the system's behaviour should live above the boundary — is right, so gate 6 now
+asks it directly and unmovably: *how many policy generics has anybody outside
+=src/= ever specialised?* The answer today is 15 of 65, which is a much less
+flattering number than 0.99 and is the actual state of the extension surface.
 
 =make integration= is the one that is different in kind. It runs river on a
 headless backend, connects to it as the ordinary Wayland client this program

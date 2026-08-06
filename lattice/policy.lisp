@@ -248,6 +248,23 @@ lines, with no edit to anything under src/."
         (format nil "~a  |  past a cell edge = next cell  ~a+- zoom out"
                 core mod)))))
 
+(defmethod p:cursor-place-name ((policy lattice-policy) world)
+  "The cell coordinate: 3,-2 rather than 0.1.0.
+
+THIS METHOD IS THE ONE THE CORE USED TO WRITE FOR US.  The shipped ECHO-CONTENT
+read :LATTICE/ADDRESS off the node itself and destructured the cons inline, in
+src/policy/appearance.lisp, so the extension's private property key and its
+private representation of an address were both compiled into the core.  It was
+never a core *edit* the lattice asked for -- the lattice never overrode
+anything here, because it did not have to -- which is exactly why no gate saw
+it and why FINDINGS.org's list did not have it.
+
+Four lines, on the outside, where it always belonged.  Everything else the
+lattice puts in the status line already worked this way; see KEYS-HINT."
+  (let* ((node (c:world-node-at world))
+         (address (and node (c:prop node :lattice/address))))
+    (if address (cell-string address) (call-next-method))))
+
 (defmethod p:clip-rect ((policy lattice-policy) node rect)
   "Crop a cell that hangs over the viewport edge.
 

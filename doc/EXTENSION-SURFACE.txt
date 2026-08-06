@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-64 generics, 111 options.  Generated from the running image.
+65 generics, 111 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -256,6 +256,31 @@ Returns a keyword; CONTAINER-ROLE-NAME turns it into a word.
 
   methods:
     (structure-policy t t)              ; structure.lisp
+
+----------------------------------------------------------------------------
+cursor-place-name (latticewm/policy:policy latticewm/policy::world)
+----------------------------------------------------------------------------
+Where the cursor is, in whatever vocabulary this policy uses for places.
+
+A short string for the status line, never NIL.  The shipped answer is the
+cursor path -- 0.1.0 -- because a path is the one name every layout model has.
+A policy that gives places a better name answers with that instead: the lattice
+returns the cell coordinate, 3,-2.
+
+THIS GENERIC IS THE REPAIR OF A CORE EDIT, and the edit is worth knowing about
+because nothing in the project could see it.  ECHO-CONTENT's default method
+used to read :LATTICE/ADDRESS off the node and destructure the cons itself --
+so the extension's private property key and its private representation of an
+address were both hard-coded into src/policy/, by the shipped default, on the
+argument that the lattice "would sensibly add the viewport" to the echo area.
+The lattice never overrode ECHO-CONTENT; it did not have to, because the core
+had already done the work for it.
+
+Gate 3 checks that the lattice touches no core and could not see this, because
+it was the core touching the *lattice*.  It checks both directions now.
+
+  methods:
+    (appearance-policy t)               ; appearance.lisp
 
 ----------------------------------------------------------------------------
 decoration-mode (latticewm/policy:policy latticewm/policy::window)
