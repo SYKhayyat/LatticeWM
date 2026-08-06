@@ -2680,3 +2680,26 @@ function written to prevent it.
 The integration suite measures it against the width river states rather than a number
 chosen here, and was verified by breaking it on purpose: 202 of 158 with the budget
 removed, 157 of 158 with it.
+
+** A file nothing compiled, for the second time
+
+~tools/hardware-check.lisp~ called ~CURRENT-VIEWPORT~ seventeen lines above the
+~DEFUN~ that provides it, so loading it printed =undefined function:
+LATTICEWM/USER::CURRENT-VIEWPORT= — a diagnostic tool putting a warning into the
+diagnosis, on every session it recorded.
+
+The ordering is a two-minute fix. Why nothing saw it is the entry: *gate 1 compiles the
+systems, and this file is in no system*, because it is one a user is told to ~load~
+from their init.lisp.
+
+That is the hole ~lattice/~ was in, and ~tools/build.lisp~'s own comment about it reads
+"nothing anywhere compiled it — so a rename in the core broke ~lattice/map.lisp~, and
+seven gates and 779 checks passed over a shipped feature that would not load. It was
+found by a user's config file failing at startup, which is the worst place to find it."
+Every clause is true of this file too.
+
+So gate 1 grew a second list beside its systems: the loose files a user is told to
+load. *Compiled and not loaded*, deliberately — loading this one installs an ~ON-KEY~
+method and five hooks into the image doing the checking, and a gate that changes the
+program it is inspecting is worse than the warning it is hunting. Verified by
+introducing a typo: the gate fails and names the symbol.

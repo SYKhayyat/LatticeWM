@@ -198,19 +198,22 @@ which is the thing that reads as a bug and is not one."
             (rect-w r) (rect-h r) (rect-x r) (rect-y r)
             (prop output :workspace)))))
 
-(defun note-state (why)
-  (note "STATE   ~a: ~d window~:p, cursor ~s~@[, cell ~s~]"
-        why (length (all-windows)) (world-cursor *world*)
-        (let ((node (world-node-at *world*)))
-          (and node (prop node :lattice/address))))
-  (let ((v (current-viewport))) (when v (note "STATE   viewport ~a" v)))
-  (note "STATE   the status line reads: ~{~a~^ | ~}"
-        (remove "" (mapcar #'car (ignore-errors
-                                  (echo-content (current-policy) *world*)))
-                :test #'equal)))
-
-
 ;;; ------------------------------------------------------- the viewport
+;;;
+;;; ABOVE NOTE-STATE, WHICH CALLS IT, and that is the whole of a defect that
+;;; shipped: CURRENT-VIEWPORT was defined seventeen lines *below* its only
+;;; caller, so loading this file printed `undefined function:
+;;; LATTICEWM/USER::CURRENT-VIEWPORT' every time -- on a recording tool whose
+;;; entire job is to make a session legible, into the first lines of the
+;;; session it was recording.
+;;;
+;;; Nothing could see it and the reason is mechanical: gate 1 compiles the
+;;; systems, and this file is in no system.  It is a file a *user* is told to
+;;; load from their init.lisp, which is the one thing the build never touched.
+;;; Gate 1 compiles it now, which is the same argument that put lattice/ on
+;;; that list -- "nothing anywhere compiled it, so a rename in the core broke
+;;; lattice/map.lisp, and seven gates and 779 checks passed over a shipped
+;;; feature that would not load".
 
 (defvar *last-viewport* nil)
 
@@ -221,6 +224,17 @@ which is the thing that reads as a bug and is not one."
           (slot (find-symbol "VIEWPORT" "LATTICE")))
      (when (and workspace slot (slot-exists-p workspace slot))
        (princ-to-string (slot-value workspace slot))))))
+
+(defun note-state (why)
+  (note "STATE   ~a: ~d window~:p, cursor ~s~@[, cell ~s~]"
+        why (length (all-windows)) (world-cursor *world*)
+        (let ((node (world-node-at *world*)))
+          (and node (prop node :lattice/address))))
+  (let ((v (current-viewport))) (when v (note "STATE   viewport ~a" v)))
+  (note "STATE   the status line reads: ~{~a~^ | ~}"
+        (remove "" (mapcar #'car (ignore-errors
+                                  (echo-content (current-policy) *world*)))
+                :test #'equal)))
 
 (defun note-viewport ()
   "Record the viewport, but only when it has actually changed.

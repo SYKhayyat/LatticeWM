@@ -805,6 +805,25 @@ document was written about one that never existed.
   because the width is river's to state and not this project's to assume.
 - *=tools/hardware-check.lisp= names a function that does not exist*,
   =current-viewport=, and so warns on every startup that loads it.
+
+  It exists; it was defined seventeen lines *below* its only caller, so the
+  warning is a forward reference and the fix is an ordering. What is worth
+  recording is why nothing saw it. Gate 1 compiles the *systems* — and this file
+  is in no system, because it is one a user is told to =load= from their
+  init.lisp. So the one file in the project written to make a session legible
+  opened every session it recorded with =undefined function:
+  LATTICEWM/USER::CURRENT-VIEWPORT=, and eighteen gates had no opinion.
+
+  That is the lattice's hole again, in a smaller room. =tools/build.lisp='s own
+  comment on why =lattice/= is on its list reads "nothing anywhere compiled it —
+  so a rename in the core broke =lattice/map.lisp=, and seven gates and 779
+  checks passed over a shipped feature that would not load. It was found by a
+  user's config file failing at startup, which is the worst place to find it."
+  Every clause of that is true of this file. *Gate 1 compiles it now* — compiled
+  and not loaded, because loading it installs an ~on-key~ method and five hooks
+  into the image doing the checking, and a gate that changes the program it is
+  inspecting is worse than the warning it is looking for. Verified by
+  introducing a typo: the gate fails and names it.
 - *One 67-second stall*, in the first screencopy after a panel first appeared;
   steady state is 0.05s and it did not reproduce in a dozen attempts. Recorded
   because *The screen was up to thirty seconds stale* is in the table above and

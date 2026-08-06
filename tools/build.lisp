@@ -26,6 +26,23 @@ purpose.  Nothing anywhere compiled it -- so a rename in the core broke
 lattice/map.lisp, and seven gates and 779 checks passed over a shipped feature
 that would not load.  It was found by a user's config file failing at startup,
 which is the worst place to find it.")
+(defparameter *loose-files*
+  '("tools/hardware-check.lisp")
+  "Files a *user* is told to load, which belong to no system.
+
+AND THEREFORE FILES NOTHING COMPILED, which is the same hole the lattice was in
+and it cost the same coin.  tools/hardware-check.lisp called CURRENT-VIEWPORT
+seventeen lines above the DEFUN that provides it, so every session it recorded
+opened with `undefined function: LATTICEWM/USER::CURRENT-VIEWPORT' — printed by
+a diagnostic tool, into the diagnosis.  Eighteen gates and seventeen hundred
+checks had no opinion, because ASDF is what gate 1 asks and this file is in no
+system.
+
+COMPILED AND NOT LOADED, deliberately.  Loading it installs an ON-KEY method
+and four hooks into the image doing the checking, and a gate that changes the
+program it is inspecting is worse than the warning it is looking for.  Every
+undefined reference in the file is visible from the compile alone.")
+
 (defparameter *real* '())
 (defparameter *redefinitions* 0)
 
@@ -78,7 +95,19 @@ would take every dependency back."
 (let ((*error-output* (make-broadcast-stream *error-output* *unit-output*)))
   (with-compilation-unit (:override t)
     (handler-bind ((warning (lambda (c) (record c) (muffle-warning c))))
-      (handler-case (dolist (system *systems*) (asdf:load-system system))
+      (handler-case
+          (progn
+            (dolist (system *systems*) (asdf:load-system system))
+            ;; After the systems, because these files use their packages.
+            (dolist (path *loose-files*)
+              (let ((file (merge-pathnames path *root*)))
+                (if (probe-file file)
+                    (uiop:with-temporary-file (:pathname fasl :type "fasl")
+                      (compile-file file :output-file fasl
+                                         :verbose nil :print nil))
+                    (push (format nil "~a is listed in *LOOSE-FILES* and is not ~
+                                       there" path)
+                          *real*)))))
         (error (e)
           (format t "~&~%======== BUILD FAILED ========~%~a~%" e)
           (sb-ext:quit :unix-status 1))))))
