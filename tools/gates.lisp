@@ -135,8 +135,28 @@
 
 ;;; ---------------------------------------------------------------- gate 5
 
-(banner 5 "codegen counts match the pinned XML")
-(let ((expected '(("river-window-management-v1" 8 57 42 10)
+(banner 5 "codegen counts and bound versions match the pinned XML")
+
+(defun declared-interface-version (path interface)
+  "The version attribute INTERFACE declares in the protocol XML at PATH."
+  (with-open-file (in path)
+    (let ((text (make-string (file-length in))))
+      (read-sequence text in)
+      (let ((head (search (format nil "<interface name=\"~a\"" interface) text)))
+        (when head
+          (let* ((at (search "version=\"" text :start2 head))
+                 (start (+ at 9))
+                 (end (position #\" text :start start)))
+            (parse-integer (subseq text start end))))))))
+
+;; RE-VENDORED FROM RIVER 0.4.6, WHICH IS WHY FIVE OF THESE SIX ROWS MOVED.
+;; The event counts went up and nothing else did, in every file: river 0.4.6
+;; added `capture_sessions' to river_window_v1 and river_output_v1, and a
+;; `done' event to each of the three input protocols' device interfaces.  No
+;; request, interface or enum changed anywhere.  That is the shape of an
+;; additive protocol release, and it is the whole reason re-vendoring was the
+;; cheaper of the two ways out of the version mismatch — see PINNED.
+(let ((expected '(("river-window-management-v1" 8 57 44 10)
                   ("river-xkb-bindings-v1" 3 11 5 1)
                   ("river-layer-shell-v1" 3 6 4 1)
                   ;; The three input protocols.  They were vendored here and
@@ -144,9 +164,9 @@
                   ;; XML in the tree that no component names is invisible to
                   ;; every gate, and these three were the difference between a
                   ;; machine that can be configured and one that cannot.
-                  ("river-input-management-v1" 2 10 5 3)
-                  ("river-libinput-config-v1" 4 27 60 23)
-                  ("river-xkb-config-v1" 3 12 11 3)))
+                  ("river-input-management-v1" 2 10 6 3)
+                  ("river-libinput-config-v1" 4 27 61 23)
+                  ("river-xkb-config-v1" 3 12 12 3)))
       (total-requests 0))
   (dolist (row expected)
     (destructuring-bind (name interfaces requests events enums) row
@@ -169,7 +189,26 @@
     (format t "  wrapped requests~40t~d~%" wrapped)
     (when (< wrapped total-requests)
       (fail 5 "~d requests in the XML but only ~d wrappers"
-            total-requests wrapped))))
+            total-requests wrapped)))
+  ;; AND THE VERSION WE BIND IS THE VERSION THE XML DECLARES, which the counts
+  ;; above cannot see.  Re-vendoring is a file copy *and* a constant, and the
+  ;; copy alone leaves a build that compiles, passes every count in this gate,
+  ;; and then refuses to start against the very river it was just vendored
+  ;; from -- diagnosable only by running it, which is the one thing a gate is
+  ;; here to spare you.  It is four steps in INSTALL.org; this is the line
+  ;; that stops it being done in three.
+  (dolist (row '(("river-window-management-v1" "river_window_manager_v1"
+                  "latticewm/runtime::+window-management-version+")
+                 ("river-xkb-bindings-v1" "river_xkb_bindings_v1"
+                  "latticewm/runtime::+xkb-bindings-version+")))
+    (destructuring-bind (file interface variable) row
+      (let ((declared (declared-interface-version
+                       (format nil "src/protocol/~a.xml" file) interface))
+            (bound (symbol-value (sym variable))))
+        (if (eql declared bound)
+            (format t "  ~a~40tbinds v~d~%" interface bound)
+            (fail 5 "~a declares version ~a in the vendored XML, but ~a is ~a"
+                  interface declared variable bound))))))
 
 ;;; ---------------------------------------------------------------- gate 6
 

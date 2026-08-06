@@ -115,14 +115,33 @@ say "sbcl        $(sbcl --version)"
 # running the window manager — the build, all six gates, all the unit tests —
 # works with no compositor at all, and refusing to bootstrap on a machine that
 # is only ever going to compile would be wrong.
+#
+# THE VERSION IT WANTS IS READ FROM src/protocol/PINNED, not written here.
+# river-window-management-v1 changes *within* a version number — 0.4.6 raised
+# it from 4 to 5 in a patch release — so the startup check is an equality and
+# "0.4 or newer" is the wrong sentence to print.  Keeping the release name in
+# one file means this warning cannot drift from what the program will actually
+# accept, which is exactly how it drifted before.
 if command -v river >/dev/null 2>&1; then
     version=$(river -version 2>/dev/null || echo unknown)
     say "river       $version"
-    case "$version" in
-        0.4.*|0.5.*|unknown) ;;
+    # `river -version' answers "0.4.6 +xwayland": the build flags are part of
+    # the line and not part of the version, and comparing the whole line
+    # against the release name warned on every machine including the correct
+    # ones, which is the fastest way to teach someone to ignore a warning.
+    found=${version%% *}
+    pinned=$(sed -n '1s/^river \([0-9][0-9.]*\).*/\1/p' \
+                 "$root/src/protocol/PINNED" 2>/dev/null || true)
+    case "$found" in
+        unknown) ;;
+        "${pinned:-$found}") ;;
         *) say ""
-           say "  WARNING: LatticeWM needs river 0.4 or newer.  It talks to"
-           say "  river-window-management-v1, which does not exist before 0.4."
+           say "  WARNING: this river is $found, and the protocol in"
+           say "  src/protocol/ was vendored from river ${pinned:-0.4.6}."
+           say "  LatticeWM checks the interface version at startup and"
+           say "  refuses to run on a mismatch rather than misbehave -- river"
+           say "  changes that protocol within a version number.  INSTALL.org,"
+           say "  'Moving to a newer river', is four steps and needs nobody."
            ;;
     esac
 else

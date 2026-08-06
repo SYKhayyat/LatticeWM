@@ -39,8 +39,11 @@ look surprising until you have read it. It is worth the thirty seconds.
 
 * Install
 
-You need *river 0.4.x* and *SBCL*. Any Linux — nix is one supported route, not
-a requirement. Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
+You need *river 0.4.6* and *SBCL*. That river release specifically: the window
+management protocol changes within a version number, so LatticeWM checks and
+refuses rather than misbehaves — [[file:INSTALL.org][INSTALL.org]] explains it and says how to move to
+a later river. Any Linux — nix is one supported route, not a requirement.
+Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
@@ -404,7 +407,8 @@ as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core, within a
 line budget and above a method floor; the core running with the lattice absent;
-codegen counts matching the pinned protocol XML; the runtime-to-policy line
+codegen counts *and the protocol versions the program binds* matching the
+pinned XML; the runtime-to-policy line
 ratio above a floor; every declared hook run and every run hook declared; every
 event handled existing on the interface it is handled for; the image, the
 installer and the shipped configuration agreeing about where an extension
@@ -427,13 +431,20 @@ sent outside the manage sequence that is the only place it is legal, so
 Super+drag did nothing for a second time and a different reason. Not one of them
 is visible to a test that builds its own world.
 
-The fifth is open and is a packaging decision rather than a bug to patch:
-*=nix build= now fails, and should.* River bumped =river_window_manager_v1= from
-4 to 5 in a patch release, the flake pins a channel rather than a river, and the
-vendored protocol is version 4 — so the flake was building a session entry that
-could not start, and succeeded, because nothing in that build had ever connected
-to the river it pins. =nix-shell=, =make=, =make check= and CI are unaffected
-and green. [[file:PLAN.org::#log8][PLAN.org §log8]] has the two ways out.
+The fifth was a packaging decision rather than a bug to patch, and it is now
+made. *=nix build= failed, and should have.* River bumped
+=river_window_manager_v1= from 4 to 5 in a patch release, the flake pins a
+channel rather than a river, and the vendored protocol was version 4 — so the
+flake was building a session entry that could not start, and succeeded, because
+nothing in that build had ever connected to the river it pins.
+
+All six river protocols have been re-vendored from 0.4.6 rather than pinning
+river back to 0.4.5, because every 4 → 5 change is additive: two new
+=capture_sessions= events and five clarifications of prose, nothing removed and
+nothing renamed. The version check refuses in both directions, so pinning back
+would have left the program unable to start on any river a user installs today.
+=src/protocol/PINNED= carries the diff and the argument; [[file:PLAN.org::#log8][PLAN.org §log8]] carries
+the decision. =nix build=, =nix-shell=, =make check= and CI are green.
 
 * Documentation
 

@@ -674,7 +674,7 @@ Recorded here rather than applied silently, per DESIGN's standing rule.
 
 | Claim | Correction |
 |-------+------------|
-| =river-window-management-v1= is version 5 with 44 events | Shipped 0.4.5 is *version 4 with 42 events*. The documents measured master; 0.4.5 stable is what we run against. Gate 5 pins 8/57/42/10. |
+| =river-window-management-v1= is version 5 with 44 events | Shipped 0.4.5 was *version 4 with 42 events*. The documents measured master; 0.4.5 stable was what we ran against, and gate 5 pinned 8/57/42/10. *This correction has since expired*: river 0.4.6 released master's version 5 with 44 events as a patch, we re-vendored to it ([[#log8][§log8]]), and the original claim is now simply true. Gate 5 pins 8/57/44/10. |
 | Two river protocols | *Six.* =river-layer-shell-v1=, =river-input-management-v1=, =river-xkb-config-v1= and =river-libinput-config-v1= also ship. Three are vendored; the other three are not needed yet. |
 | ~manage_start~ / ~render_start~ are requests | They are *events*. Only ~manage_finish~ and ~render_finish~ are client-callable. |
 | wayflan is on sr.ht and the GitHub mirror is stale | Still true, and nixpkgs already pins the sr.ht tree at 2026-01-01. But =sbclPackages.wayflan= is *broken* — it compiles wayflan-client's sources into a read-only store path. =wayflan-client= builds and omits =wayflan.asd=. The workaround is to take the nixpkgs package's *source* and let ASDF compile it: same pin, no fork. |
@@ -1669,12 +1669,84 @@ than politely bumping to v2. A flake pins the compositor and the window manager
 as one versioned pair, upgraded deliberately or never." It did not pin them as a
 pair. It pinned a channel.
 
-This is left failing rather than papered over, because the two ways out are both
-real decisions and neither belongs to the person who found it: re-vendor the
-protocol from the pinned river and bump =+WINDOW-MANAGEMENT-VERSION+=, or pin a
-river the vendored XML matches. =nix-shell= uses the ambient channel — 0.4.5,
-version 4 — and =make check= is green there, which is where every number in this
-section comes from.
+*** Resolved: re-vendored to 0.4.6
+
+The two ways out were to re-vendor the protocol from the pinned river and bump
+=+WINDOW-MANAGEMENT-VERSION+=, or to pin a river the vendored XML matches. The
+first was taken, and the argument is the diff rather than a preference — the
+whole of 4 → 5 is two new events (=capture_sessions= on =river_window_v1= and
+on =river_output_v1=) and five clarifications of prose. Nothing removed,
+nothing renamed. The feared failure — a pre-release protocol breaking *within*
+a version number — is not what this release was.
+
+Pinning back would have frozen the pair on a superseded release that leaves
+nixpkgs on a schedule nobody here controls, and the check refuses in *both*
+directions: a build vendored at 4 cannot start on any river a user installs
+today. That is the asymmetry that decided it. =src/protocol/PINNED= carries
+the diff and the reasoning.
+
+All six river protocols were re-vendored from 0.4.6 together, so the tree is
+one vintage rather than five. The three input protocols went 1 → 2 in the same
+release, each adding a =done= event; they are bound at whatever version is
+offered rather than checked for equality, so they degrade against an older
+river instead of refusing. Gate 5's rows moved by exactly the new event counts
+and by nothing else — 42 → 44, 5 → 6, 60 → 61, 11 → 12 — which is the gate
+saying, in the only vocabulary it has, that the release was additive.
+
+=nix build= is green: the build phase now connects to river 0.4.6 and the
+integration suite reports "river_window_manager_v1 is bound at version 5,
+which is the version we generated against". The three structural skips are
+unchanged.
+
+*Gate 5 grew the check that would have caught this in the first place.* It
+counted interfaces, requests, events and enums, and said nothing about the one
+number that actually decides whether the program starts: the version constant
+beside the XML. So the copy-without-the-constant is a build that compiles,
+passes every count in the gate, and refuses to start against the very river it
+was just vendored from — diagnosable only by running it, which is the one
+thing a gate exists to spare you. It now asserts that
+=+WINDOW-MANAGEMENT-VERSION+= and =+XKB-BINDINGS-VERSION+= equal the versions
+their XML declares, and it was proved to fail by setting the constant back to
+4. Four steps in [[file:INSTALL.org][INSTALL.org]], and the gate names each one you have not done.
+
+What stays true is the part that is load-bearing. The nixpkgs input is still a
+channel, so a future =nix flake update= can still move the compositor under a
+vendored XML. The difference is that it now fails at =nix build= rather than
+at a login screen, and that is tested rather than asserted.
+
+*And =shell.nix= pins now, which it claimed to do and never did.* Its
+=<nixpkgs>= was the ambient channel, so its river was whatever the machine
+held — 0.4.5 here, months behind — and the header said it pinned "the window
+manager and the compositor as one versioned pair". That is the flake's own
+untruth told in the other direction, and re-vendoring came due on it
+immediately: =nix build= went green and =nix-shell --run 'make check'= went
+red on the same tree, on the same afternoon.
+
+It now reads =flake.lock= and fetches that revision by hash, so the three
+paths — =nix-shell=, =nix develop=, =nix build= — are one river rather than
+two pinned ones and a third that drifts. It costs nothing on a machine that
+has already built the flake, and it falls back to =<nixpkgs>= when flake.lock
+is absent, so [[#packaging][§packaging]]'s "if the flake is deleted the project still
+builds" survives. A pair pinned on one path out of three was never pinned.
+
+For the machines with no nix at all, =bootstrap.sh= reads the release out of
+=src/protocol/PINNED= and warns when the river on =PATH= is a different one —
+the same file =shell.nix= reads for the same warning when =pkgs= is overridden,
+so no copy of the number can drift from what the program will accept.
+
+*** And a race the re-vendor exposed
+
+Running =make check= twice back to back failed the second time, on
+"river_xkb_bindings_v1 is bound", about one run in two. The check was
+*unpolled*, three lines below a comment explaining that exact race for
+=river_window_manager_v1= — "it lost about one run in three" — fixed there and
+left standing for its three neighbours. The manager being bound orders nothing
+else: =BIND-GLOBALS= binds whatever the first roundtrip caught and the registry
+hook binds the rest as they appear, and river_xkb_bindings_v1 is on the far
+side of that line often enough to matter under load. It read as "keybindings
+are gone", which is a catastrophe, in a run where they were merely late. All
+three are polled now. Nothing about it is specific to 0.4.6; it was reachable
+before and nothing had gone looking.
 
 ** And one hazard in the unit suite
 

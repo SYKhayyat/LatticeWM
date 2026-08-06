@@ -74,24 +74,29 @@
             #
             # *IF THIS PHASE FAILS ON THE PROTOCOL VERSION, THAT IS THE POINT,
             # AND IT IS THE THING THE HEADER OF THIS FILE SAYS IS THE LARGEST
-            # THREAT TO THE PROJECT.*  The pin above is `nixos-unstable', not a
-            # river version — so the compositor moves when the lock moves, and
-            # river bumped river_window_manager_v1 from 4 to 5 between 0.4.5 and
-            # 0.4.6, which is a *patch* release.  The vendored XML is version 4.
+            # THREAT TO THE PROJECT.*  It did, on the first run.  River bumped
+            # river_window_manager_v1 from 4 to 5 between 0.4.5 and 0.4.6, which
+            # is a *patch* release, and the locked nixpkgs has 0.4.6 — so this
+            # derivation was building a window manager that refuses to start
+            # against the river the very same derivation puts in its session
+            # entry.  `nix build' succeeded, `install' wrote a wayland-sessions
+            # file, and logging in got a version-mismatch paragraph at a login
+            # screen.  It succeeded because nothing in the build phase had ever
+            # connected to the pinned river.  Now something does.
             #
-            # So this derivation was building a window manager that refuses to
-            # start against the river the very same derivation puts in its
-            # session entry: `nix build' succeeded, `install' wrote a
-            # wayland-sessions file, and logging in got a version-mismatch
-            # message at a login screen.  It succeeded because nothing in the
-            # build phase had ever connected to the pinned river.  Now something
-            # does.
+            # THE RESOLUTION WAS TO RE-VENDOR, not to pin river back to 0.4.5.
+            # src/protocol/PINNED carries the argument; it rests on the 4 -> 5
+            # diff being additive in every particular, so following river cost
+            # two numbers and pinning back would have frozen the pair on a
+            # release that leaves nixpkgs on a schedule nobody here controls.
             #
-            # There are two honest ways out and they are not this file's to
-            # choose: re-vendor the protocol from the pinned river and bump
-            # +WINDOW-MANAGEMENT-VERSION+, or pin a river the vendored XML
-            # matches.  `nix-shell' uses the ambient channel, which is 0.4.5 at
-            # the time of writing, and works.
+            # What is load-bearing is that this phase is the thing that noticed.
+            # The nixpkgs input is still a channel, so a future `nix flake
+            # update' can still move the compositor under a vendored XML — and
+            # when it does, this phase fails at `nix build' rather than at a
+            # login screen, which is the whole difference and is now tested
+            # rather than asserted.  Re-vendor from the new river, or hold the
+            # lock; both are deliberate acts and either is fine.
             buildPhase = ''
               export HOME=$TMPDIR
               export XDG_RUNTIME_DIR=$TMPDIR/run

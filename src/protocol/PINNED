@@ -1,4 +1,37 @@
-river 0.4.5 / nixpkgs /nix/store/dfjjfyqh7dbjbs7rs6ds7ssqsw6j41wz-river-0.4.5
+river 0.4.6 / nixpkgs /nix/store/4555ycy58srgn47zrjndmm4hjqd3inxa-river-0.4.6
+
+Re-vendored from 0.4.5, which is what this directory held until the flake's
+build phase first connected to the river the same derivation pins and got the
+refusal +WINDOW-MANAGEMENT-VERSION+ exists to give.  River bumped
+river_window_manager_v1 from 4 to 5 in a *patch* release, which is the thing
+flake.nix's header says is the largest single threat to this project.
+
+There were two ways out and this is the one taken: move to 0.4.6 rather than
+pin river back to 0.4.5.  The argument is the diff, not a preference.  Every
+change from 4 to 5 is additive or a clarification of prose:
+
+  river_window_v1.capture_sessions     new event, since 5
+  river_output_v1.capture_sessions     new event, since 5
+  session_locked                       now also sent in the first manage
+                                       sequence if the session is already locked
+  min/max size                         constraint relaxed, not tightened
+  place_above / place_below            worked examples added, behaviour unchanged
+  pointer_warp                         ordering against op_start_pointer stated
+  border colour                        RGBA range stated
+
+Nothing was removed and nothing was renamed, so the feared failure — a
+pre-release protocol breaking *within* a version number — is not what happened
+here.  Pinning back would have frozen the pair on a superseded release that
+leaves nixpkgs on its own schedule, and the version check refuses in both
+directions: a build vendored at 4 cannot start on any river a user installs
+today.  Neither of these is handled by the two capture_sessions events being
+unhandled, which is a feature we do not have rather than a protocol we cannot
+speak.
+
+The three input protocols moved 1 -> 2 in the same release, each adding a
+`done' event.  They are bound at whatever version is offered rather than
+checked for equality, so they degrade to their old behaviour against an older
+river instead of refusing.
 
 wayland.xml is wayland 1.23, taken from wayflan's own vendored copy.  It is
 here for gate 8 and for nothing else: wayflan generates the core protocol into

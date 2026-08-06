@@ -480,9 +480,22 @@ are what a person means by the arrangement, and both are copy-stable."
            ;; is a silent feature loss rather than an error when it is missing:
            ;; no wl_shm is a window manager that cannot draw its own echo area
            ;; and says nothing about why.
-           (check (server-compositor server) "wl_compositor is bound")
-           (check (server-shm server) "wl_shm is bound, so we can draw our own pixels")
-           (check (r::server-bindings server) "river_xkb_bindings_v1 is bound")
+           ;;
+           ;; AND EVERY ONE OF THEM IS POLLED, for the reason directly above,
+           ;; which was fixed for the manager and left standing for its three
+           ;; neighbours.  The manager being bound orders nothing else: globals
+           ;; arrive when the compositor announces them, BIND-GLOBALS binds
+           ;; whatever the first roundtrip caught and the registry hook binds
+           ;; the rest as they appear, and river_xkb_bindings_v1 is on the far
+           ;; side of that line often enough to matter.  It cost about one run
+           ;; in two on a loaded machine -- reading as "keybindings are gone",
+           ;; which is a catastrophe, in a run where they were merely late.
+           (check (poll-until (lambda () (server-compositor server)) 10)
+                  "wl_compositor is bound")
+           (check (poll-until (lambda () (server-shm server)) 10)
+                  "wl_shm is bound, so we can draw our own pixels")
+           (check (poll-until (lambda () (r::server-bindings server)) 10)
+                  "river_xkb_bindings_v1 is bound")
            (check (poll-until (lambda () (server-seats server)) 10)
                   "and river announced a seat")))
 

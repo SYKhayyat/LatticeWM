@@ -54,9 +54,12 @@ where everything else lives.
 
 *This design document is otherwise unchanged*, and the sections below were
 written before any of it was built. Corrections it needs, recorded rather than
-applied (full list in [[file:PLAN.org::#log][PLAN §log]]): the shipped =river-window-management-v1= is
+applied (full list in [[file:PLAN.org::#log][PLAN §log]]): the shipped =river-window-management-v1= was
 *version 4 with 42 events*, not 5 with 44 — the measurement below was taken
-against master. River ships *six* protocols, not two. ~manage_start~ and
+against master. That one has expired rather than been corrected: river 0.4.6
+shipped master's version 5 with 44 events in a patch release, the protocol was
+re-vendored to it ([[file:PLAN.org::#log8][PLAN §log8]]), and the figure below is right again.
+River ships *six* protocols, not two. ~manage_start~ and
 ~render_start~ are events, not requests. And river 0.4.5 is in nixpkgs,
 prebuilt, and runs nested — so the "get access to a machine running river"
 critical path in [[#next][Next actions]] never existed.

@@ -48,29 +48,77 @@ line for your distro if it is missing.
 
 ** river, and the version that matters
 
-*LatticeWM needs river 0.4 or newer.*  This is not a preference: it talks
-=river-window-management-v1=, the protocol through which river hands window
-management to an outside program, and that protocol does not exist in earlier
-releases.  Check what you have:
+*LatticeWM needs river 0.4.6.*  Not 0.4 or newer — that particular release,
+until this program is re-vendored against a later one.  This is not a
+preference and it is stricter than it looks, so it is worth the paragraph.
+
+It talks =river-window-management-v1=, the protocol through which river hands
+window management to an outside program.  That protocol does not exist before
+0.4 at all, and it is young enough that river still changes it *within* a
+version number: 0.4.6 raised it from 4 to 5 in what was otherwise a patch
+release.  LatticeWM checks the version at startup and refuses to run on a
+mismatch in *either* direction, naming both numbers, rather than starting and
+misbehaving in ways nobody could diagnose.  If you see that refusal, it is
+doing its job; =src/protocol/PINNED= says which river this build was vendored
+from and the refusal itself says how to re-vendor.
+
+Check what you have:
 
 #+begin_src sh
 river -version
 #+end_src
 
-Most distributions package river.  Whether the packaged one is new enough
-varies and changes month to month, so check rather than assume — and if it is
-older, building river is genuinely easy, because it is one Zig program with no
-plugin system:
+Most distributions package river.  Which release they carry varies and changes
+month to month, so check rather than assume — and if it is not the one this
+build was vendored against, building river is genuinely easy, because it is one
+Zig program with no plugin system.  Check out the matching tag rather than
+=main=:
 
 #+begin_src sh
 sudo pacman -S zig wayland wayland-protocols libxkbcommon pixman     # or your equivalent
 git clone --recurse-submodules https://codeberg.org/river/river
-cd river && zig build -Doptimize=ReleaseSafe --prefix ~/.local install
+cd river && git checkout v0.4.6
+zig build -Doptimize=ReleaseSafe --prefix ~/.local install
 #+end_src
 
-=bootstrap.sh= warns if it finds a river older than 0.4, and does not stop:
-everything except actually running the window manager — the build, all six
-gates, all the tests — works with no compositor on the machine at all.
+=bootstrap.sh= warns if it finds a river that is not the vendored release —
+reading the release out of =src/protocol/PINNED=, so the warning cannot drift
+from what the program will accept — and does not stop: everything except
+actually running the window manager — the build, all ten gates, all the tests
+— works with no compositor on the machine at all.
+
+If you use nix, you do not have to think about any of this: =shell.nix= reads
+=flake.lock= and gives you the river the protocol was vendored from, so
+=nix-shell=, =nix develop= and =nix build= agree with each other and with
+=src/protocol/PINNED=.
+
+** Moving to a newer river
+
+The other direction, and it is four steps rather than two.  You do not have to
+remember them: gate 5 fails, by name, on each one you have not done yet — it
+pins the codegen counts *and* the version the program binds against the
+version the XML declares, so a protocol that changed under you cannot pass
+unnoticed and a half-finished re-vendor cannot either.
+
+#+begin_src sh
+cp "$(dirname "$(command -v river)")/../share/river-protocols/stable/"*.xml src/protocol/
+# 1. set +WINDOW-MANAGEMENT-VERSION+ in src/runtime/session.lisp to the
+#    version the refusal named
+# 2. name the new release on line 1 of src/protocol/PINNED
+make
+# 3. gate 5 fails and prints the counts it saw; paste them into the
+#    matching row of tools/gates.lisp
+make check
+#+end_src
+
+=make check= is the one that matters, because it runs the integration suite
+against a real headless river and is therefore the only step that can tell you
+the new protocol still means what the program thinks it means.  If river has
+*removed* or *renamed* something rather than added to it, this is where you
+find out, and the compiler finds most of the rest.
+
+Nothing about this needs the original author.  It is a file copy, two numbers,
+a line of prose, and a test run.
 
 * Where the Lisp dependencies come from
 

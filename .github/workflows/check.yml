@@ -13,7 +13,12 @@
 #            the integration suite against a headless river, with
 #            REQUIRE_INTEGRATION=1 so a missing compositor or terminal is a
 #            failure rather than a paragraph and an exit 0.  Run under
-#            nix-shell, which is where the pinned river lives.
+#            nix-shell, which is where the pinned river lives — and that
+#            sentence was aspirational until shell.nix started reading
+#            flake.lock.  It took `<nixpkgs>', the ambient channel, so this
+#            job tested against whatever river the runner's channel held on
+#            the day it ran.  It now tests against the one the protocol was
+#            vendored from, which is the only version the program accepts.
 #
 #   plain  — the same build with *no nix at all*, from bootstrap.sh, because
 #            PLAN.org §packaging says "nothing in src/ may know that nix exists;

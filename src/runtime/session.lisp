@@ -27,11 +27,20 @@
 
 (in-package #:latticewm/runtime)
 
-(defparameter +window-management-version+ 4
+(defparameter +window-management-version+ 5
   "The river_window_manager_v1 version this build was generated against.
 
 Bumping this means regenerating from a new XML and re-running the codegen
-count check.  It is deliberately not `whatever the compositor offers'.")
+count check.  It is deliberately not `whatever the compositor offers'.
+
+WAS 4, FOR RIVER 0.4.5.  River bumped this interface 4 -> 5 in the 0.4.6
+*patch* release — the pre-release-protocol hazard the file header names,
+arriving exactly as predicted and one release earlier than anyone would like.
+The refusal below did its job: the flake was building a session entry that
+could not start, and nothing but this check would have said so at a login
+screen.  See src/protocol/PINNED for why the resolution was to follow river
+rather than pin it back; the short version is that every 4 -> 5 change is
+additive.")
 
 (defparameter +xkb-bindings-version+ 3
   "The river_xkb_bindings_v1 version this build was generated against.")
@@ -48,12 +57,20 @@ count check.  It is deliberately not `whatever the compositor offers'.")
               Refusing to start rather than misbehave: the two versions may~%~
               disagree about what a request means.~%~%~
               To fix this, re-vendor the protocol XML from the river you are~%~
-              running, then rebuild:~%~%~
+              running, then rebuild.  ALL FOUR STEPS, in this order — the~%~
+              first two alone will fail the build on gate 5, which is that~%~
+              gate working:~%~%~
               ~2tcp $RIVER/share/river-protocols/stable/*.xml src/protocol/~%~
-              ~2t# set +WINDOW-MANAGEMENT-VERSION+ in src/runtime/session.lisp~%~
-              ~2tmake~%"
+              ~2t# set +WINDOW-MANAGEMENT-VERSION+ to ~d, src/runtime/session.lisp~%~
+              ~2t# name the release on line 1 of src/protocol/PINNED~%~
+              ~2t#   (shell.nix and bootstrap.sh both read it)~%~
+              ~2tmake~%~
+              ~2t# gate 5 prints the counts it saw; paste them into~%~
+              ~2t#   tools/gates.lisp, then run make again~%~%~
+              Or install the river this build was vendored against, which~%~
+              src/protocol/PINNED names.~%"
              (mismatch-interface condition) (mismatch-wanted condition)
-             (mismatch-offered condition))))
+             (mismatch-offered condition) (mismatch-offered condition))))
   (:documentation
    "Signalled at startup when the compositor's protocol version is not the one
 we generated bindings from."))
@@ -230,10 +247,14 @@ monitor being plugged in *is* — goes through exactly the same code."
           (bind-one-global server name interface version)))
       (unless (server-manager server)
         (error "This compositor does not offer river_window_manager_v1.~%~
-                LatticeWM is a window manager *for river*, and needs river~%~
-                0.4 or later.  Are you running it inside the right~%~
-                compositor?  WAYLAND_DISPLAY is ~s."
-               (uiop:getenv "WAYLAND_DISPLAY")))
+                LatticeWM is a window manager *for river*, and the protocol~%~
+                through which river hands window management to an outside~%~
+                program does not exist before river 0.4.  Are you running it~%~
+                inside the right compositor?  WAYLAND_DISPLAY is ~s.~%~%~
+                Note that having river is necessary and not sufficient:~%~
+                the interface version must match too, and this build wants~%~
+                version ~d.  src/protocol/PINNED names the release."
+               (uiop:getenv "WAYLAND_DISPLAY") +window-management-version+))
       ;; From here on, a global is bound the moment it is announced.  Replacing
       ;; the hook rather than adding one keeps the accumulating list from
       ;; growing for the life of the session, and there is exactly one reader.
