@@ -311,7 +311,7 @@ The default asks for server-side, which under river means our borders and no
 client titlebar, and falls back to whatever the client insists on.
 
   methods:
-    (lifecycle-policy window)           ; defaults-lifecycle.lisp
+    (lifecycle-policy window)           ; lifecycle.lisp
 
 ----------------------------------------------------------------------------
 default-float-rect (latticewm/policy:policy latticewm/policy::window
@@ -324,7 +324,7 @@ and otherwise takes a fraction of the output.
 
   answered from: *float-fraction*
   methods:
-    (lifecycle-policy window output)    ; defaults-lifecycle.lisp
+    (lifecycle-policy window output)    ; lifecycle.lisp
 
 ----------------------------------------------------------------------------
 echo-content (latticewm/policy:policy latticewm/policy::world)
@@ -1063,7 +1063,7 @@ first extension anybody writes, which is why it is a shipped worked example.
 
   answered from: *float-dialogs*, *float-fixed-size-limit*
   methods:
-    (lifecycle-policy window)           ; defaults-lifecycle.lisp
+    (lifecycle-policy window)           ; lifecycle.lisp
 
 ----------------------------------------------------------------------------
 spawn-target (latticewm/policy:policy latticewm/policy::world
@@ -1191,7 +1191,7 @@ window_menu, maximize, fullscreen, minimize — because we honour all four and
 fullscreen in particular is free.
 
   methods:
-    (lifecycle-policy window)           ; defaults-lifecycle.lisp
+    (lifecycle-policy window)           ; lifecycle.lisp
 
 ----------------------------------------------------------------------------
 window-dimensions (latticewm/policy:policy latticewm/policy::leaf

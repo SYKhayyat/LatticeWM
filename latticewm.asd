@@ -84,7 +84,12 @@
        (:file "motion")
        (:file "defaults-motion")
        (:file "structure")
-       (:file "defaults-lifecycle")
+       ;; lifecycle is every shipped answer LIFECYCLE-POLICY gives.  It was
+       ;; two files, defaults-lifecycle and lifecycle, and the pair had no
+       ;; rule a reader could apply: both were methods on the same protocol
+       ;; class, sorted by subject.  DEFAULTS- means the motion split -- an
+       ;; algorithm file that defines no methods, beside the answers it asks
+       ;; for -- and gate 18 is what makes that mean something.
        (:file "lifecycle")
        (:file "input")
        ;; devices after input: the *hardware* half of input policy, kept in its

@@ -6,17 +6,23 @@
 ;;;; be.  It is the smallest thing that is a usable daily driver, and therefore
 ;;;; the smallest thing that proves the core works.
 ;;;;
-;;;; WHAT IS HERE IS THE CLASS AND THE VALUES.  The *methods* are in five files
+;;;; WHAT IS HERE IS THE CLASS AND THE VALUES.  The *methods* are in six files
 ;;;; beside this one, one per protocol, because that is what they turned out to
 ;;;; be once POLICY was split into protocols a user can implement a slice of:
 ;;;;
 ;;;;   policy/layout.lisp              LAYOUT-POLICY
 ;;;;   policy/defaults-motion.lisp     MOTION-POLICY, and the pointer
 ;;;;   policy/structure.lisp           STRUCTURE-POLICY
-;;;;   policy/defaults-lifecycle.lisp  LIFECYCLE-POLICY, the window half
-;;;;   policy/lifecycle.lisp           LIFECYCLE-POLICY, the event half
+;;;;   policy/lifecycle.lisp           LIFECYCLE-POLICY
 ;;;;   policy/input.lisp               INPUT-POLICY, the reading half
 ;;;;   policy/appearance.lisp          APPEARANCE-POLICY
+;;;;
+;;;; Six files and six protocols, and that is not a coincidence any more: the
+;;;; lifecycle answers were in two files until they were merged, sorted by
+;;;; subject under a rule that could not be applied from outside.  Gate 18
+;;;; holds the one file-naming rule the tree does keep -- DEFAULTS- names the
+;;;; answers half of an algorithm/answers pair, and the algorithm half defines
+;;;; no methods.
 ;;;;
 ;;;; Every one of them is a default you are expected to override, and they are
 ;;;; written to be *readable as examples* rather than merely correct — because

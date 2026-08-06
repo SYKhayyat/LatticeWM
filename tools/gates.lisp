@@ -1,14 +1,14 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are seventeen.  Nine of the eleven that were added were added because
-;;;; they had already found something; gates 15 and 17 are the other two,
-;;;; both passed the day they were written, and each says so where it stands
-;;;; rather than here.
+;;;; are eighteen.  Nine of the twelve that were added were added because
+;;;; they had already found something; gates 15, 17 and 18 are the other
+;;;; three, all three passed the day they were written, and each says so where
+;;;; it stands rather than here.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other sixteen run here, against the loaded image.
+;;;; The other seventeen run here.
 ;;;;
 ;;;; Twelve of them ask the program a question.  Gate 12 asks the *documents*
 ;;;; one, which is the half of this project the other twelve cannot see; gate
@@ -27,6 +27,11 @@
 ;;;; blast radius if it is ever wrong: when an option and a generic share a
 ;;;; name, are they one relationship or two things that happen to be spelled
 ;;;; alike?  Nothing had ever asked, and a reader has no way to.
+;;;;
+;;;; Gate 18 is the only one that asks about the *file list* rather than about
+;;;; anything in the program: a DEFAULTS- prefix says the file beside it is an
+;;;; algorithm that defines no methods, which was true of one pair and
+;;;; decoration on the other.  It reads source text for gate 13's reason.
 
 (require :asdf)
 (require :sb-introspect)
@@ -2137,6 +2142,88 @@ c:axis-of are how a name is written when it is genuinely being used."
                                                          (symbol-name (first o))))
                   collect variable collect generic))
       (format t "  every shared name is one relationship~%")))
+
+;;; --------------------------------------------------------------- gate 18
+
+(banner 18 "a DEFAULTS- file names an algorithm that defines no methods")
+;; THE ONLY FILE-LAYOUT RULE THIS TREE ACTUALLY KEEPS, AND IT WAS KEPT BY LUCK.
+;;
+;; policy/motion.lisp is the walk up the ancestor chain and defines no methods
+;; at all; policy/defaults-motion.lisp is the set of answers that walk asks the
+;; shipped containers for.  That pair is predictable from outside: a reader
+;; looking for STEP-ADDRESS does not have to know what step-address is *about*,
+;; only that it is an answer, and the prefix says which file holds answers.
+;;
+;; policy/defaults-lifecycle.lisp wore the same prefix and was not the same
+;; thing.  It held SHOULD-FLOAT-P, DEFAULT-FLOAT-RECT, WINDOW-CAPABILITIES and
+;; DECORATION-MODE; policy/lifecycle.lisp held five more methods on the same
+;; protocol class, and the rule offered for the split was that one file was
+;; "about a window's properties" and the other "about tree surgery".  That is a
+;; sort by subject, and subject is exactly what a reader cannot predict: it put
+;; WINDOW-RULE-FOR -- whose entire job is setting a window's properties -- in
+;; the other file, which the properties file then needed a comment to explain.
+;; The two files are now one, and the sections inside it are the sort.
+;;
+;; WHY A GATE AND NOT JUST THE MERGE.  The merge fixes the instance.  What made
+;; the instance possible is that DEFAULTS- was decoration: no check, nothing
+;; written down, and a name that reads as meaningful in a tree where it means
+;; something once.  The next file to take the prefix takes it from the same
+;; place, which is the file list in policy/conventional.lisp's header -- and
+;; that header had already drifted to "the methods are in five files" over a
+;; list of seven.  A convention nobody is made to keep is a convention a reader
+;; is misled by, which is the same failure as *SMART-GAPS* one medium over.
+;;
+;; WHAT IT CANNOT SEE, SAID PLAINLY.  It cannot tell a good decomposition from
+;; a bad one in general, and it does not try -- INPUT-POLICY's shipped answers
+;; live in six files for six good reasons and no rule this file could state
+;; would separate those from the lifecycle pair.  What it can do is hold the
+;; one rule that *is* stated: the prefix is a promise about the shape of the
+;; pair, and the promise is now checkable.  It passed the day it was written,
+;; like gates 15 and 17.
+;;
+;; IT READS SOURCE, NOT THE IMAGE, for gate 13's reason: which file a method is
+;; in is a fact about the text, and SB-INTROSPECT would answer with a truename
+;; either way.  CODE-LINES blanks comments and strings first, so the paragraph
+;; above cannot satisfy or trip it.
+(let ((pairs '())
+      (problems '()))
+  (dolist (path (sort (append (directory "src/**/*.lisp")
+                              (directory "lattice/*.lisp"))
+                      #'string< :key #'namestring))
+    (let ((name (pathname-name path)))
+      (when (and (> (length name) 9) (string= "defaults-" name :end2 9))
+        (let* ((stem (subseq name 9))
+               (engine (merge-pathnames (make-pathname :name stem :type "lisp")
+                                        path)))
+          (cond
+            ((not (probe-file engine))
+             (push (format nil "~a has no ~a.lisp beside it" (relative path) stem)
+                   problems))
+            (t
+             (let ((methods (loop for (number . code) in (code-lines engine)
+                                  when (search "(defmethod " code)
+                                    collect number)))
+               (if methods
+                   (push (format nil "~a defines ~d method~:p, at line~p ~{~d~^, ~}"
+                                 (relative engine) (length methods)
+                                 (length methods) methods)
+                         problems)
+                   (push (cons (relative engine) (relative path)) pairs)))))))))
+  (dolist (pair (reverse pairs))
+    (format t "    ~a~36tanswered by ~a~%" (car pair) (cdr pair)))
+  (format t "  algorithm/answers pairs~46t~d~%" (length pairs))
+  (if problems
+      (fail 18 "~d DEFAULTS- file~:p that is not the answers half of a pair:~
+                ~{~%    ~a~}~%~
+                ~4tThe prefix says the file beside it is an *algorithm* -- one~%~
+                ~4tthat asks the questions these methods answer and defines no~%~
+                ~4tmethods itself, the way policy/motion.lisp does.  A pair~%~
+                ~4tsorted any other way cannot be predicted from outside, so~%~
+                ~4tthe reader who wants to override one of these has two files~%~
+                ~4tand a coin.  Merge them, or rename the file after what it~%~
+                ~4tactually holds."
+            (length problems) (sort problems #'string<))
+      (format t "  every DEFAULTS- file is the answers half of one~%")))
 
 ;;; ---------------------------------------------------------------- verdict
 

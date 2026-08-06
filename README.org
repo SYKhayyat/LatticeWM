@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, seventeen gates, 1600+ checks
+make               # build, eighteen gates, 1600+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -460,7 +460,7 @@ make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Seventeen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Eighteen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -477,11 +477,32 @@ about the program still being true of it; every node property the program
 *reads* being written by something; every declared hook being attached to
 by a suite that runs it; every policy that overrides the method reading an
 option offering an option of its own in its place; every name the two
-published packages export naming something and being reached by something; and
-an option named after a policy generic being read by a method on that generic.
+published packages export naming something and being reached by something;
+an option named after a policy generic being read by a method on that generic;
+and a file whose name begins =defaults-= being the answers half of a pair whose
+other half defines no methods.
 The reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
-Gate 17 is the newest, and it is the smallest question in the file: when an
+Gate 18 is the newest, and it is about the file list rather than the program.
+Two files under =src/policy/= carry a =defaults-= prefix — and they meant
+different things by it. ~policy/motion.lisp~ is the *algorithm*, the walk up
+the ancestor chain, and defines no methods at all; ~policy/defaults-motion.lisp~
+is the set of answers that walk asks the shipped containers for. A reader
+looking for ~step-address~ does not need to know what step-address is about,
+only that it is an answer. ~policy/defaults-lifecycle.lisp~ wore the same prefix
+over a sort by *subject*: it held four methods on ~lifecycle-policy~ and
+~policy/lifecycle.lisp~ held five more, split "properties" from "events", and
+so put ~window-rule-for~ — whose whole job is setting a window's properties —
+in the events file, which the properties file then needed a comment to explain. The
+two are now one file with sections, and the prefix is checked, because what let
+that happen is that it had never meant anything: no gate, nothing written down,
+and the one place it *was* written down — the file list at the top of
+~policy/conventional.lisp~ — had itself drifted to "the methods are in five
+files" over a list of seven. The gate cannot tell a good decomposition from a
+bad one in general and does not try; ~input-policy~'s answers live in six files
+for six good reasons. It holds the one rule the tree does state.
+
+Gate 17 is the smallest question in the file: when an
 option and a generic share a name, are they one relationship or two things
 spelled alike? Five pairs share one — ~gaps~ and ~*gaps*~, ~border-width~ and
 ~*border-width*~, ~keys-hint~, ~move-into-occupied~, ~new-child-side~ — and the

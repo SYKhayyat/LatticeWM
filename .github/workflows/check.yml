@@ -9,7 +9,7 @@
 #
 # Two jobs, deliberately, because they answer two different questions.
 #
-#   check  — the whole of `make check': build, fourteen gates, the unit suite, and
+#   check  — the whole of `make check': build, eighteen gates, the unit suite, and
 #            the integration suite against a headless river, with
 #            REQUIRE_INTEGRATION=1 so a missing compositor or terminal is a
 #            failure rather than a paragraph and an exit 0.  Run under
