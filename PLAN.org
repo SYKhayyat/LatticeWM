@@ -379,7 +379,7 @@ lattice that is three hundred lines of methods is the thesis holding. One that i
 thousand lines re-implementing geometry is the thesis failing while wearing the gate's
 uniform.
 
-** The seven that were added
+** The eight that were added
 :PROPERTIES:
 :CUSTOM_ID: gates-added
 :END:
@@ -389,9 +389,10 @@ because something had already shipped broken, and in every case the instruments 
 existed were individually reasonable and all pointed somewhere else.
 
 7. *Every declared hook is run, and every run hook is declared.* ~:focus-changed~ was
-   declared, documented "for status bars", printed in the generated surface, and run by
+   declared, documented "for status bars", named in the extension guide, and run by
    nothing. A hook is a promise about when a function will be called and nothing checked
-   the caller existed.
+   the caller existed. What this cannot see is the third state, which is where the
+   mechanism actually was — declared, run, and nobody listening. That is gate 14.
 8. *Every event we handle exists on the interface we handle it for.* The output ~:name~
    event we listened for is not on the interface we bind, so outputs had no names, on
    every machine, in silence.
@@ -498,6 +499,53 @@ existed were individually reasonable and all pointed somewhere else.
     on an object for a reader the core does not know about — so the four in that position
     are printed on every build rather than failed on. Demanding an in-tree consumer for
     =:pid= would be a check writing the design.
+14. *Every declared hook is attached to by a suite that runs it.* Gate 7 above compares
+    two sets of names — declared here, run there — and both sets are written by the same
+    hand in the same afternoon. It establishes that a hook *exists*. Nothing established
+    that one *works*, and **fourteen of the seventeen had never been attached to by
+    anything at all**: not by the lattice, not by the four worked examples, not by a
+    test.
+
+    *A hook's contract is not its name.* It is the arguments its functions are called
+    with and the moment they are called, and neither had ever been executed for any of
+    the fourteen. Three were wrong, and each is the kind of wrong only a consumer finds:
+    ~:startup~ ran *before* the compositor connection existed, which its own docstring
+    denied and which the ~:layout-restored~ docstring twelve declarations below it in the
+    same file contradicted; ~:output-added~ ran at the moment the object was made, before
+    the monitor's name, position, size or scale had arrived, which is everything "a
+    surface or a process per screen" needs; and ~:focus-changed~, documented "run after
+    the cursor moves", was skipped by two of the five places that move the cursor, one of
+    them being closing a window. All three passed gates 1, 2, 7 and 12, the whole unit
+    suite and the whole integration run, because nothing was listening.
+
+    *Somebody must be listening, and there are exactly three places that can be.* Which
+    one is decided by what has to exist for the event to happen at all: ~tests/~ for what
+    constructing state can reach, ~tools/integration.lisp~ for what needs a real
+    compositor, ~tools/hardware-check.lisp~ for what needs a real machine. The third is
+    not a loophole — a headless backend runs with no input devices, so ~:input-added~
+    cannot be reached by the harness that reaches everything else — and attaching them in
+    the session recorder is right for that tool independently, since which devices were
+    found is the first question a hardware report should answer.
+
+    *Two halves, and neither is sufficient.* The gate is static: every hook must be named
+    in the *code* of one of the three, read through ~code-of~ so a docstring cannot
+    satisfy it. That catches hook nineteen being declared and nobody touching the suites,
+    which is exactly how the first eighteen got where they were. The dynamic half is in
+    the integration run, where it has to be: a recorder sits on every declared hook for
+    the whole session, every firing is checked against the declared argument count, and a
+    hook that neither fired nor is named as one a headless backend cannot produce is a
+    failure. It found two things on its first run — a monitor that had no name yet when
+    the fixed ~:output-added~ announced it, and the fact that nothing in the project had
+    ever closed a window against a real compositor.
+
+    *And the declaration stopped being a comment.* ~defhook~ took a lambda list and began
+    ~(declare (ignore lambda-list))~, so the one statement of what a hook function
+    receives was a comment that happened to be parenthesised. It is recorded now:
+    ~add-hook~ complains about a function that cannot accept those arguments, and a
+    compiler macro on ~run-hooks~ fails gate 1 on a call site that passes the wrong
+    number. Both matter because ~run-hooks~ guards each function separately — correctly,
+    since one broken hook must not stop the others — so an arity mistake signals once per
+    fire, is caught, and leaves nothing but a log line.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

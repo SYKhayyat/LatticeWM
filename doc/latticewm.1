@@ -102,9 +102,15 @@ running image.
 .B \-\-container\-surface
 Print every generic a new
 .I container kind
-must answer, generated from the running image.  This is the other half of the
-extension surface: the first changes what the window manager decides, this
-changes what it can hold.
+must answer, generated from the running image.  This is the second of three
+surfaces: the first changes what the window manager decides, this changes what
+it can hold.
+.TP
+.B \-\-hooks
+Print every hook, what its functions are called with, and when it fires,
+generated from the running image.  The third surface: what the window manager
+.IR notices ,
+as against what it decides or what it can hold.
 .SH KEYS
 The complete keymap is drawn on screen by
 .BR Super+/ ,

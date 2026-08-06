@@ -327,11 +327,16 @@ You never edit this package.")
    ;; hooks: noticing that something happened
    #:*hooks*
    #:*hook-documentation*
+   #:*hook-arguments*
    #:defhook
    #:add-hook
    #:remove-hook
    #:run-hooks
    #:all-hooks
+   #:hook-arguments
+   #:lambda-list-arity
+   #:accepted-arity
+   #:arity-accepts-p
    #:*warn-on-undeclared-hooks*
    #:*keymap*
    #:*pending-keymap*
@@ -387,7 +392,7 @@ You never edit this package.")
    ;; helpers it is built from: describing a CLOS generic knows nothing about
    ;; policy, and the container protocol needs the identical description.
    #:policy-generic-p #:policy-generics #:extension-surface
-   #:print-extension-surface #:undocumented-generics
+   #:print-extension-surface #:print-hook-surface #:undocumented-generics
    #:*motion-reference-rect*))
 
 (defpackage #:latticewm/runtime
@@ -445,11 +450,13 @@ You never edit this package.")
    #:substitute-arguments
    #:*hooks*
    #:*hook-documentation*
+   #:*hook-arguments*
    #:defhook
    #:add-hook
    #:remove-hook
    #:run-hooks
    #:all-hooks
+   #:hook-arguments
    #:*warn-on-undeclared-hooks*
    #:keysym-named
    #:keysym-name
@@ -583,7 +590,8 @@ keybindings, the command registry, and the session loop.")
    ;; hooks, imported from POLICY above and re-exported so that
    ;; `r:add-hook' keeps resolving -- the lattice uses it.
    #:add-hook #:remove-hook #:run-hooks #:*hooks* #:defhook
-   #:all-hooks #:*hook-documentation* #:*warn-on-undeclared-hooks*
+   #:all-hooks #:hook-arguments #:*hook-documentation* #:*hook-arguments*
+   #:*warn-on-undeclared-hooks*
    ;; state
    #:close-window-later #:run-shutdown-once
    #:on-events #:declare-handled-events #:all-handled-events

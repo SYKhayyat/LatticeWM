@@ -352,6 +352,103 @@ Returns (values RESULT STATUS), STATUS being :OK, :ERROR or :TIMEOUT."
 
 (defun note-relayout () (incf *relayouts*))
 
+;;; ============================================================ the hook ledger
+;;;
+;;; FOURTEEN OF THE SEVENTEEN HOOKS HAD NEVER BEEN ATTACHED TO BY ANYTHING, so
+;;; nothing had ever executed the two things a hook's contract actually is: the
+;;; arguments its functions receive and the moment they receive them.  Both
+;;; were guesses, and three were wrong -- including :STARTUP, which ran before
+;;; the compositor connection existed while its docstring said it ran after.
+;;;
+;;; A recorder goes on every declared hook before the window manager starts,
+;;; and stays there for the whole run.  The rest of this file then does what it
+;;; was already doing -- opening windows, moving focus, switching workspaces,
+;;; restoring a layout, quitting -- and the ledger section at the end asks what
+;;; came out.  The marginal cost of covering a new hook is one row in a table,
+;;; which is the same bargain the section shape made for checks.
+;;;
+;;; RECORDING RATHER THAN ASSERTING AT THE POINT OF FIRE, because a hook
+;;; function runs on the window manager's thread inside a manage sequence, and
+;;; a failed CHECK there would be a test harness signalling into the program
+;;; under test.  RUN-HOOKS would guard it and the failure would vanish.
+
+(defvar *hook-log* '()
+  "(NAME . ARGUMENTS) for every hook that fired, most recent first.")
+
+(defvar *hook-log-lock* (sb-thread:make-mutex :name "hook-log"))
+
+(defun record-hook (name arguments)
+  ;; Locked because these fire on the window manager's thread and are read
+  ;; from the driver's.  A hook whose whole purpose is to be cheap should not
+  ;; be the thing that makes a run flaky.
+  (sb-thread:with-mutex (*hook-log-lock*)
+    (push (cons name arguments) *hook-log*))
+  nil)
+
+(defparameter +cannot-fire-headless+
+  '(:input-added :input-removed :keyboard-layout-changed :output-removed)
+  "Hooks a headless backend structurally cannot produce.
+
+Named one by one rather than counted.  river runs here with
+WLR_LIBINPUT_NO_DEVICES=1, so no input device is ever announced and no xkb
+layout ever toggles, and a virtual output cannot be unplugged.  Every one of
+these is watched in tools/hardware-check.lisp instead, which is the only thing
+in the project that runs on a machine.
+
+:POINTER-OP is deliberately not here.  It looks like it belongs — an
+interactive drag needs a pointer — but the floating section drives START- and
+END-POINTER-OP directly, so it fires every run, and listing it would have been
+an excuse for coverage that already existed.
+
+A hook that is *not* on this list and did not fire is a failure, which is what
+makes the list the interesting part of the check rather than an excuse in it.")
+
+(defun watch-every-hook ()
+  "Put a recorder on every declared hook.  Returns how many were attached.
+
+By interned symbol rather than by closure, for the reason ADD-HOOK's docstring
+gives: the list holds what it is given, and a fresh closure per call would
+accumulate rather than replace."
+  (let ((count 0))
+    (dolist (row (all-hooks) count)
+      (let* ((name (first row))
+             (symbol (intern (format nil "WATCH~a" name) '#:latticewm/integration)))
+        (unless (fboundp symbol)
+          (setf (symbol-function symbol)
+                (lambda (&rest arguments) (record-hook name arguments))))
+        (add-hook name symbol)
+        (incf count)))))
+
+(defun fired (name)
+  "Every argument list NAME was run with, oldest first."
+  (sb-thread:with-mutex (*hook-log-lock*)
+    (loop for (fired . arguments) in (reverse *hook-log*)
+          when (eq fired name) collect arguments)))
+
+;;; TWO HOOKS ARE ASSERTED ON WHAT THEY SAW RATHER THAN ON WHAT THEY WERE
+;;; HANDED, because both bugs are about *when* and an object read afterwards
+;;; has moved on.  An output's name and size arrive in events of their own, so
+;;; a check that reads them at the end of the run cannot tell "the hook waited
+;;; for them" from "they turned up later anyway" -- which is precisely the
+;;; difference this commit is about.
+
+(defvar *startup-saw* nil "The session, as :STARTUP found it.")
+
+(defun note-startup-context ()
+  (setf *startup-saw*
+        (list :server (and *server* t)
+              :manager (and *server* (server-manager *server*) t)
+              :outputs (length (world-outputs *world*)))))
+
+(defvar *outputs-as-announced* '()
+  "(NAME WIDTH HEIGHT SCALE) for each output, read inside :OUTPUT-ADDED.")
+
+(defun note-output-added (output)
+  (let ((rect (output-rect output)))
+    (push (list (output-name output) (rect-w rect) (rect-h rect)
+                (output-scale output))
+          *outputs-as-announced*)))
+
 (defun settle (&key (seconds 10))
   "Ask for a manage sequence and wait for the relayout it causes.
 
@@ -480,6 +577,13 @@ are what a person means by the arrangement, and both are copy-stable."
            (return-from driving))
          (check (poll-until (lambda () (probe-file (socket-path))) 10)
                 "with a socket at ~a" (socket-path)))
+
+       ;; BEFORE THE WINDOW MANAGER, not after.  :STARTUP fires once, from
+       ;; inside START, so a recorder attached after the thread is launched is
+       ;; a race that loses the one firing there will ever be.
+       (add-hook :startup 'note-startup-context)
+       (add-hook :output-added 'note-output-added)
+       (watch-every-hook)
 
        (start-window-manager)
        ;; SETTLE counts relayouts through this, so it goes on before anything
@@ -1247,6 +1351,16 @@ are what a person means by the arrangement, and both are copy-stable."
               (wm (lambda () (untag-window "saved")))
               (check (not (window-tagged-p a "saved")) "the tag can then be removed")
               (check (wm (lambda () (load-state path))) "the file loads again")
+              ;; THE HOOK A POLICY WITH A SHAPE NEEDS.  The restore replaces
+              ;; the tree wholesale, so anything the configuration built is
+              ;; thrown away and :LAYOUT-RESTORED is the only chance to put it
+              ;; back -- without it, enabling the lattice in a config file left
+              ;; the policy saying `lattice' and every cell command answering
+              ;; NIL.  It is the one hook of the eighteen with a consumer in
+              ;; the shipped extension, and nothing had ever watched it fire.
+              (check (fired :layout-restored)
+                     ":layout-restored ran, so a policy that needs a shape ~
+                      gets to re-establish it")
               (settle)
               (check (window-tagged-p a "saved")
                      "and the tag comes back with it")
@@ -1447,6 +1561,66 @@ are what a person means by the arrangement, and both are copy-stable."
                   (settle)))))))
 
        ;; ------------------------------------------------------------------
+       ;; NOTHING IN THIS FILE HAD EVER CLOSED A WINDOW.  Every client it
+       ;; launches sits still until the teardown terminates it, so the whole
+       ;; removal path -- DETACH-WINDOW, the tree repair through the policy,
+       ;; the focus that has to land somewhere -- ran in the unit suite against
+       ;; constructed state and never once against a compositor.  The hook
+       ;; ledger is what said so: :WINDOW-CLOSED is not a hook a headless
+       ;; backend is unable to fire, it is one nothing had asked to fire.
+       ;;
+       ;; And `close' is the request FINDINGS records being refused on every
+       ;; machine, silently, for a week: it is window-management state, it was
+       ;; sent from an event handler, and river ignored it.  Super+q did
+       ;; nothing at all until CLOSE-WINDOW-LATER put it in a sequence.
+       (section "a window going away"
+         (let ((window (open-window "latticewm-closing")))
+           (cond
+             ((null window)
+              (missing "no terminal emulator on PATH, so no window to close"))
+             (t
+              (check (stand-on window) "the cursor is on the window to be closed")
+              ;; WHAT THIS PROGRAM OWNS, AND WHERE THAT STOPS.  The close is a
+              ;; window-management request, so the assertion is that it is
+              ;; queued and that a sequence drains it -- which is the whole of
+              ;; the bug FINDINGS records.  Whether the client then goes is the
+              ;; *client's* decision: the protocol says in as many words that
+              ;; "the window may ignore this request or only close after some
+              ;; delay", and a check that waited for foot to agree would be
+              ;; this project asserting on somebody else's program.  So the
+              ;; window is made to go the commonest way a window goes -- the
+              ;; application exits -- and what is asserted below is our own
+              ;; removal path.
+              (check (wm (lambda () (close-window-later window)))
+                     "a close is queued for a manage sequence, which is the ~
+                      only place river accepts one")
+              (settle)
+              (check (null (r::server-pending-closes *server*))
+                     "and the sequence drained it, so the request was sent ~
+                      rather than refused")
+              (let ((process (first *clients*)))
+                (when process (ignore-errors (uiop:terminate-process process :urgent t))))
+              (check (poll-until (lambda () (not (c:window-live-p window))) 10)
+                     "the client exits, river says `closed', and the window ~
+                      stops being live")
+              (check (null (c:leaf-holding (c:world-root *world*) window))
+                     "the tree no longer holds it")
+              (let ((firings (fired :window-closed)))
+                (check (find window firings :key #'first)
+                       ":window-closed ran, carrying the window that went")
+                (check (every (lambda (given)
+                                (and (= 1 (length given))
+                                     (typep (first given) 'window)))
+                              firings)
+                       "with the one argument it declares, every time"))
+              ;; The focus half, which is the regression this commit is for:
+              ;; ON-WINDOW-CLOSE wrote WORLD-CURSOR directly and announced
+              ;; nothing, so the commonest focus change in the program was
+              ;; invisible to the hook documented for status bars.
+              (check (fired :focus-changed)
+                     "and the focus that had to move announced itself")))))
+
+       ;; ------------------------------------------------------------------
        ;; SHUTDOWN RUNS ONCE.  QUIT and RESTART-WM each ran the hooks and saved
        ;; the layout, and START's UNWIND-PROTECT did both again on the way out,
        ;; so every exit ran every shutdown hook twice.  Harmless for the shipped
@@ -1470,7 +1644,114 @@ are what a person means by the arrangement, and both are copy-stable."
                 "and the layout was written on the way out")
          (wm (lambda () (quit)))
          (check (poll-until (lambda () (not (server-running *server*))) 10)
-                "and QUIT ends the session")))
+                "and QUIT ends the session"))
+
+       ;; ------------------------------------------------------------------
+       ;; LAST, because it reads the whole run.  Every declared hook has had a
+       ;; recorder on it since before START was called; this asks what each one
+       ;; was handed and when, which is the half of a hook's contract that no
+       ;; gate, no document and no unit test can reach.
+       (section "the hooks, as a consumer sees them"
+         (let ((declared (all-hooks))
+               (seen 0))
+           (dolist (row declared)
+             (destructuring-bind (name documentation attached arguments) row
+               (declare (ignore documentation attached))
+               (let ((firings (fired name)))
+                 (when firings
+                   (incf seen)
+                   ;; THE DECLARATION, CHECKED AGAINST THE CALL SITE THAT RAN.
+                   ;; The compiler macro checks every literal RUN-HOOKS at
+                   ;; build time; this checks the ones that actually fired, in
+                   ;; the program, against the same declaration.
+                   (check (every (lambda (given) (= (length given) (length arguments)))
+                                 firings)
+                          "~s fired ~d time~:p with the ~d argument~:p it declares"
+                          name (length firings) (length arguments))))))
+           (check (plusp seen) "~d of ~d declared hooks fired during this run"
+                  seen (length declared))
+           ;; AND THE ONES THAT DID NOT, which is the half that would have
+           ;; caught the original state of this mechanism.  A hook that neither
+           ;; fired nor is named as one a headless backend cannot produce is
+           ;; a hook nothing in the project has ever executed.
+           (dolist (row declared)
+             (let ((name (first row)))
+               (unless (or (fired name) (member name +cannot-fire-headless+))
+                 (check nil "~s never fired, and is not one a headless backend ~
+                             is unable to fire.  Drive it, or say here why it ~
+                             cannot be driven" name))))
+           (dolist (name +cannot-fire-headless+)
+             (unless (member name declared :key #'first)
+               (check nil "~s is excused from firing and is not a declared ~
+                           hook -- the excuse outlived the thing" name)))))
+
+       (section "what the hooks were handed"
+         ;; :STARTUP RAN BEFORE THE CONNECTION EXISTED, and said in its own
+         ;; docstring that it ran after.  A hook nothing attaches to can say
+         ;; anything about itself.
+         (check *startup-saw* ":startup ran")
+         (when *startup-saw*
+           (check (getf *startup-saw* :server)
+                  "with the compositor connection up, which is what it promises")
+           (check (getf *startup-saw* :manager)
+                  "and river_window_manager_v1 bound, so a hook can act on the ~
+                   session rather than on an empty world"))
+
+         ;; :OUTPUT-ADDED RAN AT THE MOMENT THE OBJECT WAS MADE, before the
+         ;; position, the size and the wl_output join that carries the name and
+         ;; the scale.  Read here at the moment of firing, not afterwards,
+         ;; because afterwards they have all arrived either way.
+         (check *outputs-as-announced* ":output-added ran for the headless output")
+         (dolist (row *outputs-as-announced*)
+           (destructuring-bind (name width height scale) row
+             (check (and name (plusp (length name)))
+                    "and the monitor already had its name: ~a" (or name "(none)"))
+             (check (and (plusp width) (plusp height))
+                    "and its size: ~dx~d" width height)
+             (check (and (realp scale) (plusp scale))
+                    "and its scale: ~a" scale)))
+
+         ;; :KEYBOARD-FOCUS-CHANGED did not exist.  :FOCUS-CHANGED reports the
+         ;; cursor, and the cursor is a place -- focusing a float does not move
+         ;; it, so the only focus hook there was could not tell a status bar
+         ;; which window was about to receive the keystrokes.
+         (let ((firings (fired :keyboard-focus-changed)))
+           (check firings ":keyboard-focus-changed ran ~d time~:p" (length firings))
+           (check (every (lambda (given)
+                           (destructuring-bind (old new) given
+                             (and (or (null old) (typep old 'window))
+                                  (or (null new) (typep new 'window)))))
+                         firings)
+                  "with windows or NIL, NIL being the honest answer for an ~
+                   empty pane rather than a missing value")
+           (check (notany (lambda (given) (eq (first given) (second given))) firings)
+                  "and never with the same window twice, because it fires off ~
+                   the diff the runtime already had"))
+
+         (let ((firings (fired :focus-changed)))
+           (check firings ":focus-changed ran ~d time~:p" (length firings))
+           (check (every (lambda (given) (every #'listp given)) firings)
+                  "with two paths, which is what a place is"))
+
+         ;; The seam a status bar, a notification popup or a minimap attaches
+         ;; to, and the one hook in the system that four things used and
+         ;; nothing documented until it was declared.
+         (check (fired :draw-overlays)
+                ":draw-overlays ran inside the render sequences, ~d time~:p"
+                (length (fired :draw-overlays)))
+         (check (fired :reserve-space)
+                ":reserve-space was asked how much of the screen to keep ~
+                 clear, ~d time~:p" (length (fired :reserve-space)))
+
+         ;; The hooks a headless backend structurally cannot fire, reported one
+         ;; by one, because "five did not fire" is a sentence somebody has to
+         ;; go and decode.  Not fatal, and never made fatal: making them so
+         ;; would only teach people to unset the variable.
+         (dolist (name +cannot-fire-headless+)
+           (unless (fired name)
+             (skip "~s: nothing here can produce it -- no input devices, no ~
+                    unpluggable monitor, no physical pointer.  Watched in ~
+                    tools/hardware-check.lisp instead" name)))))
 
   ;; --- teardown ---------------------------------------------------------
   (dolist (process *clients*)

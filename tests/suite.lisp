@@ -26,7 +26,7 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:minibuffer #:devices #:capture))
+           #:container #:hooks #:minibuffer #:devices #:capture))
 
 (in-package #:latticewm/tests)
 
@@ -45,6 +45,12 @@ outside changes behaviour, live, with no core edit.")
 answers rather than what a new policy answers.  It had no membership test, no
 generated document and no documentation gate until it had all three, and its
 failures were the ones that absence predicts.")
+(def-suite hooks :in model
+  :description "The third extension mechanism.  A generic decides, an option
+supplies the shipped answer, and a hook notices — and the hook was the one with
+nothing asking whether anybody had ever attached to it, which fourteen of the
+seventeen had not.")
+
 (def-suite devices :in model
   :description "Input device configuration: which settings a device should
 have, which is pure, and how a value reaches the wire, which is not.")

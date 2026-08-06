@@ -242,7 +242,14 @@ a mode would make you remember which one you were in."
       (declare (ignore removed))
       (setf (c:world-root world) new-root)
       (let ((landed (focus-after-remove policy world path suggested)))
-        (setf (c:world-cursor world) (c:repair-path new-root landed))))))
+        ;; THROUGH REPAIR-CURSOR, NOT INTO THE SLOT.  This is the commonest
+        ;; focus change there is — close a window and the cursor lands
+        ;; somewhere else — and writing the slot here skipped both halves of
+        ;; the notification: ON-FOCUS-CHANGE, so :MRU never learned that the
+        ;; place had moved, and the :FOCUS-CHANGED hook, which is documented
+        ;; "run after the cursor moves" and did not.  REPAIR-CURSOR is exactly
+        ;; REPAIR-PATH plus those two, and has been since it was written.
+        (repair-cursor policy world landed)))))
 
 (defmethod on-minimize ((policy lifecycle-policy) world (window c:window))
   "Take the window out of the tree entirely and put it on the scratchpad.

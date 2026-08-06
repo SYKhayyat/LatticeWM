@@ -38,6 +38,64 @@ contributors the release attracts, and a model would rather have a plist."
                            (append row (list (option-readers (first row)))))
                          (all-options))))
 
+(defun print-hook-surface (&optional (stream *standard-output*))
+  "Print the hooks for a human.
+
+THE THIRD SURFACE, AND THE ONE THAT HAD NO DOCUMENT.  The policy generics are
+printed from the image and gated; the container protocol is printed from the
+image and gated; the options are printed from the image, gated, and carry the
+list of what reads them.  The hooks were a sentence in doc/EXTENDING.org
+naming thirteen of them, hand-typed, four short — :LAYOUT-RESTORED, which is
+the hook the flagship extension itself uses, among the missing — followed by
+\"(all-hooks) is authoritative\", which is a true statement that only helps
+somebody already in a REPL.
+
+Two comments in the source said this document existed.  DEFHOOK's docstring
+warned that an undeclared hook \"does not appear in the extension surface
+document\", and gate 7's header said :FOCUS-CHANGED was \"listed in the
+generated extension surface\".  Neither was true of any hook; nothing printed
+them anywhere."
+  (let ((hooks (all-hooks)))
+    (format stream "~&~76,,,'=<~>~%~
+                    LatticeWM hooks~%~
+                    ~d hook~:p.  Generated from the running image.~%~
+                    ~76,,,'=<~>~2%"
+            (length hooks))
+    (format stream "~
+A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,~%~
+the return value is normally ignored, and nobody is in charge.  A *generic*~%~
+decides what happens instead: one answer wins, CALL-NEXT-METHOD composes them,~%~
+and the return value is the point.  If you find yourself wanting a hook's~%~
+answer, you wanted a method -- `latticewm --extension-surface' lists those.~2%~
+    (defun note-the-window (window) (logmsg :info \"~~a\" window))~%~
+    (add-hook :window-opened 'note-the-window)~2%~
+*Pass a symbol, not #'a-function.*  The list holds what it is given and a~%~
+function object is a snapshot, so redefining the function afterwards leaves~%~
+the hook calling the old one and re-evaluating the ADD-HOOK adds a second~%~
+entry.  A symbol is looked up when the hook runs and replaces rather than~%~
+accumulates.  Both of those bit this project.~2%~
+THE ARGUMENT LIST BESIDE EACH NAME IS CHECKED, in both directions.  ADD-HOOK~%~
+complains when the function you attach cannot be called with them, and a~%~
+compiler macro fails the build on a RUN-HOOKS that passes the wrong number --~%~
+because a hook function of the wrong arity signals inside the guard that keeps~%~
+one broken hook from stopping the others, so what reaches you is silence.~2%~
+`attached' counts what is on each hook *in this image*, which is how you check~%~
+that your configuration file was loaded.  Every hook below is attached to and~%~
+watched firing by the test suite or the integration run; gate 14 fails the~%~
+build on one that is not, because a seam nobody has ever pulled is a seam~%~
+whose arguments and timing are guesses.~2%")
+    (dolist (row hooks)
+      (destructuring-bind (name documentation attached arguments) row
+        ;; The argument names alone, not ~S of the list: these are symbols
+        ;; interned in LATTICEWM/POLICY, and a reader who has to skip
+        ;; `latticewm/policy::' in front of every one of them learns nothing
+        ;; from it.  The two protocol surfaces print specializers, where the
+        ;; package is the fact; here it is noise.
+        (format stream "~&~76,,,'-<~>~%~s (~{~(~a~)~^ ~})~%~76,,,'-<~>~%~
+                        ~a~%~%  attached: ~d~2%"
+                name arguments documentation attached)))
+    (values)))
+
 (defun undocumented-generics ()
   "Every extension-surface generic with no docstring.  Gate 2 fails on any."
   (remove-if (lambda (symbol) (documentation symbol 'function))

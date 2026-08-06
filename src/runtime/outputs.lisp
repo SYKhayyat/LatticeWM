@@ -39,6 +39,13 @@ rather than in either handler means it does not matter."
           (let ((name (gethash id (server-output-names *server*))))
             (when (and name (not (equal name (c:output-name output))))
               (setf (c:output-name output) name)
+              ;; A MONITOR THAT HAS JUST LEARNED ITS OWN NAME IS NEWS.  The
+              ;; :OUTPUT-ADDED hook waits for it, and this join is not driven
+              ;; by anything that asks for a manage sequence — so without this
+              ;; line an output whose name lost the race would sit unannounced
+              ;; until something else happened to want one, which on an idle
+              ;; desktop is a keystroke away and might be minutes.
+              (when (assoc output *unannounced-outputs*) (request-manage))
               (logmsg :info "output ~a is ~a" id name))))))))
 
 (defun wl-output-named (name)
@@ -92,12 +99,65 @@ callers already have one."
     ;; A new monitor brings its own workspace, or it mirrors the first one and
     ;; looks broken.
     (guarded "workspaces for outputs" (p:ensure-workspaces-for-outputs *world*))
-    (run-hooks :output-added output)
+    (push (cons output 0) *unannounced-outputs*)
     (mark-dirty)
     (request-manage)
     (logmsg :info "output appeared: ~s (workspace ~a)"
             output (c:prop output :workspace))
     output))
+
+(defparameter +announce-attempts+ 10
+  "Manage sequences to wait for a monitor to say what it is before giving up.
+
+A CAP, NOT A TIMEOUT, and it exists so that the wait cannot become a silence.
+Waiting for the name is right — the name is what per-output workspace memory
+is keyed on, and it arrives on the same wl_output join as the scale, so an
+output that has one has both.  But `wait until it is known' with nothing on
+the end of it means a compositor that never sends one has a hook that never
+fires, and a hook that never fires is the bug this whole mechanism was in.
+Ten sequences is far more than the two it actually takes, and reaching it logs
+what was missing rather than passing over it.")
+
+(defun output-knowable-p (output)
+  "Has OUTPUT said enough about itself for a hook to act on it?
+
+Its name, because a process per screen is keyed on it and it carries the same
+wl_output join the scale does; and a real size, because a surface per screen
+needs one.  Those are the two facts the hook's documented uses require and the
+two river does not put in the event that announces the monitor."
+  (let ((rect (c:output-rect output)))
+    (and (c:output-name output)
+         (plusp (length (c:output-name output)))
+         (plusp (c:rect-w rect))
+         (plusp (c:rect-h rect)))))
+
+(defun announce-new-outputs ()
+  "Run :OUTPUT-ADDED for monitors that have arrived and said what they are.
+
+Called from the manage sequence, which is the same answer PLACE-UNPLACED-
+WINDOWS gives to the same question: at the moment `output' arrives we know
+nothing about the output.  One round trip brings the position and the size;
+the name comes from a *different global* — wl_output, joined by id — and lost
+the race about half the time, which is why this waits for it rather than for a
+fixed number of sequences.  The integration run asserts on what the hook was
+handed at the moment it fired, so `it turned up eventually' cannot pass for it."
+  (let ((pending (nreverse *unannounced-outputs*))
+        (again '()))
+    (setf *unannounced-outputs* '())
+    (dolist (entry pending)
+      (destructuring-bind (output . attempts) entry
+        ;; Still ours, and still plugged in.  DETACH-OUTPUT drops it from the
+        ;; list as well, so this is the belt to that braces.
+        (when (member output (c:world-outputs *world*))
+          (cond
+            ((output-knowable-p output) (run-hooks :output-added output))
+            ((>= attempts +announce-attempts+)
+             (logmsg :warn "output ~s never said ~:[what it is called~;how big ~
+                            it is~]; announcing it anyway"
+                     output (c:output-name output))
+             (run-hooks :output-added output))
+            (t (push (cons output (1+ attempts)) again))))))
+    (setf *unannounced-outputs* again)))
 
 (defun detach-output (output proxy)
   "A monitor went away.  Take it out of everything and put its work somewhere.
@@ -115,7 +175,14 @@ needs:
 
 The protocol also asks us to destroy the object after `removed', which frees
 the compositor's side."
-  (let ((was-showing (c:prop output :workspace)))
+  (let ((was-showing (c:prop output :workspace))
+        ;; PAIRED, OR NEITHER.  A monitor plugged and unplugged inside one
+        ;; round trip is never announced, and a hook keeping a table per screen
+        ;; must not be told to remove a screen it was never told about — which
+        ;; is the shape of the :STARTUP-without-:SHUTDOWN bug one file over,
+        ;; and cheaper to not write than to find.
+        (announced (not (assoc output *unannounced-outputs*))))
+    (setf *unannounced-outputs* (remove output *unannounced-outputs* :key #'car))
     (forget-overlays-for-output output)
     (let ((layer (c:prop output :layer-shell)))
       (when layer
@@ -127,7 +194,7 @@ the compositor's side."
     (guarded "output destroy" (river:river-output-v1.destroy proxy))
     (setf (c:output-proxy output) nil)
     (rehome-orphaned-workspace was-showing)
-    (run-hooks :output-removed output)
+    (when announced (run-hooks :output-removed output))
     (mark-dirty)
     (request-manage)
     (logmsg :info "output removed: ~s" output))

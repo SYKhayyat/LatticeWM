@@ -97,7 +97,7 @@ EOF
 # document users needed and the one document this loop did not copy, because it
 # matched *.txt and the guide is an .org file.
 mkdir -p "$share/doc"
-for file in EXTENSION-SURFACE.txt CONTAINER-SURFACE.txt COMMANDS.txt \
+for file in EXTENSION-SURFACE.txt CONTAINER-SURFACE.txt HOOKS.txt COMMANDS.txt \
             OPTIONS.txt KEYS.txt EXTENDING.org; do
     [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$share/doc/$file"
 done

@@ -100,10 +100,73 @@ and the instrumentation was the reason."
 
 (defun note-workspace (index) (note "WKSPACE now ~a" index))
 
+(defun note-keyboard-focus (old new)
+  "Which window is actually receiving the keystrokes.
+
+FOCUS IS A PLACE AND THE KEYBOARD IS A CONSEQUENCE, so this and the line above
+it are two different facts, and the sessions this file was written for turned
+on exactly that difference: `i could never type' is a claim about the keyboard
+and FOCUS lines are a claim about the cursor.  Now the report has both, and a
+NIL here beside a FOCUS line is the empty-pane case D18 makes deliberate --
+which is the thing that reads as a bug and is not one."
+  (note "KEYBRD  ~a -> ~a"
+        (if old (or (window-app-id old) "?") "(nothing)")
+        (if new (or (window-app-id new) "?") "(nothing)")))
+
 (add-hook :window-opened 'note-window-opened)
 (add-hook :window-closed 'note-window-closed)
 (add-hook :focus-changed 'note-focus)
+(add-hook :keyboard-focus-changed 'note-keyboard-focus)
 (add-hook :workspace-changed 'note-workspace)
+
+;;; ----------------------------------------- the hardware, as it is announced
+;;;
+;;; THE FOUR HOOKS ONLY A REAL MACHINE CAN FIRE, and this is the only file in
+;;; the project that runs on one.  The headless backend the integration suite
+;;; drives is started with WLR_LIBINPUT_NO_DEVICES=1, so no input device is
+;;; ever announced and no monitor is ever unplugged there -- which left these
+;;; four declared, run from the right line, and never once executed by
+;;; anything.  Gate 14 names this file as their home for that reason.
+;;;
+;;; They also belong here on their own merits.  This project binds river's
+;;; three input-configuration protocols because nothing else on the system
+;;; will, so *which devices were found and what they turned out to be* is the
+;;; first question a hardware report should answer, and until now it recorded
+;;; the answer only if something else made it look.
+
+(defun note-input-added (device)
+  ;; The name and the kind are not here yet -- they arrive in events of the
+  ;; device's own, which is what the hook's docstring warns about and what the
+  ;; second line, from a later moment, is for.
+  (note "INPUT   announced ~s" device))
+
+(defun note-input-removed (device)
+  (note "INPUT   removed ~a (~a)"
+        (or (input-device-name device) "?") (or (input-device-kind device) "?")))
+
+(defun note-keyboard-layout (device name)
+  (note "LAYOUT  ~a is now ~a" (or (input-device-name device) "keyboard") name))
+
+(defun note-output-added (output)
+  (let ((r (output-rect output)))
+    (note "OUTPUT  appeared: ~a  ~dx~d at (~d,~d)  scale ~a  workspace=~a"
+          (or (output-name output) "(unnamed)")
+          (rect-w r) (rect-h r) (rect-x r) (rect-y r)
+          (output-scale output) (prop output :workspace))))
+
+(defun note-output-removed (output)
+  (note "OUTPUT  removed: ~a" (or (output-name output) "(unnamed)")))
+
+(defun note-pointer-op (kind window)
+  (note "POINTER ~:[ended~;~:*~(~a~)~] on ~a"
+        kind (or (window-app-id window) "?")))
+
+(add-hook :input-added 'note-input-added)
+(add-hook :input-removed 'note-input-removed)
+(add-hook :keyboard-layout-changed 'note-keyboard-layout)
+(add-hook :output-added 'note-output-added)
+(add-hook :output-removed 'note-output-removed)
+(add-hook :pointer-op 'note-pointer-op)
 
 ;;; ------------------------------------------------- the machine it ran on
 

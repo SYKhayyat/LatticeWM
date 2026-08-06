@@ -397,8 +397,12 @@ nothing at all."
           (setf (c:world-root world)
                 (make-grid :cols cols :rows rows
                            :cells (list (cons (cell 0 0) root))))))
-    (setf (c:world-cursor world)
-          (c:repair-path (c:world-root world) (c:world-cursor world)))
+    ;; Every path in the world just grew a cell on the front of it, so the
+    ;; cursor moves even though nothing the user can see did.  Through
+    ;; REPAIR-CURSOR rather than into the slot: it is REPAIR-PATH plus
+    ;; ON-FOCUS-CHANGE plus the :FOCUS-CHANGED hook, and a status bar that
+    ;; shows the address needs to hear about this one most of all.
+    (p:repair-cursor (p:current-policy) world)
     (tag-cell-parity)
     (r:relayout :force t)
     (r:logmsg :info "lattice enabled: ~dx~d viewport" cols rows)

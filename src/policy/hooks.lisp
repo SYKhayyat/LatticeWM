@@ -22,6 +22,36 @@
 ;;;; OPTION-READERS answers it from the compiled image, the generated
 ;;;; extension surface prints it under every option, and gate 11 fails the
 ;;;; build on an option no method and no function reads.
+;;;;
+;;;; AND THE HOOK WAS THE ONE OF THE THREE WITH NOTHING ASKING THAT QUESTION.
+;;;; Fourteen of the seventeen declared hooks had never been attached to by
+;;;; anything -- not by the lattice, not by the four worked examples, not by a
+;;;; test.  Gate 7 asked whether a declared name is also a run name, which is a
+;;;; question about two greps rather than about the program, and gate 2 asked
+;;;; whether each has a docstring, which DEFHOOK makes mandatory anyway.
+;;;;
+;;;; A HOOK'S CONTRACT IS NOT ITS NAME.  It is what the functions are called
+;;;; with and the moment they are called, and neither of those had ever been
+;;;; executed by a consumer.  Three of them were wrong:
+;;;;
+;;;;   * :STARTUP ran before the compositor connection existed, which its own
+;;;;     docstring denied and :LAYOUT-RESTORED's docstring, twelve declarations
+;;;;     below it in this file, contradicted;
+;;;;   * :OUTPUT-ADDED ran at the moment the object was made, before the
+;;;;     monitor's name, position, size or scale had arrived -- the four facts
+;;;;     "a surface or a process per screen" needs;
+;;;;   * :FOCUS-CHANGED, documented "run after the cursor moves", was skipped
+;;;;     by two of the five places that move the cursor, one of them being
+;;;;     closing a window.
+;;;;
+;;;; So the declaration is load-bearing now.  DEFHOOK's lambda list used to be
+;;;; DECLARE IGNOREd; it is recorded, ADD-HOOK checks the function you attach
+;;;; against it, a compiler macro checks every RUN-HOOKS call site against it
+;;;; at compile time, and gate 14 requires every declared hook to be attached
+;;;; to and watched firing by the unit suite or the integration run.  There is
+;;;; also a generated document now -- `latticewm --hooks', doc/HOOKS.txt --
+;;;; because this was the only extension mechanism whose surface was a list
+;;;; somebody typed by hand, and it was four names short.
 
 (in-package #:latticewm/policy)
 
@@ -29,21 +59,84 @@
   "NAME -> (list of functions), most recently added first.")
 
 (defvar *hook-documentation* (make-hash-table :test #'eq)
-  "NAME -> docstring, for the generated extension-surface document.")
+  "NAME -> docstring, for the generated hook-surface document.")
+
+(defvar *hook-arguments* (make-hash-table :test #'eq)
+  "NAME -> the declared lambda list, as a list of symbols.
+
+THIS USED TO BE THROWN AWAY.  DEFHOOK took a lambda list and began
+(DECLARE (IGNORE LAMBDA-LIST)), so the one statement of what a hook function
+is called with was a comment that happened to be parenthesised: nothing
+compared it to the RUN-HOOKS call sites, nothing compared it to the function
+you attached, and a mismatch in either direction reached you as a hook that
+silently did nothing.  RUN-HOOKS guards each function separately -- rightly,
+since one broken hook must not stop the others -- so a function of the wrong
+arity signals once per fire, is caught, contributes NIL, and leaves a log line
+in a file nobody has open.")
 
 (defmacro defhook (name lambda-list documentation)
   "Declare a hook and what its functions are called with.
 
     (defhook :window-opened (window) \"Run after WINDOW has been placed.\")
 
+LAMBDA-LIST is checked, in both directions and at the moment each mistake is
+made: ADD-HOOK complains about a function that cannot accept these arguments,
+and a compiler macro on RUN-HOOKS fails gate 1 on a call site that does not
+pass them.
+
 Declaring is not required — ADD-HOOK works on any name — but an undeclared
-hook does not appear in the extension surface document, which means nobody
-finds it."
-  (declare (ignore lambda-list))
-  `(progn (setf (gethash ,name *hook-documentation*) ,documentation)
+hook appears in no generated document, which means nobody finds it."
+  `(progn (setf (gethash ,name *hook-documentation*) ,documentation
+                (gethash ,name *hook-arguments*) ',lambda-list)
           (unless (nth-value 1 (gethash ,name *hooks*))
             (setf (gethash ,name *hooks*) '()))
           ,name))
+
+(defun hook-arguments (name)
+  "The declared lambda list of hook NAME, and whether it was declared at all."
+  (gethash name *hook-arguments*))
+
+(defun lambda-list-arity (lambda-list)
+  "(MIN . MAX) arguments LAMBDA-LIST accepts.  MAX is NIL when unbounded.
+
+Compared by symbol *name* rather than by identity, because this is asked of
+lambda lists SB-INTROSPECT reconstructed as well as of ones written here, and
+those arrive with whatever package their &-markers were interned in."
+  (let ((min 0) (max 0) (optional nil))
+    (dolist (item lambda-list (cons min max))
+      (if (and (symbolp item) (plusp (length (symbol-name item)))
+               (char= #\& (char (symbol-name item) 0)))
+          (cond ((string= item '#:&optional) (setf optional t))
+                ((string= item '#:&aux) (return (cons min max)))
+                (t (return (cons min nil))))
+          (if optional (incf max) (progn (incf min) (incf max)))))))
+
+(defun accepted-arity (function)
+  "(MIN . MAX) arguments FUNCTION accepts, or NIL when it cannot be told.
+
+Asked of the compiler's FUNCTION type rather than of the lambda list, because
+the lambda list of a function with no debug information is NIL, and NIL is
+also the lambda list of a function of no arguments -- so the one shape that
+must not produce a complaint would have produced one.  A &REST function types
+as (FUNCTION * ...), which is the same answer as `no idea', and both mean say
+nothing: this check exists to catch a definite mistake, and a check that
+guesses is one people learn to ignore."
+  (let ((object (cond ((functionp function) function)
+                      ((and (symbolp function) (fboundp function))
+                       (symbol-function function)))))
+    (when object
+      (let ((type (ignore-errors (sb-introspect:function-type object))))
+        (when (and (consp type) (eq (first type) 'function))
+          (let ((arguments (second type)))
+            (cond ((eq arguments '*) nil)
+                  ((null arguments) (cons 0 0))
+                  ((listp arguments) (lambda-list-arity arguments)))))))))
+
+(defun arity-accepts-p (arity count)
+  "Can something of ARITY -- (MIN . MAX), or NIL for unknown -- take COUNT?"
+  (or (null arity)
+      (and (<= (car arity) count)
+           (or (null (cdr arity)) (<= count (cdr arity))))))
 
 (define-option *warn-on-undeclared-hooks* t
   "Complain when ADD-HOOK is given a name no DEFHOOK declared.
@@ -81,6 +174,20 @@ way out of it, so give it a name first."
     (logmsg :warn "~s is not a declared hook, so nothing will ever run it.~%~
                    Declared hooks are: ~{~s~^ ~}"
             name (mapcar #'first (all-hooks))))
+  ;; THE OTHER HALF OF THE SAME MISTAKE, and unconditional where the one above
+  ;; is optional: attaching to a name nobody declared is something an extension
+  ;; is entitled to do, and attaching a function that cannot be called with the
+  ;; arguments the declaration promises never is.  It arrives as a hook that
+  ;; does nothing either way, and this one would otherwise arrive as a log line
+  ;; per fire, from inside GUARDED, saying `invalid number of arguments'.
+  (multiple-value-bind (arguments declared) (hook-arguments name)
+    (when declared
+      (let ((wanted (length arguments))
+            (arity (accepted-arity function)))
+        (unless (arity-accepts-p arity wanted)
+          (logmsg :warn "~s cannot be called with ~d argument~:p, so it will ~
+                         never run: ~s is run with (~{~(~a~)~^ ~})."
+                  function wanted name arguments)))))
   (let ((existing (remove function (gethash name *hooks*))))
     (setf (gethash name *hooks*)
           (if append (append existing (list function)) (cons function existing))))
@@ -109,11 +216,32 @@ Those read this list.  Everything else ignores it, which is free."
       (push (guarded (format nil "hook ~s" name) (apply function arguments))
             out))))
 
+(define-compiler-macro run-hooks (&whole form name &rest arguments)
+  "Check a literal call site against the declaration, at compile time.
+
+Every RUN-HOOKS in the tree names its hook with a literal keyword, so this
+sees all of them, and gate 1 -- zero compiler warnings, from our files only --
+is what turns the warning into a failed build.  The declaration is in the
+image by now because the system is :SERIAL: this file is compiled and *loaded*
+before the first file that runs a hook is compiled.
+
+Nothing is transformed.  The form is returned as it arrived; the value of a
+compiler macro here is the compile-time look, not the code it emits."
+  (when (keywordp name)
+    (multiple-value-bind (declared present) (hook-arguments name)
+      (when (and present (/= (length declared) (length arguments)))
+        (warn "~s is declared with ~d argument~:p (~{~(~a~)~^ ~}) and run with ~
+               ~d here.  One of the two is wrong, and a hook function written ~
+               against the declaration will signal on every fire."
+              name (length declared) declared (length arguments)))))
+  form)
+
 (defun all-hooks ()
-  "Every declared hook, as (NAME DOCUMENTATION COUNT), sorted by name."
+  "Every declared hook, as (NAME DOCUMENTATION COUNT ARGUMENTS), by name."
   (let ((out '()))
     (maphash (lambda (name documentation)
-               (push (list name documentation (length (gethash name *hooks*)))
+               (push (list name documentation (length (gethash name *hooks*))
+                           (gethash name *hook-arguments*))
                      out))
              *hook-documentation*)
     (sort out #'string< :key (lambda (row) (string (first row))))))
@@ -123,7 +251,21 @@ Those read this list.  Everything else ignores it, which is free."
 ;;; cover every point where a *decision* is made.
 
 (defhook :startup () "Run once, after the compositor connection is up and the
-configuration file has been loaded, before the first layout.")
+configuration file has been loaded, before the first layout.
+
+THAT SENTENCE WAS FALSE FOR THE LIFE OF THE PROGRAM.  The call sat above
+CONNECT-TO-COMPOSITOR, so a hook here ran against a world with no display, no
+outputs, no seats and no windows — and this file said so twelve declarations
+below, where :LAYOUT-RESTORED describes the startup order as \"run :STARTUP,
+connect\".  Two docstrings in one file disagreeing about when a hook fires is
+what a mechanism with no consumer looks like from the inside.
+
+It also could not be paired.  A failure to connect returned out of START before
+the UNWIND-PROTECT existed, so :STARTUP had run and :SHUTDOWN never would —
+which for the one thing a startup hook reliably does, acquiring something,
+means leaking it on the one path where that is least recoverable.  The call is
+inside the UNWIND-PROTECT now, so the pairing is structural rather than
+remembered.")
 
 (defhook :shutdown () "Run once, on the way out, before the connection closes.
 State persistence already happens without your help; this is for anything of
@@ -137,7 +279,18 @@ SPAWN-TARGET or ON-WINDOW-OPEN.")
 been repaired.")
 
 (defhook :focus-changed (old-path new-path) "Run after the cursor moves.
-For status bars.  ON-FOCUS-CHANGE is the method form, and runs first.")
+ON-FOCUS-CHANGE is the method form, and runs first.
+
+*This is the cursor, which is a place.*  It is what the highlight is around and
+what a directional key moves.  It is not always what has the keyboard: focusing
+a floating window does not move the cursor, so a status bar showing the focused
+*window* wants :KEYBOARD-FOCUS-CHANGED, which is derived and fires for both.
+
+It used to be skipped by two of the five places that move the cursor —
+ON-WINDOW-CLOSE, which is the commonest focus change there is, and the
+lattice's ENABLE-IN, which repaths every cursor in the world.  Both wrote the
+slot directly.  Both go through REPAIR-CURSOR now, which is REPAIR-PATH plus
+this hook and existed the whole time.")
 
 (defhook :layout-changed () "Run after every relayout, once the placements have
 been emitted.  Fires often; keep it cheap.")
@@ -174,17 +327,43 @@ is one way now, and this is it.")
 (defhook :layout-restored () "Run after a saved layout has replaced the tree.
 
 *The hook a policy with a shape needs.*  Startup order is: make a world, load
-the configuration, run :STARTUP, connect, then restore the saved layout — so
-anything the configuration did to the *tree* is replaced wholesale by whatever
-was on disk.  A policy that requires a shape, as the lattice does, has to be
-given a chance to re-establish it, and this is that chance.
+the configuration, connect, run :STARTUP, then restore the saved layout — so
+anything the configuration *or* a startup hook did to the tree is replaced
+wholesale by whatever was on disk.  A policy that requires a shape, as the
+lattice does, has to be given a chance to re-establish it, and this is that
+chance.
 
 Without it, enabling the lattice in a configuration file wrapped an empty
 world in a plane and then the restored layout quietly threw the plane away —
 so the policy said `lattice' and every cell command answered NIL.")
 
-(defhook :output-added (output) "Run after a monitor has appeared and been
-given a workspace.  For anything that needs a surface or a process per screen.")
+(defhook :keyboard-focus-changed (old-window new-window) "Run when the window
+holding the keyboard changes.  Either may be NIL.
+
+*The derived half of D18, and the one a status bar wants.*  Focus is a place;
+which window that place gives the keyboard to is P:FOCUS-TARGET's answer, and
+the runtime asks it once per manage sequence and sends river a focus request
+only when the answer changed.  This fires from that same comparison, so it
+fires exactly when focus really moved and never when it merely could have.
+
+It covers what :FOCUS-CHANGED structurally cannot: clicking a dialog, cycling
+floats, calling up a named scratchpad, and a window closing while the cursor
+stays where it was.  NEW-WINDOW is NIL for an empty pane — D18's honest answer,
+not a missing value — and also while a screen locker holds the keyboard, since
+for as long as that lasts every focus request we make is ignored.")
+
+(defhook :output-added (output) "Run once a monitor has appeared, been given a
+workspace, and said what it is.  For anything that needs a surface or a process
+per screen.
+
+*Deliberately not the moment the object was made*, which is where this used to
+fire.  river_output_v1 arrives empty: the position, the size, and the wl_output
+that carries the name and the scale all come in events that follow, so a hook
+run at creation was handed a nameless monitor of no size — and a surface per
+screen needs the size and the scale, while a process per screen is almost
+always keyed on the name.  It is drained in the manage sequence instead, beside
+the windows, which is the same answer PLACE-UNPLACED-WINDOWS gives to the same
+question: at the moment `window' arrives we know nothing about the window.")
 
 (defhook :output-removed (output) "Run after a monitor has gone away and its
 overlays have been released.  The output object is still readable; its proxy is

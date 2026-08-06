@@ -203,6 +203,10 @@ question about a blank."
       ;; on.  Without this the default output is undefined, so a panel that
       ;; does not name one lands wherever the compositor last decided.
       (set-default-layer-output (current-output)))
+    ;; Outputs before windows: a hook that makes a surface or starts a process
+    ;; per screen wants to have been told about the screen before it is told
+    ;; about the first window on it.
+    (announce-new-outputs)
     (place-unplaced-windows)
     (drain-manage-work)
     (when (server-dirty *server*)

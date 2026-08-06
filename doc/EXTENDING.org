@@ -380,16 +380,36 @@ charge. If you want a hook's return value, you wanted a method.
 (add-hook :window-opened 'note-the-window)
 #+end_src
 
-~:startup :shutdown :window-opened :window-closed :focus-changed
-:layout-changed :workspace-changed :draw-overlays :reserve-space
-:output-added :output-removed :pointer-op :capture-changed~. ~(all-hooks)~ is
-authoritative.
+#+begin_src sh
+latticewm --hooks    # every hook, what it is called with, and when it fires
+#+end_src
 
-~:capture-changed~ is the one worth naming here, because it is the only fact in
-this list your own screen cannot show you: it fires with a window or an output
-and the number of screen capture sessions now reading it, so a status bar, a
-keyboard light or a script that mutes a microphone can follow a screen share
-without polling anything.
+*That list used to be typed here, and it was four names short.* It named
+thirteen of the program's seventeen, missing ~:layout-restored~ — which is the
+hook the lattice itself uses — and the three that report input devices, with
+"~(all-hooks)~ is authoritative" underneath, which is a true sentence that only
+helps somebody already at a REPL. There are eighteen, and the list is generated
+from the running image now, like the other two surfaces, and installed beside
+them as =HOOKS.txt=.
+
+#+CLAIM: (= 18 (length (all-hooks)))
+#+CLAIM: (every (lambda (row) (stringp (second row))) (all-hooks))
+
+Two are worth naming here. ~:capture-changed~ is the only fact in the list your
+own screen cannot show you: it fires with a window or an output and the number
+of screen capture sessions now reading it, so a status bar, a keyboard light or
+a script that mutes a microphone can follow a screen share without polling
+anything. And ~:keyboard-focus-changed~ is the one a status bar showing the
+focused window actually wants — ~:focus-changed~ reports the *cursor*, which is
+a place, and focusing a floating window does not move it.
+
+*The argument list beside each name is checked, in both directions.* Attaching
+a function that cannot be called with them says so at the moment you attach it,
+and a ~run-hooks~ inside the program that passes the wrong number fails the
+build. Neither check existed while the lambda list in ~defhook~ was discarded,
+and the failure it lets through is the quiet kind: hook functions run inside a
+guard, so one of the wrong shape signals on every fire, is caught, and leaves
+nothing behind but a line in a log file you do not have open.
 
 *One hook's return value matters*, and it is the exception that proves the
 rule. ~:reserve-space~ asks how much of an output to keep clear, each function

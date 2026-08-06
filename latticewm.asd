@@ -179,6 +179,10 @@ without a compositor — which is the whole model."
      ;; container after surface: the two are siblings, and reading them in this
      ;; order is how the second is meant to be understood.
      (:file "test-container")
+     ;; hooks after lifecycle: the focus-change checks borrow FRESH-WORLD, and
+     ;; the regression they are for is that ON-WINDOW-CLOSE never announced
+     ;; where focus went.
+     (:file "test-hooks")
      (:file "test-minibuffer")
      (:file "test-devices")
      (:file "test-examples"))))

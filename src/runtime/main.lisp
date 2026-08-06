@@ -309,7 +309,6 @@ debug it (connecting, binding, the first manage sequence) is still after it."
   (start-swank (if (eq swank-port :default) *swank-port* swank-port))
   (unless (eq ipc :default) (setf *ipc-socket* ipc))
   (start-ipc-server)
-  (run-hooks :startup)
   (let ((display (handler-case (connect-to-compositor)
                    (cannot-start (condition)
                      (report-cannot-start condition)
@@ -323,6 +322,19 @@ debug it (connecting, binding, the first manage sequence) is still after it."
                (attach-manager-hooks *server*)
                (safe-roundtrip display)
                (apply-cursor-theme)
+               ;; HERE, AND NOT BEFORE THE CONNECT.  A startup hook exists to
+               ;; do something with the session, and above the LET there is no
+               ;; session: no display, no outputs, no seats, no windows.  The
+               ;; hook's own docstring said "after the compositor connection is
+               ;; up" and had said so, wrongly, since it was written — which is
+               ;; what a hook nothing has ever attached to looks like.
+               ;;
+               ;; Inside the UNWIND-PROTECT is the other half.  Above it, a
+               ;; compositor that refused us ran :STARTUP and then returned
+               ;; without ever running :SHUTDOWN, so anything a hook acquired
+               ;; leaked on precisely the path where nothing else was going to
+               ;; clean up either.  The pairing is structural now.
+               (run-hooks :startup)
                (when restore (load-state))
                (mark-dirty)
                (request-manage)
@@ -419,6 +431,7 @@ ordinary shutdown."
   --list-keys           every key binding
   --extension-surface   every policy generic you can specialize
   --container-surface   every generic a new container kind must answer
+  --hooks               every hook, what it is called with, and when
   --write-config        write a starter init.lisp
   --check-config        load the configuration, report problems, and exit
 
@@ -508,7 +521,7 @@ found this immediately: (lattice:enable) needs a world, and there was none."
 (defparameter +flags+
   '(("--help" . 0) ("--version" . 0)
     ("--list-options" . 0) ("--list-commands" . 0) ("--list-keys" . 0)
-    ("--extension-surface" . 0) ("--container-surface" . 0)
+    ("--extension-surface" . 0) ("--container-surface" . 0) ("--hooks" . 0)
     ("--write-config" . 0) ("--check-config" . 0)
     ("--no-config" . 0) ("--no-restore" . 0) ("--no-ipc" . 0)
     ("--eval" . 1) ("--swank-port" . 1) ("--log-level" . 1) ("--log-file" . 1))
@@ -642,6 +655,10 @@ useful if a non-zero exit means what it says."
         ;; decides; a container kind changes what it can hold, and until this
         ;; existed the second one had no generated document at all.
         ((flag "--container-surface") (printing (c:print-container-surface)))
+        ;; The third.  A generic decides, a hook notices, and this one was the
+        ;; extension mechanism whose surface was a hand-typed list in a guide
+        ;; -- four names short of the program, with no gate able to tell.
+        ((flag "--hooks") (printing (p:print-hook-surface)))
         (t
          (let* ((port (argument-value arguments "--swank-port"))
                 (started (start :swank-port (cond ((null port) :default)

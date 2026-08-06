@@ -177,10 +177,11 @@ surface: build
 	@mkdir -p doc
 	$(call GENERATE,--extension-surface,doc/EXTENSION-SURFACE.txt)
 	$(call GENERATE,--container-surface,doc/CONTAINER-SURFACE.txt)
+	$(call GENERATE,--hooks,doc/HOOKS.txt)
 	$(call GENERATE,--list-commands,doc/COMMANDS.txt)
 	$(call GENERATE,--list-options,doc/OPTIONS.txt)
 	$(call GENERATE,--list-keys,doc/KEYS.txt)
-	@wc -l doc/EXTENSION-SURFACE.txt doc/CONTAINER-SURFACE.txt \
+	@wc -l doc/EXTENSION-SURFACE.txt doc/CONTAINER-SURFACE.txt doc/HOOKS.txt \
 		doc/COMMANDS.txt doc/OPTIONS.txt doc/KEYS.txt
 
 config: image

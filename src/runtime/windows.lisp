@@ -306,20 +306,34 @@ choice of which protocol request says `nothing'."
                    (list (p:focus-target (p:current-policy) *world*))))
          (window (if answer (first answer) (and seat (seat-focused seat)))))
     (when seat
-      (cond
-        ;; A layer surface has taken exclusive focus — a screen locker.  The
-        ;; protocol says every focus request we make is ignored until it
-        ;; clears, so sending them anyway is a window manager fighting a locker
-        ;; for the keyboard on every manage sequence and losing, quietly,
-        ;; forever.  Forgetting what we last focused is deliberate: when the
-        ;; lock clears we want to re-send focus rather than believe a cached
-        ;; value the compositor never honoured.
-        ((layer-shell-holds-keyboard-p seat)
-         (setf (seat-focused seat) nil))
-        ((eq window (seat-focused seat)) nil)
-        (t
-         (setf (seat-focused seat) window)
-         (guarded "focus"
-           (if (and window (c:window-proxy window) (c:window-live-p window))
-               (w:seat-focus-window (seat-proxy seat) (c:window-proxy window))
-               (w:seat-clear-focus (seat-proxy seat)))))))))
+      (let ((was (seat-focused seat)))
+        (cond
+          ;; A layer surface has taken exclusive focus — a screen locker.  The
+          ;; protocol says every focus request we make is ignored until it
+          ;; clears, so sending them anyway is a window manager fighting a
+          ;; locker for the keyboard on every manage sequence and losing,
+          ;; quietly, forever.  Forgetting what we last focused is deliberate:
+          ;; when the lock clears we want to re-send focus rather than believe
+          ;; a cached value the compositor never honoured.
+          ((layer-shell-holds-keyboard-p seat)
+           (setf (seat-focused seat) nil))
+          ((eq window (seat-focused seat)) nil)
+          (t
+           (setf (seat-focused seat) window)
+           (guarded "focus"
+             (if (and window (c:window-proxy window) (c:window-live-p window))
+                 (w:seat-focus-window (seat-proxy seat) (c:window-proxy window))
+                 (w:seat-clear-focus (seat-proxy seat))))))
+        ;; THE EVENT THAT SAYS WHAT HAS THE KEYBOARD, off the diff that was
+        ;; already here.  :FOCUS-CHANGED reports the *cursor*, and the cursor
+        ;; is a place: focusing a float, cycling floats, calling up a named
+        ;; scratchpad and a locker taking the keyboard all change who receives
+        ;; the next keystroke without moving it.  A status bar attached to the
+        ;; only focus hook there was would go on naming the tiled window
+        ;; underneath the dialog you were typing into.
+        ;;
+        ;; Here rather than at the call sites because this is the one place the
+        ;; question is answered — D18 makes keyboard focus derived, so deriving
+        ;; it is the only moment at which the answer is known to have changed.
+        (unless (eq was (seat-focused seat))
+          (run-hooks :keyboard-focus-changed was (seat-focused seat)))))))

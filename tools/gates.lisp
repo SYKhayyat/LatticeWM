@@ -1,17 +1,19 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are thirteen, and the seven that were added are the seven that found
+;;;; are fourteen, and the eight that were added are the eight that found
 ;;;; something.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other twelve run here, against the loaded image.
+;;;; The other thirteen run here, against the loaded image.
 ;;;;
 ;;;; Eleven of them ask the program a question.  Gate 12 asks the *documents*
-;;;; one, which is the half of this project the other eleven cannot see, and
-;;;; gate 13 asks the *source*, because the one thing a keyword property key
-;;;; cannot be asked about is what the compiled image thinks of it.
+;;;; one, which is the half of this project the other eleven cannot see; gate
+;;;; 13 asks the *source*, because the one thing a keyword property key cannot
+;;;; be asked about is what the compiled image thinks of it; and gate 14 asks
+;;;; the *test suites*, because the one thing neither the image nor the source
+;;;; can say about an extension point is whether anybody has ever used it.
 
 (require :asdf)
 (require :sb-introspect)
@@ -503,15 +505,19 @@ nothing.  Together they say breadth *and* depth.")
 (banner 7 "every declared hook is run, and every run hook is declared")
 ;; THE BUG THIS EXISTS FOR IS THE ONE NOTHING ELSE CAN SEE.
 ;;
-;; :FOCUS-CHANGED was declared, documented "For status bars", and listed in
-;; the generated extension surface -- and no line anywhere ran it.  A status
-;; bar attached to it would simply never have updated, and every check this
-;; project has would have kept passing: gate 2 sees a documented hook, the
-;; surface document lists it, the tests never fire it.
+;; :FOCUS-CHANGED was declared, documented "For status bars", and named in the
+;; extension guide -- and no line anywhere ran it.  A status bar attached to it
+;; would simply never have updated, and every check this project has would have
+;; kept passing: gate 2 sees a documented hook and the tests never fire it.
 ;;
-;; The mirror image is just as quiet.  A RUN-HOOKS on a name nobody declared
-;; is a seam nobody can find, because the extension surface is built from the
-;; declarations.
+;; The mirror image is just as quiet.  A RUN-HOOKS on a name nobody declared is
+;; a seam nobody can find, because the generated hook document is built from
+;; the declarations.
+;;
+;; WHAT THIS GATE CANNOT SEE is the third state, which is the one the hooks
+;; were actually in: declared, run, and nobody listening.  Both sets it
+;; compares are names, and both were written by the same hand on the same
+;; afternoon.  Gate 14 is that question.
 ;;
 ;; Both directions are one grep against the source, which is the whole reason
 ;; to have the gate: it is cheap enough that not having it was never a
@@ -1372,6 +1378,116 @@ identity."
             (length unwritten) (sort unwritten #'string<)))
     (unless unwritten
       (format t "  every key the program reads is written by something~%"))))
+
+;;; ---------------------------------------------------------------- gate 14
+
+(banner 14 "every declared hook is attached to by something that runs it")
+;; FOURTEEN OF THE SEVENTEEN HOOKS HAD NEVER BEEN ATTACHED TO BY ANYTHING.
+;; Not by the lattice, not by the four worked examples, not by a test.  They
+;; were declared, documented, run from the right line of the right file, and no
+;; function had ever been on the other end of one.
+;;
+;; Gate 7 is the check that was supposed to see this and structurally cannot.
+;; It compares two sets of *names* -- declared here, run there -- and both sets
+;; are written by the same person in the same afternoon.  What it establishes
+;; is that a hook exists.  What nobody had established is that it works, and a
+;; hook's contract is not its name: it is the arguments the functions are
+;; called with and the moment they are called.  Neither had ever been executed.
+;;
+;; THREE OF THEM WERE WRONG, and each is the kind of wrong only a consumer
+;; finds.  :STARTUP ran before the compositor connection existed, which its own
+;; docstring denied.  :OUTPUT-ADDED ran before the monitor had a name, a size
+;; or a scale, which is everything "a surface or a process per screen" needs.
+;; :FOCUS-CHANGED, documented "run after the cursor moves", was skipped by two
+;; of the five places that move the cursor -- one of them being closing a
+;; window, which is the commonest focus change there is.  All three passed
+;; gates 1, 2, 7 and 12, the whole unit suite and the whole integration run,
+;; because nothing was listening.
+;;
+;; SO: SOMETHING MUST BE LISTENING, and the three places that can listen are
+;; the three tiers of thing a hook needs in order to fire at all.
+;;
+;;   tests/                     what can be established by constructing state
+;;   tools/integration.lisp     what is only true once a compositor agreed
+;;   tools/hardware-check.lisp  what needs a real machine: a keyboard being
+;;                              unplugged, an xkb layout toggle, a monitor
+;;                              going away
+;;
+;; The third tier is not a loophole, it is the honest answer for the four hooks
+;; a headless backend cannot fire -- WLR_LIBINPUT_NO_DEVICES=1 means no input
+;; device is ever announced, so :INPUT-ADDED cannot be reached by the harness
+;; that reaches everything else.  Attaching them in the session recorder is
+;; also the right thing for that tool independently: which devices were found
+;; and when a layout changed are exactly what a hardware report is for.
+;;
+;; THIS IS THE STATIC HALF AND IT SAYS SO.  What it establishes is that every
+;; hook is *named in the code* of a suite -- not in a comment or a docstring,
+;; since it reads through CODE-OF, so the paragraph you are reading cannot
+;; satisfy it, but a name is still only a name.  It is here to catch hook
+;; nineteen being declared and nobody touching the suites, which is exactly how
+;; the first eighteen got where they were.
+;;
+;; The dynamic half is in tools/integration.lisp, where it has to be: a
+;; recorder sits on every declared hook for the whole run, +WATCHED-HOOKS+ is
+;; checked against ALL-HOOKS so the table cannot fall behind the program, every
+;; firing is checked against the declared argument count, and a hook that
+;; neither fired nor is named as one a headless backend cannot fire is a
+;; failure there.  Neither half is sufficient and both are cheap.
+(flet ((named-hooks (path)
+         "Every literal keyword in PATH's code, lowercased and deduplicated."
+         (let ((found '()))
+           (dolist (line (code-lines path) found)
+             (let ((code (cdr line)) (at 0))
+               (loop for hit = (position #\: code :start at)
+                     while hit
+                     do (let ((stop (or (position-if-not
+                                         (lambda (c)
+                                           (or (alphanumericp c)
+                                               (member c '(#\- #\/))))
+                                         code :start (1+ hit))
+                                        (length code))))
+                          ;; A package marker, not a keyword: p:add-hook has a
+                          ;; name to the left of the colon and :focus-changed
+                          ;; does not.
+                          (when (and (> stop (1+ hit))
+                                     (or (zerop hit)
+                                         (not (or (alphanumericp (char code (1- hit)))
+                                                  (char= #\: (char code (1- hit)))))))
+                            (pushnew (string-downcase (subseq code (1+ hit) stop))
+                                     found :test #'string=))
+                          (setf at (max (1+ hit) stop)))))))))
+  (let* ((sources (append (sort (directory (merge-pathnames "tests/*.lisp" *root*))
+                                #'string< :key #'namestring)
+                          (list (merge-pathnames "tools/integration.lisp" *root*)
+                                (merge-pathnames "tools/hardware-check.lisp" *root*))))
+         (exercised (make-hash-table :test #'equal))
+         (declared (call "latticewm/policy:all-hooks")))
+    (dolist (path sources)
+      (when (probe-file path)
+        (dolist (name (named-hooks path))
+          (pushnew (relative path) (gethash name exercised) :test #'string=))))
+    (let ((unexercised '()))
+      (dolist (row declared)
+        (let ((name (string-downcase (symbol-name (first row)))))
+          (unless (gethash name exercised)
+            (push name unexercised))))
+      (format t "  ~d declared, ~d exercised by a suite, ~d with a function ~
+                 attached in this image~%"
+              (length declared)
+              (- (length declared) (length unexercised))
+              (count-if #'plusp declared :key #'third))
+      (if unexercised
+          (fail 14 "declared, and named by no suite that runs it: ~{:~a~^ ~}~%~
+                    ~4tA hook nobody has ever pulled has an argument list and~%~
+                    ~4ta firing moment that are guesses.  Three of the first~%~
+                    ~4tfourteen to be checked were wrong.  Attach it in tests/~%~
+                    ~4tif constructing state can reach it, in~%~
+                    ~4ttools/integration.lisp if it needs a real compositor,~%~
+                    ~4tand in tools/hardware-check.lisp if it needs real~%~
+                    ~4thardware -- and assert on what it was handed."
+                (sort unexercised #'string<))
+          (format t "  every hook is named, attached to and watched by one of ~
+                     the three suites~%")))))
 
 ;;; ---------------------------------------------------------------- verdict
 

@@ -24,6 +24,20 @@ Declared here, before anything that consults it, because the whole point is
 that code all over the runtime can ask \"am I allowed to write to the socket
 from here?\" — and the answer must never depend on load order.")
 
+(defvar *unannounced-outputs* '()
+  "Monitors that have appeared but have not yet been announced to :OUTPUT-ADDED.
+
+The same deferral as *UNPLACED*, for the same reason and one step further out.
+river_output_v1 arrives carrying nothing: the position, the size and the
+wl_output that supplies the name and the scale are all separate events, so the
+moment the object exists is the moment least is known about it — and a hook
+documented \"for anything that needs a surface or a process per screen\" was
+being handed a nameless monitor of no size.
+
+Drained in the manage sequence, beside the windows.  An output unplugged before
+that happens is taken off this list rather than announced and then removed,
+which is a sequence no hook should have to be written against.")
+
 (defvar *unplaced* '()
   "Windows that have appeared but have not yet been placed.
 

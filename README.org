@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, thirteen gates, 1500+ checks
+make               # build, fourteen gates, 1600+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -374,14 +374,15 @@ your own file — no core edit, no rebuild, and it takes effect immediately:
 #+begin_src sh
 latticewm --extension-surface   # every policy generic you can specialize
 latticewm --container-surface   # every generic a new container kind must answer
+latticewm --hooks               # every hook, what it is called with, and when
 #+end_src
 
-*There are two surfaces, and they answer different questions.* The extension
+*There are three surfaces, and they answer different questions.* The extension
 surface is what the window manager *decides*; the container surface is what it
-can *hold*. Both are generated from the running image, so neither can drift,
-and both list the methods you added — which is how you check that your
-configuration file was loaded. Gate 2 requires every member of both to be
-documented.
+can *hold*; the hooks are what it *notices*. All three are generated from the
+running image, so none of them can drift, and the first two list the methods
+you added — which is how you check that your configuration file was loaded.
+Gate 2 requires every member of both protocols to be documented.
 
 The container surface exists because its absence had consequences. A grid
 written against the source alone answered the six obvious members of the
@@ -391,6 +392,17 @@ protocol" and defined nowhere at all; and the two generics whose failure mode
 is silent data loss on restart were declared in the wrong package, so no
 document named them. None of that was visible while only one of the two
 protocols could describe itself.
+
+The hook surface exists for the third version of the same absence. A hook is
+the mechanism for *noticing* — a status bar, a recording indicator, a script
+that starts something per screen — and its list lived in a paragraph of
+=doc/EXTENDING.org= that named thirteen of the program's seventeen. Fourteen of
+those seventeen had never been attached to by anything at all, so nothing had
+ever executed what a hook's contract actually is: the arguments its functions
+receive and the moment they receive them. Three were wrong. Gate 14 now
+requires every declared hook to be attached to and watched firing by the unit
+suite, the integration run or the session recorder, whichever tier can produce
+the event at all.
 
 Four worked examples are in =examples/=, including a whole alternate layout
 model in one method and a new *container kind* — niri's scrolling strip — in
@@ -442,7 +454,7 @@ make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Thirteen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Fourteen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -455,11 +467,26 @@ event handled existing on the interface it is handled for; the image, the
 installer and the shipped configuration agreeing about where an extension
 lives; no container kind named by class outside its own definition; every
 registered option read by something; every claim these documents make
-about the program still being true of it; and every node property the program
-*reads* being written by something. The
+about the program still being true of it; every node property the program
+*reads* being written by something; and every declared hook being attached to
+by a suite that runs it. The
 reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
-Gate 13 is the newest, and it is gate 11's question asked of the mechanism next
+Gate 14 is the newest, and it is the one the other thirteen could not ask. All
+of them read the program or the documents; a hook is neither, because a hook
+that nothing has ever attached to is *correct* by every static measure and
+untested by construction. Fourteen of seventeen were in that state, and the
+three that were checked first were all wrong — ~:startup~ ran before the
+compositor connection existed while its docstring said it ran after,
+~:output-added~ ran before the monitor had a name or a size, and
+~:focus-changed~ was skipped by the commonest focus change there is, a window
+closing. So every declared hook must now be attached to and watched by tests/,
+by the integration run, or by the session recorder, depending on which of the
+three can produce the event at all; the integration run keeps a recorder on
+every hook for the whole session and fails on one that neither fired nor is
+named as one a headless backend cannot fire.
+
+Gate 13 is gate 11's question asked of the mechanism next
 door. A node property is a keyword you type in two places — the write and the
 read — and nothing registers it, declares it or checks it, so a key with only
 one of the two is invisible: ~prop~ answers ~nil~, the branch behind it never

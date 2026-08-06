@@ -1,0 +1,270 @@
+============================================================================
+LatticeWM hooks
+18 hooks.  Generated from the running image.
+============================================================================
+
+A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,
+the return value is normally ignored, and nobody is in charge.  A *generic*
+decides what happens instead: one answer wins, CALL-NEXT-METHOD composes them,
+and the return value is the point.  If you find yourself wanting a hook's
+answer, you wanted a method -- `latticewm --extension-surface' lists those.
+
+(defun note-the-window (window) (logmsg :info "~a" window))
+(add-hook :window-opened 'note-the-window)
+
+*Pass a symbol, not #'a-function.*  The list holds what it is given and a
+function object is a snapshot, so redefining the function afterwards leaves
+the hook calling the old one and re-evaluating the ADD-HOOK adds a second
+entry.  A symbol is looked up when the hook runs and replaces rather than
+accumulates.  Both of those bit this project.
+
+THE ARGUMENT LIST BESIDE EACH NAME IS CHECKED, in both directions.  ADD-HOOK
+complains when the function you attach cannot be called with them, and a
+compiler macro fails the build on a RUN-HOOKS that passes the wrong number --
+because a hook function of the wrong arity signals inside the guard that keeps
+one broken hook from stopping the others, so what reaches you is silence.
+
+`attached' counts what is on each hook *in this image*, which is how you check
+that your configuration file was loaded.  Every hook below is attached to and
+watched firing by the test suite or the integration run; gate 14 fails the
+build on one that is not, because a seam nobody has ever pulled is a seam
+whose arguments and timing are guesses.
+
+----------------------------------------------------------------------------
+:CAPTURE-CHANGED (subject count)
+----------------------------------------------------------------------------
+Run when the number of screen
+capture sessions on a window or an output changes.  SUBJECT is a C:WINDOW or a
+C:OUTPUT and COUNT is how many sessions are now recording it, zero included.
+
+For a recording indicator of your own — a red dot on a status bar, a light on a
+keyboard, a script that mutes a microphone — and for the case the shipped
+indicator deliberately does not cover: reacting to it rather than displaying it.
+
+Fires once per subject at startup as well, with whatever count river reports on
+creation, so a hook that draws something does not have to wait for the first
+change to learn the state.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:DRAW-OVERLAYS ()
+----------------------------------------------------------------------------
+Run inside every render sequence, for anything
+that draws pixels of its own: the echo area, the empty-pane cursor, the help
+screen, the lattice's coordinate overlay and map.
+
+This is the seam a status bar, a notification popup or a minimap attaches to,
+and it is declared here rather than left implicit because it was the one hook
+in the system that nothing documented and four things used.
+
+  attached: 2
+
+----------------------------------------------------------------------------
+:FOCUS-CHANGED (old-path new-path)
+----------------------------------------------------------------------------
+Run after the cursor moves.
+ON-FOCUS-CHANGE is the method form, and runs first.
+
+*This is the cursor, which is a place.*  It is what the highlight is around and
+what a directional key moves.  It is not always what has the keyboard: focusing
+a floating window does not move the cursor, so a status bar showing the focused
+*window* wants :KEYBOARD-FOCUS-CHANGED, which is derived and fires for both.
+
+It used to be skipped by two of the five places that move the cursor —
+ON-WINDOW-CLOSE, which is the commonest focus change there is, and the
+lattice's ENABLE-IN, which repaths every cursor in the world.  Both wrote the
+slot directly.  Both go through REPAIR-CURSOR now, which is REPAIR-PATH plus
+this hook and existed the whole time.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:INPUT-ADDED (device)
+----------------------------------------------------------------------------
+Run when an input device is announced, before
+anything has been configured on it.  The device knows its own proxy and little
+else at this point -- its name and its kind arrive in the events that follow --
+so a hook that wants to know what it is should look at :KEYBOARD-LAYOUT-CHANGED
+or ask again from a later hook.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:INPUT-REMOVED (device)
+----------------------------------------------------------------------------
+Run after an input device is unplugged and
+forgotten.  The device object is still readable; every proxy on it is stale.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:KEYBOARD-FOCUS-CHANGED (old-window new-window)
+----------------------------------------------------------------------------
+Run when the window
+holding the keyboard changes.  Either may be NIL.
+
+*The derived half of D18, and the one a status bar wants.*  Focus is a place;
+which window that place gives the keyboard to is P:FOCUS-TARGET's answer, and
+the runtime asks it once per manage sequence and sends river a focus request
+only when the answer changed.  This fires from that same comparison, so it
+fires exactly when focus really moved and never when it merely could have.
+
+It covers what :FOCUS-CHANGED structurally cannot: clicking a dialog, cycling
+floats, calling up a named scratchpad, and a window closing while the cursor
+stays where it was.  NEW-WINDOW is NIL for an empty pane — D18's honest answer,
+not a missing value — and also while a screen locker holds the keyboard, since
+for as long as that lasts every focus request we make is ignored.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:KEYBOARD-LAYOUT-CHANGED (device name)
+----------------------------------------------------------------------------
+Run when a keyboard's active
+layout changes, whether we asked for it or the user pressed the xkb toggle.
+NAME is the layout's own name, e.g. "German".  For a status bar showing which
+layout is live, which is the one thing a two-layout user needs on screen.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:LAYOUT-CHANGED ()
+----------------------------------------------------------------------------
+Run after every relayout, once the placements have
+been emitted.  Fires often; keep it cheap.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:LAYOUT-RESTORED ()
+----------------------------------------------------------------------------
+Run after a saved layout has replaced the tree.
+
+*The hook a policy with a shape needs.*  Startup order is: make a world, load
+the configuration, connect, run :STARTUP, then restore the saved layout — so
+anything the configuration *or* a startup hook did to the tree is replaced
+wholesale by whatever was on disk.  A policy that requires a shape, as the
+lattice does, has to be given a chance to re-establish it, and this is that
+chance.
+
+Without it, enabling the lattice in a configuration file wrapped an empty
+world in a plane and then the restored layout quietly threw the plane away —
+so the policy said `lattice' and every cell command answered NIL.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:OUTPUT-ADDED (output)
+----------------------------------------------------------------------------
+Run once a monitor has appeared, been given a
+workspace, and said what it is.  For anything that needs a surface or a process
+per screen.
+
+*Deliberately not the moment the object was made*, which is where this used to
+fire.  river_output_v1 arrives empty: the position, the size, and the wl_output
+that carries the name and the scale all come in events that follow, so a hook
+run at creation was handed a nameless monitor of no size — and a surface per
+screen needs the size and the scale, while a process per screen is almost
+always keyed on the name.  It is drained in the manage sequence instead, beside
+the windows, which is the same answer PLACE-UNPLACED-WINDOWS gives to the same
+question: at the moment `window' arrives we know nothing about the window.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:OUTPUT-REMOVED (output)
+----------------------------------------------------------------------------
+Run after a monitor has gone away and its
+overlays have been released.  The output object is still readable; its proxy is
+already NIL.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:POINTER-OP (kind window)
+----------------------------------------------------------------------------
+Run when an interactive pointer operation
+starts or ends.  KIND is :MOVE, :RESIZE or NIL for the end of one.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:RESERVE-SPACE (output)
+----------------------------------------------------------------------------
+Run to ask how much of OUTPUT to keep clear.
+
+*The one hook whose return value matters.*  Each function answers
+(TOP RIGHT BOTTOM LEFT) in pixels, and the answers are added together — so two
+status bars each get their strip and the second does not have to know about the
+first.  Anything else, including NIL, contributes nothing.
+
+    (defun my-bar-edges (output)
+      (declare (ignore output))
+      (list 28 0 0 0))
+    (add-hook :reserve-space 'my-bar-edges)
+
+THIS USED TO BE A SPECIAL VARIABLE OUTSIDE THE HOOK MECHANISM ENTIRELY --
+P:*RESERVE-HOOKS*, which you pushed a symbol onto -- so the program had two ways
+to hook, one documented and gated and one neither.  A user reading the
+extension guide could not find the second, and gate 7 could not see it.  There
+is one way now, and this is it.
+
+  attached: 2
+
+----------------------------------------------------------------------------
+:SHUTDOWN ()
+----------------------------------------------------------------------------
+Run once, on the way out, before the connection closes.
+State persistence already happens without your help; this is for anything of
+your own that needs flushing.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:STARTUP ()
+----------------------------------------------------------------------------
+Run once, after the compositor connection is up and the
+configuration file has been loaded, before the first layout.
+
+THAT SENTENCE WAS FALSE FOR THE LIFE OF THE PROGRAM.  The call sat above
+CONNECT-TO-COMPOSITOR, so a hook here ran against a world with no display, no
+outputs, no seats and no windows — and this file said so twelve declarations
+below, where :LAYOUT-RESTORED describes the startup order as "run :STARTUP,
+connect".  Two docstrings in one file disagreeing about when a hook fires is
+what a mechanism with no consumer looks like from the inside.
+
+It also could not be paired.  A failure to connect returned out of START before
+the UNWIND-PROTECT existed, so :STARTUP had run and :SHUTDOWN never would —
+which for the one thing a startup hook reliably does, acquiring something,
+means leaking it on the one path where that is least recoverable.  The call is
+inside the UNWIND-PROTECT now, so the pairing is structural rather than
+remembered.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:WINDOW-CLOSED (window)
+----------------------------------------------------------------------------
+Run after WINDOW is gone and the tree has
+been repaired.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:WINDOW-OPENED (window)
+----------------------------------------------------------------------------
+Run after WINDOW has been placed in the tree
+or floated.  Too late to change the placement — for that, specialize
+SPAWN-TARGET or ON-WINDOW-OPEN.
+
+  attached: 0
+
+----------------------------------------------------------------------------
+:WORKSPACE-CHANGED (index)
+----------------------------------------------------------------------------
+Run after switching to a different
+workspace.
+
+  attached: 0
+

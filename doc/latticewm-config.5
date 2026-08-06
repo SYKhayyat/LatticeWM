@@ -210,11 +210,30 @@ and not a lambda.  A function object is a snapshot: redefining the function
 afterwards leaves the hook calling the old one, and adding it again adds a
 second copy.  A symbol has neither problem.
 .PP
+.B latticewm \-\-hooks
+prints every declared hook, what it is called with, and when it fires \(em
+generated from the running image, like the two protocol surfaces, and installed
+beside them as
+.BR HOOKS.txt .
 .B (all\-hooks)
-lists every declared hook with its documentation.  One of them,
-.BR :reserve\-space ,
+is the same list from a REPL.
+.PP
+The argument list beside each name is checked in both directions:
+.B add\-hook
+complains when the function you attach cannot be called with them, because a
+hook function of the wrong shape signals inside a guard and leaves nothing
+behind but a log line.
+.PP
+Two are worth naming.
+.BR :reserve\-space
 is additive: each function answers how much of an output to keep clear and the
-answers are summed, so two status bars each get their strip.
+answers are summed, so two status bars each get their strip.  And
+.B :keyboard\-focus\-changed
+is what a status bar showing the focused window wants \(em
+.B :focus\-changed
+reports the
+.IR cursor ,
+which is a place, and focusing a floating window does not move it.
 .SH THE CONTROL SOCKET
 A Unix socket in
 .BR $XDG_RUNTIME_DIR ,
