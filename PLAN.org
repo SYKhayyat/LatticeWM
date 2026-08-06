@@ -1698,6 +1698,16 @@ integration suite reports "river_window_manager_v1 is bound at version 5,
 which is the version we generated against". The three structural skips are
 unchanged.
 
+*And CI had been red, which nothing here had noticed.* The previous commit's
+=check= job failed — the =plain= job, which has no river and skips the
+integration suite, passed. That is the same shape as the flake: a runner whose
+=nixos-unstable= channel holds 0.4.6 running a tree vendored at 4. The claim
+in [[file:README.org][README]] that "=nix-shell=, =make=, =make check= and CI are unaffected and
+green" was true of every path with a 0.4.5 river on it and false of the one
+path that runs on a machine nobody owns. The same job passes on the
+re-vendored tree, and the version is the only difference between them that
+could account for it.
+
 *And the NixOS module, which is the same bug for the one user who cannot read
 a refusal.* Two things were wrong with it and neither had ever been run,
 because =nix flake check= evaluates a module's options and not a system that

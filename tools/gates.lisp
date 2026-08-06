@@ -1,10 +1,11 @@
-;;;; tools/gates.lisp --- PLAN.org's six build gates.
+;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
+;;;; are ten, and the four that were added are the four that found something.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other five run here, against the loaded image.
+;;;; The other nine run here, against the loaded image.
 
 (require :asdf)
 (require :sb-introspect)

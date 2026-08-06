@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, six gates, 566 tests
+make                  # build, ten gates, 1433 checks
 make image            # dump ./latticewm, one executable
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
