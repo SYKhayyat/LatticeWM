@@ -3,6 +3,28 @@
 **LatticeWM, swept 2026-08-05.** Whole repo, region by region. This argues with the
 intent, not the bugs — `/code-review` owns those.
 
+**CLOSED 2026-08-06 at `ffdbc94`.** Every claim and every smaller thing below carries its
+disposition inline, marked at the head of its section. Four dispositions are used and they
+are not the same thing:
+
+| | meaning |
+|---|---|
+| **LANDED** | done substantially as prescribed |
+| **LANDED, DIFFERENTLY** | the observation was accepted and the prescribed remedy replaced; the replacement is named |
+| **RULED AGAINST** | the project ruled the other way on the record, and the ruling is cited |
+| **WITHDRAWN** | the observation was wrong when written |
+
+Score: 4 claims and 6 smaller things **LANDED**, 2 prescriptions **RULED AGAINST**,
+1 smaller thing **WITHDRAWN**. Nine gates were written in the course of answering it
+(gate 6 replaced; gates 11–18 new), taking the build from ten gates to eighteen.
+
+The pattern across the whole sweep, stated once because every section repeats it: in almost
+every case the finding was right and the *remedy* was the deletion of a mechanism, and in
+almost every case what actually landed was a **check** instead — because the mechanisms
+were not the fault, the absence of anything asking whether they were connected to the
+program was. `*smart-gaps*` got implemented and gate 11; the colliding options stayed and
+got gates 15 and 17; the unattached hooks stayed and got gate 14.
+
 ---
 
 ## The sketch, committed before reading any implementation
@@ -83,11 +105,35 @@ from source and `git show`. The "1000+ checks" figure in README is therefore **u
 not refuted**: 213 `(test …)` forms and ~563 static `(is …)` forms, with loop constructs
 multiplying an unknown number of them.
 
+> **Settled since.** The named gap closed itself: everything below was landed on a machine
+> that could run `make check`, so the counts are no longer static. **1,707 unit checks** and
+> **221 integration checks in 27 sections against a real headless river 0.4.6**, under
+> eighteen gates. The README's "1000+" was an understatement, and the reason nobody could say
+> so is that nothing counted them — `c014ccf` found "566 tests" in three places against 1,433,
+> which `ASSESSMENT.org` had already caught once before.
+
 ---
 
 ## 1. Gate 6 does not measure the property it is named after, and four commits were spent arranging the tree to satisfy it
 
 `delete` — and replace it with the check gate 3 already knows how to write.
+
+> **LANDED — `f74cd07`.** Gate 6 is now "how much of the behaviour is answered from outside
+> `src/`" (`tools/gates.lisp:371`). It loads `lattice/` and the four worked examples — after
+> gate 4, whose job is proving the core comes up without them — and is the first thing in the
+> build ever to compile `examples/`. **15 of 65 generics, 22 methods.** Both floors are set
+> *at* the number rather than below it, on the argument that nothing can be rearranged to
+> lower either, so slack would only be there to spend. The old ratio is deleted; the file's
+> header carries the argument for deleting it, since deleting a gate is the thing that file
+> is least willing to do.
+>
+> The fifth core edit is repaired: `cursor-place-name`, default answers the cursor path, the
+> lattice answers `cell-string` — four lines, outside `src/`, zero behaviour change. And gate
+> 3 gained the direction it never had: **no file under `src/` may name an extension's private
+> namespace**, scanned with comments and string bodies blanked so the docstrings explaining
+> the rule can neither satisfy it nor trip it.
+>
+> Both new checks were verified by breaking them.
 
 Gate 6 (`tools/gates.lisp:162-212`) counts non-blank, non-comment lines. `runtime` =
 `src/wire/*` + `src/runtime/*` minus `font.lisp`. `policy` = `src/model/*` +
@@ -188,6 +234,25 @@ moves were right for other reasons and should stay.
 `wrong-but-keep` on the existing surface. `don't-build` on the next generic.
 `rewrite` on gate 2.
 
+> **LANDED, DIFFERENTLY — `f74cd07`, `6f6e8c2`, `40faa79`.**
+>
+> (a) The specialization ratio is printed, but by the **new gate 6** rather than by gate 2 —
+> the number belongs to the gate that floors it, not to the one that counts docstrings.
+> Gate 2 still prints the documentation count and now covers both surfaces.
+>
+> (b) The threshold is a live tripwire rather than a soft gate: `tests/test-surface.lisp:24`
+> holds `(<= 10 n 65)`, and when `6f6e8c2` took the count 62 → 64 **the ceiling did not move
+> with it** — the count is held one below the ceiling on purpose, so the next generic is a
+> decision somebody makes rather than a number that drifts. `PLAN.org` additionally carries
+> `#+CLAIM: (= 65 (length (policy-generics)))`, which gate 12 evaluates against the loaded
+> image on every build.
+>
+> (c) `PLAN.org` §generics is rewritten (`40faa79`): it records that the threshold was blown
+> through by a factor of two while the paragraph went on saying thirty, and points at
+> `tests/test-surface.lisp:24` as where the reasoning now lives.
+>
+> The 48 unspecialized generics were not deleted, as recommended. The count today is 65.
+
 `PLAN.org:184-185`, verbatim:
 
 > Thirteen. If this list reaches thirty, the decomposition has gone wrong in the direction
@@ -241,6 +306,44 @@ uncomfortable, which is the point.
 ## 3. Three mechanisms serve one want, and the file that documents how to choose between them is the proof
 
 `delete` the 13 unattached hooks and the four name-colliding options.
+
+> **Item 1 LANDED. Items 2 and 3 RULED AGAINST — `17ab76b`, `32a7d0e`, `38b989c`,
+> `762455a`.** The observation held in all three cases; two of the three remedies did not.
+>
+> **1. `*smart-gaps*` — LANDED (`17ab76b`), implemented rather than deleted,** and the
+> docstring did not survive being implemented: "a workspace holds exactly one window" fails
+> three ways (an empty pane beside a window is a second pane; three tabs are one pane; a
+> float is not a pane), so the shipped rule is what the eye can check — one pane on the
+> screen, holding a window — decided by asking `layout-children` rather than by keeping a
+> second copy of the rule. **Gate 11 is the recommended check**, built from SBCL's
+> cross-reference data rather than by grepping, because a grep for an option's name counts
+> its own `defparameter`, its export, four docstrings and the man page. 134 options, 0
+> unread; verified failing by registering a knob wired to nothing.
+>
+> **2. The name-colliding options — RULED AGAINST (`32a7d0e`, then `38b989c`).** There are
+> five, not four; `*keys-hint*` arrived after this sweep. `17ab76b` had already settled the
+> relationship the other way: *the generic is the extension point, the option is what its
+> shipped method returns, and a policy that overrides the method stops reading the option.*
+> Under that ruling the five pairs are the design's own worked examples, and deleting them
+> takes gaps and border width — the two things every tiling-WM user sets on their first day
+> — and makes them reachable only by `defmethod`. What was actually unchecked was the third
+> clause: `option-shadows` and **gate 15** (an override that takes an option away must offer
+> one of its own), and **gate 17** (an option named after a generic must be read by a method
+> on it). That found `*new-workspace*` — an option whose reader still exists and never runs
+> under the lattice, which every instrument in the project certified as working, including
+> gate 11.
+>
+> **3. The 13 unattached hooks — RULED AGAINST (`762455a`).** This section's own advice was
+> "do item 3 last, or not at all"; it was done not at all, and the hooks went 16 → 18 (this
+> sweep counted 16; a seventeenth arrived before `762455a`, which added the eighteenth). Three
+> of the fourteen unattached ones were **wrong** in ways only a consumer finds — `:startup`
+> ran before `connect-to-compositor`, `:output-added` fired on a nameless monitor of no size,
+> `:focus-changed` was skipped by two of the five places that move the cursor — which is the
+> argument against deleting them: a hook nothing attaches to is not inert, it is unverified.
+> `defhook`'s lambda list stopped being a comment (checked at `add-hook` and by a compiler
+> macro on `run-hooks`), `:keyboard-focus-changed` was added because the cursor is a place,
+> `doc/HOOKS.txt` is generated, and **gate 14** has a static half and a dynamic half that
+> records every firing during the integration run.
 
 `src/policy/hooks.lisp:5-14` is a ten-line essay explaining when to use a generic, when an
 option, and when a hook. An abstraction that needs a decision procedure has a competitor.
@@ -306,6 +409,27 @@ last, or not at all.** The other two are free.
 ## 4. The thesis holds on exactly the axis the one extension needed, and nowhere else
 
 `rewrite`, narrow — three specific decisions, not seventeen.
+
+> **LANDED, all four — `6f6e8c2`.** This is the one section whose prescription was taken
+> verbatim.
+>
+> 1. `p:focus-target` — a generic, the `cond` as its default method.
+> 2. `+capture-keys+` → `p:capture-keys`, a generic. Verified against a real river: 214 real
+>    `river_xkb_binding_v1` objects.
+> 3. `emit-render-order` is asked **once, about the whole render list** — tiled placements and
+>    floats together — instead of about the tiled half with floats appended by the caller. The
+>    shipped method still says "tiled, then floats, then overlays", so nothing moves on
+>    screen; what changed is that a method saying otherwise is now obeyed.
+> 4. **The container-protocol surface exists**: `latticewm --container-surface`, generated from
+>    the running image by the same formatter as the policy one, gate 2 requiring every member
+>    documented. **It is nineteen members**, and six of them have defaults correct for a dense
+>    integer-addressed container and wrong for anything else — which is what made skipping them
+>    silent. `serialize-node`/`deserialize-node` moved onto the contract.
+>
+> Generating the document immediately found one in the flagship extension: the lattice
+> answered thirteen of nineteen, and the one it should have answered was `c:node-signature`,
+> so undo recorded nothing for zoom, pan, resize and name-cell and silently reverted the
+> tracks with the tree. One method, in `lattice/`, no core edit.
 
 Let me be precise about what is proven, because a lot of it is.
 
@@ -384,6 +508,32 @@ the first one already tripped over.
 ## 5. The tests defend the extension and leave the program to the screenshots
 
 `rewrite` — grow `integration.lisp`, and make `make check` fail honestly.
+
+> **LANDED, all four — `7d25623`** (CI follow-ups in `c014ccf`, `da72dc9`).
+>
+> 1. `tests/test-surface.lisp:603-608` deleted. The `remove-method` alone is the restore.
+> 2. `make check` sets `LATTICEWM_REQUIRE_INTEGRATION=1`, so a missing river or a missing
+>    terminal emulator fails instead of printing a paragraph and exiting 0. Skips are counted
+>    in two kinds — a tool that should have been installed and a thing a headless backend
+>    cannot have are not the same kind.
+> 3. `README.org:437-440` fixed.
+> 4. `tools/integration.lisp` rebuilt around a **section** — a name and a body that catches
+>    its own errors, so a broken section costs one section, and fixtures are functions rather
+>    than scope. It was one 250-line `LET`, which is why it stopped at eighteen: the
+>    nineteenth check meant finding the right nesting depth inside somebody else's binding
+>    form. **18 checks → 160 in 21 sections**, and 221 in 27 sections by `762455a`.
+>
+> There is a CI workflow now (`.github/workflows/check.yml`), so "ten CI gates run on every
+> build" stopped meaning "when a human types make" — and its first run was red, on the river
+> version mismatch nothing else could see (`c014ccf`; the claim that it had been red for a
+> month was itself wrong and is corrected on the record in `da72dc9`).
+>
+> The rebuilt harness found **four live bugs**, none reachable by a test that builds its own
+> world, because in every one the model was right and the screen was wrong: a window that
+> leaves the tree was never hidden (minimize, and every workspace you are not on);
+> `new-workspace` switched the cursor and not the screen; `op_start_pointer` was sent outside
+> the one sequence that may carry it, so Super+drag did nothing; and a lost wakeup left the
+> screen thirty seconds stale, about one run in five.
 
 | | source lines | test-lines per source-line |
 |---|---|---|
@@ -468,6 +618,30 @@ wide margin, and the harness already exists.
 
 `rewrite`, small and mechanical.
 
+> **LANDED — `40faa79`** (counts in `6f6e8c2`, `c014ccf`, `5106e34`, `ffdbc94`). It was not
+> small and it was not mechanical: the sentences were the cheap half.
+>
+> **Gate 12 is the missing gate this section names.** Three checks of three kinds. Every prose
+> file is *classified* — current or historical — with the list checked against the directory
+> rather than consulted, so an unclassified document fails. Every earmuffed name a current
+> document writes **in code markup** must be a registered option or an exported special; code
+> markup rather than raw text, because org's bold syntax is also asterisks and a check with
+> false positives is a check that gets weakened. And `#+CLAIM:` makes any sentence executable
+> — an org keyword holding a form, read in `latticewm/user`, evaluated against the loaded
+> image, failing the build with the file, the line, the form and the sentence above it. A
+> claim must name something the program owns, or `#+CLAIM: t` would be a gate that can be told
+> it passes; a claim cannot read a file, so `FINDINGS.org`'s line counts stay gate 3's job.
+> **30 claims today.** It caught two errors in the prose written to introduce it.
+>
+> The seven rows: `EXTENDING.org`'s development loop leads with the control socket and says
+> plainly that SWANK is opt-in; `PLAN` §generics carries what happened to its threshold;
+> `PLAN`'s flat-bindings row records the submap reversal 300 lines below it; `README`'s forty
+> key bindings are pinned to the shipped keymap chord by command. `DESIGN.org` gets the "what
+> of this is still true" index — 22 decisions, one row each — **and does not get edited**.
+> `FINDINGS.org`'s fossil counts table was **corrected rather than deleted** (`6f6e8c2`), and
+> now says what `make gates` says. `SPIKE-WEEK0.org` was **classified historical rather than
+> cut**, which is the cheaper form of the same answer.
+
 Verified against source, one row per claim:
 
 | claim | where | verdict |
@@ -522,6 +696,21 @@ nineteen inbound links are all from the frozen document.
   here and written nowhere in the repository, so the method always falls through to
   `call-next-method` and `:FIXED` zoom's cropped trailing cell — advertised in two
   files — never happens.
+
+  > **LANDED — `fe071e7`.** And `:FIXED` was half-built underneath it: `fixed-tracks` took a
+  > *count* and gave every track exactly `*cell-width*`, so `resize-column` and `resize-row`
+  > did nothing at all under the mode `resize-column`'s own warning sends you to; a cell whose
+  > track had run entirely past the edge was still placed off-screen, and river shows a window
+  > unless it is explicitly hidden; and `map-mode-p` decided cells were too small by dividing
+  > output width by column count, which is the `:FIT` answer. The core had the same bug with
+  > nothing in common but the mechanism — `render-order`'s third tier keyed on an `:overlay`
+  > property nothing has ever written — deleted rather than wired up. **Gate 13** is the half
+  > that matters: props was the third way to keep state here and the unchecked one, so every
+  > extension property key is now read with the *reader* rather than grepped, matched by symbol
+  > identity against `prop`, with a `setf` place told apart from a read structurally. It fails
+  > on a key read and never written (provably dead) and merely reports the other direction,
+  > because a key written and never read is what D20 exists for.
+
 - **`tools/wmeval` (179 lines) is dead on arrival.** It speaks SWANK's wire protocol to port
   4005; `swank.lisp:22` makes SWANK off by default. Its own error text describes the world
   before that decision. `flake.nix:71` installs it to `$out/bin`; `install.sh` never
@@ -529,25 +718,109 @@ nineteen inbound links are all from the frozen document.
   and gate 9, whose entire job is making the image, the installer and the config agree,
   checks only the lattice. Delete it, or point it at the Unix socket `ipc.lisp` already
   serves.
+
+  > **LANDED — `5106e34`, deleted.** `latticewm --eval` is the same capability over the control
+  > socket that is on by default, and the binary is its own client. The gate-9 half was worse
+  > than this bullet knew: `flake.nix` had a hand-maintained `installPhase` beside
+  > `install.sh`'s list and the two had drifted, so `lattice.asd` — gate 9's *own* founding bug
+  > — was still uninstalled on the nix path for the whole life of the gate, plus man pages,
+  > `latticewm-session`, and both licences. **There is one installer now**: `installPhase` runs
+  > `./install.sh --prefix $out`, and gate 9 asks that it delegates rather than naming
+  > artifacts, since a gate that names an artifact can be satisfied by adding a row.
+  > `tools/install-check.sh` does the half a gate cannot — install to a scratch prefix, assert
+  > every promised artifact, then assert `--uninstall` gives all of it back.
+
 - **`src/protocol/wayland.xml`, 143 KB, named by nothing** — not `latticewm.asd`, not gate
   5's pin list, no grep hit anywhere. Gate 5's own comment says an unlisted XML is exactly
   the bug it exists for; the fix hardcoded three more rows instead of enumerating the
   directory.
+
+  > **WITHDRAWN — wrong when written.** `src/protocol/PINNED:3` named the file and gave its
+  > reason (`f63532a`, two days before this sweep), and gate 8 already read
+  > `(directory "src/protocol/*.xml")` — it enumerated the directory at the time this bullet
+  > said the fix had failed to. The file is there *for* gate 8: wayflan generates the core
+  > protocol into its own package, so nothing compiles it, but the gate checks that every event
+  > we listen for exists on the interface we listen for it on, and we listen to `wl_output` for
+  > the name and scale `river_output_v1` does not carry. Gate 5 pins interface/request/event/
+  > enum counts for the six *river* protocols and has nothing to count here. No commit was
+  > needed and none was made.
+
 - **Tags and named scratchpads do not survive a restart.** `serialize-node`
   (`state.lisp:115-118`) writes `:window` and `:label` only. `tags.lisp:5-8` opens by
   arguing that a dead slot in a *persisted* state file is worse than one in memory;
   `window-tags` has never been in that file. Two lines fix it.
+
+  > **LANDED — `6f6e8c2`.** A `:windows` section on the same identifiers. Put a terminal away
+  > under the name `music`, restart, and it came back as an anonymous window in the tree: the
+  > name gone, the putting-away undone, and the one command for getting it back keyed on the
+  > name. Adding a key is not a shape change, so no version bump.
+
 - **`Makefile:129-136`** redirects `make surface` output with `> doc/X.txt 2>/dev/null`. The
   shell truncates the target before the command runs and the diagnostic goes nowhere. If
   `cli.lisp` fails to load, the shipped extension surface, command list, option list and
   keymap all become empty files, the target exits 0, and `install.sh` installs them.
+
+  > **LANDED — `6f6e8c2`.** Write to a temporary, keep stderr, replace only on success and
+  > non-empty. A generated document cannot go stale, which is its whole argument — but it can
+  > go blank, and blank is worse than stale because nothing about it looks wrong.
+
 - **Five dead public functions in `model/`** — `tree-insert-at`, `weight-at`, `set-weight`,
   `normalized-weights`, `axis-of` — plus `replace-child`, which is **exported at
   `src/package.lisp:152` and never defined anywhere**. A `defgeneric` that does not exist,
   on the advertised container protocol.
+
+  > **LANDED — `6f6e8c2`** (`replace-child`) **and `228f77d`** (the five, deleted rather than
+  > tested). `axis-of`'s whole docstring was "alias for `direction-axis`, for call sites that
+  > read better this way", and there were no call sites; `tree-insert-at` is twenty lines with
+  > an error branch on a published surface, never executed — an untested error path on a
+  > published surface is worse than an absent function, because the absent one fails in the
+  > reader's editor. **There was already a next one**: `world-props`, left behind when that
+  > accessor was renamed to `props`, exported and denoting nothing for the life of the project
+  > — and `export` interns the symbol, so `(c:world-props *world*)` in a config file reads
+  > perfectly and dies at run time, reading as a bug in the user's config. **Gate 16** asks the
+  > two published packages whether an export names anything at all and whether anything reaches
+  > it. Its first draft failed gate 3's own rule — the five dead names in its preamble came back
+  > reported as reached by a build tool — so a string in `tools/` counts only when the entire
+  > string is one package-qualified name.
+
 - **`defaults-lifecycle.lisp`** is four methods on the same protocol as `lifecycle.lisp`,
   sorted by topic rather than by the engine/answers split its header implies. Merge it. The
   *motion* split is real and earns its file; this one doesn't.
+
+  > **LANDED — `ffdbc94`, the last item in the sweep to be answered.** Merged; nothing moved but
+  > text. **Gate 18** is the part that is not the merge: a file whose name begins `DEFAULTS-`
+  > must sit beside a file of the same stem, and that file must define no methods. `DEFAULTS-`
+  > was decoration — no check, nothing written down, and the one place it *was* written down,
+  > the file list at the top of `policy/conventional.lisp`, had itself drifted to "the methods
+  > are in five files" over a list of seven. It deliberately does **not** judge decompositions
+  > in general: `input-policy`'s shipped answers live in six files for six good reasons, and no
+  > rule this project could state would separate those from the lifecycle pair.
+
+---
+
+## Found on the way, not in this document
+
+Answering the sweep turned up work it did not name. Recorded here so the ledger above is not
+mistaken for the whole diff:
+
+- **`306ea13`** — `latticewm --extension-surface | head` printed five lines and a sixteen-frame
+  SBCL backtrace. SBCL turns EPIPE into a condition rather than letting the default SIGPIPE
+  disposition kill the process. It applied to all six listing flags — the six documents whose
+  entire purpose is to be piped — so the failure landed on the first interaction with the flags
+  the extension guide and the man page both tell people to run.
+- **`1a316df`, `d1e458a`, `c014ccf`, `da72dc9`** — river moved `river_window_manager_v1` from 4
+  to 5 in a *patch* release, so `nix build` was producing a session entry that could not start;
+  it succeeded because nothing in that build had ever connected to the river the same derivation
+  pins, until the integration suite (grown by `7d25623`) moved into the build phase and
+  something did. Re-vendored at 0.4.6 rather than pinned back. `shell.nix` claimed to pin the
+  pair and took the ambient `<nixpkgs>`; the NixOS module defaulted `river` to the *user's*
+  nixpkgs and had never been evaluated by anything, since `nix flake check` evaluates a module's
+  options and not a system that enables it. Gate 5 now asserts that the version we bind is the
+  version the XML declares.
+- **`210381a`** — river 0.4.6's two `capture_sessions` events, which `PINNED` had recorded as
+  "a feature we do not have rather than a protocol we cannot speak". That is also the argument
+  for building it: the one thing you cannot see by looking at your own screen is that somebody
+  else can see it too.
 
 ---
 
@@ -603,3 +876,18 @@ wrong.
 
 Gate 6 stays at the top regardless, because it is the only item that is actively shaping
 where new code gets filed.
+
+> **How it was actually answered.** The question was never put to the repo, and the ranking
+> turned out not to be needed: all six claims were worked, in roughly reverse order of the
+> ranking above. Gate 6 went first (`f74cd07`) as the section asked, but claim 4's container
+> surface — the item that would have been top if the answer were "a second extension" —
+> landed first of all (`6f6e8c2`), because it was the one whose *absence* the other work kept
+> tripping over.
+>
+> The ranking's premise held anyway. Each claim, once worked, produced a defect that only the
+> work could find: the container surface found `node-signature` missing from the lattice and
+> undo silently reverting the tracks; the integration rebuild found four; gate 14 found two on
+> its first run; gate 12 found two errors in the prose written to introduce it. The three
+> gates that passed the day they were written — 15, 17 and 18 — say so in the gate, in `PLAN`
+> and in `README` rather than dressed up, because what they defend is not a bug that was found
+> but the meaning of a name.
