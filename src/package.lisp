@@ -258,7 +258,7 @@ You never edit this package.")
    #:clip-rect #:outer-rect #:reserved-space #:run-reserve-hooks
    #:*solo-windows* #:solo-window #:output-solo-window #:solo-node-p
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
-   #:echo-content #:cursor-place-name
+   #:echo-content #:cursor-place-name #:window-name #:name-of-window
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change #:focus-target

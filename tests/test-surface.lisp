@@ -130,13 +130,44 @@
   ;; next generic, whatever it is, which is what a threshold that has been
   ;; reached is supposed to feel like.
   ;;
+  ;; SIXTY-FIVE TO SIXTY-SIX IS THE SEVENTH MOVE, AND IT IS THE ONE THE
+  ;; PARAGRAPH ABOVE SAID WOULD HAVE TO BE ARGUED FOR.  Here is the argument.
+  ;;
+  ;;   WINDOW-NAME   six hardcoded answers, in five files, that disagreed with
+  ;;                 each other.  ECHO-CONTENT said (OR APP-ID "?"),
+  ;;                 CAPTURE-SUBJECT-NAME said (OR APP-ID TITLE "a window"),
+  ;;                 TAG-WINDOW said (OR APP-ID "window"), LIST-TAGS and
+  ;;                 LIST-SCRATCHPADS mapped APP-ID and fell back to "?", and
+  ;;                 the lattice's drawn map read APP-ID itself.  So "what do we
+  ;;                 call this window" was answered six times, three ways, and
+  ;;                 could be overridden nowhere.
+  ;;
+  ;; It is a boundary correction of the third kind, and it comes with the same
+  ;; second half CURSOR-PLACE-NAME had: a *documented* extension point that
+  ;; could not reach any of those six sites.  :LABEL is a WINDOW-RULE-FOR
+  ;; override key, listed in +WINDOW-RULE-KEYS+ and in the option's own
+  ;; docstring, honoured into a property -- and read by nothing, so a rule that
+  ;; named a window named it to nobody.  Gate 13 reported that and correctly
+  ;; refused to fail on it, because the fix wanted a ruling on what a window's
+  ;; name is *for* before it wanted code.  The ruling is in WINDOW-NAME's
+  ;; docstring and this generic is it.
+  ;;
+  ;; And the symmetry is the tell that the surface was missing a member rather
+  ;; than gaining one: a *place* has had a name generic since the sixth move.  A
+  ;; window did not, and the difference was not a decision anybody took.
+  ;;
+  ;; No knob is added -- :LABEL already existed and already did nothing -- and
+  ;; nothing outside src/ answers it yet, so gate 6's count of generics answered
+  ;; from outside stays where it was while the total rises.  That is the honest
+  ;; direction to report it in.
+  ;;
   ;; The other surface has a count too, and it is not on this test because it
   ;; is not the same question: see EVERY-CONTAINER-PROTOCOL-GENERIC-IS-DOCUMENTED
   ;; in tests/test-container.lisp.  A container protocol member is an obligation
   ;; on an extension author rather than an option offered to one, so `too many'
   ;; means something different there and a shared ceiling would say nothing.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 65) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 66) "the extension surface has ~d generics" n)))
 
 (test the-surface-is-what-takes-a-policy-and-nothing-else
   "POLICY-GENERICS used to mean 'every exported generic in the package'.
@@ -450,6 +481,52 @@ had to ask, so no gate saw an extension asking."))
           "and the shipped policy is untouched by the extension's vocabulary")
       (is (search (format nil "~{~a~^.~}" (c:world-cursor world)) shipped)
           "whose own answer is the cursor path, which every layout model has"))))
+
+;;; A WINDOW RULE THAT NAMES A WINDOW USED TO NAME IT TO NOBODY.  :LABEL was a
+;;; documented WINDOW-RULE-FOR key, honoured into a property, and read by
+;;; nothing at all -- while six places asked "what do we call this window" in
+;;; three different ways, none of them overridable.  WINDOW-NAME is the ruling
+;;; and these are its two halves: the key does something, and a policy can say
+;;; what the something is.
+
+(defclass titles-policy (p:conventional-policy) ()
+  (:documentation
+   "Names windows by their title rather than their app id.  One method, and
+the obvious thing somebody will want: the shipped order prefers the app id
+because a title moves under you while you read it."))
+
+(defmethod p:window-name ((policy titles-policy) (window c:window))
+  (or (c:window-title window) (call-next-method)))
+
+(test a-window-rule-that-names-a-window-names-it-in-the-status-line
+  (let ((world (fresh-world))
+        (p:*echo-message* nil)
+        (p:*window-rules* '(((:app-id "thunderbird") :label "Mail"))))
+    (let ((window (win "thunderbird")))
+      (p:on-window-open (policy) world window)
+      (is (equal "Mail" (c:prop window :label))
+          "the rule put the label on the window, as it always did")
+      (is (equal "Mail" (p:window-name (policy) window))
+          "and something reads it now, which is the whole finding")
+      (let ((line (echo-line (policy) world 200)))
+        (is (search "Mail" line) "so the status line says what you called it")
+        (is (not (search "thunderbird" line))
+            "rather than what its author called it")))))
+
+(test what-a-window-is-called-is-the-policys-to-decide
+  (let ((world (fresh-world))
+        (p:*echo-message* nil)
+        (p:*window-rules* '()))
+    (let ((window (win "org.mozilla.firefox")))
+      (setf (c:window-title window) "Anthropic")
+      (p:on-window-open (policy) world window)
+      (is (equal "org.mozilla.firefox" (p:window-name (policy) window))
+          "the shipped answer is the app id, which does not move while you read")
+      (is (equal "Anthropic"
+                 (p:window-name (make-instance 'titles-policy) window))
+          "and one method outside changes it, with no core edit")
+      (is (equal "a window" (p:window-name (policy) (win nil)))
+          "a window with nothing to say for itself is still a noun"))))
 
 ;;; THE STATUS LINE HAS A WIDTH, and for the whole life of the program nobody
 ;;; had told it.  PENDING-KEYMAP-SEGMENTS took a column budget from the day it

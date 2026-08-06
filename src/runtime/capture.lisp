@@ -53,7 +53,7 @@ without a line about it every time OBS adds a source.")
 (defun capture-subject-name (subject)
   "What to call SUBJECT when telling the user about it."
   (etypecase subject
-    (c:window (or (c:window-app-id subject) (c:window-title subject) "a window"))
+    (c:window (p:name-of-window subject))
     (c:output (format nil "screen ~a" (or (c:output-name subject) "?")))))
 
 (defun note-capture-sessions (subject count)

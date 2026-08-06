@@ -326,6 +326,52 @@ second placement wins, and the whole layout silently collapses onto the last
 output while the model insists everything is fine.  That was the first
 implementation."))
 
+(defgeneric window-name (policy window)
+  (:documentation
+   "What to call WINDOW when the window manager has to name it to a person.
+
+A short string, never NIL.  The shipped answer is the label a window rule gave
+it, then the app id, then the title, then \"a window\".
+
+THIS IS THE RULING :LABEL WAS WAITING FOR, and it is worth stating because the
+key existed with nothing behind it.  :LABEL is a documented WINDOW-RULE-FOR
+override, it is honoured into a property, and *nothing read it* -- so a rule
+that named a window named it to nobody.  Gate 13 reported that rather than
+failing on it, correctly: a property written and never read is exactly what
+DESIGN D20 says PROPS is for, and a gate that failed there would be ordering
+the program to grow a consumer, which is a check writing the design.  So the
+decision was left open, and this is it.
+
+*A window's name is what this program calls it when it has to name it* -- in
+the status line, on the drawn map, in a notification, in the tag and scratchpad
+lists, and in a log line about it.  One question, asked in one place, so that
+setting :LABEL once changes every one of them.
+
+And *not* an addressing layer.  You cannot jump to a window by its label,
+because that is what tags are for, and M-x name names *places*: D1's three
+addressing layers are about where a thing is and this is about what it is
+called.  Two windows may share a name and nothing breaks, which is the test of
+whether a name is an address.
+
+The shipped order puts the label first and the *app id* second, ahead of the
+title, because a title changes under you -- every browser tab, every unsaved
+buffer -- and a status line whose text moves while you read it is worse than
+one that says `firefox'.  A policy that would rather see titles overrides this.
+
+DECLARED HERE AND ANSWERED IN appearance.lisp, which is where the rest of the
+naming lives.  It is declared this early because policy/lifecycle.lisp names
+windows in its log lines, and a call above its definition is the forward
+reference that gate 1 exists to refuse."))
+
+(defun name-of-window (window)
+  "WINDOW's name, asked of the policy in force.
+
+For the callers that have a window and no policy in hand -- a command, an event
+handler, a log line.  One line, so that none of them is tempted to read the app
+id directly and quietly opt the user's label out."
+  (or (guarded "window-name" (window-name (current-policy) window))
+      "a window"))
+
 (defgeneric echo-content (policy world &optional columns)
   (:documentation
    "What the echo area says, as a list of (TEXT . KIND), inside COLUMNS.

@@ -520,7 +520,7 @@ asked about. The gate asks the image, and the same fact is now printed in the
 document — every generic whose shipped method reads an option says =answered
 from: *gaps*= under its docstring, so the reader who arrives at the *generics*
 section, which is the one every docstring points at and the one that says
-"write a method", can see that twenty-five of the sixty-five decisions are
+"write a method", can see that twenty-five of the sixty-six decisions are
 already settable without writing anything.
 
 #+CLAIM: (let ((by-generic (options-by-generic)))
@@ -610,7 +610,7 @@ happened three times over: this file said the layer-shell and HiDPI paths were
 "exercised by the test suite" when nothing referenced them, =*smart-gaps*= was
 documented as working while nothing read it, and the plan's own written
 ceiling of thirty policy generics went on saying thirty while the count
-reached sixty-five. So a document is now declared *current* or *historical*,
+reached sixty-six. So a document is now declared *current* or *historical*,
 every option a current document names must exist, and any sentence can be
 pinned to the image with a =#+CLAIM:= line that the build evaluates. It cannot
 find a false sentence nobody annotated, and nothing honest can; what it can do
@@ -640,10 +640,10 @@ walked from 0.82 to 1.17 largely by relocation, two of those commits reproduce
 was set after the position had been arranged. What it stood for — that most of
 the system's behaviour should live above the boundary — is right, so gate 6 now
 asks it directly and unmovably: *how many policy generics has anybody outside
-=src/= ever specialised?* The answer today is 15 of 65, which is a much less
+=src/= ever specialised?* The answer today is 15 of 66, which is a much less
 flattering number than 0.99 and is the actual state of the extension surface.
 
-#+CLAIM: (= 65 (length (policy-generics)))
+#+CLAIM: (= 66 (length (policy-generics)))
 
 =make integration= is the one that is different in kind. It runs river on a
 headless backend, connects to it as the ordinary Wayland client this program

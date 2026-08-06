@@ -206,18 +206,18 @@ hold in their head is not a surface.
 Thirteen. If this list reaches thirty, the decomposition has gone wrong in the direction
 of ceremony. If it drops below ten, it has gone wrong in the direction of a monolith.
 
-*That was written on day one and the list is at sixty-five.* The threshold was
+*That was written on day one and the list is at sixty-six.* The threshold was
 right to write down and wrong to leave unrevised: it was blown through by a factor
 of two while this paragraph went on saying thirty, which is what a number nobody is
 made to argue with does. The live version of it is
 [[file:tests/test-surface.lisp::24][=tests/test-surface.lisp:24=]], whose ~(<= 10 n 65)~
 sits under a comment recording every occasion the ceiling was raised and why —
 that is where the reasoning now lives, and it is the file to argue with before
-adding number sixty-six. The count itself is printed by gate 2 on every build,
+adding number sixty-seven. The count itself is printed by gate 2 on every build,
 and gate 6 prints the number that matters more: how many of them anything outside
 =src/= has ever answered.
 
-#+CLAIM: (= 65 (length (policy-generics)))
+#+CLAIM: (= 66 (length (policy-generics)))
 
 * What extensibility is actually worth here
 :PROPERTIES:
@@ -2703,3 +2703,45 @@ load. *Compiled and not loaded*, deliberately — loading this one installs an ~
 method and five hooks into the image doing the checking, and a gate that changes the
 program it is inspecting is worse than the warning it is hunting. Verified by
 introducing a typo: the gate fails and names the symbol.
+
+** A window rule that named a window named it to nobody
+
+Gate 13 has printed =label -- written in src/policy/lifecycle.lisp= on every build
+since it was written, under the heading "written and never read". The gate was right
+to report it and right not to fail on it: a property written and never read is exactly
+what [[file:DESIGN.org::#d20][D20]] says props is for, and failing there would be a
+check ordering the program to grow a consumer. So the decision was left open. This
+takes it.
+
+*A window's name is what this program calls it when it has to name it* — in the status
+line, on the drawn map, in a notification, in the tag and scratchpad lists, and in a
+log line about it. ~WINDOW-NAME (policy window)~ is the one question, its shipped
+answer is the label, then the app id, then the title, and =:label= sets it. Not an
+addressing layer: you cannot jump to a window by label, because that is what tags are
+for and ~M-x name~ names *places*.
+
+*The generic is the finding, not the property.* Six places asked what to call a window
+and each answered inline, three different ways — =(or app-id "?")=, =(or app-id title
+"a window")=, =(or app-id "window")=, and two commands and the lattice's map reading
+the app id directly. Six answers to one question, none reachable, so =:label= had
+nowhere to be honoured even if somebody had wanted to honour it. A *place* has had a
+name generic since [[file:FINDINGS.org::#edit-6][core edit 6]]; a window had not, and
+that difference was nobody's decision.
+
+** And two tripwires fired before a human did
+
+Worth its own heading because it is the first time the project's own machinery stopped
+a change rather than a person noticing:
+
+- ~tests/test-surface.lisp~'s ~(<= 10 n 65)~ failed. [[#generics][§generics]] above
+  says that file "is the file to argue with before adding number sixty-six", and the
+  argument is now in the comment beside the assertion: six hardcoded answers replaced,
+  a documented extension key that could reach none of them, and the symmetry with
+  ~CURSOR-PLACE-NAME~.
+- Gate 12 then failed *four documents* — README, this file, and doc/EXTENDING.org
+  twice — whose prose said sixty-five. Every one of them is a =#+CLAIM:= somebody
+  pinned deliberately, and the gate that evaluates them against the live image is a
+  little over a week old.
+
+Neither was noticed by reading. Both were reported by the build, with the file and the
+line, which is exactly the state PLAN §log8 was written to reach.

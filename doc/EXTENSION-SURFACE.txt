@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-65 generics, 111 options.  Generated from the running image.
+66 generics, 111 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -1224,6 +1224,47 @@ for.  GRAVITY decides where the shortfall goes.
     (layout-policy leaf t)              ; layout.lisp
 
 ----------------------------------------------------------------------------
+window-name (latticewm/policy:policy latticewm/policy::window)
+----------------------------------------------------------------------------
+What to call WINDOW when the window manager has to name it to a person.
+
+A short string, never NIL.  The shipped answer is the label a window rule gave
+it, then the app id, then the title, then "a window".
+
+THIS IS THE RULING :LABEL WAS WAITING FOR, and it is worth stating because the
+key existed with nothing behind it.  :LABEL is a documented WINDOW-RULE-FOR
+override, it is honoured into a property, and *nothing read it* -- so a rule
+that named a window named it to nobody.  Gate 13 reported that rather than
+failing on it, correctly: a property written and never read is exactly what
+DESIGN D20 says PROPS is for, and a gate that failed there would be ordering
+the program to grow a consumer, which is a check writing the design.  So the
+decision was left open, and this is it.
+
+*A window's name is what this program calls it when it has to name it* -- in
+the status line, on the drawn map, in a notification, in the tag and scratchpad
+lists, and in a log line about it.  One question, asked in one place, so that
+setting :LABEL once changes every one of them.
+
+And *not* an addressing layer.  You cannot jump to a window by its label,
+because that is what tags are for, and M-x name names *places*: D1's three
+addressing layers are about where a thing is and this is about what it is
+called.  Two windows may share a name and nothing breaks, which is the test of
+whether a name is an address.
+
+The shipped order puts the label first and the *app id* second, ahead of the
+title, because a title changes under you -- every browser tab, every unsaved
+buffer -- and a status line whose text moves while you read it is worse than
+one that says `firefox'.  A policy that would rather see titles overrides this.
+
+DECLARED HERE AND ANSWERED IN appearance.lisp, which is where the rest of the
+naming lives.  It is declared this early because policy/lifecycle.lisp names
+windows in its log lines, and a call above its definition is the forward
+reference that gate 1 exists to refuse.
+
+  methods:
+    (appearance-policy window)          ; appearance.lisp
+
+----------------------------------------------------------------------------
 window-rule-for (latticewm/policy:policy latticewm/policy::window)
 ----------------------------------------------------------------------------
 A property list of overrides for WINDOW, or NIL.
@@ -1511,7 +1552,7 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
-  read by: hint-lines, key-unbound (input-policy t t), echo-content (appearance-policy t)
+  read by: hint-lines, echo-content (appearance-policy t), key-unbound (input-policy t t)
   DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up
@@ -1854,7 +1895,7 @@ device's default, which is off.
 
 *modifier*
   now: :SUPER
-  read by: modifier-string, keys-hint (appearance-policy t), welcome-rows (appearance-policy)
+  read by: modifier-string, welcome-rows (appearance-policy), keys-hint (appearance-policy t)
   The modifier every default binding uses.
 
 :SUPER is the only one that does not collide with something an application
@@ -2356,6 +2397,12 @@ MATCH keys:
 OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+: :float, :workspace, :path,
 :focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
 :capabilities, :tags and :label.
+
+:LABEL IS WHAT THIS PROGRAM CALLS THE WINDOW when it has to name it -- in the
+status line, on the drawn map, in a notification, in the tag and scratchpad
+lists, and in a log line about it.  It is a name and not an address: two
+windows may share one, and finding a window by name is what :TAGS is for.  See
+WINDOW-NAME, which is the generic every one of those places asks.
 
 This is the tier-0 half of window placement.  The tier-1 half is a method on
 WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three

@@ -502,6 +502,13 @@ split it, move between the pieces, close one, and find everything else."))
                    ~a+/ all keys"
               mod mod mod mod mod))))
 
+(defmethod window-name ((policy appearance-policy) (window c:window))
+  "The label, the app id, the title, or a last resort that is still a noun."
+  (or (c:prop window :label)
+      (c:window-app-id window)
+      (c:window-title window)
+      "a window"))
+
 (defgeneric cursor-place-name (policy world)
   (:documentation
    "Where the cursor is, in whatever vocabulary this policy uses for places.
@@ -564,7 +571,12 @@ always true, so the hint is the one that can wait for a quieter line."
                        (format nil "empty -- ~{~a~^ ~} to open"
                                (mapcar (lambda (entry) (string (car entry)))
                                        *empty-pane-keys*)))
-                      (window (or (c:window-app-id window) "?"))
+                      ;; ASKED, NOT READ.  This used to name the window by its
+                      ;; app id, so a window rule's :LABEL -- documented,
+                      ;; honoured into a property, and read by nothing -- could
+                      ;; not reach the one line that says what you are looking
+                      ;; at.  See WINDOW-NAME.
+                      (window (window-name policy window))
                       (t ""))
                 :normal)
           segments)

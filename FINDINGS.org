@@ -1190,6 +1190,35 @@ nothing displays it — so a rule that names a window names it to nobody. That i
 ~*smart-gaps*~'s species again and the fix is not obvious, because it wants a
 ruling on what a window's name is /for/ before it wants code.
 
+*** The ruling, taken
+
+/A window's name is what this program calls it when it has to name it./ In the
+status line, on the drawn map, in a notification, in the tag and scratchpad
+lists, and in a log line about it. ~window-name (policy window)~ is the one
+question; its shipped answer is the label, then the app id, then the title, then
+"a window"; and =:label= is how you set it.
+
+And *not* an addressing layer — you cannot jump to a window by its label,
+because that is what tags are for, and =M-x name= names /places/. D1's three
+addressing layers are about where a thing is; this is about what it is called.
+Two windows may share a name and nothing breaks, which is the test of whether a
+name is an address.
+
+*The generic is the finding, not the property.* Six places asked "what do we
+call this window" and every one of them answered it inline, three different
+ways: ~echo-content~ said =(or app-id "?")=, ~capture-subject-name~ said =(or
+app-id title "a window")=, ~tag-window~ said =(or app-id "window")=, two list
+commands mapped the app id, and the lattice's drawn map read the app id itself.
+Six answers to one question, none of them reachable — so =:label= had nowhere to
+be honoured even if somebody had wanted to honour it, and a *place* had had a
+name generic since [[#edit-6][core edit 6]] while a window had not.
+
+It is the seventh time the policy-generic ceiling has moved and the first for
+which the tripwire fired as designed: =tests/test-surface.lisp='s
+~(<= 10 n 65)~ failed, the count is arguable in a comment beside the assertion,
+and gate 12 then failed four documents whose prose said "sixty-five". *Both
+checks caught it before a human did*, which is what they are for.
+
 *Cost:* one property write, one accessor argument, three geometry clauses, one
 deleted ~cond~ branch, about a hundred lines of gate, five unit tests and the
 first section in the integration suite that runs the extension against a real

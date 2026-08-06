@@ -110,8 +110,12 @@ still does the only thing it knows how to do."
       (call-next-method)))
 
 (defun window-summary (node)
-  "A short description of what is in a cell: the app ids, deduplicated."
-  (let ((names (remove nil (mapcar #'c:window-app-id (c:node-windows node)))))
+  "A short description of what is in a cell: what the windows are called.
+
+Through P:NAME-OF-WINDOW rather than reading the app id, so a window rule's
+:LABEL reaches the map as well as the status line.  One question asked in one
+place is the whole of that decision -- see P:WINDOW-NAME."
+  (let ((names (remove nil (mapcar #'p:name-of-window (c:node-windows node)))))
     (cond ((null names) "")
           ((null (rest names)) (first names))
           (t (format nil "~a +~d" (first names) (1- (length names)))))))

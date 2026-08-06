@@ -107,7 +107,7 @@ rule that looks right."
         unless (member key +window-rule-keys+)
           do (logmsg :warn "window rule for ~a: ~s is not a rule key, so it ~
                             does nothing.~%  Known keys: ~{~s~^ ~}"
-                     (or (c:window-app-id window) "a window")
+                     (name-of-window window)
                      key +window-rule-keys+))
   rule)
 
@@ -134,6 +134,12 @@ MATCH keys:
 OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+: :float, :workspace, :path,
 :focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
 :capabilities, :tags and :label.
+
+:LABEL IS WHAT THIS PROGRAM CALLS THE WINDOW when it has to name it -- in the
+status line, on the drawn map, in a notification, in the tag and scratchpad
+lists, and in a log line about it.  It is a name and not an address: two
+windows may share one, and finding a window by name is what :TAGS is for.  See
+WINDOW-NAME, which is the generic every one of those places asks.
 
 This is the tier-0 half of window placement.  The tier-1 half is a method on
 WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
@@ -226,7 +232,7 @@ answer at all and is the first question anybody asks."
   (cond
     ((and *float-dialogs* (c:window-parent-window window))
      (logmsg :debug "~a floats: it has a parent, so river calls it a dialog"
-             (or (c:window-app-id window) "a window"))
+             (name-of-window window))
      t)
     (t
      (multiple-value-bind (want-w want-h) (c:window-preferred-size window)
@@ -237,11 +243,11 @@ answer at all and is the first question anybody asks."
                    (> want-h (cdr *float-fixed-size-limit*))))
           (logmsg :debug "~a asked for a fixed ~dx~d, which is larger than ~
                           *float-fixed-size-limit* — tiling it"
-                  (or (c:window-app-id window) "a window") want-w want-h)
+                  (name-of-window window) want-w want-h)
           nil)
          (t
           (logmsg :debug "~a floats: it pinned itself to a fixed ~dx~d"
-                  (or (c:window-app-id window) "a window") want-w want-h)
+                  (name-of-window window) want-w want-h)
           t))))))
 
 (defmethod default-float-rect ((policy lifecycle-policy) (window c:window)

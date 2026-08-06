@@ -1099,6 +1099,12 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   :focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
   :capabilities, :tags and :label.
   
+  :LABEL IS WHAT THIS PROGRAM CALLS THE WINDOW when it has to name it -- in the
+  status line, on the drawn map, in a notification, in the tag and scratchpad
+  lists, and in a log line about it.  It is a name and not an address: two
+  windows may share one, and finding a window by name is what :TAGS is for.  See
+  WINDOW-NAME, which is the generic every one of those places asks.
+  
   This is the tier-0 half of window placement.  The tier-1 half is a method on
   WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
   are supported and this one requires no Lisp beyond a quoted list.

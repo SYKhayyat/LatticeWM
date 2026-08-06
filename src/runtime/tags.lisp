@@ -79,7 +79,7 @@ across workspaces, across cells, and after any amount of rearranging."
       (t
        (pushnew (normalize-tag name) (c:window-tags window))
        (notify "tagged ~(~a~): ~{~(~a~)~^ ~}"
-               (or (c:window-app-id window) "window")
+               (p:name-of-window window)
                (window-tag-names window))
        window))))
 
@@ -253,9 +253,8 @@ and should never need to be found."
          (loop for name in names
                collect (cons name
                              (format nil "~{~a~^, ~}"
-                                     (or (remove nil
-                                                 (mapcar #'c:window-app-id
-                                                         (scratchpad-windows name)))
+                                     (or (mapcar #'p:name-of-window
+                                                 (scratchpad-windows name))
                                          (list "?")))))))))
 
 (defcommand list-tags ()
@@ -268,7 +267,6 @@ and should never need to be found."
          (loop for name in names
                collect (cons name
                              (format nil "~{~a~^, ~}"
-                                     (or (remove nil
-                                                 (mapcar #'c:window-app-id
-                                                         (windows-tagged name)))
+                                     (or (mapcar #'p:name-of-window
+                                                 (windows-tagged name))
                                          (list "?")))))))))
