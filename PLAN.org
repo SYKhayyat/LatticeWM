@@ -2508,3 +2508,48 @@ It is recorded as [[file:FINDINGS.org::#edit-6][core edit 6]].
 Both new checks were verified by breaking them on purpose — the reach-in check reports
 the exact file and line, and gate 6 fails on both floors when a single outside method is
 deleted. ~make surface~ regenerated; the surface document says 65 generics.
+
+* Eleventh session — 2026-08-06: closing the two-output findings
+:PROPERTIES:
+:CUSTOM_ID: log11
+:END:
+
+[[file:FINDINGS.org::#two-outputs][FINDINGS.org §two-outputs]] was written at the end of
+the tenth session and closed nothing: it recorded six defects found by running the window
+manager on two outputs and against a real panel, and left every one of them standing.
+This session takes them one at a time.
+
+** The flaky check, which was not a flaky program
+
+The one worth reading first, because the finding was *wrong about its subject*. "~quit~
+does not always quit, about one run in three" — two failures in seven runs of the last
+check in the integration suite — was written up as a window manager that sometimes does
+not exit when told, with a guess at the mechanism (the lost wakeup) and an explicit note
+that the guess was a place to look and not a finding.
+
+Reproduced first: two failures in four runs, then two in six. Then instrumented rather
+than reasoned about, and the probe answers it in one line. On every failing run
+=*server*= is ~NIL~ and the window manager's thread is dead *before the check runs*. The
+program had shut down completely — loop returned, hooks run, connection closed, ~START~
+returned — in the few hundred microseconds between =quit= answering and the next line of
+the test. The check read ~(server-running *server*)~, which on ~NIL~ is a type error
+rather than an answer; =poll-until= wrapped every call in ~ignore-errors~; so for ten
+seconds a *broken predicate* was indistinguishable from a condition that had not come
+true, and the suite reported that the window manager had not exited.
+
+*The check failed precisely when the shutdown was quickest.*
+
+Two repairs, and the second is the one that generalises past this check:
+
+- The assertion asks a fact that survives the teardown. The session ending is ~START~
+  returning, and ~START~ returning is its thread finishing — monotonic, and true
+  afterwards for as long as anyone cares to ask. Reading a slot off an object to detect
+  that the object is being destroyed cannot be made reliable by waiting longer.
+- =poll-until= keeps the last condition and prints it when it times out having never once
+  answered. Tolerating an error there is right — half the predicates in that suite read
+  state that is being built while they read it — and discarding it is not. One line, on
+  the run where it happens, saying what the predicate said instead of an answer. It would
+  have cost nothing and saved a page of FINDINGS.org.
+
+*Verified:* six consecutive =make integration= runs, six passes, against two in four and
+two in six on the same tree beforehand.

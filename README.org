@@ -718,11 +718,14 @@ and read back with a real window's tags in it; and the control socket
 answering one line per form.
 
 =make check= fails when river or a terminal emulator is missing rather than
-skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. It is also
-*intermittently red on a good tree*: the suite's last check, that =quit= ends the
-session within ten seconds, failed twice in seven runs on 2026-08-06 with
-nothing else changed. Undiagnosed; see
-[[file:FINDINGS.org::#two-outputs][FINDINGS.org §two-outputs]]. A red =check= is
+skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. It was
+*intermittently red on a good tree* — the suite's last check, that =quit= ends
+the session, failed twice in seven runs on 2026-08-06 — and that has been
+diagnosed and fixed: the window manager always quit, and the check failed on the
+runs where it quit *fastest*, because it read a slot off a server object the
+shutdown had already torn down. Six consecutive runs pass now. The instrument
+that hid it for a day is fixed too, and that is the transferable half; see
+[[file:FINDINGS.org::#quit-flake][FINDINGS.org §quit-flake]]. A red =check= is
 worth reading before it is worth re-running. What it
 still cannot reach is named out loud in its own output every run: a physically
 scaled output, libinput devices, and a layer-shell client, none of which a

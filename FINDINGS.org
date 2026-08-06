@@ -589,7 +589,18 @@ Confirmed rather than inferred: with the map up, =echo-content= still returns
 all five segments and =map-mode-p= is true, and the bar renders empty. The
 policy is right and the screen is wrong, which is this section's whole subject.
 
-** ~quit~ does not always quit, about one run in three
+** ~quit~ does not always quit, about one run in three — *withdrawn: it always quit, and the check failed when it quit fastest*
+:PROPERTIES:
+:CUSTOM_ID: quit-flake
+:END:
+
+*This finding was wrong about its subject and right that something was wrong.*
+What follows is what was recorded on the day; the diagnosis is underneath it,
+and it inverts the claim. =quit= has never once failed to end the session. The
+*assertion* failed, and it failed on precisely the runs where the shutdown was
+quickest.
+
+*** What was recorded on the day
 
 =make check= was run seven times over the session. Twice, the last check of the
 integration suite failed:
@@ -620,6 +631,59 @@ wakeup in the table above, where =wake-event-loop= set a flag and threw into a
 CATCH that was not on the stack, and the loop then sat in a thirty-second wait
 with work already queued. That one was hit about one run in five. The
 resemblance is a place to look and not a finding.
+
+*** What it actually was
+
+Reproduced first — two failures in four runs, then two in six — and then
+instrumented rather than reasoned about, because the previous paragraph is what
+reasoning about it produced. The probe printed =*server*= and the state of the
+window manager's thread at the moment the check ran. Every failing run says the
+same thing:
+
+#+begin_example
+PROBE: server=NIL thread=NIL
+PROBE after poll: answer=NIL server=NIL thread=NIL
+  FAIL  and QUIT ends the session
+#+end_example
+
+On the failing runs the window manager was *entirely gone*: the event loop had
+returned, =START='s ~unwind-protect~ had run the shutdown, closed the
+connection, set =*server*= to ~NIL~ and returned, and the thread had finished —
+all inside the few hundred microseconds between =quit= answering and the next
+line of the test. The passing runs are the *slower* ones, where the check
+sampled while the teardown was still in flight.
+
+The check read ~(server-running *server*)~. With =*server*= ~NIL~ that is a
+type error, not an answer — and =poll-until= wrapped every call in
+~ignore-errors~, so for ten full seconds a broken predicate was indistinguishable
+from a condition that had not yet come true. The report then said the one thing
+that was not so.
+
+*** The two repairs, and the second is the one that generalises
+
+- *The check now asks a fact that survives the teardown.* The session ending is
+  =START= returning, and =START= returning is its thread finishing. That is
+  monotonic — once true it stays true — which is what an assertion about a
+  shutdown has to be made of. Reading a slot off a live object to detect that
+  the object is being torn down cannot be made reliable by waiting longer.
+- *=poll-until= no longer swallows the difference between "no" and "broken".*
+  Tolerating an error is right: half the predicates in that suite read state
+  that is being built while they read it. Discarding it is not. It keeps the
+  last condition now and prints it when the wait times out having never once
+  answered — one line, on the run where it happens, saying what the predicate
+  said instead of an answer. That line is the whole finding, and it would have
+  been there on 2026-08-06.
+
+*Verified:* six consecutive runs of =make integration=, six passes, against two
+failures in four and two in six on the same tree before the change.
+
+*What it says about the eight defects in [[#two-outputs][the table above]].* Every one of them was
+a case of the *model* being right and the *screen* being wrong. This is the
+third species: the model was right, the screen was right, and the *instrument*
+was wrong — and it accused the program. A check that fails when the program is
+fastest is worse than no check, because the story it tells is coherent: a
+shutdown that sometimes hangs is a completely believable bug, and a page of this
+document was written about one that never existed.
 
 ** Smaller, from the same sitting
 

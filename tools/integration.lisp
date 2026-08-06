@@ -147,13 +147,42 @@ information about the twelve checks that never happened."
   `(run-section ,title (lambda () ,@body)))
 
 (defun poll-until (predicate seconds &optional (step 0.02))
-  "Poll PREDICATE until it answers or SECONDS elapse.  Returns its answer."
+  "Poll PREDICATE until it answers or SECONDS elapse.  Returns its answer.
+
+AN ERROR IN THE PREDICATE IS NOT AN ANSWER OF NO, and this used to treat the
+two as the same thing.  Tolerating an error is right — half the predicates here
+read state that is being built while they read it, and a transient type error
+on the way to the answer is normal.  Swallowing it *silently* is not: a
+predicate that is simply wrong then behaves exactly like a condition that never
+became true, and what the report says is `waited ten seconds and it did not
+happen'.
+
+That cost a day.  The suite's last check asked whether QUIT had ended the
+session by reading (SERVER-RUNNING *SERVER*) — and START sets *SERVER* to NIL
+on its way out, so on every run where the shutdown got there first the
+predicate signalled a type error for ten seconds and the suite reported that
+the window manager had *not* exited.  The check failed precisely when the
+shutdown was quickest.  Two runs in seven, and a whole section of FINDINGS.org
+written about a window manager that always quit.
+
+So the last condition is kept and printed when the wait times out having never
+once answered.  One line, on the run where it happens, saying what the
+predicate said instead of an answer."
   (let ((deadline (+ (get-internal-real-time)
-                     (* seconds internal-time-units-per-second))))
+                     (* seconds internal-time-units-per-second)))
+        (failure nil))
     (loop
-      (let ((answer (ignore-errors (funcall predicate))))
+      (multiple-value-bind (answer condition)
+          (handler-case (values (funcall predicate) nil)
+            (error (condition) (values nil condition)))
+        (when condition (setf failure condition))
         (when answer (return answer)))
-      (when (> (get-internal-real-time) deadline) (return nil))
+      (when (> (get-internal-real-time) deadline)
+        (when failure
+          (format t "  ....  the predicate never answered; it signalled: ~a~%"
+                  failure)
+          (force-output))
+        (return nil))
       (sleep step))))
 
 (defun find-program (&rest names)
@@ -238,6 +267,9 @@ else already holds wayland-1, which is every developer's machine."
 (defun socket-path ()
   (format nil "~a/~a" *runtime-dir* *display*))
 
+(defvar *wm-under-test* nil
+  "The thread START is running on.")
+
 (defun start-window-manager ()
   "Run START on a thread, against the headless river.
 
@@ -254,10 +286,11 @@ the pieces by hand would be constructing state again."
   (setf *log-level* :warn
         *log-file* nil
         *ipc-socket* nil)
-  (sb-thread:make-thread
-   (lambda ()
-     (ignore-errors (start :swank-port nil :config nil :restore nil)))
-   :name "latticewm-under-test"))
+  (setf *wm-under-test*
+        (sb-thread:make-thread
+         (lambda ()
+           (ignore-errors (start :swank-port nil :config nil :restore nil)))
+         :name "latticewm-under-test")))
 
 (defun client-environment ()
   (list (format nil "WAYLAND_DISPLAY=~a" *display*)
@@ -1643,7 +1676,19 @@ are what a person means by the arrangement, and both are copy-stable."
          (check (probe-file (state-file))
                 "and the layout was written on the way out")
          (wm (lambda () (quit)))
-         (check (poll-until (lambda () (not (server-running *server*))) 10)
+         ;; THE THREAD, NOT THE SERVER OBJECT.  This asked whether
+         ;; (SERVER-RUNNING *SERVER*) had gone false, and START's UNWIND-PROTECT
+         ;; sets *SERVER* to NIL two lines after the loop it ends — so on a
+         ;; quick shutdown the predicate was reading a slot off NIL, POLL-UNTIL
+         ;; swallowed the type error, and the suite reported that QUIT had not
+         ;; ended the session.  It failed *because* the shutdown was fast.
+         ;;
+         ;; The session ending is START returning, and START returning is this
+         ;; thread finishing.  That fact is monotonic and survives the teardown,
+         ;; which is what an assertion about a shutdown has to be made of.
+         (check (poll-until (lambda ()
+                              (not (sb-thread:thread-alive-p *wm-under-test*)))
+                            10)
                 "and QUIT ends the session"))
 
        ;; ------------------------------------------------------------------
