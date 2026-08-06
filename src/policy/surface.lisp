@@ -33,7 +33,19 @@ This is what the SWANK bridge answers 'what can I change?' with, and it is
 deliberately machine-readable first and pretty second — PLAN.org's framing is
 that the realistic post-expiry maintainer is a cheap model plus whatever
 contributors the release attracts, and a model would rather have a plist."
-  (list :generics (mapcar #'c:generic-description (policy-generics))
+  (let ((by-generic (options-by-generic)))
+    (list :generics (mapcar (lambda (name)
+                              ;; :OPTIONS is this surface's addition to the
+                              ;; shared description.  The container protocol has
+                              ;; no options and its entries carry none, which is
+                              ;; why the printer treats the key as optional
+                              ;; rather than the two surfaces keeping two
+                              ;; printers -- see model/surface.lisp.
+                              (append (c:generic-description name)
+                                      (list :options
+                                            (mapcar #'option-print-name
+                                                    (gethash name by-generic)))))
+                            (policy-generics))
         :options (mapcar (lambda (row)
                            (let ((shadows (option-shadows (first row))))
                              (append row
@@ -42,7 +54,7 @@ contributors the release attracts, and a model would rather have a plist."
                                                    (remove-if-not #'third shadows))
                                            (mapcar #'option-shadow-name
                                                    (remove-if #'third shadows))))))
-                         (all-options))))
+                         (all-options)))))
 
 (defun print-hook-surface (&optional (stream *standard-output*))
   "Print the hooks for a human.
@@ -132,6 +144,19 @@ replaces the shipped answer instead of extending it and CALL-NEXT-METHOD~%~
 signals NO-NEXT-METHOD.~2%~
 The `methods' list under each generic includes yours, which is how you check~%~
 that your configuration file was actually loaded.~2%~
+`answered from' NAMES THE OPTIONS THE SHIPPED METHOD READS, and it is there to~%~
+save you writing a method you did not need.  When a generic has that line, the~%~
+decision is already tier-0: set the variable in your config file and the~%~
+shipped answer changes, with no DEFMETHOD anywhere.  Write the method when you~%~
+want a *different decision* -- one that depends on the container, the window or~%~
+the time of day -- and be aware that your method then stops reading the option,~%~
+because it is the method that was reading it.  Both halves of that sentence are~%~
+printed: the option's own entry below lists what reads it and what overrides~%~
+it, and this line is the same fact from the other end.~2%~
+Where a generic and an option share a name -- GAPS and *GAPS* -- they are that~%~
+one relationship and not two competing ones, and gate 17 fails the build if~%~
+they ever stop being: an option named after a generic has to be read by a~%~
+method on it.~2%~
 This is one of two surfaces.  The other is the *container* protocol -- what a~%~
 new container kind answers rather than what a new policy answers -- and it is~%~
 printed by `latticewm --container-surface'.~2%")

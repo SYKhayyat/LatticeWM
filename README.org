@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, sixteen gates, 1600+ checks
+make               # build, seventeen gates, 1600+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -460,7 +460,7 @@ make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Sixteen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Seventeen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -476,11 +476,39 @@ registered option read by something; every claim these documents make
 about the program still being true of it; every node property the program
 *reads* being written by something; every declared hook being attached to
 by a suite that runs it; every policy that overrides the method reading an
-option offering an option of its own in its place; and every name the two
-published packages export naming something and being reached by something. The
-reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
+option offering an option of its own in its place; every name the two
+published packages export naming something and being reached by something; and
+an option named after a policy generic being read by a method on that generic.
+The reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
-Gate 16 is the newest, and it is about the one thing on the extension surface
+Gate 17 is the newest, and it is the smallest question in the file: when an
+option and a generic share a name, are they one relationship or two things
+spelled alike? Five pairs share one — ~gaps~ and ~*gaps*~, ~border-width~ and
+~*border-width*~, ~keys-hint~, ~move-into-occupied~, ~new-child-side~ — and the
+rule this project settled on says they are one thing: /the generic is the
+extension point, the option is what its shipped method returns/. That was true
+of all five by nothing stronger than the fact that somebody had written it that
+way. Move the read into a helper, answer the option from a different generic,
+and the program holds a generic and an identically-named option with no
+relationship at all — while every gate passes, because gate 11 only asks that
+*something* reads the option and gate 15 only asks about methods that override
+a reader. A user reads ~gaps~, sets ~*gaps*~, and is wrong for a reason no
+instrument can see. That is ~*smart-gaps*~ and ~*new-workspace*~ a third time:
+a relationship between two independently maintained things, assumed rather than
+asked about. The gate asks the image, and the same fact is now printed in the
+document — every generic whose shipped method reads an option says =answered
+from: *gaps*= under its docstring, so the reader who arrives at the *generics*
+section, which is the one every docstring points at and the one that says
+"write a method", can see that twenty-five of the sixty-five decisions are
+already settable without writing anything.
+
+#+CLAIM: (let ((by-generic (options-by-generic)))
+#+CLAIM:   (every (lambda (g) (member (find-symbol (format nil "*~a*" (symbol-name g))
+#+CLAIM:                                          '#:latticewm/policy)
+#+CLAIM:                              (gethash g by-generic)))
+#+CLAIM:          '(gaps border-width keys-hint move-into-occupied new-child-side)))
+
+Gate 16 is about the one thing on the extension surface
 that belongs to no mechanism. Every other gate asks after a *kind* of thing
 that has a registry — a generic, an option, a hook, a property key — and a
 plain exported function is in none of them. It is a line somebody typed in
@@ -522,7 +550,7 @@ wholesale stays legal; the lattice's workspace is a plane, always. Doing it and
 leaving the user nothing to set does not: the lattice pays ~*new-workspace*~
 back with ~*new-workspace-cells*~.
 
-Gate 14 is the one the other fourteen could not ask. All
+Gate 14 is the one the other sixteen could not ask. All
 of them read the program or the documents; a hook is neither, because a hook
 that nothing has ever attached to is *correct* by every static measure and
 untested by construction. Fourteen of seventeen were in that state, and the

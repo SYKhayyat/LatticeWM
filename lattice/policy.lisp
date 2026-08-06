@@ -363,8 +363,12 @@ a single option could not say that.
 
 Narrowed to GRID, so *GAPS* still answers for every split and stack in the
 tree — including the ones inside a cell.  `latticewm --extension-surface'
-prints this method under *GAPS* as an `overridden for', which is the only
-statement of it a user has to be able to find."
+prints this method under *GAPS* as an `overridden for', and prints *CELL-GAP*
+under GAPS itself as an `answered from' — the option this method takes away and
+the option it puts in its place, each named where somebody would look for it.
+The second half of that was missing until gate 17: the surface said what an
+override removed and never what it added, so the knob this method offers was
+findable only by reading this file."
   *cell-gap*)
 
 (defun coordinate-hue (address)

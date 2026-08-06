@@ -327,9 +327,10 @@ a weak model editing a monolith.
 All six run on every commit from day one. They are cheap and they are the only automated
 defence the project has.
 
-/There are sixteen now. The six planned here are below; the ten that were added are in
-[[#gates-added][§gates-added]], because each of them exists for a bug that had already
-shipped and the bug is the reason./
+/There are seventeen now. The six planned here are below; the eleven that were added are
+in [[#gates-added][§gates-added]]. Nine of the eleven exist for a bug that had already
+shipped and the bug is the reason; gates 15 and 17 passed the day they were written, and
+each says so in its own entry rather than being quietly counted with the others./
 
 1. *Zero compiler warnings* under ~(declaim (optimize (safety 3) (speed 1)))~ with
    ~ftype~ on every exported function. Verified in
@@ -674,6 +675,54 @@ existed were individually reasonable and all pointed somewhere else.
     ~remove-command-wrapper~ was on it and should not have been — the guide taught
     ~add-command-wrapper~ and never said how to take one off, which is the function you
     want at the moment a half-written wrapper has stopped the desktop answering keys.
+17. *An option named after a policy generic is read by a method on that generic.* Five
+    options are named after one — ~*gaps*~/~gaps~, ~*border-width*~/~border-width~,
+    ~*keys-hint*~/~keys-hint~, ~*move-into-occupied*~/~move-into-occupied~ and
+    ~*new-child-side*~/~new-child-side~.
+    [[file:lamdan/the-ratio-and-the-untested-axis-2026-08-05.md][The
+    lamdan sweep]] read those as two mechanisms answering one question — "resolved by
+    which one you found first" — and asked for the options to be deleted, on the ground
+    that the generic was always the real extension point.
+
+    *Half of that is right and it is not the half that is the remedy.* The rule this
+    project settled on, three commits after that document was written, says the opposite:
+    an option is not a competing answer, it is what a generic's shipped method returns.
+    ~policy/hooks.lisp~ states it, ~option-readers~ made the first clause a fact about the
+    image, ~option-shadows~ made the second one, and [[#gates-added][gate 15]] requires a
+    policy that overrides a method wholesale to ship an option of its own so the decision
+    stays tier-0 for somebody who will never write a ~defmethod~. Under that rule the five
+    pairs are the rule's own worked examples, and deleting them would take four P1 forks —
+    [[file:DESIGN.org::#p1][DESIGN P1]]'s "where a fork is situational rather than
+    principled, ship both" — away from exactly the user the rule exists to protect.
+
+    *What was genuinely unchecked is the shared name.* ~*gaps*~ is read by
+    ~gaps (layout-policy t)~ today, so the two names mean one thing, and nothing anywhere
+    required that. Move the read into a helper or answer the option from a different
+    generic and the program holds a generic and an identically-named option with no
+    relationship at all — while every gate passes, because gate 11 asks only that
+    *something* reads the option and gate 15 asks only about methods that override a
+    reader. Verified by breaking it deliberately: with ~*gaps*~ still read, from
+    ~outer-rect~ instead, gate 11 reports zero unread options and gate 17 fails alone.
+
+    *That is this project's own recurring bug a third time.* ~*smart-gaps*~ was a
+    documented value wired to nothing; ~*new-workspace*~ was a reader that never ran. Both
+    were invisible until the relationship between two independently maintained artifacts
+    was asked about rather than assumed, which is the shape
+    [[#log3][§log3]] is proudest of. A shared name is that same assumption, written in the
+    one place a reader is most likely to trust it.
+
+    *And the document had the fact in one direction only.* ~option-readers~ and
+    ~option-shadows~ are printed under every option, so a reader arriving from the option
+    list is told the whole rule. Nothing told the reader arriving from the other end — and
+    the other end is the *front* of the same document, the generics section that gate 2
+    guards and that every docstring in the package points at. Twenty-five of the sixty-five
+    generics have a shipped answer that is a value a user can set without writing a method,
+    and the surface said so under none of them. It now prints ~answered from: *gaps*~ under
+    each one, from ~options-by-generic~, which is ~option-readers~ read backwards.
+
+    *It passed the day it was written*, like gate 15 and unlike the other nine. What it
+    defends is not a bug that was found but the meaning of a name, which is the thing this
+    project has now watched rot in every other medium it keeps.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

@@ -297,6 +297,106 @@ nowhere is the state *NEW-WORKSPACE* was already in."
         "the two labels are not interchangeable: a narrowed override must not ~
          be reported as taking the option away everywhere")))
 
+(test the-relationship-reads-the-same-way-round-from-the-generic
+  "OPTIONS-BY-GENERIC is OPTION-READERS backwards, and it exists because the
+document had the fact in one direction only.
+
+Everything under an option -- read by, overridden by, overridden for -- helps
+only somebody who arrived holding an option.  Most people arrive holding a
+generic: they read the generics section, it says `to change one, write a
+method', and they write a method they did not need, because the decision was
+already a value they could have set."
+  (let ((table (p:options-by-generic)))
+    (is (member 'p:*gaps* (gethash 'p:gaps table))
+        "the generic says which option answers it, not just the other way round")
+    (is (null (gethash 'p:layout-children table))
+        "and a generic whose answer is an algorithm rather than a value says ~
+         nothing, so the line means something when it is there")
+    ;; MEMBER and not EQUAL, and the reason is the feature rather than a
+    ;; loosened assertion: an extension's own option lands under the core
+    ;; generic it answers.  Load the lattice and GAPS is answered from
+    ;; LATTICE:*CELL-GAP* as well as *GAPS*, which is what a user of a lattice
+    ;; image needs the line to say.  This suite runs with the lattice loaded --
+    ;; tools/test.lisp -- and degrades to the core alone without it, so the
+    ;; check is conditional for the harness's own reason.
+    (let ((cell-gap (find-symbol "*CELL-GAP*" '#:lattice)))
+      (when cell-gap
+        (is (member cell-gap (gethash 'p:gaps table))
+            "an extension's option appears under the core generic it answers")))
+    (is (string= "*gaps*" (p:option-print-name 'p:*gaps*))
+        "an option this package exports is spelled the way a config file ~
+         already spells it, with no prefix to copy over")
+    ;; THE ASSERTION IS THE ROUND TRIP AND NOT THE SPELLING, and finding that
+    ;; out is why this check is worth having.  The obvious expectation was that
+    ;; LATTICE:*CELL-GAP* prints qualified because LATTICEWM/USER does not
+    ;; inherit LATTICE -- and it does not, at the moment it is defined.  The
+    ;; lattice USE-PACKAGEs itself into LATTICEWM/USER on load
+    ;; (lattice/commands.lisp INSTALL-VOCABULARY) so that `(zoom-out)' works at
+    ;; a REPL, which makes `*cell-gap*' exactly what a user types.  So the
+    ;; printer's question is not "is there a prefix" but "does this read back
+    ;; to the option I am describing, in the package a config file is read in",
+    ;; and that is true for an extension that installs its vocabulary and for
+    ;; one that does not.  Same shape as
+    ;; EVERY-OPTION-IS-REACHABLE-FROM-A-CONFIG-FILE: symbol identity between
+    ;; two independently maintained things.
+    (dolist (variable (remove-duplicates
+                       (loop for generic being the hash-keys of table
+                             append (gethash generic table))))
+      (is (eq variable
+              (let ((*package* (find-package '#:latticewm/user))
+                    (*read-eval* nil))
+                (ignore-errors (read-from-string (p:option-print-name variable)))))
+          "~a reads back to the option it names, in the package a ~
+           configuration file is read in"
+          (p:option-print-name variable)))
+    ;; Methods only.  An option read by an ordinary function is not a shipped
+    ;; default anybody can override, so there is no `write a method instead'
+    ;; to point the reader at.
+    (is (notany (lambda (generic) (member 'p:*log-file* (gethash generic table)))
+                (p:policy-generics))
+        "*LOG-FILE* is read by plain functions, so it belongs to no generic")))
+
+(test a-shared-name-is-one-relationship-and-not-two
+  "Five options are named after a generic.  Gate 17 is the check; this is the
+statement of what it checks, in the suite, where a reader will meet it.
+
+lamdan/ read the shared names as two mechanisms answering one question and asked
+for the options to be deleted.  The project ruled the other way -- an option is
+what a generic's shipped method returns -- which makes these five the rule's own
+worked examples.  That ruling is only true while each option is actually read by
+a method on the generic it is named after, and until gate 17 nothing required
+it: move the read into a helper and you have two unrelated things under one
+name, with gate 11 still satisfied because *something* reads the option."
+  (let ((table (p:options-by-generic)))
+    (dolist (generic '(p:gaps p:border-width p:keys-hint
+                       p:move-into-occupied p:new-child-side))
+      (let ((option (find-symbol (format nil "*~a*" (symbol-name generic))
+                                 '#:latticewm/policy)))
+        (is (not (null option))
+            "~(~a~) has an identically-named option" generic)
+        (is (member option (gethash generic table))
+            "and a method on ~(~a~) reads it, so the shared name is a ~
+             relationship rather than a coincidence" generic)))))
+
+(test the-generated-surface-prints-the-option-under-the-generic
+  "The document is the delivery mechanism, for this the same as for the
+override labels: a fact the image knows and prints nowhere helps nobody."
+  (let* ((text (with-output-to-string (out) (p:print-extension-surface out)))
+         (lines (with-input-from-string (in text)
+                  (loop for line = (read-line in nil nil) while line collect line))))
+    (is (find-if (lambda (line) (and (search "  answered from: " line)
+                                     (search "*gaps*" line)))
+                 lines)
+        "the generic entry names the option its shipped method reads")
+    (is (>= (count-if (lambda (line) (search "  answered from: " line)) lines) 20)
+        "and it is every generic backed by an option, not one worked example")
+    ;; The container surface shares this printer and has no options at all.  A
+    ;; stray label there would mean the shared printer had grown a policy
+    ;; assumption, which is the thing moving it into model/ was meant to stop.
+    (let ((container (with-output-to-string (out) (c:print-container-surface out))))
+      (is (not (search "answered from:" container))
+          "the container surface carries no :OPTIONS and prints no label"))))
+
 ;;; ---------------------------------------------------------- tier 1: a method
 
 (defclass gapless-policy (p:conventional-policy) ()

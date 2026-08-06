@@ -156,6 +156,16 @@ tier for somebody who will never write a ~defmethod~. Gate 15 is what makes
 that a rule rather than a courtesy, and =latticewm --extension-surface= prints
 the override under the option it switches off.
 
+*And the cell override pays too, which only became visible later.* ~gaps~ on a
+cell does not merely take ~*gaps*~ away, it reads ~*cell-gap*~ in its place — a
+knob of the extension's own, at the same tier, for the same person. That was
+true from the day the method was written and appeared in no document, because
+the surface named the options an override *removed* and never the ones it
+*added*. It does now: the generic's own entry reads =answered from: *cell-gap*,
+*gaps*=, so a reader of a lattice image meets the extension's knob at the
+generic it answers rather than having to know the extension has one. See gate
+17 in [[file:PLAN.org::#gates-added][PLAN §gates-added]].
+
 Plus twelve methods on the *container protocol* — ~container-addresses~,
 ~child-at~, ~(setf child-at)~, ~insert-child~, ~remove-child~,
 ~container-count~, ~default-address~, ~simplify-node~,

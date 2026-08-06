@@ -1,16 +1,17 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are sixteen.  Nine of the ten that were added were added because they
-;;;; had already found something; gate 15 is the tenth, it passed the day it
-;;;; was written, and it says so where it stands rather than here.
+;;;; are seventeen.  Nine of the eleven that were added were added because
+;;;; they had already found something; gates 15 and 17 are the other two,
+;;;; both passed the day they were written, and each says so where it stands
+;;;; rather than here.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other fifteen run here, against the loaded image.
+;;;; The other sixteen run here, against the loaded image.
 ;;;;
-;;;; Eleven of them ask the program a question.  Gate 12 asks the *documents*
-;;;; one, which is the half of this project the other eleven cannot see; gate
+;;;; Twelve of them ask the program a question.  Gate 12 asks the *documents*
+;;;; one, which is the half of this project the other twelve cannot see; gate
 ;;;; 13 asks the *source*, because the one thing a keyword property key cannot
 ;;;; be asked about is what the compiled image thinks of it; gate 14 asks
 ;;;; the *test suites*, because the one thing neither the image nor the source
@@ -21,6 +22,11 @@
 ;;;; asks all four at once -- the image for what a published name denotes, and
 ;;;; the source, the suites and the documents for whether anything at all wants
 ;;;; it -- because a name nobody reaches is not visible from any one of them.
+;;;;
+;;;; Gate 17 is the smallest question in the file and the one with the widest
+;;;; blast radius if it is ever wrong: when an option and a generic share a
+;;;; name, are they one relationship or two things that happen to be spelled
+;;;; alike?  Nothing had ever asked, and a reader has no way to.
 
 (require :asdf)
 (require :sb-introspect)
@@ -2042,6 +2048,95 @@ c:axis-of are how a name is written when it is genuinely being used."
               (sort (mapcar (lambda (row) (symbol-name (car row))) dead) #'string<)))
       (unless (or missing dead)
         (format t "  every published name is defined and reachable~%")))))
+
+;;; --------------------------------------------------------------- gate 17
+
+(banner 17 "an option named after a generic is that generic's shipped answer")
+;; THE ONE THING ABOUT AN OPTION THAT WAS STILL ONLY TRUE BY COINCIDENCE.
+;;
+;; Five options are named after a policy generic: *GAPS* and GAPS,
+;; *BORDER-WIDTH* and BORDER-WIDTH, *KEYS-HINT* and KEYS-HINT,
+;; *MOVE-INTO-OCCUPIED* and MOVE-INTO-OCCUPIED, *NEW-CHILD-SIDE* and
+;; NEW-CHILD-SIDE.  lamdan/ read that as two mechanisms answering one question
+;; -- "resolved by which one you found first" -- and asked for the options to
+;; be deleted, on the ground that the generic was always the real extension
+;; point.  Half of that is right and it is the half that is not the remedy.
+;;
+;; THE PROJECT HAS SINCE RULED THE OTHER WAY, and the rule is better than the
+;; deletion.  An option is not a competing answer; it is what a generic's
+;; shipped method returns.  policy/hooks.lisp states it, OPTION-READERS makes
+;; the first half a fact about the image, OPTION-SHADOWS makes the second half
+;; one, and gate 15 requires a policy that overrides a method wholesale to ship
+;; an option of its own so the decision stays tier-0 for somebody who will
+;; never write a DEFMETHOD.  Under that rule these five pairs are not a hedge,
+;; they are the rule's worked examples, and deleting them would take four P1
+;; design forks -- DESIGN's "where a fork is situational rather than
+;; principled, ship both" -- away from exactly the user the rule protects.
+;;
+;; WHAT WAS ACTUALLY UNCHECKED IS THE SHARED NAME.  *GAPS* is read by
+;; GAPS (LAYOUT-POLICY T) today, so the two names mean one thing, and nothing
+;; anywhere required that.  Move the read into a helper, answer the option from
+;; a different generic, or rename the method's job out from under it, and the
+;; program would hold a generic and an identically-named option with no
+;; relationship at all -- and every gate would pass, because gate 11 only asks
+;; that *something* reads the option and gate 15 only asks about methods that
+;; override a reader.  A user reads GAPS, sets *GAPS*, and is wrong for a
+;; reason no instrument can see.
+;;
+;; THAT IS THIS PROJECT'S OWN RECURRING BUG, TWICE OVER.  *SMART-GAPS* was a
+;; documented value wired to nothing and *NEW-WORKSPACE* was a reader that
+;; never ran; both were invisible until the relationship between two
+;; independently maintained artifacts was asked about rather than assumed.  A
+;; shared name is that same kind of assumption, written in the one place a
+;; reader is most likely to trust it.
+;;
+;; SO ASK THE IMAGE.  OPTIONS-BY-GENERIC is OPTION-READERS read backwards: for
+;; every policy generic, the options its *methods* read.  An option whose name
+;; matches a generic has to appear under that generic.  No file can be moved to
+;; satisfy it and no docstring can argue with it.
+;;
+;; IT PASSES THE DAY IT IS WRITTEN, like gate 15 and unlike the other nine, and
+;; it is worth saying plainly rather than dressing up: what it defends is not a
+;; bug that was found but the meaning of a name, which is the thing this
+;; project has watched rot in every other medium it keeps.  It is also why the
+;; generated surface now prints `answered from' under each generic -- the check
+;; and the document are the same fact, and a reader should not have to run the
+;; build to learn it.
+;;
+;; IT RUNS AFTER GATE 6, for gate 11's reason: the lattice and the four worked
+;; examples are loaded by then, so a method one of them contributes counts.
+(let* ((rows (call "latticewm/policy:all-options"))
+       (generics (call "latticewm/policy:policy-generics"))
+       (by-generic (call "latticewm/policy:options-by-generic"))
+       (names (mapcar #'symbol-name generics))
+       (pairs 0)
+       (orphans '()))
+  (dolist (row rows)
+    (let* ((variable (second row))
+           (bare (string-trim "*" (symbol-name variable)))
+           (generic (find bare generics :key #'symbol-name :test #'string=)))
+      (when (member bare names :test #'string=)
+        (if (member variable (gethash generic by-generic))
+            (incf pairs)
+            (push (list variable generic) orphans)))))
+  (format t "  options named after a generic~46t~d~%" (+ pairs (length orphans)))
+  (format t "  and read by a method on it~46t~d~%" pairs)
+  (if orphans
+      (fail 17 "~d option~:p named after a policy generic that no method on ~
+                that generic reads:~{~%    ~(~a~) / ~(~a~)~}~%~
+                ~4tThe shared name is a claim: that the option is what this~%~
+                ~4tgeneric's shipped method returns, so a user can set the~%~
+                ~4tvalue or write the method and knows which wins.  Nothing~%~
+                ~4telse in the program says so.  If the relationship is real,~%~
+                ~4tread the option from a method on the generic.  If it is~%~
+                ~4tnot, rename one of them -- two unrelated things under one~%~
+                ~4tname is the *SMART-GAPS* failure with a docstring agreeing."
+            (length orphans)
+            (loop for (variable generic) in (sort (copy-list orphans) #'string<
+                                                  :key (lambda (o)
+                                                         (symbol-name (first o))))
+                  collect variable collect generic))
+      (format t "  every shared name is one relationship~%")))
 
 ;;; ---------------------------------------------------------------- verdict
 

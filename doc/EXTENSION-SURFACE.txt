@@ -19,6 +19,21 @@ signals NO-NEXT-METHOD.
 The `methods' list under each generic includes yours, which is how you check
 that your configuration file was actually loaded.
 
+`answered from' NAMES THE OPTIONS THE SHIPPED METHOD READS, and it is there to
+save you writing a method you did not need.  When a generic has that line, the
+decision is already tier-0: set the variable in your config file and the
+shipped answer changes, with no DEFMETHOD anywhere.  Write the method when you
+want a *different decision* -- one that depends on the container, the window or
+the time of day -- and be aware that your method then stops reading the option,
+because it is the method that was reading it.  Both halves of that sentence are
+printed: the option's own entry below lists what reads it and what overrides
+it, and this line is the same fact from the other end.
+
+Where a generic and an option share a name -- GAPS and *GAPS* -- they are that
+one relationship and not two competing ones, and gate 17 fails the build if
+they ever stop being: an option named after a generic has to be read by a
+method on it.
+
 This is one of two surfaces.  The other is the *container* protocol -- what a
 new container kind answers rather than what a new policy answers -- and it is
 printed by `latticewm --container-surface'.
@@ -42,6 +57,7 @@ it per command, and specializing this covers a whole naming scheme at once.
 NIL means the parameter cannot be read from a human, which is what stops M-x
 offering to prompt for a tree path.
 
+  answered from: *argument-naming-convention*
   methods:
     (input-policy t t)                  ; input.lisp
 
@@ -85,6 +101,7 @@ rather than as a place — DESIGN D18 lists that as an accepted cost with the
 cursor being unmissable as the mitigation.  Do not make the focused colour
 subtle.
 
+  answered from: *cursor-border-color*, *empty-pane-color*, *focused-border-color*, *unfocused-border-color*
   methods:
     (appearance-policy t t)             ; layout.lisp
 
@@ -96,6 +113,7 @@ Border thickness in pixels for NODE, drawn by the compositor.
 
 FOCUSEDP takes the same three values BORDER-COLOR's does.
 
+  answered from: *border-width*
   methods:
     (appearance-policy t t)             ; layout.lisp
 
@@ -135,6 +153,7 @@ incrementally and never removed, which is the same rule REGISTER-BINDINGS uses
 for the keymap and for the same reason: a river_xkb_binding_v1 the compositor
 has already been told about is cheaper to leave disabled than to churn.
 
+  answered from: *readline-chords*
   methods:
     (input-policy)                      ; input.lisp
 
@@ -181,6 +200,7 @@ form cannot express `not repeatable under these circumstances', which is the
 interesting case.  A command that is repeatable when it acted and not when it
 declined is one method here and is inexpressible in a denylist.
 
+  answered from: *not-repeatable*
   methods:
     (input-policy t t)                  ; commands.lisp
 
@@ -302,6 +322,7 @@ The rectangle a newly floated WINDOW should occupy on OUTPUT.
 The default honours the window's own preferred size when it has one, centred,
 and otherwise takes a fraction of the output.
 
+  answered from: *float-fraction*
   methods:
     (lifecycle-policy window output)    ; defaults-lifecycle.lisp
 
@@ -320,6 +341,7 @@ shipped answer names the workspace, the place, what is in it, and the counts.
 The lattice's answer would sensibly include the viewport; a policy with no
 workspaces should not mention them.
 
+  answered from: *empty-pane-keys*
   methods:
     (appearance-policy t)               ; appearance.lisp
 
@@ -388,6 +410,7 @@ Returning something else is a one-method change, and MRU-after-close is one of
 the shipped worked examples precisely because it is the most commonly wanted
 one.
 
+  answered from: *focus-after-close*
   methods:
     (motion-policy t t t)               ; defaults-motion.lisp
 
@@ -454,6 +477,7 @@ A role is a keyword rather than a subclass so that an extension can invent
 one -- a widget the core has never heard of asks FONT-FOR with its own
 keyword and inherits the default answer for free.
 
+  answered from: *ui-font*
   methods:
     (appearance-policy t)               ; appearance.lisp
 
@@ -465,6 +489,7 @@ Pixels of empty space to leave between CONTAINER's adjacent children.
 Specialize on the container to vary it: zero inside a stack, larger between
 lattice cells than between splits within a cell.
 
+  answered from: *gaps*
   methods:
     (layout-policy stack)               ; layout.lisp
     (layout-policy t)                   ; layout.lisp
@@ -582,6 +607,7 @@ input.  Under a single-default policy, typing `ls` at an empty pane opens a
 terminal showing `s`.  Under the table the keypress was a choice rather than
 content, and nothing is lost.
 
+  answered from: *empty-pane-keys*
   methods:
     (input-policy t t)                  ; lifecycle.lisp
 
@@ -604,6 +630,7 @@ express, and precisely the case that matters to the person who has one:
           (values "de" "nodeadkeys" nil nil nil)
           (call-next-method)))
 
+  answered from: *xkb-layout*, *xkb-model*, *xkb-options*, *xkb-rules*, *xkb-variant*
   methods:
     (input-policy t)                    ; devices.lisp
 
@@ -617,6 +644,7 @@ Shown in the status line until the keymap has been opened once.  Derived from
 the smallest set somebody cannot work the machine without -- open something,
 split it, move between the pieces, close one, and find everything else.
 
+  answered from: *keys-hint*, *modifier*
   methods:
     (appearance-policy t)               ; appearance.lisp
 
@@ -703,6 +731,7 @@ place with nothing in it, where typing a key spawns something.  *NEW-WORKSPACE*
 changes that without a method.  The lattice answers with a fresh plane, and
 that single method is the whole of the Z axis.
 
+  answered from: *new-workspace*
   methods:
     (structure-policy t t)              ; structure.lisp
 
@@ -730,6 +759,7 @@ question notes that if move-onto-occupied swapped, the separate swap verb
 would be half redundant, and splitting is the only choice that never destroys
 structure.  Both other verbs remain separately bound.
 
+  answered from: *move-into-occupied*
   methods:
     (structure-policy t t t)            ; structure.lisp
 
@@ -741,6 +771,7 @@ new-child-side (latticewm/policy:policy latticewm/policy::node
 
 DIRECTION is the direction the user asked for, or NIL for a plain spawn.
 
+  answered from: *new-child-side*
   methods:
     (structure-policy t t)              ; structure.lisp
 
@@ -822,6 +853,7 @@ Returns the path it was placed at, or NIL if the policy declined to tile it
 (having floated it, or parked it).  This is the top of the placement path;
 SPAWN-TARGET is the part you usually want to specialize instead.
 
+  answered from: *focus-new-windows*
   methods:
     (lifecycle-policy t window)         ; lifecycle.lisp
 
@@ -833,6 +865,7 @@ The rectangle the layout tree may use on OUTPUT.
 Subtract space here for a status bar or a reserved strip; everything
 downstream honours it without knowing why.
 
+  answered from: *outer-gaps*
   methods:
     (layout-policy output)              ; layout.lisp
 
@@ -885,6 +918,7 @@ pointer leaves the screen and comes back.
 Specialize this for snapping, for edge resistance, for a grid, or to make a
 resize keep its aspect ratio.
 
+  answered from: *pointer-resize-minimum*
   methods:
     (input-policy t t t t t t)          ; defaults-motion.lisp
 
@@ -1011,6 +1045,7 @@ pointless, whereas a one-workspace workspace list is a thing you are about to
 add to.  Answering NIL for splits gives i3's behaviour, where containers
 persist and can be filled again.
 
+  answered from: *collapse-degenerate-splits*
   methods:
     (structure-policy t)                ; structure.lisp
     (structure-policy stack)            ; structure.lisp
@@ -1026,6 +1061,7 @@ river_window_v1.parent and the spec says it 'might be a dialog, file picker,
 or similar' — and everything else tiles.  Adding app-id rules is the canonical
 first extension anybody writes, which is why it is a shipped worked example.
 
+  answered from: *float-dialogs*, *float-fixed-size-limit*
   methods:
     (lifecycle-policy window)           ; defaults-lifecycle.lisp
 
@@ -1047,6 +1083,7 @@ the default; this generic plus the *SPAWN-MODE* option is that ruling.  The
 shipped default is 'split the focused pane', which is Emacs's and hyprland's
 behaviour and the one nobody has to be taught.
 
+  answered from: *spawn-mode*
   methods:
     (structure-policy t t)              ; structure.lisp
 
@@ -1060,6 +1097,7 @@ The shipped rule is dynamic: cut along whichever axis is longer, so panes tend
 towards square instead of towards slivers.  A fixed :HORIZONTAL is one method
 away and is what people who want dwindle-style predictability ask for.
 
+  answered from: *split-axis*
   methods:
     (structure-policy t t)              ; structure.lisp
 
@@ -1138,6 +1176,7 @@ Both halves are derived rather than written down -- the key names from
 *MODIFIER*, the descriptions from each command's own docstring -- so a
 rebinding moves the welcome screen with it.
 
+  answered from: *modifier*
   methods:
     (appearance-policy)                 ; appearance.lisp
 
@@ -1178,6 +1217,7 @@ Consulted once when the window appears.  Recognised keys: :FLOAT, :WORKSPACE,
 hatch for people who do not want to write methods; the method is still there
 underneath for people who do.
 
+  answered from: *window-rules*
   methods:
     (lifecycle-policy window)           ; lifecycle.lisp
 
@@ -1455,7 +1495,7 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
-  read by: hint-lines, key-unbound (input-policy t t), echo-content (appearance-policy t)
+  read by: hint-lines, echo-content (appearance-policy t), key-unbound (input-policy t t)
   DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up

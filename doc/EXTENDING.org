@@ -155,13 +155,59 @@ unless the method calls ~call-next-method~. ~overridden for~ is the same thing
 narrowed to the argument classes it names, so ~*gaps*~ still reaches every
 container that is not a stack or a lattice cell.
 
-An option that nothing reads is a failing build, and so is an ~overridden by~
-that neither composes nor reads an option of its own — you may replace a
-shipped answer wholesale, but not leave the person who was setting the option
-with nothing to set. The lattice does replace ~make-workspace~ wholesale, and
-pays for it with ~*new-workspace-cells*~. See gates 11 and 15 in
+*And the same fact from the other end.* Everything above is printed under the
+*option*, which only helps if you arrived at the question holding one. Most
+people arrive holding a generic: you read the generics section, it says /to
+change one, write a method/, and you write a method. So each generic whose
+shipped method reads an option now says so, directly beneath its docstring:
+
+#+begin_example
+gaps (latticewm/policy:policy latticewm/policy::container)
+----------------------------------------------------------------------------
+Pixels of empty space to leave between CONTAINER's adjacent children.
+
+Specialize on the container to vary it: zero inside a stack, larger between
+lattice cells than between splits within a cell.
+
+  answered from: *gaps*
+  methods:
+    (layout-policy stack)               ; layout.lisp
+    (layout-policy t)                   ; layout.lisp
+#+end_example
+
+Read that as /you may not need a method at all/. Twenty-five of the sixty-five
+generics carry the line, and for those the decision is already tier-0: set the
+variable in your config file and the shipped answer changes. Write the method
+when you want a decision that a single value cannot express — one that depends
+on the container, the window, or what else is on screen — and know that your
+method is then the reason the option stops being read, because it is the method
+that was reading it.
+
+The line describes the image you are running, so an extension's own option
+appears on it. Load the lattice and ~gaps~ reads =answered from: *cell-gap*,
+*gaps*= — the extension's knob, named where the generic it answers is. Each
+name is spelled the way you would have to type it in a configuration file,
+which is asked of the reader's package rather than assumed: ~*cell-gap*~ needs
+no prefix because the lattice makes its names visible in =latticewm/user= when
+it loads, and an extension that does not would appear here qualified. The copy
+under =doc/EXTENSION-SURFACE.txt= is generated from the core alone and shows
+only ~*gaps*~, for the same reason its override lines show only the core's.
+
+An option that nothing reads is a failing build; so is an ~overridden by~ that
+neither composes nor reads an option of its own — you may replace a shipped
+answer wholesale, but not leave the person who was setting the option with
+nothing to set; and so is an option named after a generic that no method on that
+generic reads. The last one is why the shared name can be trusted rather than
+merely observed: ~*gaps*~ and ~gaps~ are one relationship because gate 17 fails
+the build on the day they stop being, and not because this page says so. The
+lattice does replace ~make-workspace~ wholesale, and pays for it with
+~*new-workspace-cells*~. See gates 11, 15 and 17 in
 [[file:../PLAN.org::#gates-added][PLAN.org §gates-added]] for the option that
-shipped wired to nothing and the one that shipped switched off.
+shipped wired to nothing, the one that shipped switched off, and the five whose
+names were a claim nothing checked.
+
+#+CLAIM: (member '*gaps* (gethash 'gaps (options-by-generic)))
+#+CLAIM: (string= "*gaps*" (option-print-name '*gaps*))
 
 * Tier 1 — methods
 

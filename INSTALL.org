@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, sixteen gates, 1600+ checks
+make                  # build, seventeen gates, 1600+ checks
 make image            # dump ./latticewm, one executable
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
@@ -84,7 +84,7 @@ zig build -Doptimize=ReleaseSafe --prefix ~/.local install
 =bootstrap.sh= warns if it finds a river that is not the vendored release —
 reading the release out of =src/protocol/PINNED=, so the warning cannot drift
 from what the program will accept — and does not stop: everything except
-actually running the window manager — the build, all sixteen gates, all the tests
+actually running the window manager — the build, all seventeen gates, all the tests
 — works with no compositor on the machine at all.
 
 If you use nix, you do not have to think about any of this: =shell.nix= reads
@@ -252,7 +252,7 @@ file-chooser, no hardware acceleration.
 * Checking that it worked
 
 #+begin_src sh
-make            # the sixteen gates, then the unit suite
+make            # the seventeen gates, then the unit suite
 ./latticewm --version
 ./latticewm --list-commands | head
 river -c "$PWD/latticewm --log-level debug"

@@ -251,3 +251,79 @@ sorted by name."
                        out)))
              *options*)
     (sort out #'string< :key (lambda (row) (symbol-name (first row))))))
+
+;;; ------------------------------------------ and the same fact, read backwards
+;;;
+;;; THE RELATIONSHIP WAS DATA IN ONE DIRECTION ONLY.  OPTION-READERS says which
+;;; methods look at an option and OPTION-SHADOWS says which methods take that
+;;; answer away, and the generated surface prints both under every option.  So
+;;; a reader who arrives at the question from the option list is told the whole
+;;; rule.  Nothing told the reader who arrives from the other end, and the
+;;; other end is the *front* of the same document: the generics section is what
+;;; gate 2 guards, what every docstring in this package points at, and what
+;;; `write a method' means.  Twenty-five of the sixty-five generics have a
+;;; shipped answer that is a value a user can set without writing one, and the
+;;; surface said so under none of them.
+;;;
+;;; FIVE OF THEM SHARE THE OPTION'S NAME, which is where it stops being a
+;;; missing cross-reference and starts being the thing lamdan/ complained
+;;; about: *GAPS* and GAPS, *BORDER-WIDTH* and BORDER-WIDTH, *KEYS-HINT* and
+;;; KEYS-HINT, *MOVE-INTO-OCCUPIED* and MOVE-INTO-OCCUPIED, *NEW-CHILD-SIDE*
+;;; and NEW-CHILD-SIDE.  Its reading was that two mechanisms answer one
+;;; question and you get whichever you found first, and its remedy was to
+;;; delete the options.  The remedy is wrong now and the observation is not.
+;;; This project has since ruled the other way -- an option is not a second
+;;; answer, it is what a generic's shipped method returns, and gate 15 requires
+;;; a policy that overrides the method wholesale to offer an option of its own
+;;; -- so those five pairs are the rule's own worked examples rather than a
+;;; hedge against it.  What was true is that a reader could not see that from
+;;; the generic, and a shared name is a claim about the program that nothing
+;;; checked.  Gate 17 checks it; this is what it asks.
+
+(defun options-by-generic ()
+  "Every policy generic whose methods read options, mapped to which.
+
+GENERIC -> a sorted list of variables.  Methods only, deliberately: the rule
+this answers is about a *shipped method's* answer, and an option read by an
+ordinary function is not a generic's default -- nothing can override it and
+there is no `write a method instead' to point the reader at.
+
+Built in one pass because OPTION-READERS costs a cross-reference walk per
+option, and asking it once per generic instead would be sixty-five times over
+the same ground for the same table."
+  (let ((table (make-hash-table :test #'eq)))
+    (dolist (row (all-options))
+      (dolist (reader (option-readers (first row)))
+        (when (option-reader-method reader)
+          (pushnew (second row) (gethash (second reader) table)))))
+    ;; SETF GETHASH on a key already present is defined during MAPHASH; adding
+    ;; or removing one is not, and this does neither.
+    (maphash (lambda (generic options)
+               (setf (gethash generic table)
+                     (sort options #'string< :key #'symbol-name)))
+             table)
+    table))
+
+(defun option-print-name (variable)
+  "VARIABLE spelled the way a configuration file would have to spell it.
+
+NOT PRINC, WHICH IS WHAT THE OPTION LIST USES AND GETS AWAY WITH.  Every option
+in this package is inherited by LATTICEWM/USER, so PRINC's unqualified name is
+right for all of them by luck rather than by construction.  An *extension's*
+option is not this package's: load the lattice and GAPS is answered from
+LATTICE:*CELL-GAP* as well as *GAPS*, and this is a document whose whole claim
+is that it describes the image you are running, so it has to survive one with
+an extension in it.
+
+SO ASK THE QUESTION AS THE READER HAS IT, which is not `where does this symbol
+live' but `what would I have to type'.  Binding *PACKAGE* to LATTICEWM/USER and
+printing readably answers exactly that: a prefix appears when one is needed and
+does not when it is not, and which case an extension falls into is the
+extension's own decision rather than a guess made here.  The lattice
+USE-PACKAGEs itself into LATTICEWM/USER on load so that (zoom-out) works at a
+REPL, so *CELL-GAP* prints bare and is correct bare; an extension that does not
+install its vocabulary prints qualified and is correct qualified.  The test is
+the round trip, not the spelling -- see
+THE-RELATIONSHIP-READS-THE-SAME-WAY-ROUND-FROM-THE-GENERIC."
+  (let ((*package* (or (find-package '#:latticewm/user) *package*)))
+    (string-downcase (prin1-to-string variable))))

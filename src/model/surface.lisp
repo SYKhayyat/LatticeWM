@@ -67,7 +67,16 @@ have quietly dropped the half of CHILD-AT that a new kind must implement."
                            (closer-mop:generic-function-methods gf)))))
 
 (defun print-generic-descriptions (entries &optional (stream *standard-output*))
-  "Print the generics of ENTRIES, one block each.  Both surfaces use this."
+  "Print the generics of ENTRIES, one block each.  Both surfaces use this.
+
+:OPTIONS IS OPTIONAL AND ONLY ONE SURFACE SUPPLIES IT.  A policy generic may
+have a shipped answer that is a tier-0 value, and until it was printed here the
+option knew about the generic and the generic did not know about the option --
+so the reader who arrived at the generics section, which is the section every
+docstring in the policy package points at, could not see that the decision was
+already settable without writing anything.  A container generic has no such
+thing and its entries carry no :OPTIONS, which is a missing key rather than a
+second printer: two printers for one format are two chances to disagree."
   (dolist (entry entries)
     (format stream "~&~76,,,'-<~>~%~(~a~) ~(~s~)~%~76,,,'-<~>~%"
             (getf entry :name) (getf entry :lambda-list))
@@ -75,7 +84,16 @@ have quietly dropped the half of CHILD-AT that a new kind must implement."
       (if documentation
           (format stream "~a~%" documentation)
           (format stream "UNDOCUMENTED <-- flag me~%")))
-    (format stream "~%  methods:~%")
+    (format stream "~%")
+    (let ((options (getf entry :options)))
+      (when options
+        ;; Already strings, already spelled the way a config file would have to
+        ;; spell them -- see OPTION-PRINT-NAME.  This printer must not downcase
+        ;; or PRINC a symbol of its own, because whether a package prefix is
+        ;; needed is a question about the reader's package and not about this
+        ;; format.
+        (format stream "  answered from: ~{~a~^, ~}~%" options)))
+    (format stream "  methods:~%")
     (dolist (method (getf entry :methods))
       (destructuring-bind (specializers qualifiers source) method
         (format stream "    (~{~a~^ ~})~@[ ~{~a~^ ~}~]~@[~40t; ~a~]~%"
