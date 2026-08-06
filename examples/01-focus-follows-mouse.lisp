@@ -6,10 +6,10 @@
 ;;;;
 ;;;;     (load "/path/to/examples/01-focus-follows-mouse.lisp")
 ;;;;
-;;;; or paste it into a REPL connected to the running window manager, where it
-;;;; takes effect immediately:
+;;;; or tell the running window manager to load it, where it takes effect
+;;;; immediately — no restart, no relogin:
 ;;;;
-;;;;     wmeval "$(cat examples/01-focus-follows-mouse.lisp)"
+;;;;     latticewm --eval '(load "examples/01-focus-follows-mouse.lisp")'
 ;;;;
 ;;;; WHAT TO NOTICE, if you are learning the shape:
 ;;;;

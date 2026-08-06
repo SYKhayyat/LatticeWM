@@ -156,6 +156,17 @@ Installed extensions, examples and documentation.  This directory is on ASDF's
 registry at startup, so
 .B (load\-extension "name")
 in a configuration file finds anything installed here.
+.TP
+.I PREFIX/share/latticewm/doc/
+The generated references, the extension guide, and the licences \(em ours and
+the SIL Open Font License the bundled Terminus font is under.
+.TP
+.I PREFIX/share/latticewm/protocol/
+The river protocol descriptions this binary was built against, and
+.IR PINNED ,
+which records the river release they came from.  LatticeWM refuses to start
+against a river whose river_window_manager_v1 is a different version, and this
+is how that refusal is diagnosed on a machine with no source tree.
 .SH ENVIRONMENT
 .TP
 .B XDG_CONFIG_HOME

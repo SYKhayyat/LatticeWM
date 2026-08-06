@@ -396,8 +396,37 @@ existed were individually reasonable and all pointed somewhere else.
 8. *Every event we handle exists on the interface we handle it for.* The output ~:name~
    event we listened for is not on the interface we bind, so outputs had no names, on
    every machine, in silence.
-9. *The image, the installer and the sample config agree.* Three independently
+9. *The image, the one installer and the sample config agree.* Three independently
    maintained lists of where an extension lives, and they disagreed.
+
+   And then the gate read one installer and there were *two*. ~flake.nix~ kept its own
+   ~installPhase~ with a second hand-maintained list of what ships, and that list did not
+   include ~lattice.asd~ — so the bug this gate is named after was live on the nix path
+   for the whole life of the gate, on the path that reaches somebody who never ran
+   ~make~, which is exactly the machine "does not have the source" describes. The two
+   lists differed in six places: no lattice sources, no man pages, no launcher and a
+   flattened ~doc/~ on one side; no pinned protocol on the other; and a ~tools/wmeval~
+   that existed only on the nix side and spoke to a SWANK port that is off by default.
+
+   *A gate that names an artifact can be satisfied by adding a row*, which is the mistake
+   [[#gates][gate 5]]'s comment records making. So the check is not "does ~flake.nix~ also
+   install ~lattice.asd~" — it is *there is one installer*: ~flake.nix~ runs ~install.sh~
+   and installs nothing by hand. Under that, a new artifact is added in one place or in
+   none, and whether the two paths agree stops being a question anybody has to ask.
+
+   It also checks the two licences, because the font's is a *condition* rather than a
+   document: ~src/runtime/font.lisp~ is a generated table of Terminus glyphs and says in
+   its own header that the OFL text must travel with any copy of it. The binary contains
+   the table. Neither path shipped it on purpose — nix caught it through a ~doc/*.txt~
+   glob — and neither shipped ours at all, because ~LICENSE~ has no extension and both
+   paths matched on one.
+
+   *And it is still text, so something else runs it.* The gates cannot install: there is
+   no image yet when they run. ~tools/install-check.sh~ installs to a scratch prefix,
+   asserts every artifact, and then asserts that ~--uninstall~ gives all of it back —
+   which found that the removal list had never included ~latticewm-config.5~. ~make
+   install-check~ runs it, CI runs it after the image, and ~nix build~ now runs the
+   installer itself in a sandbox on every build.
 10. *No container kind is named by class outside its own definition.* ~copy-node~ was a
     ~typecase~ over the concrete container classes, so the lattice's grid matched no
     clause and copied with no children — and ~serialize-node~ had the identical shape
@@ -579,6 +608,16 @@ Quicklisp, the pinned river), and a NixOS module. It consumes the same ~Makefile
 
 *Nothing in ~src/~ may know that nix exists.* If the flake is deleted the project still
 builds. That is the test.
+
+*And there is one installer.* "It consumes the same Makefile" was true of the build and
+false of the install: ~flake.nix~ had its own ~installPhase~ listing what ships, beside
+~install.sh~'s list, and the two drifted apart without anything able to
+see it — including the lattice sources, which is [[#gates][gate 9]]'s own artifact. The
+phase runs ~install.sh --prefix $out~ now. The two flags that exist for it, ~--no-config~
+and ~--river~, are the whole of what a build sandbox needs said differently: no home
+directory to write a starter config into, and a compositor named by store path rather
+than by whatever ~river~ resolves to at login — which is the pinning this file argues for
+two sections down, applied to the launcher that actually starts the session.
 
 ** Protocol pinning, in both worlds
 :PROPERTIES:

@@ -627,7 +627,7 @@ nothing.  Together they say breadth *and* depth.")
 
 ;;; ---------------------------------------------------------------- gate 9
 
-(banner 9 "the image, the installer and the sample config agree")
+(banner 9 "the image, the one installer and the sample config agree")
 ;; THE SHIPPED CONFIGURATION USED TO LOAD ONLY ON THE AUTHOR'S MACHINE.
 ;;
 ;; SAMPLE-CONFIG offered to load the lattice; the lattice is an ASDF system;
@@ -641,40 +641,130 @@ nothing.  Together they say breadth *and* depth.")
 ;; the build tree, which is still there.  That is the whole shape of the bug:
 ;; it is invisible to everything except a machine that does not have the source.
 ;;
-;; So this gate reads the three files and checks they say the same thing.  It
-;; is text matching, which is crude, and it is the only check that can be made
-;; without actually installing to a clean prefix — which the next gate does.
+;; AND THEN THIS GATE READ ONE INSTALLER AND THERE WERE TWO.  flake.nix had an
+;; `installPhase' with its own hand-maintained list of what ships, and that list
+;; did not include lattice.asd — so the bug above, the one this gate is named
+;; after, was live on the nix path for the whole life of the gate.  It was live
+;; on the *worse* path: a store path is what reaches somebody who never ran
+;; `make', which is exactly the machine "does not have the source" describes.
+;; The two lists disagreed about the lattice sources, the man pages, the
+;; launcher, where doc/ lands, the protocol XML, which .org files count as
+;; documentation, both licences, and a SWANK client that existed only on the nix
+;; side and could not work there.  flake.nix enumerates them; this is the only
+;; other place that says so, and it says so without a count, because a number
+;; repeated in two files is the FINDINGS §census failure one level up.
+;;
+;; A gate that names an artifact is a gate that can be satisfied by adding a
+;; row, which is the mistake gate 5's comment records making.  So the check here
+;; is not "does flake.nix also install lattice.asd" — it is *THERE IS ONE
+;; INSTALLER*: flake.nix runs install.sh and installs nothing by hand.  Under
+;; that, a new artifact is added in one place or it is added nowhere, and the
+;; question of whether the two paths agree stops being a question.
+;;
+;; It is still text matching, which is crude, and it is still the only check
+;; that can be made without actually installing to a clean prefix.  Nothing
+;; installs to a clean prefix here — the image does not exist yet when the gates
+;; run.  tools/install-check.sh is where that happens; `make install-check'
+;; runs it, CI runs it after the image, and `nix build' now runs the installer
+;; itself, in a sandbox, on every build.
 (flet ((contains (path text)
          (and (probe-file path)
               (with-open-file (in path)
                 (loop for line = (read-line in nil) while line
-                      thereis (search text line))))))
-  (let ((problems '()))
+                      thereis (search text line)))))
+       (install-phase ()
+         ;; flake.nix's installPhase, as lines.  Nix has no reader here and does
+         ;; not need one: the phase is a '' … '' block introduced by a line
+         ;; naming it, which is enough to say what is inside it.
+         (when (probe-file "flake.nix")
+           (with-open-file (in "flake.nix")
+             (loop with inside = nil
+                   for line = (read-line in nil) while line
+                   when (and inside (search "'';" line)) do (loop-finish)
+                     when inside collect line into body
+                   when (search "installPhase = ''" line) do (setf inside t)
+                   finally (return body))))))
+  (let ((problems '())
+        (phase (install-phase)))
     (unless (contains "tools/image.lisp" "(asdf:load-system \"lattice\")")
       (push "tools/image.lisp does not build the lattice into the image" problems))
     (unless (contains "install.sh" "lattice.asd")
       (push "install.sh does not install lattice.asd" problems))
     (unless (contains "install.sh" "EXTENDING.org")
       (push "install.sh does not install the extension guide" problems))
-    ;; The last two are asked of the *live image* rather than of the text,
+    ;; THE FONT'S LICENCE IS NOT A DOCUMENT, IT IS A CONDITION.  font.lisp is a
+    ;; generated table of Terminus glyphs and says in its own header that the
+    ;; OFL text must travel with any copy of it.  The binary contains the table,
+    ;; so every install is a copy — and neither install path shipped the licence
+    ;; on purpose: nix caught it through a doc/*.txt glob and install.sh had a
+    ;; hand-written list that did not name it.  Our own LICENSE was shipped by
+    ;; neither, because it has no extension and both paths matched on one.
+    ;; Each message is built with FORMAT NIL rather than written as a string
+    ;; with ~ continuations in it, because these are interpolated into FAIL's
+    ;; report with ~A: a directive inside one of them is text by then, and the
+    ;; message arrives with a literal tilde in the middle of a sentence.
+    (unless (contains "install.sh" "OFL-TERMINUS.txt")
+      (push (format nil "install.sh does not install doc/OFL-TERMINUS.txt; ~
+src/runtime/font.lisp says the OFL text must travel with any copy of the font ~
+table, and the binary is a copy of it")
+            problems))
+    (unless (contains "install.sh" "\"$root/LICENSE\"")
+      (push "install.sh does not install LICENSE" problems))
+    (unless (contains "install.sh" "src/protocol")
+      (push (format nil "install.sh does not install the pinned protocol, so ~
+a version mismatch cannot be diagnosed from an installed copy")
+            problems))
+    ;; And the structural half: one installer, not two.
+    ;;
+    ;; ASKED ONLY WHEN THERE IS A FLAKE.  §packaging's test is that deleting
+    ;; flake.nix leaves a project that still builds, so a gate that fails on its
+    ;; absence would be a gate asserting the dependency the file exists to deny.
+    (cond ((not (probe-file "flake.nix")))
+          ((null phase)
+           (push (format nil "flake.nix has no installPhase; if it has stopped ~
+installing anything, this gate no longer knows what a packaged install contains")
+                 problems))
+          (t
+           (unless (some (lambda (line) (search "install.sh" line)) phase)
+             (push (format nil "flake.nix's installPhase does not run ~
+install.sh, so there are two installers again and only one of them is checked ~
+anywhere")
+                   problems))
+           (let ((handrolled
+                   (remove-if-not
+                    (lambda (line)
+                      (some (lambda (verb) (search verb line))
+                            '("install -D" "install -m" "cp " "cat >" "ln -s")))
+                    phase)))
+             (when handrolled
+               (push (format nil "flake.nix's installPhase installs by hand ~
+as well as running install.sh, which is how the two lists diverged before:~
+~{~%      ~a~}"
+                             (mapcar (lambda (line) (string-trim " " line))
+                                     handrolled))
+                     problems)))))
+    ;; The last three are asked of the *live image* rather than of the text,
     ;; which is both more direct and immune to a docstring that happens to
     ;; mention the thing being checked for.
     (let ((sample (call "latticewm/runtime:sample-config"))
           (directories (mapcar #'namestring
                                (call "latticewm/runtime:data-directories"))))
       (when (search "asdf:load-system" sample)
-        (push "the sample config calls asdf:load-system directly; it should ~
-call LOAD-EXTENSION, which knows where an installed system lives"
+        (push (format nil "the sample config calls asdf:load-system directly; ~
+it should call LOAD-EXTENSION, which knows where an installed system lives")
               problems))
       (unless (search "load-extension" sample)
-        (push "the sample config never mentions LOAD-EXTENSION, so nothing ~
-tells a user how to load one" problems))
+        (push (format nil "the sample config never mentions LOAD-EXTENSION, so ~
+nothing tells a user how to load one")
+              problems))
       (unless (some (lambda (path) (search "share/latticewm/" path)) directories)
-        (push "DATA-DIRECTORIES does not look under share/latticewm/, which is ~
-where install.sh puts it" problems)))
+        (push (format nil "DATA-DIRECTORIES does not look under ~
+share/latticewm/, which is where install.sh puts it")
+              problems)))
     (if problems
         (fail 9 "~{~%    ~a~}" (reverse problems))
-        (format t "  image builds it, install.sh ships it, the runtime finds it~%"))))
+        (format t "  image builds it, one installer ships it, the runtime ~
+finds it~%"))))
 
 ;;; --------------------------------------------------------------- gate 10
 

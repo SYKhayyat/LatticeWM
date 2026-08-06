@@ -9,7 +9,7 @@
 #
 # Two jobs, deliberately, because they answer two different questions.
 #
-#   check  — the whole of `make check': build, thirteen gates, the unit suite, and
+#   check  — the whole of `make check': build, fourteen gates, the unit suite, and
 #            the integration suite against a headless river, with
 #            REQUIRE_INTEGRATION=1 so a missing compositor or terminal is a
 #            failure rather than a paragraph and an exit 0.  Run under
@@ -26,6 +26,12 @@
 #            test", and a test nobody runs is a sentence.  It stops before the
 #            integration suite, because a bare runner has no river; that is the
 #            forgiving mode, and it says `skip' out loud.
+#
+# THE INSTALL IS PART OF `check' NOW, and it is the one thing here that asks
+# what a *user* gets rather than what the source says.  Nothing had ever run
+# either installer end to end unattended: `make check' stops before the image
+# exists, so nothing downstream of it was reachable, and the two install paths
+# had drifted apart with every gate green.
 
 name: check
 
@@ -54,6 +60,12 @@ jobs:
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
           nix-shell --run 'make check'
+      # The image, then the installer against a scratch prefix.  This is the
+      # only step that answers "does a packaged install contain what the
+      # documents promise?", and the answer was no for the whole life of the
+      # gate that is named after asking it.
+      - name: make install-check
+        run: nix-shell --run 'make install-check'
 
   plain:
     name: no nix, from bootstrap.sh

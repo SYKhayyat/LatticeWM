@@ -15,6 +15,7 @@
 #   make run         run nested inside the current Wayland session
 #   make surface     regenerate the generated documents under doc/
 #   make install     ./latticewm, a session entry and a man page into $(PREFIX)
+#   make install-check  install to a scratch prefix, check it, take it out again
 
 LISP        ?= sbcl
 PREFIX      ?= $(HOME)/.local
@@ -57,7 +58,8 @@ RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-i
                  --load tools/prelude.lisp
 
 .PHONY: all deps toolchain build gates test integration check image release bench \
-        run run-bare surface config install uninstall clean distclean help
+        run run-bare surface config install install-check uninstall clean \
+        distclean help
 
 all: build gates test
 
@@ -187,14 +189,24 @@ surface: build
 config: image
 	@./latticewm --write-config
 
-# install.sh does the rest — the session entry, the man page and the starter
-# config — because those are the parts that differ between a system install
-# and a home-directory one, and a shell script can ask.
+# install.sh does the rest — the session entry, the man pages, the licences and
+# the starter config — because those are the parts that differ between a system
+# install and a home-directory one, and a shell script can ask.
+#
+# IT IS ALSO THE ONLY INSTALLER.  flake.nix runs this same script rather than
+# keeping a second list of what ships; gate 9 checks that it still does.
 install: image
 	@./install.sh --prefix "$(PREFIX)"
 
 uninstall:
 	@./install.sh --uninstall --prefix "$(PREFIX)"
+
+# THE CHECK THE GATES CANNOT MAKE.  Gate 9 reads install.sh and flake.nix as
+# text, because the gates run before there is an image to install.  This runs
+# the installer for real, against a scratch prefix, asserts every artifact the
+# documents promise, and then asserts that uninstalling gives all of it back.
+install-check: image
+	@./tools/install-check.sh
 
 clean:
 	@rm -f latticewm

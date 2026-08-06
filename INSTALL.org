@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, thirteen gates, 1516 checks
+make                  # build, fourteen gates, 1600+ checks
 make image            # dump ./latticewm, one executable
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
@@ -84,7 +84,7 @@ zig build -Doptimize=ReleaseSafe --prefix ~/.local install
 =bootstrap.sh= warns if it finds a river that is not the vendored release —
 reading the release out of =src/protocol/PINNED=, so the warning cannot drift
 from what the program will accept — and does not stop: everything except
-actually running the window manager — the build, all thirteen gates, all the tests
+actually running the window manager — the build, all fourteen gates, all the tests
 — works with no compositor on the machine at all.
 
 If you use nix, you do not have to think about any of this: =shell.nix= reads
@@ -154,19 +154,39 @@ unlikely to be packaged anywhere.
 
 * Installing
 
-=install.sh= puts four things in place, and each of them is a step that
+=install.sh= puts six things in place, and each of them is a step that
 somebody's first attempt at running a window manager from source misses:
 
-| =$PREFIX/bin/latticewm=                    | the binary                     |
-| =$PREFIX/bin/latticewm-session=            | river, told to run it          |
-| =$PREFIX/share/wayland-sessions/….desktop= | so the login screen offers it  |
-| =$PREFIX/share/man/man1/latticewm.1=       | =man latticewm=                |
+| =$PREFIX/bin/latticewm=                    | the binary                            |
+| =$PREFIX/bin/latticewm-session=            | river, told to run it                 |
+| =$PREFIX/share/wayland-sessions/….desktop= | so the login screen offers it         |
+| =$PREFIX/share/man/man{1,5}/=              | both man pages                        |
+| =$PREFIX/share/latticewm/=                 | the lattice, examples, docs, protocol |
+| =$PREFIX/share/latticewm/doc/=             | the licences, ours and the font's     |
 
 #+begin_src sh
 ./install.sh                            # ~/.local, no root
 sudo ./install.sh --prefix /usr/local   # system-wide
 ./install.sh --uninstall                # takes it all back out
 #+end_src
+
+Two more flags exist for packagers, and they are the whole of what a build
+sandbox needs said differently: =--no-config= skips writing a starter
+=init.lisp=, and =--river PATH= names the compositor the launcher and the
+session entry run, instead of whatever =river= resolves to at login.
+
+*This is the only installer.* =nix build= runs this same script rather than
+keeping its own list of what ships — there used to be two lists and they had
+drifted apart, including over the lattice sources, which meant the
+shipped configuration failed to load on the one path that reaches a user who
+never ran =make=. Gate 9 checks that =flake.nix= still delegates and installs
+nothing by hand; =make install-check= installs to a scratch prefix, checks
+every file above is there, and then checks that uninstalling gives all of it
+back.
+
+The bitmap font is Terminus, under the SIL Open Font License, and the licence
+text ships with the install because =src/runtime/font.lisp= says it must travel
+with any copy of the glyph table — which the binary contains.
 
 A home-directory install puts the session entry in
 =~/.local/share/wayland-sessions=.  GDM and SDDM read =$XDG_DATA_DIRS= and
@@ -196,7 +216,10 @@ builds, which is the property those two files are held to.
 ** Installing it as a session, with the module
 
 The flake ships a NixOS module, which is the way to get a login-screen entry
-without =install.sh=:
+without running =install.sh= yourself.  The store path it installs is built by
+that same script; what the module adds is a session entry naming the river
+=programs.latticewm.river= is set to, which is a decision only a system
+configuration can make.
 
 #+begin_src nix
 {
@@ -229,7 +252,7 @@ file-chooser, no hardware acceleration.
 * Checking that it worked
 
 #+begin_src sh
-make            # the thirteen gates, then the unit suite
+make            # the fourteen gates, then the unit suite
 ./latticewm --version
 ./latticewm --list-commands | head
 river -c "$PWD/latticewm --log-level debug"

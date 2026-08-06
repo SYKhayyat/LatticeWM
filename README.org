@@ -57,13 +57,14 @@ make run           # river nested in the session you are already in — try it h
 Once you like it:
 
 #+begin_src sh
-./install.sh       # binary, a session entry, a launcher and a man page
+./install.sh       # binary, launcher, session entry, man pages, sources, licences
 #+end_src
 
 =install.sh= adds a =wayland-sessions= desktop entry, so *LatticeWM appears at
 your login screen* like any other desktop. =--prefix /usr/local= installs
 system-wide; =--uninstall= takes it back out. It never overwrites an existing
-=init.lisp=.
+=init.lisp=. It is also the only installer — =nix build= runs this same script,
+so there is one list of what ships rather than two that drift.
 
 In a session you are already running river in: =river -c latticewm=.
 
@@ -429,9 +430,14 @@ can drive it.
 A SWANK server is available too and is *off by default*: it offers arbitrary
 code execution over TCP with no authentication step, which is right for a
 development tool and wrong for something that starts before you have done
-anything. Turn it on with =--swank-port 4005=, and it binds to loopback.
-=tools/wmeval= speaks SWANK's wire protocol directly rather than the socket, so
-it is the one thing here that needs that flag.
+anything. Turn it on with =--swank-port 4005=, and it binds to loopback. It is
+for an editor — SLIME, a live REPL, a debugger on a running desktop. Anything
+that only wants to *send a form* wants the socket above, which needs no flag.
+
+There used to be a =tools/wmeval= here that spoke SWANK's wire protocol, and it
+was the one shipped thing that needed the port open. It is gone: it was
+installed by the nix path and by no other, and what it did is what =--eval=
+does over a socket that is on by default.
 
 #+CLAIM: (null (option-default :swank-port))
 

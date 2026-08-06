@@ -497,6 +497,23 @@ What has *not* been demonstrated, and should not be claimed:
   It is reported here as raw numbers so that a reader can disagree with the
   interpretation.
 
+** And on one of the two install paths, the extension was not in the package
+
+Every number above is about an extension somebody has to be able to *get*.
+=flake.nix= kept its own list of what ships, beside =install.sh='s, and that
+list did not include =lattice.asd= or =lattice/= — so a =nix build= produced a
+window manager whose shipped sample configuration loads an extension that was
+not there, on the one path that reaches a user who never ran =make=. Gate 9
+exists precisely to prevent that and had been reading the other installer.
+
+The lattice is compiled into the image, so this was not visible as a crash;
+what was missing is the half the argument above rests on — *the sources beside
+the machine that runs them*, and =(load-extension "lattice")= working in an
+image built without it. A reader who wanted to see the 28 methods this document
+counts had the package and not the code.
+
+There is one installer now. See [[file:PLAN.org::#gates][PLAN §gates]], gate 9.
+
 * Core edit 5 — one of the two protocols could not describe itself
 :PROPERTIES:
 :CUSTOM_ID: edit-5

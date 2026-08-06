@@ -110,27 +110,53 @@
               sbcl --non-interactive --load tools/image.lisp
             '';
 
+            # THERE IS ONE INSTALLER AND THIS IS NOT IT.  This phase used to
+            # hand-roll a second list of what ships, beside install.sh's, and
+            # the two had drifted apart everywhere below.  Every difference was
+            # a bug that only a *packaged* install could have, which is the
+            # worst place for one: this is the path that reaches a user who
+            # never ran `make', so nothing anybody did in a source tree could
+            # see it.  The whole list, since this is the one place it is
+            # enumerated:
+            #
+            #   * no lattice.asd and no lattice/ — which is gate 9's own bug,
+            #     the one it was written to prevent, live on the nix path for
+            #     the whole life of the gate.  The sample configuration loads
+            #     the lattice, DATA-DIRECTORIES puts share/latticewm/ on ASDF's
+            #     registry to find it, and there was nothing there to find;
+            #   * no man pages, so `man latticewm' failed on nix alone;
+            #   * no latticewm-session, so the launcher install.sh calls one of
+            #     the four things it exists for was missing;
+            #   * doc/ flattened into share/latticewm/ rather than
+            #     share/latticewm/doc/, so the same file had two paths
+            #     depending on how you installed;
+            #   * tools/wmeval on PATH — a SWANK client, and SWANK is off by
+            #     default, so the one binary unique to this path was the one
+            #     that could not work.  It is deleted now; `latticewm --eval'
+            #     is the same capability over the socket that is on by default;
+            #   * and in the other direction, install.sh shipped no protocol
+            #     XML, so the version-mismatch diagnostic this file argues is
+            #     the largest threat to the project was readable only by nix
+            #     users;
+            #   * a *.org glob here also shipped PLAN, ASSESSMENT and
+            #     SPIKE-WEEK0, which install.sh's curated list leaves out.  That
+            #     one is settled the other way: the curated list wins, because
+            #     the session logs are a record for whoever works on this and
+            #     not documentation for whoever runs it.
+            #
+            # The licences were the case neither list had on purpose, and it is
+            # the one that mattered legally rather than practically: the OFL
+            # text arrived here through a doc/*.txt glob and nowhere at all
+            # through install.sh, and our own LICENSE shipped on neither path,
+            # because it has no extension and both matched on one.
+            #
+            # Running the script is what makes divergence impossible rather
+            # than merely checked, and it makes `nix build' the clean-prefix
+            # install test that gate 9 can only approximate from text.  The two
+            # flags are the whole of what a sandbox needs said differently.
             installPhase = ''
-              install -Dm755 latticewm $out/bin/latticewm
-              install -Dm755 tools/wmeval $out/bin/wmeval
-              for f in doc/*.txt doc/*.org *.org; do
-                install -Dm644 "$f" "$out/share/latticewm/$(basename $f)"
-              done
-              mkdir -p $out/share/latticewm/examples
-              cp examples/*.lisp $out/share/latticewm/examples/
-              # The pinned protocol, so a version mismatch can be diagnosed
-              # from an installed copy without the source tree.
-              mkdir -p $out/share/latticewm/protocol
-              cp src/protocol/*.xml $out/share/latticewm/protocol/
-
-              mkdir -p $out/share/wayland-sessions
-              cat > $out/share/wayland-sessions/latticewm.desktop <<EOF
-              [Desktop Entry]
-              Name=LatticeWM
-              Comment=An extensible window manager for river
-              Exec=${pkgs.river}/bin/river -c $out/bin/latticewm
-              Type=Application
-              EOF
+              ./install.sh --prefix $out --no-config \
+                           --river ${pkgs.river}/bin/river
             '';
 
             meta = with pkgs.lib; {
