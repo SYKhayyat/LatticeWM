@@ -26,18 +26,32 @@
 
 ;;; ---------------------------------------------------------------- gate 2
 
-(banner 2 "every policy generic and command is documented")
+(banner 2 "every generic on either surface, and every command, is documented")
+;; BOTH SURFACES.  This gate asked about the policy protocol only, for the
+;; whole life of the project, because the policy protocol was the only one that
+;; could describe itself — and the container protocol's undocumented member was
+;; not a missing docstring but a missing *definition*: REPLACE-CHILD was
+;; exported under the comment `the container protocol' in package.lisp and
+;; defined nowhere at all.  A gate that walks the live generics cannot be told
+;; that lie, which is the whole argument for asking the image rather than the
+;; source.
 (let ((generics (call "latticewm/policy:undocumented-generics"))
+      (containers (call "latticewm/core:undocumented-container-generics"))
       (commands (call "latticewm/runtime::undocumented-commands")))
   (dolist (g generics) (format t "  UNDOCUMENTED <-- flag me: ~(~a~)~%" g))
+  (dolist (g containers)
+    (format t "  UNDOCUMENTED <-- flag me: container protocol ~(~a~)~%" g))
   (dolist (c commands)
     (format t "  UNDOCUMENTED <-- flag me: command ~a~%"
             (call "latticewm/runtime:command-name" c)))
-  (if (or generics commands)
-      (fail 2 "~d undocumented generic~:p, ~d undocumented command~:p"
-            (length generics) (length commands))
-      (format t "  all ~d generics and ~d commands documented~%"
+  (if (or generics containers commands)
+      (fail 2 "~d undocumented policy generic~:p, ~d undocumented container ~
+               protocol generic~:p, ~d undocumented command~:p"
+            (length generics) (length containers) (length commands))
+      (format t "  all ~d policy generics, ~d container protocol generics ~
+                 and ~d commands documented~%"
               (length (call "latticewm/policy:policy-generics"))
+              (length (call "latticewm/core:container-protocol-generics"))
               (length (call "latticewm/runtime:all-commands")))))
 
 ;;; ---------------------------------------------------------------- gate 3

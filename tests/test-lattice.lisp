@@ -747,3 +747,64 @@ third addressing layer and the one humans actually remember")
                                     index)))
       (is (equal '("a") (mapcar #'c:window-app-id (c:node-windows node)))
           "the window survived a container kind this image has never heard of"))))
+
+(test the-plane-s-own-state-is-part-of-its-signature
+  "UNDO SKIPPED EVERY VERB THAT CHANGES THE PLANE AND NOT THE TREE.
+
+Layout undo records a snapshot only when C:NODE-SIGNATURE changed, and the grid
+did not answer that generic — so zoom, pan, resize-column, resize-row and
+name-cell recorded nothing.  Pressing undo after any of them jumped back to a
+*previous tree* and, because COPY-NODE-SLOTS does its job, silently reverted
+the zoom and the tracks along with it.  The visible symptom was undo appearing
+to skip a step, which reads as an undo bug rather than as a missing method.
+
+It was found by generating the container-protocol surface and reading it: the
+grid answered thirteen of the nineteen members, and nothing before that had
+ever stated that there are nineteen."
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    ;; Start on a rung of the ladder, since that is what SET-ZOOM moves between.
+    (l:set-zoom grid 0 :focus (l:cell 0 0))
+    (let ((base (c:node-signature grid)))
+      ;; Zoom.  Recorded with its origin, because SET-ZOOM re-anchors the
+      ;; viewport around the focused cell -- so returning to the same rung is
+      ;; the same arrangement only when the origin came back too.
+      (l:set-zoom grid 4 :focus (l:cell 0 0))
+      (is (not (equal base (c:node-signature grid)))
+          "a zoom is invisible to undo")
+      (l:set-zoom grid 0 :focus (l:cell 0 0))
+      (is (equal base (c:node-signature grid))
+          "and zooming back to where you started is the same arrangement"))
+    ;; Pan.
+    (let ((before (c:node-signature grid)))
+      (setf (l:viewport-origin (l:grid-viewport grid)) (l:cell 3 -2))
+      (is (not (equal before (c:node-signature grid)))
+          "a pan is invisible to undo"))
+    ;; Tracks.
+    (let ((before (c:node-signature grid)))
+      (setf (l:col-width grid 0) 5/2)
+      (is (not (equal before (c:node-signature grid)))
+          "resizing a column is invisible to undo"))
+    (let ((before (c:node-signature grid)))
+      (setf (l:row-height grid 0) 3)
+      (is (not (equal before (c:node-signature grid)))
+          "resizing a row is invisible to undo"))
+    ;; Names.
+    (let ((before (c:node-signature grid)))
+      (setf (gethash "mail" (l:grid-names grid)) (l:cell 0 0))
+      (is (not (equal before (c:node-signature grid)))
+          "naming a cell is invisible to undo")))
+  ;; And the signature must not vary with hash table iteration order, or every
+  ;; snapshot looks like a change and the ring fills with identical trees.
+  (let ((a (grid-of)) (b (grid-of)))
+    (dolist (g (list a b))
+      (setf (c:child-at g (l:cell 0 0)) (c:make-leaf)))
+    (loop for x in '(5 -3 0 12) do (setf (l:col-width a x) 2))
+    (loop for x in '(0 12 -3 5) do (setf (l:col-width b x) 2))
+    ;; The first eight elements are the plane's own state; everything after
+    ;; them is the container method's answer, which carries node ids that are
+    ;; deliberately unique per node and so can never compare equal.
+    (is (equal (subseq (c:node-signature a) 0 8)
+               (subseq (c:node-signature b) 0 8))
+        "two grids with the same tracks entered in a different order must
+compare equal")))

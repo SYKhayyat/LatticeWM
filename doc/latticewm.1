@@ -96,8 +96,15 @@ Print every command with its documentation.
 Print every key binding.
 .TP
 .B \-\-extension\-surface
-Print every generic function that can be specialized, generated from the
+Print every policy generic that can be specialized, generated from the
 running image.
+.TP
+.B \-\-container\-surface
+Print every generic a new
+.I container kind
+must answer, generated from the running image.  This is the other half of the
+extension surface: the first changes what the window manager decides, this
+changes what it can hold.
 .SH KEYS
 The complete keymap is drawn on screen by
 .BR Super+/ ,

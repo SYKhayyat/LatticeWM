@@ -15,7 +15,7 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:minibuffer #:devices))
+           #:container #:minibuffer #:devices))
 
 (in-package #:latticewm/tests)
 
@@ -25,7 +25,15 @@
 (def-suite tree :in model)
 (def-suite motion :in model)
 (def-suite lifecycle :in model)
-(def-suite surface :in model)
+(def-suite surface :in model
+  :description "The policy protocol, tested as a product: a DEFMETHOD from
+outside changes behaviour, live, with no core edit.")
+
+(def-suite container :in model
+  :description "The *other* extension surface -- what a new container kind
+answers rather than what a new policy answers.  It had no membership test, no
+generated document and no documentation gate until it had all three, and its
+failures were the ones that absence predicts.")
 (def-suite devices :in model
   :description "Input device configuration: which settings a device should
 have, which is pure, and how a value reaches the wire, which is not.")

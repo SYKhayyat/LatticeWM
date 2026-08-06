@@ -1,0 +1,363 @@
+============================================================================
+LatticeWM container protocol
+19 generics.  Generated from the running image.
+============================================================================
+
+A CONTAINER holds children at ADDRESSES.  That is the whole abstraction, and
+every structural operation in the window manager -- motion, layout, insert,
+remove, move, swap, focus repair, copy, undo, persistence -- is written once
+against the generics below.  Answer them and a container kind you invented is
+a first-class citizen of a program that has never heard of it.
+
+(defclass my-grid (c:container) ((cells :initform (make-hash-table ...))))
+(defmethod c:container-addresses ((c my-grid)) ...)
+
+THE LIST IS THE POINT.  Six of these are obvious and the rest are not, and a
+kind that answers only the obvious six loads without complaint and then loses
+data.  The ones that are missed, in the order they were actually missed:
+
+COPY-NODE-SLOTS      undo and layout snapshots silently drop your children
+SERIALIZE-NODE       every restart loses the arrangement, and the windows
+DESERIALIZE-NODE     its other half; both or neither
+NODE-SIGNATURE       undo skips past the operation the user wanted back
+DEFAULT-ADDRESS      focus repair lands somewhere that is not on screen
+ADDRESS-EQUAL        EQL is wrong the moment an address is not an integer
+
+Defaults exist for most of them on CONTAINER, so the minimum is smaller than
+this list -- but the minimum is not what a kind with state of its own needs.
+The `methods' list under each generic includes yours, which is how you check
+that your kind is actually answering rather than inheriting.
+
+----------------------------------------------------------------------------
+address-equal (latticewm/core:container latticewm/core::a latticewm/core::b)
+----------------------------------------------------------------------------
+True when addresses A and B name the same slot of CONTAINER.
+
+A method is needed because addresses are integers in a SPLIT and coordinate
+lists in a GRID, and EQL is wrong for the second.
+
+  methods:
+    (container t t)                     ; node.lisp
+
+----------------------------------------------------------------------------
+child-at (latticewm/core:container latticewm/core::address)
+----------------------------------------------------------------------------
+The child of CONTAINER at ADDRESS, or NIL when there is none.
+
+Returning NIL rather than signalling is deliberate: the lattice is sparse and
+asking about an empty coordinate is an ordinary question, not an error.
+
+  methods:
+    (sequential-container t)            ; node.lisp
+
+----------------------------------------------------------------------------
+(setf child-at) (latticewm/core:node latticewm/core:container
+                 latticewm/core::address)
+----------------------------------------------------------------------------
+Put NODE at ADDRESS in CONTAINER, replacing whatever was there.
+
+For a dense container ADDRESS must already exist; use INSERT-CHILD to grow
+one.  For a sparse container this creates the address.
+
+  methods:
+    (t sequential-container t)          ; node.lisp
+
+----------------------------------------------------------------------------
+container-addresses (latticewm/core:container)
+----------------------------------------------------------------------------
+The addresses of CONTAINER's children, as a fresh list, in layout order.
+
+Layout order is the order the addresses are laid out left-to-right or
+top-to-bottom, and it is the order LAYOUT-CHILDREN and RENDER-ORDER walk.
+For a SPLIT it is 0, 1, 2, …; for the lattice's GRID it is the visible cell
+coordinates in reading order.
+
+  methods:
+    (sequential-container)              ; node.lisp
+
+----------------------------------------------------------------------------
+container-alternatives-p (latticewm/core:container)
+----------------------------------------------------------------------------
+True when CONTAINER holds *alternatives* — a set of children of which one
+is current — rather than a division of space.
+
+A STACK answers T; that is what makes it simultaneously tabs, workspaces and
+the Z axis.  A SPLIT and the lattice's GRID answer NIL, because every one of
+their children is on screen at once.
+
+This generic exists because four places in the runtime asked (TYPEP CONTAINER
+'STACK) directly, and a TYPEP is not an extension point: a container kind from
+outside the core that holds alternatives in exactly the way a stack does was
+invisible to TAB-NEXT, UNTAB, and the whole workspace vocabulary, and no method
+anywhere could say otherwise.  Answer this and all of them work.
+
+Paired with CONTAINER-SELECTION, which is how the current one is read and
+written.
+
+  methods:
+    (stack)                             ; node.lisp
+    (container)                         ; node.lisp
+
+----------------------------------------------------------------------------
+container-count (latticewm/core:container)
+----------------------------------------------------------------------------
+How many children CONTAINER currently holds.
+
+  methods:
+    (sequential-container)              ; node.lisp
+    (container)                         ; node.lisp
+
+----------------------------------------------------------------------------
+container-selection (latticewm/core:container)
+----------------------------------------------------------------------------
+Which address of an alternatives container is current, or NIL.
+
+Meaningful only where CONTAINER-ALTERNATIVES-P is true.  Settable, and setting
+it is what switching a tab or a workspace *is*.
+
+  methods:
+    (stack)                             ; node.lisp
+    (container)                         ; node.lisp
+
+----------------------------------------------------------------------------
+(setf container-selection) (latticewm/core::address latticewm/core:container)
+----------------------------------------------------------------------------
+Make ADDRESS the current alternative of CONTAINER.
+
+  methods:
+    (t stack)                           ; node.lisp
+    (t container)                       ; node.lisp
+
+----------------------------------------------------------------------------
+container-splits-along-p (latticewm/core:container latticewm/core::axis)
+----------------------------------------------------------------------------
+True when CONTAINER divides its space along AXIS.
+
+The structural half of policy's CONTAINER-AXIS, and it is here rather than only
+there because model/surgery.lisp is pure — it may not reach for a policy — and
+TREE-SPLIT-AT's default join rule needs the answer.  A container kind that
+divides space the way a split does answers this and joins splits correctly
+without the core having heard of it.
+
+  methods:
+    (split t)                           ; node.lisp
+    (container t)                       ; node.lisp
+
+----------------------------------------------------------------------------
+copy-node (latticewm/core:node)
+----------------------------------------------------------------------------
+A structural copy of NODE and everything under it.
+
+Windows are shared, not duplicated — there is only ever one of those.  PROPS
+are copied one level deep, so an extension's plist survives but a mutable value
+inside it is shared.
+
+A GENERIC, AND THE REASON IS THE DEEPEST FINDING THIS FILE HAS RECORDED.  It
+was a DEFUN dispatching on concrete classes by TYPECASE, sitting in the middle
+of a layer whose entire advertised contract is that container kinds are open.
+A kind that subclassed CONTAINER directly — the lattice's GRID does — matched no
+clause, so the copy came back carrying props and a label and *nothing else*: no
+children, no tracks, no viewport.  Silently.  No error, no warning.
+
+Nothing in the core called it, which is why it survived; but it is exported,
+documented and tested, and its obvious uses are exactly the ones a user reaches
+for — undo, layout snapshots, cloning a workspace.  Each of those, written
+against the documented extension surface, silently destroyed a grid.
+
+Add a kind by adding a COPY-NODE-SLOTS method, not by editing this.
+
+  methods:
+    (node)                              ; node.lisp
+
+----------------------------------------------------------------------------
+copy-node-slots (latticewm/core::new latticewm/core::old)
+----------------------------------------------------------------------------
+Copy OLD's own state into the fresh NEW.  Every class contributes.
+
+PROGN combination, *most specific last*, so the methods run base-class-first:
+NODE copies props and label, CONTAINER copies the children through the
+container protocol, and only then does SPLIT copy the weights that inserting
+those children just recomputed.  Getting that order the other way round is a
+copy whose weights are silently all equal.
+
+Adding a container kind means adding one method here, and inheriting the
+CONTAINER method means the children are already handled.
+
+  methods:
+    (leaf leaf) PROGN                   ; node.lisp
+    (stack stack) PROGN                 ; node.lisp
+    (split split) PROGN                 ; node.lisp
+    (container container) PROGN         ; node.lisp
+    (node node) PROGN                   ; node.lisp
+
+----------------------------------------------------------------------------
+default-address (latticewm/core:container)
+----------------------------------------------------------------------------
+The address a structural descent into CONTAINER should take.
+
+*Structural*, not policy: this is what REPAIR-PATH and FIRST-LEAF-PATH use to
+find a valid place, so it must always answer with something real and must not
+consult a policy that might not be loaded.  A STACK answers with its selected
+child, because landing focus repair on a hidden tab would be a bug that looks
+like a haunting.
+
+Policy's ENTRY-ADDRESS is the richer question — it knows the direction you
+arrived from — and it is what ordinary navigation uses.
+
+  methods:
+    (stack)                             ; node.lisp
+    (container)                         ; node.lisp
+
+----------------------------------------------------------------------------
+deserialize-node (latticewm/core::tag latticewm/core::plist
+                  latticewm/core::index)
+----------------------------------------------------------------------------
+Rebuild the node TAG names from PLIST, looking windows up in INDEX.
+
+TAG is the keyword SERIALIZE-NODE wrote, and is dispatched on with an EQL
+specializer, so adding a kind is adding a method rather than editing a CASE.
+INDEX maps river window identifiers to live WINDOWs; an identifier that is not
+in it belongs to a window that no longer exists and yields an empty pane.
+
+The method on T is the one that matters for forward compatibility: a file
+written by an image that had an extension loaded, read by one that does not,
+keeps the windows and loses only the arrangement.
+
+  methods:
+    (t t t)                             ; state.lisp
+    ((eql :STACK) t t)                  ; state.lisp
+    ((eql :SPLIT) t t)                  ; state.lisp
+    ((eql :LEAF) t t)                   ; state.lisp
+
+----------------------------------------------------------------------------
+insert-child (latticewm/core:container latticewm/core::address
+              latticewm/core:node)
+----------------------------------------------------------------------------
+Add NODE to CONTAINER at ADDRESS, growing the container.
+
+For a dense container (SPLIT, STACK) ADDRESS is the index NODE will occupy and
+existing children from that index on shift up by one.  For a sparse container
+it is simply the address to fill.  Returns CONTAINER.
+
+  methods:
+    (stack t t) AFTER                   ; node.lisp
+    (split t t) AFTER                   ; node.lisp
+    (sequential-container t t)          ; node.lisp
+
+----------------------------------------------------------------------------
+node-empty-p (latticewm/core:node)
+----------------------------------------------------------------------------
+True when NODE holds no windows at all.
+
+An empty *leaf* is a deliberate object (D17); an empty *container* is usually
+debris, and this is how the collapse rules find it.
+
+A generic rather than an ETYPECASE so that a container kind whose emptiness
+means something of its own — a strip that keeps a scroll position, a grid that
+has been named — can say so.
+
+  methods:
+    (container)                         ; node.lisp
+    (leaf)                              ; node.lisp
+    (node)                              ; node.lisp
+
+----------------------------------------------------------------------------
+node-signature (latticewm/core:node)
+----------------------------------------------------------------------------
+A readable value that changes exactly when NODE's arrangement does.
+
+Compared with EQUAL.  What counts as `the arrangement' is up to each kind, and
+that is the point: a split's weights are part of its arrangement and a stack's
+selection is part of its, while neither has any business in the other's answer.
+
+Used by layout undo to tell a structural change from a mere focus move, so
+that a bounded ring of previous trees does not fill up with entries that differ
+in nothing.  A container kind that keeps state of its own — a viewport, a set
+of track sizes — should add it here, or its users will find that undo skips
+straight past the operation they wanted back.
+
+  methods:
+    (split)                             ; node.lisp
+    (container)                         ; node.lisp
+    (leaf)                              ; node.lisp
+    (node)                              ; node.lisp
+
+----------------------------------------------------------------------------
+remove-child (latticewm/core:container latticewm/core::address)
+----------------------------------------------------------------------------
+Take the child at ADDRESS out of CONTAINER and return it, or NIL.
+
+For a dense container the remaining children close up and their addresses
+shift down; any path held elsewhere that pointed past ADDRESS is now stale.
+That is why every surgery function returns a repaired path rather than
+expecting callers to fix it themselves — see DESIGN D18's focus-repair rule.
+
+  methods:
+    (stack t) AROUND                    ; node.lisp
+    (split t) AROUND                    ; node.lisp
+    (sequential-container t)            ; node.lisp
+
+----------------------------------------------------------------------------
+serialize-node (latticewm/core:node)
+----------------------------------------------------------------------------
+NODE as a readable s-expression: a tag keyword followed by a plist.
+
+Windows become their river identifier, which is the only part of a window that
+means anything across a restart.
+
+*Every field is named.*  The first version of this wrote
+
+    (:split :horizontal (1 1) (:leaf …) (:leaf …))
+
+— weights positionally, children after — and read it back by asking which
+elements were conses.  The weights *are* a cons, so they came back as a child,
+and every restart grew a spurious empty pane at the front of every split.  The
+tree was subtly wrong in a way that looked like a layout bug rather than a
+parsing one.  Naming the fields costs eight characters and makes that class of
+mistake unavailable.
+
+A container kind adds one method here and one DESERIALIZE-NODE method, and its
+users' layouts survive a restart.  Use a namespaced tag — :LATTICE/GRID — so
+two extensions cannot collide.
+
+DECLARED HERE, WITH THE REST OF THE PROTOCOL, AND IMPLEMENTED IN THE RUNTIME.
+It was declared in runtime/state.lisp beside its methods, which put two of the
+container protocol's members in a package the protocol's own document could not
+see — so the half of the contract whose failure mode is silent data loss on
+restart was the half nothing described.  The methods stay where the file format
+is; the obligation belongs with the other seventeen.
+
+  methods:
+    (node)                              ; state.lisp
+    (stack)                             ; state.lisp
+    (split)                             ; state.lisp
+    (leaf)                              ; state.lisp
+
+----------------------------------------------------------------------------
+simplify-node (latticewm/core:node)
+----------------------------------------------------------------------------
+Return the node that should stand in NODE's place after surgery.
+
+Three possible answers:
+
+  NODE itself   nothing to do — the overwhelmingly common case;
+  another node  NODE dissolves into it.  A split down to one child is not
+                wrong, merely pointless, and leaving such nodes behind is how
+                a tree becomes nine levels deep for three windows;
+  NIL           NODE should be *removed from its parent entirely*, which then
+                gets the same question asked of it.
+
+The NIL answer is what makes a whole nest unwind in one step: close the only
+window inside three levels of nesting and every level above it evaporates,
+rather than leaving a ladder of empty containers or — worse — an empty pane
+the user never asked for.  D17's empty pane is deliberate, and debris must not
+be able to impersonate it.
+
+Called by the surgery functions with :SIMPLIFY T, which is the default.  Pass
+:SIMPLIFY NIL when you are mid-operation and about to add a sibling back.
+
+  methods:
+    (stack)                             ; node.lisp
+    (split)                             ; node.lisp
+    (node)                              ; node.lisp
+

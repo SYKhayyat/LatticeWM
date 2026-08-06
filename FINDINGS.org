@@ -28,6 +28,9 @@ This is that list. It is written to be read against the code rather than
 instead of it.
 
 * The short version
+:PROPERTIES:
+:CUSTOM_ID: short
+:END:
 
 *The thesis held, with three qualifications and one bug.*
 
@@ -46,7 +49,17 @@ covered the workspaces that existed when it loaded and no others. See
 [[#edit-4][core edit 4]], which is the sharpest of the four because nothing
 failed.
 
-All four are the same species: the extension surface was correct for the author
+A *fifth* came later still and is of a different kind: not a missing method on
+a surface that worked, but a whole half of the surface that no check could see.
+The *container* protocol — what a new container kind answers, as against what a
+new policy answers — had no membership test, no generated document and no
+documentation gate, and so it had a generic exported and never defined, two
+members declared in the wrong package, and no statement anywhere of its size.
+See [[#edit-5][core edit 5]]. It is the only one of the five that was found by
+asking what the project checks about itself rather than by tripping over
+something.
+
+All five are the same species: the extension surface was correct for the author
 and incomplete for a stranger, in ways that only being a stranger revealed.
 
 | Measure | Value |
@@ -54,6 +67,7 @@ and incomplete for a stranger, in ways that only being a stranger revealed.
 | Lines in =lattice/= | 1,941 (386 model, 697 policy, 500 commands, 298 map and overlay, 60 package) |
 | ~defmethod~ forms | 26 |
 | Core generics specialised | 13 (11 policy, 2 persistence) |
+| Container protocol members | 19, of which the lattice answers 13 |
 | New container classes | 1 |
 | *Core files edited* | *7* (two for the lattice, two for the examples, four for the workspace decision, one shared) |
 | *Core behaviours changed* | *0* |
@@ -313,6 +327,9 @@ surfaced by the first extension that exercised the path, on a codebase small
 enough that the fix took one function.
 
 * What the lattice did *not* need
+:PROPERTIES:
+:CUSTOM_ID: free
+:END:
 
 Worth listing, because these are the things a "no core edits" claim usually
 founders on, and each one is a place the container protocol turned out to be
@@ -454,16 +471,87 @@ What has *not* been demonstrated, and should not be claimed:
   It is reported here as raw numbers so that a reader can disagree with the
   interpretation.
 
+* Core edit 5 — one of the two protocols could not describe itself
+:PROPERTIES:
+:CUSTOM_ID: edit-5
+:END:
+
+*File:* =src/model/surface.lisp= (new), =src/model/node.lisp=,
+=src/package.lisp=, =tools/gates.lisp=. *Change:* the container protocol
+became introspectable, generated and gated, the way the policy protocol already
+was. *Behaviour changed:* none. *Found by:* nobody, for the life of the
+project, which is the finding.
+
+*This is the fifth of the same species and the largest.* The first four were
+each one missing thing on a surface that otherwise worked. This one is a whole
+half of the surface that no check could see, and the tell is that its
+consequences had all four shapes at once:
+
+- ~replace-child~ was exported from =latticewm/core=, listed in
+  =src/package.lisp= under the comment "the container protocol", and *defined
+  nowhere at all* — a ~defgeneric~ that does not exist, on the advertised
+  surface, from the first commit to this one. Gate 2 walked the policy
+  generics. Gate 10 checks that the core dispatches /through/ the protocol and
+  says nothing about what the protocol contains. The generated document is
+  built from the live image, so a name with nothing behind it simply does not
+  appear — a document cannot report an absence it cannot see, which is why the
+  check that catches this is a *test* and not a document.
+- ~serialize-node~ and ~deserialize-node~ were declared in
+  =src/runtime/state.lisp=. They are as much a part of the contract as
+  ~child-at~ — a kind that skips them loses the user's layout on every restart,
+  silently — and being in the runtime package put them outside every statement
+  of what the protocol is. They are declared in =model/node.lisp= now, beside
+  the other seventeen, with their methods left where the file format is.
+- *Nothing anywhere said how many members there are.* This file's own
+  [[#free][what you get for free]] list is the closest thing, and it lists what a
+  kind /inherits/ rather than what it must answer. The number is *nineteen*.
+  Six of them have defaults that are correct for a dense integer-addressed
+  container and wrong for anything else, which is what makes skipping them
+  silent: a grid written with the source open answered the obvious six, loaded
+  without complaint, and broke on copy, on save and on focus repair.
+
+*The generalisable rule, and it is the one this file keeps rediscovering in a
+new place each time:* an extension surface that cannot describe itself is not a
+surface, it is a convention. The policy protocol had ~policy-generics~, a
+generated document and a documentation gate from Week 1, and every finding
+above about it was a *missing method* — a small, local, fixable thing. The
+container protocol had none of the three, and its findings are missing
+definitions, misplaced declarations, and an unstated size. The difference is
+not that one protocol was designed more carefully. It is that one of them was
+checked.
+
+*Cost:* one new file (~180 lines, of which about half is the reasoning),
+three helpers moved out of =policy/surface.lisp= so both surfaces share one
+formatter, one flag (~--container-surface~), ten lines in gate 2, and a new
+test suite. Zero behaviour changes, zero source files moved.
+
+*What it says about the four above:* they were all found by writing an
+extension and tripping over something. This one was found by asking what the
+project checks about itself and noticing an asymmetry. Those are different
+methods and the second one is cheaper — but it only works on a project that
+already has one good half to compare the other against.
+
 * The counts, for gate 3
 
-: lattice/package.lisp    49 lines
-: lattice/grid.lisp      268 lines    9 defmethods   (the container protocol)
-: lattice/policy.lisp    322 lines    7 defmethods   (layout, motion, colour)
-: lattice/commands.lisp  410 lines    0 defmethods   (18 commands)
-: -------------------------------------------------
-: total                1,049 lines   16 defmethods
+: lattice/package.lisp     60 lines    0 defmethods
+: lattice/grid.lisp       386 lines   14 defmethods   (the container protocol)
+: lattice/policy.lisp     697 lines   11 defmethods   (layout, motion, colour)
+: lattice/commands.lisp   500 lines    0 defmethods   (18 commands)
+: lattice/map.lisp        170 lines    1 defmethod    (the minimap)
+: lattice/overlay.lisp    128 lines    0 defmethods   (the coordinate overlay)
+: --------------------------------------------------
+: total                 1,941 lines   26 defmethods
 
-: core files edited              3   (one export, one default method,
-:                                    one class-hierarchy correction)
+: core files edited              7   (one export, one default method, one
+:                                    class-hierarchy correction, four for
+:                                    the workspace decision)
 : core behaviours changed        0
 : core bugs found and fixed      1
+
+*These numbers were wrong here for three commits* — this block said 1,049 lines
+and 16 defmethods while [[#short][the short version]] forty lines above said 1,941
+and 26, in the same file. The lattice's line count appeared in four places and
+three of them disagreed. Nothing checks that a sentence in an =.org= file is
+still true about the program, which is the gate this project does not have; gate
+3 prints the live numbers on every build, so the honest instruction to a reader
+is to believe =make gates= over this table.

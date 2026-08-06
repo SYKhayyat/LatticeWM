@@ -397,7 +397,8 @@ ordinary shutdown."
   --list-options        every configuration value, with its default and why
   --list-commands       every command
   --list-keys           every key binding
-  --extension-surface   every generic you can specialize
+  --extension-surface   every policy generic you can specialize
+  --container-surface   every generic a new container kind must answer
   --write-config        write a starter init.lisp
   --check-config        load the configuration, report problems, and exit
 
@@ -487,7 +488,8 @@ found this immediately: (lattice:enable) needs a world, and there was none."
 (defparameter +flags+
   '(("--help" . 0) ("--version" . 0)
     ("--list-options" . 0) ("--list-commands" . 0) ("--list-keys" . 0)
-    ("--extension-surface" . 0) ("--write-config" . 0) ("--check-config" . 0)
+    ("--extension-surface" . 0) ("--container-surface" . 0)
+    ("--write-config" . 0) ("--check-config" . 0)
     ("--no-config" . 0) ("--no-restore" . 0) ("--no-ipc" . 0)
     ("--eval" . 1) ("--swank-port" . 1) ("--log-level" . 1) ("--log-file" . 1))
   "Every accepted option, and how many values each takes.
@@ -592,6 +594,11 @@ useful if a non-zero exit means what it says."
          (install-default-keymap) (print-keymap) (sb-ext:exit :code 0))
         ((flag "--extension-surface")
          (p:print-extension-surface) (sb-ext:exit :code 0))
+        ;; The other surface.  A policy changes what the window manager
+        ;; decides; a container kind changes what it can hold, and until this
+        ;; existed the second one had no generated document at all.
+        ((flag "--container-surface")
+         (c:print-container-surface) (sb-ext:exit :code 0))
         (t
          (let* ((port (argument-value arguments "--swank-port"))
                 (started (start :swank-port (cond ((null port) :default)

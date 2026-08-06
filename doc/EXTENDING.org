@@ -23,11 +23,31 @@ frame.
 Before reading anything, ask it. It knows more about itself than this file
 does, and it cannot be out of date.
 
+The binary answers without a running session, which is what you want while
+writing a configuration file:
+
 #+begin_src sh
-wmeval --surface     # every generic you can specialize, with its contract
-wmeval --options     # every value, with its default and what it does
-wmeval --commands    # every command
-wmeval --keys        # every binding
+latticewm --extension-surface   # every policy generic, with its contract
+latticewm --container-surface   # every generic a new container kind answers
+latticewm --list-options        # every value, with its default and what it does
+latticewm --list-commands       # every command
+latticewm --list-keys           # every binding
+#+end_src
+
+*There are two surfaces and they answer different questions.* The extension
+surface is what the window manager *decides* — where a window goes, what a
+border looks like, what a key means. The container surface is what it can
+*hold*. Overriding a policy generic changes an answer; implementing the
+container protocol adds a new kind of thing to have answers about. Almost
+everything you will ever write is the first; =lattice/= is the second.
+
+Both are generated from the running image, so neither can be out of date, and
+both list the methods *you* have added — which is how you check that your
+configuration file was actually loaded.
+
+And a session that is already up, over the control socket:
+
+#+begin_src sh
 wmeval --tree        # the layout right now
 wmeval --state       # cursor, window count, active policy
 #+end_src
@@ -225,6 +245,35 @@ land arriving at it.
 the size, and the lattice is only larger because a plane has more data in it
 than a strip does.
 
+*** The list is the point
+
+Run =latticewm --container-surface= and read it before you start. Six of the
+members are obvious and the rest are not, and *a kind that answers only the
+obvious six loads without complaint and then loses data*. That is not
+hypothetical — it is what happened to a grid written with the source open, and
+each of these was found the hard way:
+
+| generic | what skipping it costs |
+|---------+------------------------|
+| ~copy-node-slots~ | undo and layout snapshots silently drop your children |
+| ~serialize-node~ | every restart loses the arrangement, and the windows |
+| ~deserialize-node~ | its other half; both or neither |
+| ~node-signature~ | undo skips past the operation the user wanted back |
+| ~default-address~ | focus repair lands somewhere that is not on screen |
+| ~address-equal~ | ~eql~ is wrong the moment an address is not an integer |
+
+Every one of them has a default on ~container~ that is correct for a dense,
+integer-addressed container and wrong for anything else. That is what makes
+skipping them silent rather than loud, and it is why the list is generated from
+the image rather than written here: this table can go stale and the document
+cannot.
+
+If you subclass ~sequential-container~ rather than ~container~ — as the
+scrolling-columns example does — the addressing half is already answered and
+what is left is the state your kind adds. Answer ~copy-node-slots~,
+~node-signature~ and the two persistence generics for that state and nothing
+downstream will ever ask you about it again.
+
 ** What you get for free
 
 The point of the container protocol is what you do *not* have to write. A new
@@ -235,6 +284,12 @@ container kind inherits, without being told:
 - ~move~, ~swap~, ~pull~, ~send-to-workspace~ and every other structural verb;
 - persistence, floating, minimize, fullscreen, tabs;
 - being nestable inside any other container, including itself.
+
+What you *do* have to write is on the container surface, and there is a check
+standing over it: gate 2 requires every member of it to be documented, exactly
+as it does for the policy generics, and gate 10 stops the core from working
+around it with a ~typecase~. Between them, a kind that answers the protocol is
+a first-class citizen of a program that has never heard of it.
 
 * The lattice
 

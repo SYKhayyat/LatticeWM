@@ -287,6 +287,48 @@ copy whose weights are silently all equal.
 Adding a container kind means adding one method here, and inheriting the
 CONTAINER method means the children are already handled."))
 
+(defgeneric serialize-node (node)
+  (:documentation
+   "NODE as a readable s-expression: a tag keyword followed by a plist.
+
+Windows become their river identifier, which is the only part of a window that
+means anything across a restart.
+
+*Every field is named.*  The first version of this wrote
+
+    (:split :horizontal (1 1) (:leaf …) (:leaf …))
+
+— weights positionally, children after — and read it back by asking which
+elements were conses.  The weights *are* a cons, so they came back as a child,
+and every restart grew a spurious empty pane at the front of every split.  The
+tree was subtly wrong in a way that looked like a layout bug rather than a
+parsing one.  Naming the fields costs eight characters and makes that class of
+mistake unavailable.
+
+A container kind adds one method here and one DESERIALIZE-NODE method, and its
+users' layouts survive a restart.  Use a namespaced tag — :LATTICE/GRID — so
+two extensions cannot collide.
+
+DECLARED HERE, WITH THE REST OF THE PROTOCOL, AND IMPLEMENTED IN THE RUNTIME.
+It was declared in runtime/state.lisp beside its methods, which put two of the
+container protocol's members in a package the protocol's own document could not
+see — so the half of the contract whose failure mode is silent data loss on
+restart was the half nothing described.  The methods stay where the file format
+is; the obligation belongs with the other seventeen."))
+
+(defgeneric deserialize-node (tag plist index)
+  (:documentation
+   "Rebuild the node TAG names from PLIST, looking windows up in INDEX.
+
+TAG is the keyword SERIALIZE-NODE wrote, and is dispatched on with an EQL
+specializer, so adding a kind is adding a method rather than editing a CASE.
+INDEX maps river window identifiers to live WINDOWs; an identifier that is not
+in it belongs to a window that no longer exists and yields an empty pane.
+
+The method on T is the one that matters for forward compatibility: a file
+written by an image that had an extension loaded, read by one that does not,
+keeps the windows and loses only the arrangement."))
+
 (defun container-p (x)
   "True when X is a container."
   (typep x 'container))

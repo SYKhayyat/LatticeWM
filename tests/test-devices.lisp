@@ -246,3 +246,61 @@ counts redefinitions."))
   (is (eq :clickfinger (r::one-of :clickfinger r::+click-methods+)))
   (is (eq :no-scroll (r::one-of :none r::+scroll-methods+))
       "and a synonym somebody would plausibly write is accepted"))
+
+;;; ------------------------------------------------------------ capture keys
+
+(defclass modal-policy (p:conventional-policy) ()
+  (:documentation
+   "A policy with a modal editing layer, which is the single most obvious thing
+an Emacs-shaped window manager's users ask for and was the exact thing the old
++CAPTURE-KEYS+ made impossible."))
+
+(defmethod p:capture-keys ((policy modal-policy))
+  (append (call-next-method)
+          ;; F1 through F12.
+          (loop for keysym from #xffbe to #xffc9 collect (cons keysym '()))))
+
+(test capture-keys-is-the-whole-of-what-a-prompt-can-read
+  "River delivers keys to the focused *window* and hands the window manager only
+what it asked for, so this list is not a convenience: a key that is not on it is
+not merely unbound, it is unreadable, and no keymap entry can rescue it.
+
+It was a DEFPARAMETER in src/runtime/, which is why these assertions are worth
+making at all -- the shape being checked is `the answer comes from a policy'."
+  (let ((keys (p:capture-keys (policy))))
+    (is (< 200 (length keys))
+        "printable ASCII bare and shifted alone is 190 entries; got ~d"
+        (length keys))
+    ;; The bug you find by trying to type a bracket: river matches on keysym
+    ;; *and* modifiers, and sends the unshifted keysym with Shift still set.
+    (is (member (cons (char-code #\9) '()) keys :test #'equal))
+    (is (member (cons (char-code #\9) '(:shift)) keys :test #'equal)
+        "without the shifted copy, M-: cannot read an open bracket")
+    ;; Escape, Return, Backspace and the arrows, which are how a prompt is left.
+    (dolist (keysym '(#xff08 #xff0d #xff1b #xff51 #xff53))
+      (is (member (cons keysym '()) keys :test #'equal)
+          "keysym #x~x is not readable" keysym))
+    ;; The readline chords, and the option that decides which.
+    (is (member (cons (char-code #\a) '(:ctrl)) keys :test #'equal))
+    (let ((p:*readline-chords* "ae"))
+      (let ((narrowed (p:capture-keys (policy))))
+        (is (member (cons (char-code #\e) '(:ctrl)) narrowed :test #'equal))
+        (is (not (member (cons (char-code #\w) '(:ctrl)) narrowed :test #'equal))
+            "*READLINE-CHORDS* decides which chords a prompt reads")))
+    ;; Nothing is listed twice: every entry becomes a river_xkb_binding_v1, and
+    ;; a duplicate is a second binding on the same key racing the first.
+    (is (= (length keys) (length (remove-duplicates keys :test #'equal)))
+        "the capture list has duplicates in it")))
+
+(test a-modal-layer-can-add-a-key-the-core-never-heard-of
+  "The failure this replaces: bind F5 in a keymap, press it, and river never
+delivers it -- with nothing anywhere to say why, because the keymap is right,
+the command exists, and the key was simply never requested."
+  (let ((shipped (p:capture-keys (policy)))
+        (modal (p:capture-keys (make-instance 'modal-policy))))
+    (is (not (member (cons #xffc2 '()) shipped :test #'equal))
+        "F5 is not readable by default, which is the premise")
+    (is (member (cons #xffc2 '()) modal :test #'equal)
+        "and one method makes it readable")
+    (is (= (+ 12 (length shipped)) (length modal))
+        "CALL-NEXT-METHOD kept everything the shipped answer had")))

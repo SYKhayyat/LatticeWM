@@ -112,7 +112,12 @@ its half."
         do (guarded "capture binding destroy"
              (river:river-xkb-binding-v1.destroy binding)))
   (setf (c:prop seat :capture-bindings) nil
-        (c:prop seat :capture-armed) nil)
+        (c:prop seat :capture-armed) nil
+        ;; The remembered answer goes with the bindings it produced.  Leaving
+        ;; it behind would mean ENSURE-CAPTURE-BINDINGS saw `the policy says
+        ;; what it said last time' on a seat that now has no bindings at all,
+        ;; and skipped making any -- a seat that came back with a dead prompt.
+        (c:prop seat :capture-wanted) nil)
   (let ((layer (c:prop seat :layer-shell)))
     (when layer
       (guarded "layer shell seat destroy"
@@ -192,33 +197,30 @@ the keyboard."
   (let ((leaf (current-leaf)))
     (and leaf (c:leaf-empty-p leaf) (null (c:world-focused-float *world*)))))
 
-(defparameter +capture-keys+
-  (append
-   ;; Printable ASCII, twice: once bare and once with Shift.  The second copy
-   ;; is not redundant and its absence is a bug you would find by trying to
-   ;; type a bracket.  River matches a binding on keysym *and* modifiers, and
-   ;; the keysym xkb produces for Shift+9 on a US layout is `parenleft' with
-   ;; Shift still in the modifier set — so a binding for parenleft with no
-   ;; modifiers never fires, and M-: could not read a single open bracket.
-   ;; Doing it by mask rather than by guessing which characters are shifted on
-   ;; which layout is what makes this work on a Dvorak or a German keyboard.
-   (loop for code from #x20 to #x7e
-         append (list (cons code '()) (cons code '(:shift))))
-   ;; The keys that move and delete rather than type.
-   (loop for keysym in '(#xff08 #xff09 #xff0d #xff1b #xff8d #xffff
-                         #xff51 #xff52 #xff53 #xff54 #xff50 #xff57)
-         collect (cons keysym '()))
-   ;; The readline chords, which are what fingers do at a prompt without being
-   ;; asked.  Bound only for as long as a prompt is up, so C-w still means
-   ;; close-tab to the browser underneath.
-   (loop for letter across "abdefgknpuwy"
-         collect (cons (char-code letter) '(:ctrl))))
-  "Every key the window manager may want to read directly, with its modifiers.
+;;; +CAPTURE-KEYS+ WAS HERE, AS A DEFPARAMETER, AND THAT WAS THE BUG.
+;;;
+;;; It listed every key the window manager may ever read directly, which — since
+;;; river delivers keys to the focused *window* and hands us only what we asked
+;;; for — is the whole of what a prompt, an empty pane or the second key of a
+;;; chord can ever see.  Fixed at compile time, in the runtime, in a program
+;;; whose premise is that this class of thing is a decision.  A modal editing
+;;; layer could bind a function key in a keymap and simply never receive it.
+;;;
+;;; It is P:CAPTURE-KEYS now: a policy generic whose default method is the same
+;;; list, in src/policy/input.lisp.  What is left here is the part that is
+;;; genuinely the runtime's — turning an answer into river_xkb_binding_v1
+;;; objects, once, in a manage sequence, without churning the ones that already
+;;; exist.
 
-Bound once, enabled only while something is reading — see ARM-CAPTURE.  Two
-hundred-odd bindings sounds like a lot and is one round trip at startup; the
-alternative is not being able to read text at all, because river delivers keys
-to the focused *window* and gives us only what we asked for.")
+(defun capture-key-list ()
+  "What the policy says the window manager may read, as (KEYSYM . MODIFIERS).
+
+An empty answer — which is what GUARDED yields when a method signals — adds
+nothing and removes nothing, so a policy that breaks after startup leaves the
+prompt exactly as readable as it was.  A policy that breaks *before* the first
+manage sequence gets no capture keys and a logged error, which is the same
+outcome the old DEFPARAMETER would have had if the file failed to load."
+  (or (guarded "capture-keys" (p:capture-keys (p:current-policy))) '()))
 
 (defun capture-wanted-p ()
   "Is anything currently waiting to read a key directly?
@@ -235,24 +237,52 @@ always and the window manager acted on them never."
   (or (reading-p) (cursor-on-empty-pane-p) *pending-keymap*))
 
 (defun ensure-capture-bindings (seat)
-  "Create the capture bindings, once."
-  (let ((bindings (server-bindings *server*)))
-    (when (and bindings (null (c:prop seat :capture-bindings)))
-      (setf (c:prop seat :capture-bindings)
-            (loop for (keysym . modifiers) in +capture-keys+
-                  for binding = (guarded "get_xkb_binding"
-                                  (w:bindings-get-xkb-binding
-                                   bindings (seat-proxy seat) keysym modifiers))
-                  when binding
-                    collect (progn
-                              (push (let ((keysym keysym) (modifiers modifiers))
-                                      (lambda (event &rest arguments)
-                                        (declare (ignore arguments))
-                                        (with-abandon
-                                          (when (eq event :pressed)
-                                            (handle-captured-key keysym modifiers)))))
-                                    (wl:wl-proxy-hooks binding))
-                              (cons (cons keysym modifiers) binding))))))
+  "Make sure every key the policy asks for has a binding on SEAT.
+
+INCREMENTAL, AND THAT IS THE WHOLE DIFFERENCE FROM WHAT THIS USED TO BE.  It
+created the bindings once, from a constant, and never looked again — so a
+CAPTURE-KEYS method evaluated at a REPL, or a policy installed by a
+configuration file that loads after the first manage sequence, would have been
+read and discarded.  Now it is the same rule REGISTER-BINDINGS uses for the
+keymap: add what is missing, leave what is there.
+
+Never removes.  A river_xkb_binding_v1 the compositor already knows about costs
+one disabled object, and destroying bindings on every manage sequence to chase
+a policy that might answer differently is churn in the one code path that runs
+before the compositor can process input.
+
+A binding created while capture is armed is enabled immediately.  Without that,
+a key added at a REPL would not work until something else toggled the armed
+state — which is the sort of `works on the second try' that costs an afternoon."
+  (let* ((bindings (server-bindings *server*))
+         (armed (c:prop seat :capture-armed))
+         (wanted (capture-key-list)))
+    ;; Diffed like everything else on this path.  ARM-CAPTURE runs on every
+    ;; manage sequence and the answer is two hundred keys, so the common case —
+    ;; the policy said the same thing it said last time — has to be one list
+    ;; comparison rather than two hundred ASSOCs over a two-hundred-element
+    ;; alist.  Comparing the answer is also what makes `never removes' safe to
+    ;; state: nothing here can churn when nothing changed.
+    (when (and bindings (not (equal wanted (c:prop seat :capture-wanted))))
+      (setf (c:prop seat :capture-wanted) (copy-list wanted))
+      (dolist (key wanted)
+        (destructuring-bind (keysym . modifiers) key
+          (unless (assoc key (c:prop seat :capture-bindings) :test #'equal)
+            (let ((binding (guarded "get_xkb_binding"
+                             (w:bindings-get-xkb-binding
+                              bindings (seat-proxy seat) keysym modifiers))))
+              (when binding
+                (push (let ((keysym keysym) (modifiers modifiers))
+                        (lambda (event &rest arguments)
+                          (declare (ignore arguments))
+                          (with-abandon
+                            (when (eq event :pressed)
+                              (handle-captured-key keysym modifiers)))))
+                      (wl:wl-proxy-hooks binding))
+                (push (cons (cons keysym modifiers) binding)
+                      (c:prop seat :capture-bindings))
+                (when armed
+                  (guarded "capture binding" (w:binding-enable binding))))))))))
   (c:prop seat :capture-bindings))
 
 (defun handle-captured-key (keysym modifiers)

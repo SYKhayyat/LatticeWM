@@ -124,17 +124,38 @@ run: image
 run-bare: image
 	@river -c "$(CURDIR)/latticewm"
 
+# THIS TARGET USED TO TRUNCATE THE SHIPPED DOCUMENTATION AND EXIT 0.
+#
+# It was `$(RUN) ... > doc/X.txt 2>/dev/null'.  The shell truncates the target
+# *before* the command runs and the diagnostic went nowhere, so if cli.lisp
+# failed to load, the extension surface, the command list, the option list and
+# the keymap all became empty files, make said nothing, and install.sh
+# installed them.  A generated document cannot go stale, which is its whole
+# argument -- but it can go blank, and blank is worse than stale because
+# nothing about it looks wrong.
+#
+# So: write to a temporary, keep stderr, and only replace the shipped file when
+# the command succeeded and produced something.
+define GENERATE
+	@printf '  %s\n' "$(2)"
+	@$(RUN) --load tools/cli.lisp -- $(1) > $(2).new || \
+	  { echo "make surface: $(1) failed; $(2) left alone" >&2; \
+	    rm -f $(2).new; exit 1; }
+	@test -s $(2).new || \
+	  { echo "make surface: $(1) produced nothing; $(2) left alone" >&2; \
+	    rm -f $(2).new; exit 1; }
+	@mv $(2).new $(2)
+endef
+
 surface: build
 	@mkdir -p doc
-	@$(RUN) --load tools/cli.lisp -- --extension-surface \
-		> doc/EXTENSION-SURFACE.txt 2>/dev/null
-	@$(RUN) --load tools/cli.lisp -- --list-commands \
-		> doc/COMMANDS.txt 2>/dev/null
-	@$(RUN) --load tools/cli.lisp -- --list-options \
-		> doc/OPTIONS.txt 2>/dev/null
-	@$(RUN) --load tools/cli.lisp -- --list-keys \
-		> doc/KEYS.txt 2>/dev/null
-	@wc -l doc/EXTENSION-SURFACE.txt doc/COMMANDS.txt doc/OPTIONS.txt doc/KEYS.txt
+	$(call GENERATE,--extension-surface,doc/EXTENSION-SURFACE.txt)
+	$(call GENERATE,--container-surface,doc/CONTAINER-SURFACE.txt)
+	$(call GENERATE,--list-commands,doc/COMMANDS.txt)
+	$(call GENERATE,--list-options,doc/OPTIONS.txt)
+	$(call GENERATE,--list-keys,doc/KEYS.txt)
+	@wc -l doc/EXTENSION-SURFACE.txt doc/CONTAINER-SURFACE.txt \
+		doc/COMMANDS.txt doc/OPTIONS.txt doc/KEYS.txt
 
 config: image
 	@./latticewm --write-config

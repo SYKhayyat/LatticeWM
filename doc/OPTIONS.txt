@@ -743,6 +743,21 @@ LatticeWM options.  Set any of these in /home/shaul/.config/latticewm/init.lisp
   edge lines up with it exactly, which is the one piece of drag polish that is
   worth having and the one people notice is missing.
 
+*READLINE-CHORDS*
+  value:   "abdefgknpuwy"
+  default: "abdefgknpuwy"
+  Which Ctrl-letter chords a prompt reads.
+  
+  The keys fingers press at a prompt without being asked: C-a, C-e, C-k, C-w and
+  the rest.  Bound only while a prompt is up, so C-w still means close-tab to the
+  browser underneath.
+  
+  An option rather than a constant because the two obvious other answers are a
+  whole different muscle memory -- a vi user wants almost none of these and a
+  readline maximalist wants more -- and because it is the one part of
+  CAPTURE-KEYS somebody might reasonably want to change without writing a
+  method.
+
 *REPEAT-DELAY*
   value:   NIL
   default: NIL

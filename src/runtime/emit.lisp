@@ -123,14 +123,19 @@ should err towards calling it rather than reasoning about whether they must."
   (when force
     (clrhash (server-emitted *server*)))
   (let* ((policy (p:current-policy))
-         (placements (compute-layout))
-         (ordered (guarded "render-order" (p:render-order policy placements))))
+         (placements (compute-layout)))
     (setf (c:prop *world* :last-placements) placements
           (c:prop *world* :rect-index) (index-placements placements))
     ;; Split the work.  The manage pile waits for the next manage sequence.
     (setf (server-pending-dimensions *server*)
           (collect-dimension-work policy placements))
-    (emit-rendering-state policy (or ordered placements))
+    ;; RENDER-ORDER IS ASKED ONCE, DOWN IN EMIT-RENDER-ORDER, ABOUT THE WHOLE
+    ;; RENDER LIST.  It used to be asked here, about the tree placements alone,
+    ;; and the floats were appended unconditionally afterwards — so a policy
+    ;; that put a float below a tiled window was overruled by the caller and
+    ;; looked like a broken generic.  Emitting position and borders in render
+    ;; order bought nothing; only the place_above chain cares.
+    (emit-rendering-state policy placements)
     (draw-overlays)
     (run-hooks :layout-changed)
     placements))
@@ -248,13 +253,15 @@ set changes, or overlapping windows flicker between frames."
             (when (and window (c:window-proxy window) (c:window-live-p window))
               (cond
                 ((and visible (not (c:window-minimized-p window)))
-                 (push window shown)
+                 (push placement shown)
                  (emit-window-visible policy window node path rect cursor))
                 (t
                  (when-changed (window :shown nil)
                    (guarded "hide" (w:window-hide (c:window-proxy window)))))))))))
-    (emit-floats policy)
-    (emit-render-order (nreverse shown))))
+    ;; The floats come back as placements rather than being appended by the
+    ;; caller, so that RENDER-ORDER is handed the whole render list and its
+    ;; answer is the whole answer.
+    (emit-render-order policy (append (nreverse shown) (emit-floats policy)))))
 
 (defun leaf-focus-state (path cursor)
   "What kind of focus the pane at PATH has: T, :CURSOR, or NIL.
@@ -356,53 +363,69 @@ answer is to centre it."
         rect)))
 
 (defun emit-floats (policy)
-  "Position the floating windows.
+  "Position the floating windows, and return them as placements.
 
 They are not in the tree, so they are not in the layout; they are placed from
 their own rectangles, and an *anchored* float is offset by wherever its anchor
 node ended up — which is what makes 'a floating window inside a window' travel
-with the window it belongs to."
-  (dolist (float (c:world-floats *world*))
-    (let* ((window (c:float-window float))
-           (proxy (and window (c:window-proxy window))))
-      (when (and proxy (c:window-live-p window))
-        (if (c:window-minimized-p window)
-            (when-changed (window :shown nil)
-              (guarded "hide" (w:window-hide proxy)))
-            (let* ((anchor (c:float-anchor float))
-                   (base (and anchor (gethash anchor (c:prop *world* :rect-index))))
-                   (rect (c:float-rect float))
-                   (placed (if base
-                               (c:make-rect (+ (c:rect-x base) (c:rect-x rect))
-                                            (+ (c:rect-y base) (c:rect-y rect))
-                                            (c:rect-w rect) (c:rect-h rect))
-                               rect)))
-              (setf (c:window-rect window) placed)
-              (when-changed (window :shown t)
-                (guarded "show" (w:window-show proxy)))
-              ;; Diffed like everything around it.  This was the one emission
-              ;; in the file that was not, so every float re-proposed identical
-              ;; dimensions on every relayout — and river processes every
-              ;; request we send before it can answer input, which is the whole
-              ;; reason the diff table exists.
-              (when-changed (window :float-dimensions
-                                    (list (c:rect-w placed) (c:rect-h placed)))
-                (push (list window (c:rect-w placed) (c:rect-h placed))
-                      (server-pending-dimensions *server*)))
-              (let ((river-node (window-river-node window)))
-                (when river-node
-                  (when-changed (window :position (list (c:rect-x placed)
-                                                        (c:rect-y placed)))
-                    (guarded "set_position"
-                      (w:node-set-position river-node (c:rect-x placed)
-                                           (c:rect-y placed))))))
-              ;; The float's own leaf, kept on the float record rather than
-              ;; made fresh each time: BORDER-COLOR is handed a node, and a
-              ;; node that is a different object on every relayout cannot carry
-              ;; a prop, cannot be compared, and cannot be the thing a
-              ;; window-rule hung a colour on.
-              (emit-borders policy window (float-leaf float)
-                            (window-focused-p window))))))))
+with the window it belongs to.
+
+RETURNING PLACEMENTS IS WHAT MAKES P:RENDER-ORDER MEAN ANYTHING FOR FLOATS.
+This used to return nothing and the caller appended the floats to the end of
+the render list itself, above every tiled window, unconditionally — so the one
+generic whose whole job is to order the render list was consulted about the
+tiled half and overruled about the other.  A policy that wanted a float below a
+tiled window wrote a method, watched nothing happen, and had every reason to
+think the generic was broken rather than the caller.  The float's node is
+FLOAT-LEAF, the same node every appearance generic is already handed for it, so
+a RENDER-ORDER method sees floats and tiles in one vocabulary."
+  (let ((out '()))
+    (dolist (float (c:world-floats *world*) (nreverse out))
+      (let* ((window (c:float-window float))
+             (proxy (and window (c:window-proxy window))))
+        (when (and proxy (c:window-live-p window))
+          (if (c:window-minimized-p window)
+              (when-changed (window :shown nil)
+                (guarded "hide" (w:window-hide proxy)))
+              (let* ((anchor (c:float-anchor float))
+                     (base (and anchor (gethash anchor (c:prop *world* :rect-index))))
+                     (rect (c:float-rect float))
+                     (placed (if base
+                                 (c:make-rect (+ (c:rect-x base) (c:rect-x rect))
+                                              (+ (c:rect-y base) (c:rect-y rect))
+                                              (c:rect-w rect) (c:rect-h rect))
+                                 rect)))
+                (setf (c:window-rect window) placed)
+                (when-changed (window :shown t)
+                  (guarded "show" (w:window-show proxy)))
+                ;; Diffed like everything around it.  This was the one emission
+                ;; in the file that was not, so every float re-proposed identical
+                ;; dimensions on every relayout — and river processes every
+                ;; request we send before it can answer input, which is the whole
+                ;; reason the diff table exists.
+                (when-changed (window :float-dimensions
+                                      (list (c:rect-w placed) (c:rect-h placed)))
+                  (push (list window (c:rect-w placed) (c:rect-h placed))
+                        (server-pending-dimensions *server*)))
+                (let ((river-node (window-river-node window)))
+                  (when river-node
+                    (when-changed (window :position (list (c:rect-x placed)
+                                                          (c:rect-y placed)))
+                      (guarded "set_position"
+                        (w:node-set-position river-node (c:rect-x placed)
+                                             (c:rect-y placed))))))
+                ;; The float's own leaf, kept on the float record rather than
+                ;; made fresh each time: BORDER-COLOR is handed a node, and a
+                ;; node that is a different object on every relayout cannot carry
+                ;; a prop, cannot be compared, and cannot be the thing a
+                ;; window-rule hung a colour on.
+                (emit-borders policy window (float-leaf float)
+                              (window-focused-p window))
+                ;; The same shape a tree placement has: (NODE PATH RECT VISIBLE).
+                ;; PATH is NIL because a float is deliberately not in the tree,
+                ;; which is exactly what a RENDER-ORDER method wanting to know
+                ;; `is this a float' can test.
+                (push (list (float-leaf float) nil placed t) out))))))))
 
 (defun float-leaf (float)
   "The LEAF standing for FLOAT, made once and kept.
@@ -415,18 +438,29 @@ system has: props, labels, and any rule that identified it."
   (or (c:float-node float)
       (setf (c:float-node float) (c:make-leaf (c:float-window float)))))
 
-(defun emit-render-order (tiled)
-  "Order every visible node, bottom to top: tiled, then floats, then overlays.
+(defun emit-render-order (policy placements)
+  "Order every visible window, bottom to top, however P:RENDER-ORDER says.
 
 River leaves the initial render position undefined, so this cannot be skipped
 for windows we have not moved.  It can, however, be skipped when the *sequence*
-has not changed, which is the common case."
-  (let* ((floats (loop for float in (c:world-floats *world*)
-                       for window = (c:float-window float)
-                       when (and window (c:window-live-p window)
-                                 (not (c:window-minimized-p window)))
-                         collect window))
-         (order (append tiled floats)))
+has not changed, which is the common case.
+
+PLACEMENTS IS THE WHOLE RENDER LIST — tiled placements and floats together —
+and the generic is asked once, about all of it.  It used to be asked in
+RELAYOUT about the tree alone, with the floats appended here afterwards, which
+made P:RENDER-ORDER's own documented contract (`tiled nodes in layout order,
+then floats, then overlays') something the caller enforced rather than
+something the method decided.  The shipped method still says exactly that, so
+nothing moves on screen; what changed is that a method saying otherwise is now
+obeyed."
+  (let* ((ordered (or (guarded "render-order" (p:render-order policy placements))
+                      placements))
+         (order (loop for placement in ordered
+                      for node = (first placement)
+                      for window = (and (typep node 'c:leaf) (c:leaf-window node))
+                      when (and window (c:window-live-p window)
+                                (not (c:window-minimized-p window)))
+                        collect window)))
     ;; EQUAL on a list of objects compares them with EQL, which is identity —
     ;; exactly the comparison wanted, and it makes the common case (nothing
     ;; changed order) one list walk rather than N protocol messages.

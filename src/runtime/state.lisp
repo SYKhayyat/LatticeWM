@@ -50,41 +50,13 @@ everybody's layout once to protect against nothing.")
 ;;; back, the core knows only that a node has a *tag* and a plist, and the
 ;;; `unknown' branch goes back to meaning what it says: a kind that is genuinely
 ;;; not loaded right now.
-
-(defgeneric serialize-node (node)
-  (:documentation
-   "NODE as a readable s-expression: a tag keyword followed by a plist.
-
-Windows become their river identifier, which is the only part of a window that
-means anything across a restart.
-
-*Every field is named.*  The first version of this wrote
-
-    (:split :horizontal (1 1) (:leaf …) (:leaf …))
-
-— weights positionally, children after — and read it back by asking which
-elements were conses.  The weights *are* a cons, so they came back as a child,
-and every restart grew a spurious empty pane at the front of every split.  The
-tree was subtly wrong in a way that looked like a layout bug rather than a
-parsing one.  Naming the fields costs eight characters and makes that class of
-mistake unavailable.
-
-A container kind adds one method here and one DESERIALIZE-NODE method, and its
-users' layouts survive a restart.  Use a namespaced tag — :LATTICE/GRID — so
-two extensions cannot collide."))
-
-(defgeneric deserialize-node (tag plist index)
-  (:documentation
-   "Rebuild the node TAG names from PLIST, looking windows up in INDEX.
-
-TAG is the keyword SERIALIZE-NODE wrote, and is dispatched on with an EQL
-specializer, so adding a kind is adding a method rather than editing a CASE.
-INDEX maps river window identifiers to live WINDOWs; an identifier that is not
-in it belongs to a window that no longer exists and yields an empty pane.
-
-The method on T is the one that matters for forward compatibility: a file
-written by an image that had an extension loaded, read by one that does not,
-keeps the windows and loses only the arrangement."))
+;;;
+;;; THEY ARE DECLARED IN model/node.lisp, with the other seventeen members of
+;;; the container protocol, and only their methods are here.  Declaring them
+;;; beside the file format put two obligations of an advertised protocol in a
+;;; package that protocol's document could not see — and the two whose failure
+;;; mode is silent data loss on restart, at that.  The file format is a runtime
+;;; concern and stays here; the contract is not.
 
 (defun serialize-children (node)
   "Every child of NODE, serialized, in container order.
@@ -175,6 +147,74 @@ knows what this shape was'; neither means `throw the windows away'."
           ((null (rest children)) (first children))
           (t (c:make-split :horizontal children)))))
 
+;;; ------------------------------------------------ what is not in the tree
+;;;
+;;; A WINDOW'S OWN STATE IS NOT THE TREE'S STATE, and putting it in the tree is
+;;; how the feature that most needed it was the feature that lost it.
+;;;
+;;; runtime/tags.lisp opens by arguing that a dead slot in a *persisted* state
+;;; file is worse than one in memory, because it becomes de-facto API.
+;;; WINDOW-TAGS had never been in that file.  Neither had :SCRATCHPAD — and a
+;;; named scratchpad is a *minimized* window, which is out of the tree by
+;;; construction, so no amount of care in SERIALIZE-NODE could have reached it.
+;;; Put a terminal away under the name `music', restart the window manager, and
+;;; it came back as an anonymous window in the tree: the name gone, the putting
+;;; away undone, and the one command for getting it back keyed on the name.
+;;;
+;;; So this is a second section of the file, on the same identifiers, for the
+;;; facts that belong to a window rather than to a place.  Adding a key is not
+;;; a shape change — see +STATE-VERSION+ — so an older reader ignores it and a
+;;; newer reader gets NIL from a file written before it existed.
+
+(defun window-facts (&optional (windows (all-windows)))
+  "Per-window state that is not in the tree, keyed by river identifier.
+
+Only windows that have some.  The common case is none, and a file full of empty
+rows is a file nobody reads.
+
+WINDOWS is a parameter, defaulted, rather than a call to ALL-WINDOWS in the
+body: everything else in this file can be unit-tested and this could not have
+been, which for a persistence path is the wrong way round."
+  (loop for window in windows
+        for identifier = (c:window-identifier window)
+        for tags = (c:window-tags window)
+        for scratchpad = (c:prop window :scratchpad)
+        for minimized = (c:window-minimized-p window)
+        when (and identifier (or tags scratchpad minimized))
+          collect (list identifier
+                        :tags (copy-list tags)
+                        :scratchpad scratchpad
+                        :minimized minimized)))
+
+(defun restore-window-facts (world saved index)
+  "Put SAVED per-window state back onto the live windows in INDEX.
+
+Tags are unioned rather than assigned: the window is already open, so a window
+rule may have tagged it since it did, and the file describes the world as it was
+a moment ago rather than as it must be.
+
+Minimizing goes through ON-MINIMIZE like every other minimize, so a policy that
+keeps its own scratchpad sees it happen.  It runs *before* LOAD-STATE re-places
+the windows the restored tree did not mention, which is what keeps a window that
+was deliberately put away from reappearing on screen.
+
+A row that is not a list, or names an identifier no live window has, is skipped
+rather than signalled: a state file is untrusted input the moment somebody edits
+it by hand, which is the same ruling READ-NODE makes three functions up."
+  (dolist (row saved)
+    (when (consp row)
+      (destructuring-bind (identifier &key tags scratchpad minimized) row
+        (let ((window (gethash identifier index)))
+          (when window
+            ;; Reversed, so that a window with no tags yet comes back with
+            ;; them in the order they were given.  WINDOW-TAG-NAMES documents
+            ;; that order and the tag prompt lists them in it.
+            (dolist (tag (reverse tags)) (pushnew tag (c:window-tags window)))
+            (when scratchpad (setf (c:prop window :scratchpad) scratchpad))
+            (when (and minimized (not (c:window-minimized-p window)))
+              (guarded "restore minimized"
+                (p:on-minimize (p:current-policy) world window)))))))))
+
 (defun output-workspaces ()
   "Which workspace each output is showing, by output name.
 
@@ -229,6 +269,7 @@ problem, which is what makes it worth a paragraph."
         (write (list :version +state-version+
                      :cursor (c:world-cursor *world*)
                      :outputs (output-workspaces)
+                     :windows (window-facts)
                      :root (serialize-node (c:world-root *world*)))
                :stream out)
         (terpri out)))
@@ -255,6 +296,10 @@ be."
         (dolist (window (all-windows))
           (when (c:window-identifier window)
             (setf (gethash (c:window-identifier window) index) window)))
+        ;; Before the tree, because it decides which windows the tree is
+        ;; allowed to re-place: a window that was on a named scratchpad is
+        ;; minimized again here, and the loop below skips minimized windows.
+        (restore-window-facts *world* (getf form :windows) index)
         (let ((root (read-node (getf form :root) index)))
           ;; Anything we are managing that the file did not mention has to go
           ;; somewhere, or it would be invisible and unreachable.

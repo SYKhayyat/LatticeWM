@@ -148,15 +148,29 @@ deliberately decomposed so that policy can redirect it.")
    #:container #:children #:weights #:container-p #:sequential-container
    #:split #:split-axis #:make-split
    #:stack #:stack-selected #:make-stack
-   ;; the container protocol
+   ;; the container protocol.  REPLACE-CHILD was here for the life of the
+   ;; project and was never defined anywhere — a DEFGENERIC that does not exist,
+   ;; on the advertised surface, which nothing could see because the container
+   ;; protocol had no generated document and no membership test.  It has both
+   ;; now; see model/surface.lisp.  (SETF CHILD-AT) is what it would have been.
    #:container-addresses #:child-at #:remove-child #:insert-child
-   #:replace-child #:address-equal #:container-count
+   #:address-equal #:container-count
    #:map-nodes #:find-node-if #:node-leaves #:node-windows #:leaf-holding
    #:copy-node #:copy-node-slots #:node-signature #:node-empty-p #:simplify-node
    #:default-address #:empty-pane-p
    #:container-alternatives-p #:container-selection #:container-splits-along-p
+   #:serialize-node #:deserialize-node
    #:*insertion-weight-function* #:default-insertion-weight
    #:insertion-weight-for
+   ;; the container protocol, describing itself.  The sibling of
+   ;; LATTICEWM/POLICY's extension surface, and it exists for the same reason:
+   ;; a surface documented by hand rots, and one generated from the image
+   ;; cannot.
+   #:container-protocol-p #:container-protocol-generics
+   #:undocumented-container-generics #:container-surface
+   #:print-container-surface #:+container-protocol-extras+
+   #:generic-description #:method-description #:specializer-name
+   #:print-generic-descriptions #:accessor-generic-p #:node-lineage-p
    ;; paths
    #:resolve-path #:resolve-chain #:path-valid-p #:node-path-to
    #:node-contains-p
@@ -235,7 +249,7 @@ You never edit this package.")
    #:echo-content
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
-   #:focus-after-remove #:on-focus-change
+   #:focus-after-remove #:on-focus-change #:focus-target
    #:find-motion-target #:move-cursor #:jump-cursor #:descend-to-leaf
    #:repair-cursor #:motion-rects #:best-aligned-address
    #:mru-path #:node-rect #:place-node
@@ -354,7 +368,7 @@ You never edit this package.")
    #:on-restore #:window-capabilities #:decoration-mode
    #:default-float-rect #:window-rule-for
    ;; --- input ----------------------------------------------------------
-   #:key-unbound #:on-key #:pointer-focus
+   #:key-unbound #:on-key #:pointer-focus #:capture-keys #:*readline-chords*
    #:pointer-drag-rect #:pointer-resize-edges
    #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
    #:*click-to-focus* #:*click-to-raise* #:*float-on-drag*
@@ -366,12 +380,23 @@ You never edit this package.")
    #:stack-visible-address #:container-label #:container-role
    #:container-role-name #:world-role-name
    ;; --- introspection --------------------------------------------------
+   ;; GENERIC-DESCRIPTION was here and is in LATTICEWM/CORE now, with the two
+   ;; helpers it is built from: describing a CLOS generic knows nothing about
+   ;; policy, and the container protocol needs the identical description.
    #:policy-generic-p #:policy-generics #:extension-surface
-   #:print-extension-surface #:undocumented-generics #:generic-description
+   #:print-extension-surface #:undocumented-generics
    #:*motion-reference-rect*))
 
 (defpackage #:latticewm/runtime
   (:use #:cl)
+  ;; The two container-protocol generics whose *methods* live here.  They are
+  ;; declared in model/node.lisp with the rest of the protocol and imported so
+  ;; that `r:serialize-node' keeps resolving -- the lattice specializes both,
+  ;; and the whole point of moving the declaration was to change where the
+  ;; obligation is documented, not to break the extension that meets it.
+  (:import-from #:latticewm/core
+   #:serialize-node
+   #:deserialize-node)
   ;; Imported rather than prefixed at every call site.  The command registry
   ;; and the logging boundary moved to LATTICEWM/POLICY -- see PLAN §log5 --
   ;; and importing them means the move cost zero edits in the four hundred
@@ -561,7 +586,8 @@ keybindings, the command registry, and the session loop.")
    #:on-events #:declare-handled-events #:all-handled-events
    #:save-state #:load-state #:save-state-soon #:state-file
    #:serialize-node #:deserialize-node #:read-node
-   #:serialize-children #:deserialize-children))
+   #:serialize-children #:deserialize-children
+   #:window-facts #:restore-window-facts))
 
 (defpackage #:latticewm/user
   (:use #:cl #:latticewm/core #:latticewm/policy #:latticewm/runtime)

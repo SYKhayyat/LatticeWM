@@ -7,6 +7,36 @@
   "A world in its shipped starting shape: one workspace, one empty pane."
   (c:make-world))
 
+;;; Two policies an extension author might really write, defined here rather
+;;; than installed onto CONVENTIONAL-POLICY by a test that then puts the
+;;; shipped method back.  A test that restores by re-DEFMETHODing a hand-copied
+;;; body leaves a frozen duplicate of the shipped algorithm on a *more specific*
+;;; class for the rest of the image, and every later test dispatches through it
+;;; -- which is the exact mistake FINDINGS.org core edit 3 exists to prevent.
+;;; A subclass costs one line and cannot do that.
+
+(defclass floats-below-policy (p:conventional-policy) ()
+  (:documentation "Floats render underneath the tiled windows."))
+
+(defmethod p:render-order ((policy floats-below-policy) placements)
+  (stable-sort (copy-list placements) #'<
+               :key (lambda (placement)
+                      (let ((node (first placement)))
+                        (if (and (typep node 'c:leaf)
+                                 (c:leaf-window node)
+                                 (c:window-floating-p (c:leaf-window node)))
+                            0
+                            1)))))
+
+(defclass sloppy-focus-policy (p:conventional-policy) ()
+  (:documentation
+   "Keyboard focus stays on the last window rather than clearing over an empty
+pane -- what most tiling window managers do, and what D18 deliberately does
+not.  It is the obvious thing somebody will want back."))
+
+(defmethod p:focus-target ((policy sloppy-focus-policy) world)
+  (or (call-next-method) (c:prop world :last-focused)))
+
 (test a-fresh-world-is-one-empty-pane
   (let ((world (fresh-world)))
     (is (equal '(:stack 0 (:leaf nil)) (shape (c:world-root world))))
@@ -256,6 +286,74 @@ method."))
                                              (list tiled '(0) nil t)))))
       (is (eq tiled (first (first ordered))))
       (is (eq floated (first (second ordered)))))))
+
+(test render-order-decides-the-whole-list-and-not-half-of-it
+  "THE FLOAT CLAUSE OF THE SHIPPED METHOD USED TO BE UNREACHABLE.
+
+Floats are deliberately not in the tree, so they were never in the PLACEMENTS
+this generic was handed: the runtime asked it about the tiled half and then
+appended the floats itself, above everything, unconditionally.  A policy that
+wanted a float *below* a tiled window wrote a method, watched nothing happen,
+and had every reason to conclude the generic was broken rather than the caller.
+
+So the assertion is not `floats end up on top' — the test above already says
+that.  It is that a method saying otherwise is obeyed, which is the property
+that was false."
+  (let* ((tiled (leaf-with "tiled"))
+         (floated (leaf-with "floated"))
+         (placements (list (list tiled '(0) nil t)
+                           (list floated nil nil t))))
+    (setf (c:window-floating-p (c:leaf-window floated)) t)
+    (let ((ordered (p:render-order (policy) placements)))
+      (is (= 2 (length ordered))
+          "a float handed in as a placement must come back as one")
+      (is (eq floated (first (second ordered)))))
+    ;; And now a policy that wants its floats underneath.  One method.
+    (let ((below (make-instance 'floats-below-policy)))
+      (let ((ordered (p:render-order below placements)))
+        (is (eq floated (first (first ordered)))
+            "the policy put floats at the bottom and was overruled")
+        (is (eq tiled (first (second ordered))))))))
+
+;;; ------------------------------------------------------------ D18, as policy
+
+(test focus-target-is-the-shipped-rule-and-is-a-decision
+  "D18 IS THE IDEA THE README ASKS YOU TO READ FIRST AND IT WAS A COND.
+
+Focus is a place; Wayland keyboard focus is *derived* from where the cursor
+rests.  That derivation lived inline in runtime/windows.lisp, so a policy could
+change where the cursor went, what it looked like, and what happened after it
+moved -- and could not change what focus meant.  The one idea the project leads
+with was the one decision no method could reach.
+
+Two assertions, and the second is the one that was false: the shipped rule is
+still the shipped rule, and something else is now writable."
+  (let ((world (fresh-world)) (pol (policy)))
+    ;; A fresh world is one empty pane, so the honest answer is `nothing'.
+    (is (null (p:focus-target pol world))
+        "an empty pane must clear the keyboard, not leave it where it was")
+    (p:on-window-open pol world (win "emacs"))
+    (is (equal "emacs" (c:window-app-id (p:focus-target pol world))))
+    ;; A float takes the keyboard from the cursor's pane, because it is on top
+    ;; and is what the user is looking at.
+    (let* ((floated (win "dialog"))
+           (float (make-instance 'c:floating-window :window floated
+                                                    :rect (c:make-rect 0 0 10 10))))
+      (push float (c:world-floats world))
+      (setf (c:world-focused-float world) float)
+      (is (eq floated (p:focus-target pol world))))))
+
+(test sloppy-focus-is-one-method
+
+  "The obvious other rule, written the way an extension author would write it."
+  (let ((world (fresh-world))
+        (sloppy (make-instance 'sloppy-focus-policy))
+        (remembered (win "editor")))
+    (setf (c:prop world :last-focused) remembered)
+    (is (null (p:focus-target (policy) world))
+        "the shipped policy clears over an empty pane")
+    (is (eq remembered (p:focus-target sloppy world))
+        "and a policy that does not want that says so in one method")))
 
 ;;; ------------------------------------------------------------ persistence
 

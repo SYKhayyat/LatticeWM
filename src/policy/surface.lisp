@@ -16,34 +16,15 @@
 ;;;; *you* have added, so a user with a configuration file can ask the running
 ;;;; window manager what they have changed.
 
+;;;; SPECIALIZER-NAME, METHOD-DESCRIPTION and GENERIC-DESCRIPTION used to live
+;;;; here.  They describe a CLOS generic and know nothing about policy, and the
+;;;; container protocol needs the identical description in the identical format
+;;;; — so they are in model/surface.lisp now and both surfaces call them.  Two
+;;;; printers for one format are two chances to disagree about it, and a
+;;;; generated document whose whole value is that it cannot drift is a poor
+;;;; place to keep a second copy of the formatter.
+
 (in-package #:latticewm/policy)
-
-(defun specializer-name (specializer)
-  "A readable name for a method specializer."
-  (typecase specializer
-    (closer-mop:eql-specializer
-     (format nil "(eql ~s)" (closer-mop:eql-specializer-object specializer)))
-    (class (string-downcase (class-name specializer)))
-    (t (princ-to-string specializer))))
-
-(defun method-description (method)
-  "A method as (SPECIALIZERS QUALIFIERS SOURCE-FILE)."
-  (list (mapcar #'specializer-name (closer-mop:method-specializers method))
-        (method-qualifiers method)
-        (ignore-errors
-         (let ((source (sb-introspect:find-definition-source method)))
-           (when source
-             (let ((path (sb-introspect:definition-source-pathname source)))
-               (when path (file-namestring path))))))))
-
-(defun generic-description (symbol)
-  "One extension-surface generic, as a plist."
-  (let ((gf (fdefinition symbol)))
-    (list :name symbol
-          :lambda-list (sb-introspect:function-lambda-list symbol)
-          :documentation (documentation symbol 'function)
-          :methods (mapcar #'method-description
-                           (closer-mop:generic-function-methods gf)))))
 
 (defun extension-surface ()
   "The whole extension surface, as data.
@@ -52,7 +33,7 @@ This is what the SWANK bridge answers 'what can I change?' with, and it is
 deliberately machine-readable first and pretty second — PLAN.org's framing is
 that the realistic post-expiry maintainer is a cheap model plus whatever
 contributors the release attracts, and a model would rather have a plist."
-  (list :generics (mapcar #'generic-description (policy-generics))
+  (list :generics (mapcar #'c:generic-description (policy-generics))
         :options (all-options)))
 
 (defun undocumented-generics ()
@@ -84,20 +65,11 @@ can write.  Yours has to be strictly more specific than theirs, or it~%~
 replaces the shipped answer instead of extending it and CALL-NEXT-METHOD~%~
 signals NO-NEXT-METHOD.~2%~
 The `methods' list under each generic includes yours, which is how you check~%~
-that your configuration file was actually loaded.~2%")
-    (dolist (entry (getf surface :generics))
-      (format stream "~&~76,,,'-<~>~%~(~a~) ~(~s~)~%~76,,,'-<~>~%"
-              (getf entry :name) (getf entry :lambda-list))
-      (let ((documentation (getf entry :documentation)))
-        (if documentation
-            (format stream "~a~%" documentation)
-            (format stream "UNDOCUMENTED <-- flag me~%")))
-      (format stream "~%  methods:~%")
-      (dolist (method (getf entry :methods))
-        (destructuring-bind (specializers qualifiers source) method
-          (format stream "    (~{~a~^ ~})~@[ ~{~a~^ ~}~]~@[~40t; ~a~]~%"
-                  specializers qualifiers source)))
-      (terpri stream))
+that your configuration file was actually loaded.~2%~
+This is one of two surfaces.  The other is the *container* protocol -- what a~%~
+new container kind answers rather than what a new policy answers -- and it is~%~
+printed by `latticewm --container-surface'.~2%")
+    (c:print-generic-descriptions (getf surface :generics) stream)
     (format stream "~&~76,,,'=<~>~%OPTIONS~%~76,,,'=<~>~2%")
     (dolist (row (getf surface :options))
       (destructuring-bind (key variable value default documentation) row

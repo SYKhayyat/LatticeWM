@@ -125,3 +125,46 @@ Specializing this is how a modal layer -- a resize mode, a vi-style submap --
 intercepts everything without unbinding anything."
   (declare (ignore world key))
   nil)
+
+(define-option *readline-chords* "abdefgknpuwy"
+  "Which Ctrl-letter chords a prompt reads.
+
+The keys fingers press at a prompt without being asked: C-a, C-e, C-k, C-w and
+the rest.  Bound only while a prompt is up, so C-w still means close-tab to the
+browser underneath.
+
+An option rather than a constant because the two obvious other answers are a
+whole different muscle memory -- a vi user wants almost none of these and a
+readline maximalist wants more -- and because it is the one part of
+CAPTURE-KEYS somebody might reasonably want to change without writing a
+method.")
+
+(defmethod capture-keys ((policy input-policy))
+  "Printable ASCII bare and shifted, the keys that move and delete, and the
+readline chords.
+
+THE LIST MOVED HERE FROM src/runtime/seats.lisp, WHERE IT WAS A DEFPARAMETER.
+See the generic.  The composition is unchanged and each of the three parts is
+worth its comment:
+
+Printable ASCII appears *twice*, once bare and once with Shift, and the second
+copy is not redundant — its absence is a bug you find by trying to type a
+bracket.  River matches a binding on keysym *and* modifiers, and the keysym xkb
+produces for Shift+9 on a US layout is `parenleft' with Shift still in the
+modifier set, so a binding for parenleft with no modifiers never fires and M-:
+could not read a single open bracket.  Doing it by mask rather than by guessing
+which characters are shifted on which layout is what makes this work on a
+Dvorak or a German keyboard.
+
+Two hundred-odd bindings sounds like a lot and is one round trip at startup;
+the alternative is not being able to read text at all."
+  (declare (ignore policy))
+  (append
+   (loop for code from #x20 to #x7e
+         append (list (cons code '()) (cons code '(:shift))))
+   ;; Backspace, Tab, Return, Escape, KP_Enter, Delete, and the six that move.
+   (loop for keysym in '(#xff08 #xff09 #xff0d #xff1b #xff8d #xffff
+                         #xff51 #xff52 #xff53 #xff54 #xff50 #xff57)
+         collect (cons keysym '()))
+   (loop for letter across *readline-chords*
+         collect (cons (char-code letter) '(:ctrl)))))

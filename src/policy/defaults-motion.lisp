@@ -103,6 +103,17 @@ is exactly the kind of state an *option* wants and the core does not."
                                  :count 1)))))
   nil)
 
+(defmethod focus-target ((policy motion-policy) world)
+  "D18's rule: a focused float, else the cursor's window, else nothing.
+
+Delegated to C:WORLD-FOCUS-WINDOW rather than restated, because the model
+already answers it and two copies of the definition of focus is precisely the
+sort of thing that goes wrong quietly.  What is new is that the *question* is
+now asked of a policy, so answering it differently is a method rather than a
+patch to an event handler."
+  (declare (ignore policy))
+  (c:world-focus-window world))
+
 (defmethod pointer-focus ((policy motion-policy) world x y)
   "The deepest visible leaf whose rectangle contains the pointer."
   (let ((best nil))

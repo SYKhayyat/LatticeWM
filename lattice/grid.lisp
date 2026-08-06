@@ -257,6 +257,47 @@ so nothing here has to know that a cell address is a coordinate."
         (grid-row-heights new) (copy-table (grid-row-heights old))
         (grid-names new) (copy-table (grid-names old))))
 
+(defun sorted-table (table)
+  "TABLE as a sorted alist, so two equal tables compare EQUAL."
+  (sort (let ((out '()))
+          (maphash (lambda (key value) (push (cons key value) out)) table)
+          out)
+        #'string< :key (lambda (entry) (princ-to-string (car entry)))))
+
+(defmethod c:node-signature ((grid grid))
+  "Identity, every cell, *and the plane's own state* — viewport, tracks, names.
+
+FOUND BY GENERATING THE CONTAINER-PROTOCOL SURFACE AND READING IT.  The grid
+answered thirteen of the protocol's nineteen members and this was the one it
+should have answered and did not; nothing anywhere listed the nineteen, so
+nothing could say so.  NODE-SIGNATURE's own docstring names this exact case:
+
+    A container kind that keeps state of its own — a viewport, a set of track
+    sizes — should add it here, or its users will find that undo skips straight
+    past the operation they wanted back.
+
+Which is what happened.  Undo records a snapshot only when the signature
+changed, so zoom, pan, resize-column, resize-row and name-cell — five verbs
+that change the plane and not the tree — recorded nothing at all.  Pressing
+undo after any of them jumped to a *previous tree* and, because COPY-NODE-SLOTS
+does its job correctly, silently reverted the zoom and the tracks along with
+it.  The one visible symptom was undo appearing to skip a step, which reads as
+an undo bug rather than as a missing method.
+
+The tables are sorted so that two grids with equal state compare EQUAL: hash
+table iteration order is not specified, and a signature that varied by
+iteration order would make every snapshot look like a change — the opposite
+failure, and a ring that fills up with identical trees."
+  (list* :lattice/grid
+         (cell-x (viewport-origin (grid-viewport grid)))
+         (cell-y (viewport-origin (grid-viewport grid)))
+         (viewport-cols (grid-viewport grid))
+         (viewport-rows (grid-viewport grid))
+         (sorted-table (grid-col-widths grid))
+         (sorted-table (grid-row-heights grid))
+         (sorted-table (grid-names grid))
+         (call-next-method)))
+
 (defmethod r:serialize-node ((grid grid))
   "The plane as a readable form, under a namespaced tag.
 

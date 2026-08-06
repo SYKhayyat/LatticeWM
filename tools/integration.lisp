@@ -35,7 +35,17 @@
 ;;;;      kinds, and a setting river's own protocol carries is accepted --
 ;;;;      the half of input configuration that exists without hardware;
 ;;;;   7. with a client available, a window is announced, placed, given a
-;;;;      proposed size and shown.
+;;;;      proposed size and shown;
+;;;;   8. the two extension points that decide what the keyboard does reach the
+;;;;      compositor — P:CAPTURE-KEYS becomes real river_xkb_binding_v1 objects,
+;;;;      and P:FOCUS-TARGET's answer is what river was told to focus.
+;;;;
+;;;; Section 8 is the one that could least be faked.  Both were unreachable
+;;;; decisions until recently — a DEFPARAMETER and a COND in an event handler —
+;;;; and both fail in the same silent way: the binding is never created, or the
+;;;; focus request is never sent, and everything downstream looks fine because
+;;;; nothing downstream is what broke.  A unit test constructing a seat proves
+;;;; nothing about either.
 ;;;;
 ;;;;   make integration
 ;;;;
@@ -378,7 +388,52 @@ the pieces by hand would be constructing state again."
                                         10)
                               "and river told us the size it actually took: ~dx~d"
                               (call "latticewm/core:window-width" window)
-                              (call "latticewm/core:window-height" window))))))))
+                              (call "latticewm/core:window-height" window))
+                       ;; --- 8b. focus is a place, all the way to river ------
+                       ;;
+                       ;; D18 is the idea the README leads with and it was a
+                       ;; COND in an event handler until it was P:FOCUS-TARGET.
+                       ;; The window opened onto the pane the cursor is on, so
+                       ;; the derivation says: that window has the keyboard.
+                       ;; Anything short of asking the *seat* proves only that
+                       ;; the model agrees with itself.
+                       (let ((seat (call "latticewm/runtime::primary-seat")))
+                         (when seat
+                           (check (poll-until
+                                   (lambda ()
+                                     (eq window
+                                         (call "latticewm/runtime::seat-focused" seat)))
+                                   10)
+                                  "and P:FOCUS-TARGET's answer is what river ~
+                                   was told to focus"))))))))
+              ;; --- 8a. the policy's capture keys became real bindings -------
+              ;;
+              ;; P:CAPTURE-KEYS is the whole of what a prompt, an empty pane or
+              ;; the second key of a chord can ever read, because river delivers
+              ;; keys to the focused *window* and hands us only what we asked
+              ;; for.  Asking the seat how many binding objects exist is the
+              ;; only way to know the answer was acted on: a list nobody turned
+              ;; into river_xkb_binding_v1 objects is a keymap that silently
+              ;; does nothing, which is precisely what a submap did before its
+              ;; bug was found.
+              (let ((seat (call "latticewm/runtime::primary-seat")))
+                (cond
+                  ((null seat)
+                   (format t "  skip  the headless backend announced no seat, ~
+                              so no capture bindings were made~%"))
+                  (t
+                   (let ((wanted (length (call "latticewm/policy:capture-keys"
+                                               (call "latticewm/policy:current-policy"))))
+                         (made (poll-until
+                                (lambda ()
+                                  (let ((b (call "latticewm/core:prop" seat
+                                                 :capture-bindings)))
+                                    (and b (length b))))
+                                10)))
+                     (check (eql wanted made)
+                            "the policy asked for ~d capture keys and river ~
+                             made ~a binding~:p"
+                            wanted (or made 0)))))))
             ;; --- shutdown ------------------------------------------------
             (ignore-errors (call "latticewm/runtime:quit"))
             (sleep 0.5))

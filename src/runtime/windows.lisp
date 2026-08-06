@@ -279,9 +279,24 @@ Focus is a *place*.  When the place holds a window that window gets focus;
 when it is an empty pane there is nothing for Wayland focus to be, and
 clear_focus is the honest answer rather than leaving the last window focused
 while the cursor is somewhere else — which would mean your keystrokes go
-somewhere other than where the highlight is."
-  (let ((seat (primary-seat))
-        (window (c:world-focus-window *world*)))
+somewhere other than where the highlight is.
+
+WHAT COUNTS AS THE PLACE IS P:FOCUS-TARGET, and that is the point of the one
+line that changed here.  The rule itself was a C:WORLD-FOCUS-WINDOW call in the
+middle of this function, so the single idea the README leads with was the single
+decision no policy could reach: click-to-focus and sloppy-focus were both
+unwritable, in a program whose thesis is that they are methods.  This function
+keeps what is genuinely the runtime's: the lock-screen case, the diff, and the
+choice of which protocol request says `nothing'."
+  (let* ((seat (primary-seat))
+         ;; Wrapped in a list, deliberately.  A policy answering NIL means `an
+         ;; empty pane, clear the keyboard' and is D18's whole point; GUARDED
+         ;; also answers NIL when a method signalled.  Clearing the keyboard
+         ;; because somebody's FOCUS-TARGET has a typo in it is the wrong
+         ;; failure — the right one is to leave focus exactly where it was.
+         (answer (guarded "focus-target"
+                   (list (p:focus-target (p:current-policy) *world*))))
+         (window (if answer (first answer) (and seat (seat-focused seat)))))
     (when seat
       (cond
         ;; A layer surface has taken exclusive focus — a screen locker.  The

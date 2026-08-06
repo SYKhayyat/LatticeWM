@@ -327,8 +327,25 @@ your own file — no core edit, no rebuild, and it takes effect immediately:
 #+end_src
 
 #+begin_src sh
-latticewm --extension-surface   # every generic you can specialize, from the running image
+latticewm --extension-surface   # every policy generic you can specialize
+latticewm --container-surface   # every generic a new container kind must answer
 #+end_src
+
+*There are two surfaces, and they answer different questions.* The extension
+surface is what the window manager *decides*; the container surface is what it
+can *hold*. Both are generated from the running image, so neither can drift,
+and both list the methods you added — which is how you check that your
+configuration file was loaded. Gate 2 requires every member of both to be
+documented.
+
+The container surface exists because its absence had consequences. A grid
+written against the source alone answered the six obvious members of the
+protocol, loaded without complaint, and broke on copy, on save and on focus
+repair; a generic was exported from the core under the comment "the container
+protocol" and defined nowhere at all; and the two generics whose failure mode
+is silent data loss on restart were declared in the wrong package, so no
+document named them. None of that was visible while only one of the two
+protocols could describe itself.
 
 Four worked examples are in =examples/=, including a whole alternate layout
 model in one method and a new *container kind* — niri's scrolling strip — in

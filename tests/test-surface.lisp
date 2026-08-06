@@ -79,6 +79,35 @@
   ;; those twenty settings had no answer at all -- not a wrong default, not an
   ;; unreachable constant, but no code.  The XML was vendored and never
   ;; compiled.
+  ;;
+  ;; SIXTY-TWO TO SIXTY-FOUR IS THE FIFTH MOVE, AND THE CEILING DID NOT MOVE
+  ;; WITH IT.  That is deliberate and it is the point of writing this down: the
+  ;; count is now one below the ceiling, so the next generic is a decision
+  ;; somebody has to make on purpose rather than a number that drifts up.
+  ;;
+  ;; The two are FOCUS-TARGET and CAPTURE-KEYS, and both pass the test this
+  ;; comment demands -- name the hardcoded answer each replaced:
+  ;;
+  ;;   FOCUS-TARGET   a COND in APPLY-KEYBOARD-FOCUS.  D18 -- focus is a place,
+  ;;                  Wayland keyboard focus is derived from it -- is the idea
+  ;;                  the README asks you to read first, and it was the one
+  ;;                  decision no method could reach.  Click-to-focus and
+  ;;                  sloppy-focus were both unwritable.
+  ;;   CAPTURE-KEYS   a DEFPARAMETER in src/runtime/seats.lisp.  The set of keys
+  ;;                  the window manager may *ever* read was fixed at compile
+  ;;                  time, so a modal editing layer -- the most obvious thing
+  ;;                  this program's users ask for -- could bind a function key
+  ;;                  and never receive it, with nothing to say why.
+  ;;
+  ;; Both are boundary corrections rather than features, which is the third
+  ;; kind of move and the kind gate 6 exists to encourage.  Neither adds a knob
+  ;; that did not exist as a hardcoded answer.
+  ;;
+  ;; The other surface has a count too, and it is not on this test because it
+  ;; is not the same question: see EVERY-CONTAINER-PROTOCOL-GENERIC-IS-DOCUMENTED
+  ;; in tests/test-container.lisp.  A container protocol member is an obligation
+  ;; on an extension author rather than an option offered to one, so `too many'
+  ;; means something different there and a shared ceiling would say nothing.
   (let ((n (length (p:policy-generics))))
     (is (<= 10 n 65) "the extension surface has ~d generics" n)))
 

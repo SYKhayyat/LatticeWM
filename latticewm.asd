@@ -55,6 +55,9 @@
       :components
       ((:file "geometry")
        (:file "node")
+       ;; surface after node: it describes the container protocol NODE
+       ;; declares, and policy/surface.lisp shares its description helpers.
+       (:file "surface")
        (:file "path")
        (:file "surgery")
        (:file "window")
@@ -167,6 +170,9 @@ without a compositor — which is the whole model."
      (:file "test-motion")
      (:file "test-lifecycle")
      (:file "test-surface")
+     ;; container after surface: the two are siblings, and reading them in this
+     ;; order is how the second is meant to be understood.
+     (:file "test-container")
      (:file "test-minibuffer")
      (:file "test-devices")
      (:file "test-examples"))))

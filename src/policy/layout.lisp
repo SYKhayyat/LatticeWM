@@ -250,7 +250,13 @@ result without knowing why it is that shape."
   "Tiled nodes in layout order, then floats, then anything marked as overlay.
 
 River says the initial position of a node in the render list is *undefined*,
-so every node must be ordered explicitly or overlapping windows flicker."
+so every node must be ordered explicitly or overlapping windows flicker.
+
+The float clause used to be unreachable.  Floats are not in the tree, so they
+were never in the PLACEMENTS this was handed — the runtime appended them after
+the fact, above everything, and this method could only ever see tiles.  It sees
+the whole render list now, which is what makes `then floats' a decision this
+takes rather than a sentence describing what the caller does next."
   (stable-sort (copy-list placements) #'<
                :key (lambda (placement)
                       (let ((node (first placement)))

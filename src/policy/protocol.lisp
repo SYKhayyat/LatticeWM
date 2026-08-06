@@ -428,6 +428,43 @@ Returning something else is a one-method change, and MRU-after-close is one of
 the shipped worked examples precisely because it is the most commonly wanted
 one."))
 
+(defgeneric focus-target (policy world)
+  (:documentation
+   "Which window should hold the *keyboard*, or NIL for none.
+
+DESIGN D18, AND IT IS THE ONE IDEA THE README ASKS YOU TO READ FIRST: focus is
+a *place*, and Wayland keyboard focus is derived from where the cursor rests
+rather than being the primary fact.  When the place holds a window, that window
+gets the keyboard; when it is a deliberately empty pane, NIL is the honest
+answer and the compositor is told to clear focus — because leaving the last
+window focused while the highlight is somewhere else means your keystrokes go
+somewhere other than where you are looking.
+
+THIS WAS A COND IN AN EVENT HANDLER UNTIL IT WAS A GENERIC.  The single idea
+that distinguishes this window manager from i3 was the one decision no method
+could reach: runtime/windows.lisp derived it inline, so a policy could change
+where the *cursor* went, what it *looked* like, and what happened *after* it
+moved — and could not change what focus meant.  The thesis of the project is
+that the decisions live above the line; this one is the thesis's own example,
+and it was below it.
+
+The shipped rule is C:WORLD-FOCUS-WINDOW: a focused float wins, because a float
+is on top and is what the user is looking at; otherwise the cursor's window,
+which may be NIL.  Two obvious other rules, both now one method:
+
+  click-to-focus     ignore the cursor, answer the last window clicked
+  sloppy-focus       answer the cursor's window but never NIL, so an empty
+                     pane leaves the keyboard where it was
+
+Returns a C:WINDOW or NIL.  It is asked on every manage sequence, so it must be
+cheap and must not signal — errors are caught and logged, and the fallback is
+to leave focus alone rather than to clear it.
+
+Note what this does *not* decide: a layer surface holding exclusive keyboard
+focus — a screen locker — is a protocol fact rather than a policy one, and the
+runtime honours it whatever this answers.  A policy that could focus a window
+through a lock screen would be a policy that could unlock the screen."))
+
 (defgeneric on-focus-change (policy world old-path new-path)
   (:documentation
    "Called after the cursor moves from OLD-PATH to NEW-PATH.
@@ -769,6 +806,41 @@ underneath for people who do."))
 The default returns NIL, letting the command bound to KEY run.  Specializing
 this is how a modal layer — a resize mode, a vi-style submap — intercepts
 everything without unbinding anything."))
+
+(defgeneric capture-keys (policy)
+  (:documentation
+   "Every key the window manager may read *directly*, as (KEYSYM . MODIFIERS).
+
+River delivers keys to the focused window and gives the window manager only
+what it asked for, so this list is the whole of what can ever be read at a
+prompt, in an empty pane, or as the second key of a chord.  Bound once at
+startup and enabled only while something is reading — a key not on this list
+is not merely unbound, it is *unreadable*, and no keymap entry can rescue it.
+
+THIS WAS A DEFPARAMETER, AND THAT IS THE FINDING RATHER THAN THE FIX.  The set
+of keys an Emacs-shaped window manager may ever read was fixed at compile time,
+in src/runtime/, in a program whose entire premise is that this class of thing
+is a decision.  A modal editing layer — the single most obvious thing this
+program's users will ask for — could bind F1 through F12 in a keymap and find
+that river never delivered one of them, with nothing anywhere to say why.
+Nobody decided that; it is a DEFPARAMETER nobody revisited.
+
+The shipped answer is printable ASCII bare and shifted, the keys that move and
+delete, and the readline chords.  Extend rather than replace:
+
+    (defmethod capture-keys ((policy my-policy))
+      (append (call-next-method)
+              (loop for keysym from #xffbe to #xffc9 collect (cons keysym '()))))
+
+Answering with *more* is free — a binding that is never enabled costs one
+object on each side.  Answering with *less* is how you make a prompt unable to
+read a character, so subtract only what you are sure of.
+
+Consulted on every manage sequence and diffed, so a method that answers
+differently after the fact takes effect at the next one; keys are added
+incrementally and never removed, which is the same rule REGISTER-BINDINGS uses
+for the keymap and for the same reason: a river_xkb_binding_v1 the compositor
+has already been told about is cheaper to leave disabled than to churn."))
 
 (defgeneric shifted-character (policy character)
   (:documentation
