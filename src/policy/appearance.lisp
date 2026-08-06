@@ -351,16 +351,26 @@ full stop or dash keeps the sentence and drops the essay."
   "TEXT cut to CHARACTERS, ending in an ellipsis if anything was lost.
 
 Cut at a word boundary where there is one within reach, because a description
-that stops mid-word reads as a rendering bug rather than as an abbreviation."
-  (if (<= (length text) characters)
-      text
-      (let* ((room (max 0 (- characters 3)))
-             (space (position #\Space text :from-end t :end (min room (length text)))))
-        (concatenate 'string
-                     (subseq text 0 (if (and space (> space (floor room 2)))
-                                        space
-                                        room))
-                     "..."))))
+that stops mid-word reads as a rendering bug rather than as an abbreviation.
+
+*IT NEVER RETURNS MORE THAN IT WAS ASKED FOR*, which it used to do: below four
+characters there is no room for a word and an ellipsis, and the ellipsis alone
+is three, so asking for two got three back.  A function named TRUNCATE-TEXT
+that can overrun its budget is the same species of bug as the status line that
+made this docstring necessary, one layer down, and its callers are entitled to
+believe the number they passed."
+  (cond
+    ((<= (length text) characters) text)
+    ;; No room for a word and a mark, so all that can be said is that
+    ;; something was left out -- and even that, only as far as it fits.
+    ((< characters 4) (subseq "..." 0 (max 0 (min 3 characters))))
+    (t (let* ((room (- characters 3))
+              (space (position #\Space text :from-end t :end (min room (length text)))))
+         (concatenate 'string
+                      (subseq text 0 (if (and space (> space (floor room 2)))
+                                         space
+                                         room))
+                      "...")))))
 
 (defun wrap-text (text width)
   "TEXT broken into lines of at most WIDTH characters, keeping its blank lines.
@@ -517,8 +527,14 @@ it was the core touching the *lattice*.  It checks both directions now."))
   "The cursor path, dotted: the fallback every layout model can answer."
   (format nil "~{~a~^.~}" (c:world-cursor world)))
 
-(defmethod echo-content ((policy appearance-policy) world)
-  "The shipped echo area: workspace, place, contents, counts, last message."
+(defmethod echo-content ((policy appearance-policy) world &optional (columns 120))
+  "The shipped echo area: workspace, place, contents, counts, last message.
+
+The last segment is the one that gets cut, so the last segment is the one that
+takes the budget: a message is truncated at a word boundary and the standing
+key hint is dropped whole rather than shown as a fragment.  Which is right way
+round — the message is about what just happened and the hint is about what is
+always true, so the hint is the one that can wait for a quieter line."
   (let* ((root (c:world-root world))
          (workspaces (c:world-workspaces world))
          (window (c:world-focus-window world))
@@ -574,10 +590,35 @@ it was the core touching the *lattice*.  It checks both directions now."))
               segments)))
     ;; A message wins the space when there is one -- it is about what just
     ;; happened, and the hint is about what is always true.
-    (let ((message (current-message)))
-      (cond (message (push (cons message :accent) segments))
-            ((keys-hint policy world)
-             (push (cons (keys-hint policy world) :normal) segments))))
+    (let ((message (current-message))
+          (hint (keys-hint policy world))
+          ;; What is left after everything above, with three characters per
+          ;; separator: " | ".  The separators are what makes this arithmetic
+          ;; rather than a LENGTH, and forgetting them is how a budget comes out
+          ;; two words optimistic.
+          (room (- columns
+                   (reduce #'+ (mapcar (lambda (segment) (length (car segment)))
+                                       segments)
+                           :initial-value 0)
+                   (* 3 (length segments)))))
+      ;; EIGHT, not one.  Something cut down to "..." has told you that there
+      ;; was news and taken away what it was, which is the worst of both -- and
+      ;; it can only arise on a line whose fixed segments already fill the
+      ;; screen, where the honest answer is that there is no room.  The echo
+      ;; area's own cut is the backstop if even those do not fit.
+      ;;
+      ;; SHORTENED RATHER THAN DROPPED, and the hint is the case that decides
+      ;; it.  With the lattice loaded the hint is about 130 characters and a
+      ;; 1280-pixel screen holds 155 of them all told, so `whole or nothing'
+      ;; means the beginner's hint disappears on an ordinary laptop -- and the
+      ;; sentence this option exists because of is "i have no clue how to close
+      ;; windows".  Four bindings and an ellipsis are worth more than none, and
+      ;; TRUNCATE-TEXT cuts at a word boundary, so what is left ends at the end
+      ;; of something.
+      (cond ((and message (>= room 8))
+             (push (cons (truncate-text message room) :accent) segments))
+            ((and hint (>= room 8))
+             (push (cons (truncate-text hint room) :normal) segments))))
     (nreverse segments)))
 
 (defun keymap-choices (policy keymap)

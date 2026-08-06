@@ -38,10 +38,15 @@ goes only to a log file nobody is reading."
 
 Three sources, in the order that decides which one wins when more than one has
 something to say: a prompt owns the line outright, an armed chord is the next
-most urgent thing, and otherwise the status line is the policy's to fill."
+most urgent thing, and otherwise the status line is the policy's to fill.
+
+COLUMNS reaches all three now.  It used to reach one: the chord had a budget,
+the prompt is as long as what you typed, and the status line was handed no
+number at all and ran off the edge of the screen."
   (cond ((reading-p) (prompt-segments))
         (*pending-keymap* (p:pending-keymap-segments (p:current-policy) columns))
-        (t (guarded "echo-content" (p:echo-content (p:current-policy) world)))))
+        (t (guarded "echo-content"
+             (p:echo-content (p:current-policy) world columns)))))
 
 (defun draw-echo-area (world output)
   "Draw and place the echo area along the bottom of OUTPUT.
@@ -57,7 +62,23 @@ this window manager has, absent from the monitor you were looking at."
     (draw-echo-area-on world output overlay)))
 
 (defun draw-echo-area-on (world output overlay)
-  "Draw the echo area for OUTPUT into OVERLAY."
+  "Draw the echo area for OUTPUT into OVERLAY.
+
+NOTHING IS DRAWN PAST THE RIGHT-HAND EDGE, and that is a guarantee of the
+mechanism rather than a courtesy of the policy.  This used to draw every segment
+it was given and let the canvas end where it ended, so on a 1280-pixel screen
+the shipped status line lost its last two words with nothing to say so:
+ECHO-CONTENT ended \"...Super+- zoom out\" and the screen ended \"...past a cell
+edge = next cel\".
+
+The policy gets a budget too — see ECHO-CONTENT — and that is the better half,
+because a policy can choose *what* to drop.  But a budget in characters and a
+canvas in pixels are two different arithmetics, an extension may ignore the
+budget entirely, and a message can arrive from anywhere; so the guarantee lives
+here, where the widths are known exactly, and the budget lives there, where the
+priorities are.  A segment that does not fit is cut at a word boundary and
+marked with an ellipsis, which is TRUNCATE-TEXT's job everywhere else in this
+program."
   (let* ((area (c:output-rect output))
          (height (max (+ 6 (text-height :scale p:*echo-scale*)) p:*echo-height*))
          (width (c:rect-w area))
@@ -82,33 +103,48 @@ this window manager has, absent from the monitor you were looking at."
                                    (floor (- width 16)
                                           (max 1 (text-width "m"
                                                              :scale p:*echo-scale*)))))))
-        (loop for (text . kind) in segments
-              for firstp = t then nil
-              do ;; The separator goes *between* segments, which means before
-                 ;; every one but the first.  Putting it after each instead
-                 ;; leaves a dangling bar at the end of the line, which looks
-                 ;; like something failed to render.  A prompt draws its parts
-                 ;; contiguously, because "M-x | foc" is not a prompt.
-                 (unless (or firstp (reading-p) (eq kind :caret))
-                   (incf pen (* 4 p:*echo-scale*))
-                   (incf pen (canvas-text canvas pen baseline "|" divider
-                                          :scale p:*echo-scale*))
-                   (incf pen (* 4 p:*echo-scale*)))
-                 (if (eq kind :caret)
-                     ;; Drawn, not typed: a bar between two characters rather
-                     ;; than a character between them, so that the text does
-                     ;; not jump sideways as the caret moves through it.
-                     (canvas-fill canvas caret-color
-                                  (c:make-rect pen baseline
-                                               (* 2 p:*echo-scale*)
-                                               (text-height :scale p:*echo-scale*)))
-                     (incf pen (canvas-text canvas pen baseline text
-                                            (case kind
-                                              (:accent accent)
-                                              (:prompt prompt-color)
-                                              (:dim dim)
-                                              (t normal))
-                                            :scale p:*echo-scale*)))))
+        ;; The right-hand margin is the left-hand one, so the line is inset by
+        ;; the same eight pixels at both ends and a full line looks deliberate
+        ;; rather than jammed against the glass.
+        (let ((edge (- width 8))
+              (cell (max 1 (text-width "m" :scale p:*echo-scale*))))
+          (loop for (text . kind) in segments
+                for firstp = t then nil
+                do ;; The separator goes *between* segments, which means before
+                   ;; every one but the first.  Putting it after each instead
+                   ;; leaves a dangling bar at the end of the line, which looks
+                   ;; like something failed to render.  A prompt draws its parts
+                   ;; contiguously, because "M-x | foc" is not a prompt.
+                   (unless (or firstp (reading-p) (eq kind :caret))
+                     (incf pen (* 4 p:*echo-scale*))
+                     (incf pen (canvas-text canvas pen baseline "|" divider
+                                            :scale p:*echo-scale*))
+                     (incf pen (* 4 p:*echo-scale*)))
+                   (if (eq kind :caret)
+                       ;; Drawn, not typed: a bar between two characters rather
+                       ;; than a character between them, so that the text does
+                       ;; not jump sideways as the caret moves through it.
+                       (canvas-fill canvas caret-color
+                                    (c:make-rect (min pen edge) baseline
+                                                 (* 2 p:*echo-scale*)
+                                                 (text-height :scale p:*echo-scale*)))
+                       ;; What fits, in characters, because the shipped font is
+                       ;; fixed-width and the budget above counts in characters
+                       ;; for the same reason.  Fewer than four and there is no
+                       ;; room for an abbreviation either, so the line stops.
+                       (let ((room (floor (- edge pen) cell)))
+                         (when (< room 4) (loop-finish))
+                         (let ((fitted (if (<= (length text) room)
+                                           text
+                                           (p:truncate-text text room))))
+                           (incf pen (canvas-text canvas pen baseline fitted
+                                                  (case kind
+                                                    (:accent accent)
+                                                    (:prompt prompt-color)
+                                                    (:dim dim)
+                                                    (t normal))
+                                                  :scale p:*echo-scale*))
+                           (unless (eq fitted text) (loop-finish))))))))
       (overlay-commit overlay
                       :rect (c:make-rect (c:rect-x area)
                                          (if (eq p:*echo-position* :top)

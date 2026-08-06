@@ -779,6 +779,30 @@ document was written about one that never existed.
   say it was clipped. =echo-content= ends "...Super+- zoom out"; the screen ends
   "...past a cell edge = next cel". The help screen had this bug once already —
   it is the ninth row of the table above.
+
+  *Fixed, in the two places it had to be.* =pending-keymap-segments= has taken a
+  column budget since the day it was written, and its own docstring says why:
+  "the budget is arithmetic rather than clipping […] the last choice on the line
+  then read as a word that had lost its ending, which is worse than not offering
+  it, because it looks like a bug rather than like a list that goes on."
+  =echo-content= is on the same surface, does the same job, and was asked
+  without a number. It has one now, so the policy chooses *what* to drop; and
+  the echo area itself refuses to draw past the right-hand edge whatever it is
+  handed, so a policy that ignores the budget — an extension's, or any future
+  one — gets an ellipsis rather than a saw cut.
+
+  Two details worth keeping. The hint is *shortened rather than dropped*: with
+  the lattice loaded it is about 130 characters and a 1280-pixel screen holds
+  158, so whole-or-nothing would have deleted the beginner's hint on an ordinary
+  laptop, and the sentence that option exists because of is "i have no clue how
+  to close windows". And ~truncate-text~ could return *more* characters than it
+  was asked for — below four there is no room for a word and a mark, and the
+  mark alone is three — which is this same bug one layer down, in the function
+  written to prevent it.
+
+  Measured against a real river with the lattice loaded: *202 columns of a
+  158-column screen* before, 157 after. That check is in the integration suite,
+  because the width is river's to state and not this project's to assume.
 - *=tools/hardware-check.lisp= names a function that does not exist*,
   =current-viewport=, and so warns on every startup that loads it.
 - *One 67-second stall*, in the first screencopy after a panel first appeared;

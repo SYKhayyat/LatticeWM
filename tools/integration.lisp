@@ -1550,6 +1550,37 @@ are what a person means by the arrangement, and both are copy-stable."
                        (check (settle) "and the plane laid out")
                        (check (late-call "lattice:current-grid")
                               "the root of the workspace is a plane")
+                       ;; THE STATUS LINE FITS THE SCREEN, and with the lattice
+                       ;; loaded is exactly where it did not: the extension adds
+                       ;; two facts to the key hint, taking it to about 130
+                       ;; characters on a screen that holds 155 all told, and
+                       ;; what the display showed was "...past a cell edge =
+                       ;; next cel".  Measured against the width river gave us
+                       ;; rather than a number chosen here.
+                       (let* ((screen (c:output-rect (current-output)))
+                              (columns (floor (- (c:rect-w screen) 16)
+                                              (max 1 (r::text-width "m"))))
+                              ;; With the hint on, which is the state a new user
+                              ;; is in and the state the clipping was seen in.
+                              ;; An earlier section opens the help overlay,
+                              ;; which turns it off for the rest of the run.
+                              (p::*keymap-ever-opened* nil)
+                              ;; And with no message standing, or the message
+                              ;; takes the last segment and the hint -- the
+                              ;; long one, the one that was cut -- never gets
+                              ;; asked for.  Enabling the lattice posts one.
+                              (p::*echo-message* nil)
+                              (segments (echo-content (current-policy) *world*
+                                                      columns))
+                              (drawn (+ (reduce #'+ (mapcar (lambda (segment)
+                                                              (length (car segment)))
+                                                            segments)
+                                                :initial-value 0)
+                                        (* 3 (max 0 (1- (length segments)))))))
+                         (check (<= drawn columns)
+                                "the status line fits the screen it is on: ~d ~
+                                 columns of ~d, with the lattice's own hint on it"
+                                drawn columns))
                        (check (stand-on a) "standing on the window")
                        (verb "move-to-cell" 1 0)
                        (check (settle) "and it is in cell 1,0, the trailing cell")

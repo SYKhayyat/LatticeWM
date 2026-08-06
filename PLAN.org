@@ -2647,3 +2647,36 @@ river's own two surfaces where they are.
 
 Verified by breaking it on purpose: with the old canvas rectangle the same lines read
 =map 0..720= and fail.
+
+** The status line had no width
+
+~PENDING-KEYMAP-SEGMENTS~ has taken a column budget since the day it was written and
+its docstring says why: "the budget is arithmetic rather than clipping […] the last
+choice on the line then read as a word that had lost its ending, which is worse than
+not offering it, because it looks like a bug rather than like a list that goes on."
+
+~ECHO-CONTENT~ is on the same surface, does the same job, and was asked without a
+number. So the shipped status line ran off the edge and the compositor cut it wherever
+it landed. Measured against a real river with the lattice loaded: *202 columns on a
+158-column screen*.
+
+Fixed in the two places it had to be, and the split is the point:
+
+- the *policy* gets a budget, so it chooses what to drop. The last segment takes the
+  loss, which is the right way round — a message is about what just happened and the
+  hint is about what is always true;
+- the *echo area* refuses to draw past the right-hand edge whatever it is handed. A
+  budget in characters and a canvas in pixels are two arithmetics, an extension may
+  ignore the budget, and a message can come from anywhere; so the guarantee lives
+  where the widths are exact and the priorities live where the policy is.
+
+Two details. The hint is *shortened rather than dropped* — with the lattice loaded it
+is about 130 characters and a 1280-pixel screen holds 158, so whole-or-nothing deletes
+the beginner's hint on an ordinary laptop, and the sentence ~*KEYS-HINT*~ exists
+because of is "i have no clue how to close windows". And ~TRUNCATE-TEXT~ could return
+*more* characters than it was asked for, which is this same bug one layer down in the
+function written to prevent it.
+
+The integration suite measures it against the width river states rather than a number
+chosen here, and was verified by breaking it on purpose: 202 of 158 with the budget
+removed, 157 of 158 with it.

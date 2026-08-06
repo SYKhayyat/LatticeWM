@@ -326,9 +326,9 @@ second placement wins, and the whole layout silently collapses onto the last
 output while the model insists everything is fine.  That was the first
 implementation."))
 
-(defgeneric echo-content (policy world)
+(defgeneric echo-content (policy world &optional columns)
   (:documentation
-   "What the echo area says, as a list of (TEXT . KIND).
+   "What the echo area says, as a list of (TEXT . KIND), inside COLUMNS.
 
 KIND is :ACCENT for the part that says where you are and :NORMAL for the rest.
 Segments are drawn left to right with separators between them; empty ones are
@@ -338,7 +338,22 @@ This is a policy decision and not a status-bar feature: what a window manager
 should tell you about depends entirely on what its layout model *is*.  The
 shipped answer names the workspace, the place, what is in it, and the counts.
 The lattice's answer would sensibly include the viewport; a policy with no
-workspaces should not mention them."))
+workspaces should not mention them.
+
+COLUMNS IS A BUDGET AND IT ARRIVED LATE.  This used to be asked without one, so
+the shipped line ran off the right-hand edge of a 1280-pixel screen and the
+compositor cut it wherever it happened to land: ECHO-CONTENT ended \"...Super+-
+zoom out\" and the screen ended \"...past a cell edge = next cel\", with nothing
+to say that anything had been lost.  PENDING-KEYMAP-SEGMENTS has had a budget
+since it was written and says why in its own docstring — a line cut at the
+screen edge \"reads as a word that had lost its ending, which is worse than not
+offering it, because it looks like a bug rather than like a list that goes on\".
+The same sentence was true here and nobody had applied it.
+
+*A method that ignores COLUMNS is not broken*, which is why it is optional: the
+echo area truncates what does not fit and marks it, so the worst a
+budget-blind policy gets is an ellipsis.  Honouring it is how a policy chooses
+*what* to drop rather than having its last segment cut."))
 
 (defgeneric reserved-space (policy output)
   (:documentation

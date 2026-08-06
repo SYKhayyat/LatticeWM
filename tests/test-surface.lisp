@@ -451,6 +451,73 @@ had to ask, so no gate saw an extension asking."))
       (is (search (format nil "~{~a~^.~}" (c:world-cursor world)) shipped)
           "whose own answer is the cursor path, which every layout model has"))))
 
+;;; THE STATUS LINE HAS A WIDTH, and for the whole life of the program nobody
+;;; had told it.  PENDING-KEYMAP-SEGMENTS took a column budget from the day it
+;;; was written and says why in its own docstring; ECHO-CONTENT was asked
+;;; without one, so on a 1280-pixel screen the shipped line ended
+;;; "...Super+- zoom out" and the screen ended "...past a cell edge = next cel".
+
+(defun echo-line (policy world columns)
+  "The shipped status line at COLUMNS wide, as one string with its separators."
+  (format nil "~{~a~^ | ~}" (mapcar #'car (p:echo-content policy world columns))))
+
+(test the-status-line-fits-the-width-it-is-given
+  (let ((world (fresh-world))
+        (p:*echo-message* nil)
+        (p:*keymap-ever-opened* nil))
+    (p:on-window-open (policy) world (win "firefox"))
+    (let ((wide (echo-line (policy) world 200))
+          (middling (echo-line (policy) world 120))
+          (narrow (echo-line (policy) world 45)))
+      (is (search "Super+/ all keys" wide)
+          "with room for it, the key hint is on the line whole")
+      (is (and (search "Super+Return term" middling)
+               (search "..." middling)
+               (not (search "Super+/ all keys" middling)))
+          "with less room it is shortened and marked, because four bindings
+           and an ellipsis are worth more to a beginner than none")
+      (is (not (search "Super" narrow))
+          "and with no room for even a binding and a mark it is gone, rather
+           than offered as three dots")
+      (is (<= (length wide) 200) "~d characters inside 200" (length wide))
+      (is (<= (length middling) 120)
+          "~d characters inside a budget of 120" (length middling))
+      (is (<= (length narrow) 45)
+          "~d characters inside a budget of 45" (length narrow)))))
+
+(test a-message-too-long-for-the-line-is-cut-at-a-word-and-marked
+  (let ((world (fresh-world))
+        (p:*echo-message* (cons "recording started on the second monitor"
+                                (get-universal-time))))
+    (let* ((line (echo-line (policy) world 80))
+           (message (car (first (last (p:echo-content (policy) world 80))))))
+      (is (<= (length line) 80) "the line fits (~d characters)" (length line))
+      (is (search "..." message)
+          "and the message says that it was cut rather than simply stopping")
+      (is (not (search "second monitor" message))
+          "having actually lost the part that did not fit"))))
+
+(test a-line-with-no-room-for-news-carries-none
+  ;; ROOM goes to nothing when the fixed segments alone nearly fill the line.
+  ;; A message cut down to "..." says that something happened and takes away
+  ;; what it was, which is the worst of both.
+  (let ((world (fresh-world))
+        (p:*echo-message* (cons "something" (get-universal-time))))
+    (finishes (p:echo-content (policy) world 1))
+    (let ((segments (p:echo-content (policy) world 1)))
+      (is (notany (lambda (segment) (search "..." (car segment))) segments)
+          "nothing is offered as an abbreviation of itself")
+      (is (not (search "something" (echo-line (policy) world 1)))
+          "and the message waits for a line with room on it"))))
+
+(test truncate-text-never-returns-more-than-it-was-asked-for
+  ;; It used to: below four characters there is no room for a word and an
+  ;; ellipsis, and the ellipsis alone is three, so asking for two got three.
+  (loop for n from 0 to 6
+        do (is (<= (length (p:truncate-text "a longer sentence" n)) n)
+               "~d character~:p asked for, ~d given back" n
+               (length (p:truncate-text "a longer sentence" n)))))
+
 ;;; ------------------------------------------------- tier 2: method plus state
 
 (defclass remembering-policy (p:conventional-policy) ()
