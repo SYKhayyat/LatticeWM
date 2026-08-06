@@ -361,7 +361,7 @@ drawing in it, and the number of windows underneath is not its business."
                    (max 1 (- (c:rect-h rect) top bottom))))))
 
 (defmethod render-order ((policy layout-policy) placements)
-  "Tiled nodes in layout order, then floats, then anything marked as overlay.
+  "Tiled nodes in layout order, then floats.
 
 River says the initial position of a node in the render list is *undefined*,
 so every node must be ordered explicitly or overlapping windows flicker.
@@ -370,13 +370,24 @@ The float clause used to be unreachable.  Floats are not in the tree, so they
 were never in the PLACEMENTS this was handed — the runtime appended them after
 the fact, above everything, and this method could only ever see tiles.  It sees
 the whole render list now, which is what makes `then floats' a decision this
-takes rather than a sentence describing what the caller does next."
+takes rather than a sentence describing what the caller does next.
+
+AND THERE WAS A THIRD TIER THAT NOTHING COULD ENTER.  This said `then anything
+marked as overlay' and sorted a node carrying an :OVERLAY property above the
+floats.  Nothing in the program has ever written that property — the echo area,
+the help page, the cursor and the lattice's own two overlays are *surfaces*,
+made by runtime/surface.lisp, and they are not nodes and are not in a render
+list.  A documented tier reachable only by an extension nobody told about it,
+which is the shape gate 13 now fails the build on.  Deleted rather than wired
+up, because the tier a policy actually wants is this method: RENDER-ORDER is
+the documented extension point, an override of it is obeyed for the whole list
+(see RENDER-ORDER-DECIDES-THE-WHOLE-LIST-AND-NOT-HALF-OF-IT), and a property
+key standing in for a generic is the mistake *SMART-GAPS* made with an option."
   (stable-sort (copy-list placements) #'<
                :key (lambda (placement)
                       (let ((node (first placement)))
-                        (cond ((c:prop node :overlay) 2)
-                              ((and (typep node 'c:leaf)
-                                    (c:leaf-window node)
-                                    (c:window-floating-p (c:leaf-window node)))
-                               1)
-                              (t 0))))))
+                        (if (and (typep node 'c:leaf)
+                                 (c:leaf-window node)
+                                 (c:window-floating-p (c:leaf-window node)))
+                            1
+                            0)))))

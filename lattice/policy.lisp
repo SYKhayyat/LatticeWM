@@ -142,73 +142,134 @@ at a glance if all you want to know is whether a move happened.")
 ;;; LAYOUT
 ;;; ==================================================================
 
+(defun cell-tracks (grid rect axis)
+  "The screen rectangles of the visible tracks along AXIS inside RECT.
+
+:HORIZONTAL gives one rectangle per visible column, :VERTICAL one per visible
+row, each spanning RECT on the other axis.  CELL-RECTS crosses the two.
+
+THE ONE PLACE THAT KNOWS HOW BIG A CELL IS.  It was two, and the second one was
+wrong in a way only :FIXED could see: MAP-MODE-P divided the output width by the
+column count, which is the :FIT answer, so at eight columns of a nine-hundred-
+pixel :FIXED lattice it computed 240 pixels, believed the cells were too small
+to render, and put the drawn map up over cells that were full size.  Both
+callers ask this now, so a third zoom mode is one clause here rather than a
+clause here and a division somewhere else."
+  (let* ((viewport (grid-viewport grid))
+         (horizontal (eq axis :horizontal))
+         (origin (if horizontal
+                     (cell-x (viewport-origin viewport))
+                     (cell-y (viewport-origin viewport))))
+         (count (if horizontal (viewport-cols viewport) (viewport-rows viewport)))
+         (weights (loop for i from 0 below count
+                        collect (if horizontal
+                                    (col-width grid (+ origin i))
+                                    (row-height grid (+ origin i))))))
+    (ecase *zoom-mode*
+      (:fit (c:divide-rect rect axis weights :gap *cell-gap*))
+      (:fixed (fixed-tracks rect axis weights
+                            (if horizontal *cell-width* *cell-height*)
+                            *cell-gap*)))))
+
 (defun cell-rects (policy grid rect)
   "Rectangles for every visible cell, as an alist of (ADDRESS . RECT).
 
 THE SIGN INVERSION LIVES HERE, and nowhere else.  Lattice +Y is up (D2);
-Wayland +Y is down.  One line, one function, deliberately."
+Wayland +Y is down.  One line, one function, deliberately.
+
+A cell whose rectangle has run entirely past the edge of RECT is not a cell that
+is partly visible, it is a cell that is not on screen, and it is omitted for the
+same reason a cell outside the viewport is: LAYOUT-CHILDREN's omissions are what
+get *hidden*, and a window positioned wholly outside the output but never hidden
+is a window drawn on top of somebody else's desktop.  This can only happen under
+:FIXED, where the tracks do not adapt to the space; :FIT tiles RECT exactly and
+nothing is ever dropped."
   (declare (ignorable policy))
   (let* ((viewport (grid-viewport grid))
          (ox (cell-x (viewport-origin viewport)))
          (oy (cell-y (viewport-origin viewport)))
          (cols (viewport-cols viewport))
          (rows (viewport-rows viewport))
-         (gap *cell-gap*)
-         (widths (loop for i from 0 below cols collect (col-width grid (+ ox i))))
-         (heights (loop for i from 0 below rows collect (row-height grid (+ oy i))))
-         (columns
-           (ecase *zoom-mode*
-             (:fit (c:divide-rect rect :horizontal widths :gap gap))
-             (:fixed (fixed-tracks rect :horizontal cols *cell-width* gap))))
-         (bands
-           (ecase *zoom-mode*
-             (:fit (c:divide-rect rect :vertical heights :gap gap))
-             (:fixed (fixed-tracks rect :vertical rows *cell-height* gap)))))
+         (columns (cell-tracks grid rect :horizontal))
+         (bands (cell-tracks grid rect :vertical)))
     (loop for row from 0 below rows
           append (loop for col from 0 below cols
                        for column = (nth col columns)
                        ;; +Y is up, so the *last* band on screen is the
                        ;; *lowest* row number.  This is the inversion.
                        for band = (nth (- rows 1 row) bands)
-                       when (and column band)
-                         collect (cons (cell (+ ox col) (+ oy row))
-                                       (c:make-rect (c:rect-x column)
-                                                    (c:rect-y band)
-                                                    (c:rect-w column)
-                                                    (c:rect-h band)))))))
+                       for box = (and column band
+                                      (c:make-rect (c:rect-x column)
+                                                   (c:rect-y band)
+                                                   (c:rect-w column)
+                                                   (c:rect-h band)))
+                       when (and box (c:rect-intersect box rect))
+                         collect (cons (cell (+ ox col) (+ oy row)) box)))))
 
-(defun fixed-tracks (rect axis count size gap)
-  "COUNT tracks of exactly SIZE pixels along AXIS, starting at RECT's edge.
+(defun fixed-tracks (rect axis weights size gap)
+  "One track per weight along AXIS, each WEIGHT * SIZE pixels, from RECT's edge.
+
+Absolute rather than proportional, which is the whole of :FIXED: a track's pixel
+size depends on its own weight and on nothing else, so panning cannot resize a
+window — PLAN's Delta 3, which is the reason this mode exists.
 
 The trailing track runs off the end of RECT and is cropped by CLIP-RECT —
 river's set_content_clip_box redraws the border at the crop edge, so it reads
 as a cleanly cut cell rather than a window sliced in half.  The sliver is
 arguably a feature: it is peripheral vision telling you something is over
-there."
-  (let ((horizontal (eq axis :horizontal)))
-    (loop for i from 0 below count
-          for offset = (* i (+ size gap))
+there.
+
+THE WEIGHTS USED TO BE DROPPED HERE.  This took a COUNT and gave every track
+exactly SIZE, so RESIZE-COLUMN and RESIZE-ROW did nothing whatsoever under
+:FIXED — in the one mode RESIZE-COLUMN's own first-use warning tells you to
+switch to when :FIT's panning cost becomes intolerable.  The advice sent you to
+the mode where the thing you had just done stopped working, silently, and the
+test that covered :FIXED asserted a uniform lattice.  D8's ruling is that a
+size belongs to a column and spans every row; under :FIXED the weight scales
+the absolute size, and EQUALIZE-CELLS puts it back."
+  (let ((horizontal (eq axis :horizontal))
+        (offset 0))
+    (loop for weight in weights
+          for extent = (max 1 (round (* weight size)))
           collect (if horizontal
                       (c:make-rect (+ (c:rect-x rect) offset) (c:rect-y rect)
-                                   size (c:rect-h rect))
+                                   extent (c:rect-h rect))
                       (c:make-rect (c:rect-x rect) (+ (c:rect-y rect) offset)
-                                   (c:rect-w rect) size)))))
+                                   (c:rect-w rect) extent))
+          do (incf offset (+ extent gap)))))
 
-(defun tag-cell (node address)
-  "Record which cell a subtree is, so decoration can ask.
+(defun tag-cell (node address bounds)
+  "Record which cell a subtree is and what it is allowed to spill over.
 
 On PROPS rather than a slot, because it is presentation state that a node has
 no business carrying permanently — which is exactly the case DESIGN D20
-predicted an extension would need PROPS for."
+predicted an extension would need PROPS for.
+
+BOUNDS IS THE RECTANGLE THE PLANE WAS LAID OUT IN, and it is here because
+CLIP-RECT is asked about a *window* and has to answer with the *plane's* edge.
+It is rewritten on every relayout — the layout driver calls LAYOUT-CHILDREN
+before it descends — so the bound follows the output, the reserved space and the
+gaps without anything having to invalidate it, and a cached first answer cannot
+outlive the layout that produced it.
+
+WHAT IT DOES NOT COVER, since the whole point of this key is that a silent NIL
+cost the method its life: a plane nested inside a *cell of another plane* tags
+its own subtree afterwards and so its own rectangle wins, and if that cell is
+itself one of the partial ones, the inner plane's overhang is cropped at the
+inner rectangle rather than at both.  One extra sliver on a nested plane at the
+screen edge, and the honest reason it is left is that fixing it means keeping a
+bound from the enclosing pass, which is a cache, and a stale cache here is the
+failure that does not announce itself."
   (when node
     (setf (c:prop node :lattice/address) address
           (c:prop node :lattice/parity) (evenp (+ (cell-x address)
-                                                  (cell-y address))))
+                                                  (cell-y address)))
+          (c:prop node :lattice/viewport-bounds) bounds)
     ;; The cell's whole subtree answers for the cell, so a split *inside* a
     ;; cell borders in the cell's colour rather than reverting to neutral.
     (when (c:container-p node)
       (dolist (child-address (c:container-addresses node))
-        (tag-cell (c:child-at node child-address) address))))
+        (tag-cell (c:child-at node child-address) address bounds))))
   node)
 
 (defmethod p:layout-children ((policy lattice-policy) (grid grid) rect)
@@ -221,7 +282,7 @@ optional, since newly created windows are shown unless explicitly hidden."
   (let ((placed (remove-if-not (lambda (entry) (c:child-at grid (car entry)))
                                (cell-rects policy grid rect))))
     (dolist (entry placed placed)
-      (tag-cell (c:child-at grid (car entry)) (car entry)))))
+      (tag-cell (c:child-at grid (car entry)) (car entry) rect))))
 
 (defmethod p:keys-hint ((policy lattice-policy) world)
   "Add the two facts about cells that nothing else can teach.
@@ -271,7 +332,19 @@ lattice puts in the status line already worked this way; see KEYS-HINT."
 This is the payoff of the best find in the protocol.  Under :FIXED zoom the
 trailing cell is usually partial, and set_content_clip_box crops the content
 *and* redraws the compositor's border at the crop edge, for free.  It was
-expected to cost a week of bad approximation."
+expected to cost a week of bad approximation.
+
+AND IT COULD NOT FIRE, from the commit that wrote it until the one that wrote
+this paragraph.  :LATTICE/VIEWPORT-BOUNDS occurred exactly twice in the whole
+tree — this read, and a docstring — and never once in a SETF, so BOUNDS was
+always NIL, the method always fell through to CALL-NEXT-METHOD, and
+CALL-NEXT-METHOD is the shipped `nothing overhangs here, clip nothing'.  A
+method on the right generic, dispatching on the right class, doing nothing at
+all: DESIGN's best find, FINDINGS' list of what the lattice overrides, and two
+documents describing the cropped trailing cell as shipped behaviour.  TAG-CELL
+records the bounds now, and gate 13 is the check that would have said so — a
+property the program reads and nothing writes is the same bug as an option the
+program registers and nothing reads, one mechanism over."
   (let ((bounds (c:prop node :lattice/viewport-bounds)))
     (cond ((null bounds) (call-next-method))
           (t (let ((visible (c:rect-intersect rect bounds)))

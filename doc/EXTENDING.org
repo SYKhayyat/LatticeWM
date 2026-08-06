@@ -250,6 +250,22 @@ adding a slot to a class you do not own is a fork.
 Namespace your keys with a prefix. Two extensions using ~:last~ is a bug
 neither author can see.
 
+*A key you read must be written by something, and the build checks it.* This is
+the one rule about ~props~ that is worth stating, because breaking it produces no
+error of any kind: ~prop~ answers ~nil~ for a key nobody wrote, ~nil~ is a legal
+value, and the branch behind the read simply never runs. That shipped twice here
+— the lattice's ~clip-rect~ read a viewport bound nothing wrote, so the one
+method standing for river's content clipping cropped nothing for its whole life,
+and the core's ~render-order~ had a third render tier keyed on a property no node
+was ever given. Gate 13 reads =src/=, =lattice/= and =examples/= and fails the
+build on a key that is read and never written, which is what you will see if you
+misspell one of yours in either place.
+
+The converse is *reported* rather than failed: writing a key nothing in the tree
+reads is exactly how you publish a fact for somebody else's status bar, and four
+core properties are in that position deliberately. If you are the somebody else,
+=make gates= prints the list.
+
 * Tier 3 — new layout models
 
 This is where the design stops being a window manager with settings and starts
@@ -341,6 +357,14 @@ and nothing is lost. ~(lattice:disable)~ goes back.
 - Motion runs straight through the cell boundary. Moving right from the
   rightmost pane of a cell lands on the leftmost pane of the cell to its right.
   There is no mode and no second command.
+- ~*zoom-mode*~ picks how zoom makes room. ~:fit~ stretches the visible cells to
+  tile the screen; ~:fixed~ gives a cell ~*cell-width*~ by ~*cell-height*~ pixels
+  wherever it sits, scrolls the plane under the screen, and *crops the trailing
+  cell at the edge* — river's ~set_content_clip_box~, with the border redrawn at
+  the crop, which is the one thing in this program the compositor does for free.
+  Resize a column and ~:fixed~ keeps it that many pixels wide however you pan;
+  ~:fit~ will change every width on screen when you pan a plane with a resized
+  column in it, which is the whole reason there are two.
 
 Read =FINDINGS.org= for what building it cost, which is the most useful thing
 this project has to say about its own design.

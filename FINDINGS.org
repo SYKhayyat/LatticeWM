@@ -34,7 +34,7 @@ instead of it.
 
 *The thesis held, with three qualifications and one bug.*
 
-The lattice is 1,999 lines in six files, of which 28 are ~defmethod~ forms. It
+The lattice is 2,077 lines in six files, of which 28 are ~defmethod~ forms. It
 specialises *twelve* policy generics and *two* persistence generics that the
 core already declared, adds one new container class, and needed *two* edits
 under =src/= to exist at all. Neither changed a behaviour; one was an omitted
@@ -77,7 +77,7 @@ quietly doing the extension's half of it.
 
 | Measure | Value |
 |---------+-------|
-| Lines in =lattice/= | 1,999 (427 model, 714 policy, 500 commands, 298 map and overlay, 60 package) |
+| Lines in =lattice/= | 2,077 (427 model, 779 policy, 500 commands, 311 map and overlay, 60 package) |
 | ~defmethod~ forms | 28 |
 | Core generics specialised | 14 (12 policy, 2 persistence) |
 | Container protocol members | 19, of which the lattice answers 13 |
@@ -94,18 +94,21 @@ is three hundred lines of methods is the thesis holding. One that is two
 thousand lines re-implementing geometry is the thesis failing while wearing the
 gate's uniform."
 
-1,999 lines is well above three hundred, so the honest question is what the
+2,077 lines is well above three hundred, so the honest question is what the
 extra lines are. They are: the plane's own data structure (427), which nobody
 claimed would come free; the zoom, pan and jump *commands* (500), which are
 user-facing verbs rather than layout mechanism; the coordinate overlay and the
-minimap (298), which are two of the three orientation aids DESIGN names as the
-mitigation for its own biggest risk and are drawing code, not layout; and 714
+minimap (311), which are two of the three orientation aids DESIGN names as the
+mitigation for its own biggest risk and are drawing code, not layout; and 779
 lines of policy of which the substance is twelve methods and the rest is the
 reasoning behind them. *No geometry is re-implemented.* The lattice calls
 ~divide-rect~, ~tree-move~, ~tree-swap~, ~tree-transplant~, ~repair-path~,
 ~descend-to-leaf~ and ~find-motion-target~ and defines none of them.
 
 * The twelve policy generics the lattice specialises
+:PROPERTIES:
+:CUSTOM_ID: twelve
+:END:
 
 This is the whole of the layout, navigation and workspace change.
 
@@ -128,6 +131,11 @@ Plus ~serialize-node~ and ~deserialize-node~, so a plane survives a restart.
 
 ~cursor-place-name~ is the newest and is here for an unflattering reason: the
 core used to answer it *for* the lattice. See [[#edit-6][core edit 6]].
+
+~clip-rect~ is here for a worse one: this row was true of the *source* and false
+of the *program* for the whole life of the method, because the bound it reads was
+written nowhere. See [[#dead-property][the method that could not fire]] — which is
+also where ~:fixed~ zoom stops being half-built.
 
 ~make-workspace~ is the one that arrived last and matters most, because it is
 the difference between the lattice being an arrangement you set up and being
@@ -632,16 +640,135 @@ That is the third distinct method in this file, after "write an extension and
 trip over something" and "ask what the project checks about itself", and it is
 the most expensive of the three: it needs somebody to distrust a green build.
 
+* The method that was on the right generic and could not fire
+:PROPERTIES:
+:CUSTOM_ID: dead-property
+:END:
+
+*File:* =lattice/policy.lisp=, =lattice/map.lisp=, =src/policy/layout.lisp=,
+=tools/gates.lisp=. *Change:* the plane records the rectangle it was laid out in,
+so ~clip-rect~ can crop against it; ~:fixed~ zoom honours the column and row
+sizes it was dropping; the core's unreachable third render tier is deleted; gate
+13 is the check that would have found all three on the day. *Behaviour changed:*
+yes, and it is the point. *Found by:* reading the table at the top of this file
+against what the program actually does.
+
+*~clip-rect~ is a row in [[#twelve][the twelve]] and it did nothing at all.* It is
+river's ~set_content_clip_box~, which [[file:DESIGN.org::#feasibility][DESIGN §feasibility]] calls
+the best find in the whole protocol: a cell half over the viewport edge is
+cropped /and its border is redrawn at the crop edge/, free, by the compositor,
+where the alternative was "a week of bad approximation". The lattice's method for
+it read =:lattice/viewport-bounds= off the node. Nothing wrote
+=:lattice/viewport-bounds=. The key occurred exactly twice in the tree — that
+read, and a docstring — so the bound was always ~nil~, the method always fell
+through to ~call-next-method~, and ~call-next-method~ is the core's "nothing
+overhangs here, clip nothing".
+
+*Nothing could see it, and the list of what looked at it is the finding.* An
+absent property is a legal answer and ~nil~ is a legal return, so there was
+nothing to signal. Gate 3 saw an extension answering a generic. Gate 6 counted a
+method answered from outside =src/=. Gate 2 saw a documented generic. The unit
+suite had a test named
+~fixed-zoom-keeps-cells-the-same-size-and-crops-the-trailing-one~ which asserted
+where the trailing track /starts/, called that "to be cropped by the clip box",
+and never asked ~clip-rect~ anything. Every instrument agreed, and each of them
+was answering a question about the /shape/ of the code.
+
+*And underneath it, the mode itself was half-built.* ~:fixed~ is the zoom mode
+[[file:PLAN.org::#delta-3][Delta 3]] exists to provide and the one
+~resize-column~'s own first-use warning tells you to switch to when ~:fit~'s
+panning cost becomes intolerable. Three things were wrong with it:
+
+- ~fixed-tracks~ took a /count/ and gave every track exactly ~*cell-width*~, so
+  *~resize-column~ and ~resize-row~ did nothing whatsoever under ~:fixed~*. The
+  advice sent you to the mode where the thing you had just done stopped working,
+  silently. D8's ruling is that a size belongs to a column and spans every row;
+  under ~:fixed~ the weight scales the absolute size, which is what it does now.
+- a cell whose track had run *entirely* past the edge was still placed, at a
+  position off the screen, and river shows a window unless it is explicitly
+  hidden. Omitting it is what hides it, and that is one clause.
+- ~map-mode-p~ decided whether cells were too small to render by dividing the
+  output width by the column count, which is the ~:fit~ answer and nothing at all
+  under ~:fixed~ — so eight columns of a 960-pixel lattice computed 240 pixels
+  and put the drawn map up over cells that were full size. Both callers ask
+  ~cell-tracks~ now, which is the one place that knows how big a cell is.
+
+#+CLAIM: (let ((lattice:*zoom-mode* :fixed) (lattice:*cell-width* 500)
+#+CLAIM:       (lattice:*cell-height* 600) (lattice:*cell-gap* 0))
+#+CLAIM:   (let* ((grid (lattice:make-grid
+#+CLAIM:                :cols 3 :rows 1
+#+CLAIM:                :cells (list (cons (lattice:cell 2 0) (make-leaf)))))
+#+CLAIM:          (policy (make-instance 'lattice:lattice-policy))
+#+CLAIM:          (placed (layout-children policy grid (make-rect 0 0 1200 600)))
+#+CLAIM:          (box (cdr (assoc (lattice:cell 2 0) placed :test #'equal)))
+#+CLAIM:          (clip (clip-rect policy (child-at grid (lattice:cell 2 0)) box)))
+#+CLAIM:     (and clip (= 1000 (rect-x clip)) (= 200 (rect-w clip)))))
+
+*The core had the same bug, in the same week, with nothing in common but the
+mechanism.* ~render-order~'s shipped method sorted tiled nodes, then floats,
+"then anything marked as overlay" — a third tier for a node carrying an
+=:overlay= property. Nothing has ever written that property, and nothing was ever
+going to: every overlay in this program — the echo area, the help page, the
+cursor, the lattice's coordinate labels and its map — is a *surface* rather than
+a node, made by =runtime/surface.lisp=, and none of them is in a render list. A
+documented tier with no way in. It is deleted rather than wired up, because the
+tier a policy actually wants is the method: ~render-order~ is the extension
+point, an override of it is obeyed for the whole list, and a property key
+standing in for a generic is the mistake ~*smart-gaps*~ made with an option.
+
+*Gate 13 is the half of this that matters.* Props is the third way to keep state
+here, and it was the unchecked one. An option is registered and gate 11 asks
+whether anything reads it; a hook is declared and gate 7 asks whether anything
+runs it; a property key is neither registered nor declared — it is a keyword
+somebody types in two places, and nothing compared the two. So the gate reads
+=src/=, =lattice/= and =examples/= with the *reader* rather than grepping them: a
+key is found by symbol identity against ~prop~, so every nickname the tree uses
+is the same function, a docstring naming a key is a string and cannot make it
+pass, and a ~setf~ place is distinguished from a read structurally rather than by
+looking left for a bracket. One forwarder — ~node-window-prop~, the bridge a
+window rule's colour crosses to reach a generic handed a node — is named in the
+table rather than special-cased.
+
+*It fails one direction and reports the other, and that asymmetry is the
+argument.* A key that is read and never written is provably dead: the read is
+~nil~, the branch never runs, nothing signals, and there is no arrangement of the
+program in which that was the intent. A key that is *written* and never read is a
+different animal, because [[file:DESIGN.org::#d20][D20]] is that props exists for
+exactly this — state hung on an object for a reader the core does not know about.
+Four are in that position today and the build prints all four:
+
+: label -- written in src/policy/lifecycle.lisp
+: locked -- written in src/runtime/session.lisp
+: pid -- written in src/runtime/windows.lisp
+: presentation-hint -- written in src/runtime/windows.lisp
+
+=:pid= and =:presentation-hint= are facts river's events carry and a status bar
+would want; =:locked= is the session-lock state. Failing on those would be a gate
+ordering the program to grow a consumer, which is a check writing the design.
+*=:label= is the one worth a decision*, and it is not made here: it is a
+documented ~window-rule-for~ override key, it is honoured into a property, and
+nothing displays it — so a rule that names a window names it to nobody. That is
+~*smart-gaps*~'s species again and the fix is not obvious, because it wants a
+ruling on what a window's name is /for/ before it wants code.
+
+*Cost:* one property write, one accessor argument, three geometry clauses, one
+deleted ~cond~ branch, about a hundred lines of gate, five unit tests and the
+first section in the integration suite that runs the extension against a real
+compositor — which is where the remaining question lived, because a clip box
+outside the window's content is river's ~invalid_clip_box~ error and it takes the
+connection down rather than returning anything. It sends one now, for a cell
+overhanging by 638 pixels, and river keeps talking to us.
+
 * The counts, for gate 3
 
 : lattice/package.lisp     60 lines    0 defmethods
 : lattice/grid.lisp       427 lines   15 defmethods   (the container protocol)
-: lattice/policy.lisp     714 lines   12 defmethods   (layout, motion, colour)
+: lattice/policy.lisp     779 lines   12 defmethods   (layout, motion, colour)
 : lattice/commands.lisp   500 lines    0 defmethods   (18 commands)
-: lattice/map.lisp        170 lines    1 defmethod    (the minimap)
+: lattice/map.lisp        183 lines    1 defmethod    (the minimap)
 : lattice/overlay.lisp    128 lines    0 defmethods   (the coordinate overlay)
 : --------------------------------------------------
-: total                 1,999 lines   28 defmethods
+: total                 2,077 lines   28 defmethods
 
 : core files edited              7   (one export, one default method, one
 :                                    class-hierarchy correction, four for

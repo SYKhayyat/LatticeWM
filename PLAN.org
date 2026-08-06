@@ -119,6 +119,19 @@ the flip is one ~setf~ in either direction. D22 stands.
 
 This is a one-line default change, not a redesign, and it is reversible by config.
 
+*And the mode this paragraph rules on was half-built, which nobody found for as long as
+it was the mode nobody was in.* ~set_content_clip_box~ does render the partial trailing
+cell cleanly and it is free from the compositor — and the method that asks for it read a
+bound that nothing in the tree wrote, so it cropped nothing, ever. Under ~:fixed~ a
+column you had resized was ignored outright, which is the sharpest form of the problem:
+the *only* reason to leave ~:fit~ is that you resized something and do not want panning
+to move it, and the mode you were sent to dropped the resize. A cell that had run clean
+off the edge was placed offscreen rather than hidden, and the drawn map's threshold
+computed the ~:fit~ cell width in both modes. All four are fixed and all four are now
+covered — see [[file:FINDINGS.org::#dead-property][FINDINGS: the method that could not
+fire]]. *The default is unchanged*: ~:fit~ is still right for the reason above, and what
+changed is that the alternative is now the thing this ruling describes.
+
 * Architecture
 :PROPERTIES:
 :CUSTOM_ID: arch
@@ -366,7 +379,7 @@ lattice that is three hundred lines of methods is the thesis holding. One that i
 thousand lines re-implementing geometry is the thesis failing while wearing the gate's
 uniform.
 
-** The six that were added
+** The seven that were added
 :PROPERTIES:
 :CUSTOM_ID: gates-added
 :END:
@@ -451,6 +464,40 @@ existed were individually reasonable and all pointed somewhere else.
     document that arrives unclassified. The claim count is printed with no floor,
     because prose is deleted along with the thing it described; the two automatic
     checks are what stop it becoming a no-op if the claims went away.
+13. *Every node property the program reads is written by something.* ~props~ is the
+    third way to keep state here — [[file:DESIGN.org::#d20][D20]]'s answer to "an
+    extension needs somewhere to put its own state" — and it was the unchecked one. An
+    option is registered and gate 11 asks who reads it; a hook is declared and gate 7
+    asks who runs it; *a property key is neither registered nor declared.* It is a
+    keyword typed in two places, the write and the read, and nothing compared the two.
+
+    Two keys had only one of the two, in the same tree, with nothing in common but the
+    mechanism. =:lattice/viewport-bounds= was read by the lattice's ~clip-rect~ and
+    written by nothing, so the one method standing for ~set_content_clip_box~ — the best
+    find in [[file:DESIGN.org::#feasibility][§feasibility]], the cropped trailing cell
+    that ~:fixed~ zoom exists for, a row in
+    [[file:FINDINGS.org::#twelve][FINDINGS' list of what the extension overrides]] —
+    returned "clip nothing" for its entire life. And =:overlay= was read by the core's
+    ~render-order~ as a third render tier above the floats, which no node could be put
+    into, because every overlay in this program is a *surface* rather than a node.
+    Neither is a typo. Both are a keyword that was read where it should also have been
+    written, and *an absent property is a legal answer*, so there was nothing to signal
+    and nothing to test.
+
+    It reads the source with the *reader*, which is the whole difference from a grep: a
+    key is found by symbol identity against ~prop~, so every nickname in the tree is the
+    same function; a docstring naming a key is a string rather than a form and cannot
+    make it pass; and a ~setf~ place is told apart from a read structurally rather than
+    by looking left for a bracket. Gate 11's instrument is unavailable here — keywords
+    are constants, not variables, and ~who-references~ answers ~nil~ for every one of
+    them.
+
+    *It fails one direction and reports the other.* A key that is read and never written
+    is provably dead code and there is no arrangement of the program in which that was
+    the intent. A key that is written and never read is what D20 exists for — state hung
+    on an object for a reader the core does not know about — so the four in that position
+    are printed on every build rather than failed on. Demanding an in-tree consumer for
+    =:pid= would be a check writing the design.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

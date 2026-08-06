@@ -74,11 +74,25 @@ Dimmer than the coordinate, because the coordinate is what you are navigating
 by and the contents are what confirm you picked the right cell.")
 
 (defun map-mode-p (grid rect)
-  "Should the plane be drawn rather than rendered, at this size?"
+  "Should the plane be drawn rather than rendered, at this size?
+
+ASKING CELL-TRACKS RATHER THAN DIVIDING THE OUTPUT.  This used to be
+RECT-W / COLS, which is the width of a cell under :FIT and is nothing at all
+under :FIXED, where a cell is *CELL-WIDTH* pixels however many of them the
+viewport is asking for.  So a :FIXED lattice zoomed to eight columns computed
+240 pixels for cells that were 960, decided they were too small to bother
+rendering, and put the map up over full-size windows.
+
+The mean rather than the narrowest track, deliberately: the question is whether
+cells are worth rendering at this zoom level, and one deliberately narrow column
+beside four wide ones is not that.  Under :FIT the mean is the division that used
+to be here, short by the gaps, so the behaviour this shipped with is unchanged
+except at a threshold set within a few pixels of a boundary."
   (and grid (plusp *map-threshold*)
-       (let ((viewport (grid-viewport grid)))
-         (< (floor (c:rect-w rect) (max 1 (viewport-cols viewport)))
-            *map-threshold*))))
+       (let ((columns (cell-tracks grid rect :horizontal)))
+         (and columns
+              (< (floor (reduce #'+ (mapcar #'c:rect-w columns)) (length columns))
+                 *map-threshold*)))))
 
 (defmethod p:layout-children :around ((policy lattice-policy) (grid grid) rect)
   "Place nothing at all once the cells are too small to be worth rendering.

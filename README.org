@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, twelve gates, 1400+ checks
+make               # build, thirteen gates, 1500+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -241,6 +241,20 @@ and you keep your place. Set ~*workspace-entry*~ to ~:aligned~ and
 ~*new-workspace-origin*~ to ~:inherit~ for pure Z-axis movement — X and Y never
 change, only which plane is under you.
 
+*Two ways for zoom to make room*, and it matters once you resize a column.
+~*zoom-mode*~ is ~:fit~ by default: the visible cells stretch to fill the screen
+exactly. That is free while every column is the same width, and the moment one
+is not, panning changes the width of every window on screen — which is what
+~:fixed~ is for.
+
+| ~:fit~   | cells stretch to tile the screen exactly. Panning a *non-uniform* plane resizes windows |
+| ~:fixed~ | a cell is ~*cell-width*~ by ~*cell-height*~ pixels wherever it sits; the plane scrolls under the screen and the trailing cell is *cropped at the edge*, border redrawn there by the compositor |
+
+Under ~:fixed~ a column you widen is that much wider in pixels, always, and
+panning resizes nothing. The crop is river's ~set_content_clip_box~ and it is
+the reason the partial cell at the edge reads as a cleanly cut cell rather than
+a window sliced in half.
+
 The lattice is the project's own experiment on itself: it is a *separate ASDF
 system* that depends on the policy package and nothing else, and a CI gate
 asserts on every build that it touches no core file. What that cost is written
@@ -428,7 +442,7 @@ make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Twelve gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Thirteen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -440,11 +454,28 @@ pinned XML; how many policy generics have ever been answered from *outside*
 event handled existing on the interface it is handled for; the image, the
 installer and the shipped configuration agreeing about where an extension
 lives; no container kind named by class outside its own definition; every
-registered option read by something; and every claim these documents make
-about the program still being true of it. The
+registered option read by something; every claim these documents make
+about the program still being true of it; and every node property the program
+*reads* being written by something. The
 reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
-Gate 12 is the newest and it is the only one that reads a sentence. Eleven
+Gate 13 is the newest, and it is gate 11's question asked of the mechanism next
+door. A node property is a keyword you type in two places — the write and the
+read — and nothing registers it, declares it or checks it, so a key with only
+one of the two is invisible: ~prop~ answers ~nil~, the branch behind it never
+runs, and nothing ever fails. Two had shipped that way. The lattice's
+~clip-rect~ — the cropped trailing cell above, river's best request, a row in
+FINDINGS' list of what the extension overrides — read a bound that nothing
+wrote, so it returned "clip nothing" for its entire life; and the core's
+~render-order~ had a third render tier above the floats that no node could ever
+be put into. The gate reads the source with the *reader* rather than grepping it,
+so a key is found by symbol identity and a docstring naming one cannot make it
+pass. It fails on a key that is read and never written, and *reports* the
+converse rather than failing: ~props~ exists precisely so that state can be hung
+on an object for a reader the core does not know about, and a gate that demanded
+an in-tree consumer for =:pid= would be a check writing the design.
+
+Gate 12 came before it and it is the only one that reads a sentence. Eleven
 gates point at the code and none of them can see a paragraph, so when SWANK
 was turned off by default — correctly; it was unauthenticated code execution
 started before the user had done anything — the first instruction in the

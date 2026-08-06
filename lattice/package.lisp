@@ -39,7 +39,7 @@ motion runs straight through the cell boundary as though it were not there.")
    ;; the viewport
    #:viewport #:viewport-origin #:viewport-cols #:viewport-rows
    #:viewport-cells #:viewport-contains-p #:ensure-visible
-   #:zoom-index #:set-zoom #:zoom-origin #:cell-rects
+   #:zoom-index #:set-zoom #:zoom-origin #:cell-rects #:cell-tracks
    ;; the policy
    #:lattice-policy
    #:*zoom-mode* #:*zoom-ladder* #:*cell-width* #:*cell-height* #:*cell-gap*

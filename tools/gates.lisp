@@ -1,15 +1,17 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are twelve, and the six that were added are the six that found
+;;;; are thirteen, and the seven that were added are the seven that found
 ;;;; something.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other eleven run here, against the loaded image.
+;;;; The other twelve run here, against the loaded image.
 ;;;;
 ;;;; Eleven of them ask the program a question.  Gate 12 asks the *documents*
-;;;; one, which is the half of this project the other eleven cannot see.
+;;;; one, which is the half of this project the other eleven cannot see, and
+;;;; gate 13 asks the *source*, because the one thing a keyword property key
+;;;; cannot be asked about is what the compiled image thinks of it.
 
 (require :asdf)
 (require :sb-introspect)
@@ -886,9 +888,11 @@ where install.sh puts it" problems)))
 ;; automatic checks are what stop this becoming a no-op if the claims went
 ;; away.
 ;;
-;; IT RUNS LAST because it evaluates arbitrary claim forms against the image
-;; and installs the shipped keymap to do it, and nothing after it should have
-;; to reason about what a claim left behind.
+;; IT RUNS AFTER EVERY GATE THAT ASKS THE IMAGE A QUESTION, because it evaluates
+;; arbitrary claim forms against that image and installs the shipped keymap to do
+;; it, and none of them should have to reason about what a claim left behind.
+;; Gate 13 follows it and is the one gate that does not care: it reads source
+;; text and the package table, and no claim can change either.
 
 (defparameter *current-documents*
   '("README.org" "INSTALL.org" "FINDINGS.org"
@@ -1164,6 +1168,210 @@ with."
                 ~4treason this gate exists."
             (length broken) (reverse broken))
       (format t "  every claim the prose pins is still true~%")))
+
+;;; --------------------------------------------------------------- gate 13
+
+(banner 13 "every extension property is written and read")
+;; THE SAME BUG AS *SMART-GAPS*, ONE MECHANISM OVER, AND IT HAD SHIPPED TWICE.
+;;
+;; PROPS is the third way to keep state in this program.  An option is
+;; registered and gate 11 asks whether anything reads it; a hook is declared and
+;; gate 7 asks whether anything runs it; a property key is neither registered nor
+;; declared -- it is a keyword somebody types in two places, and until this gate
+;; nothing compared the two.  Both halves of the tree had a key where the second
+;; place was missing:
+;;
+;;   * :LATTICE/VIEWPORT-BOUNDS.  Read by LATTICE's CLIP-RECT, written by
+;;     nothing, so the method returned CALL-NEXT-METHOD's `clip nothing' every
+;;     time it was called.  That method is river's set_content_clip_box, which
+;;     DESIGN calls the best find in the protocol; it is the cropped trailing
+;;     cell that :FIXED zoom is *for*; it is a row in FINDINGS' list of the
+;;     generics the lattice overrides.  It could not fire.
+;;
+;;   * :OVERLAY.  Read by the core's RENDER-ORDER as a third render tier above
+;;     the floats, written by nothing, because everything anybody would call an
+;;     overlay here is a *surface* rather than a node and is not in a render
+;;     list at all.  A documented tier with no way in.
+;;
+;; Neither is a typo and that is the point: both are a keyword that was read
+;; where it should also have been written, which no compiler and no test notices
+;; because PROP's contract is that an absent key is NIL.  The failure mode is
+;; always the same shape -- a method or a clause that runs, does nothing, and
+;; agrees with the documentation.
+;;
+;; ASK THE READER, NOT THE TEXT.  Gate 11 asks SBCL's cross-reference data,
+;; which cannot be done here: keywords are constants, not variables, and
+;; WHO-REFERENCES answers NIL for every one of them.  So this reads the source --
+;; but with READ rather than SEARCH, which is the whole difference.  A key is
+;; found by *symbol identity* against LATTICEWM/CORE:PROP, so c:prop, r::prop and
+;; a package-local nickname nobody has invented yet are all the same function; a
+;; docstring that mentions :LATTICE/VIEWPORT-BOUNDS is a string and not a form,
+;; so it cannot make the gate pass; and the SETF pairs are separated from the
+;; reads structurally rather than by looking for "(setf " to the left.
+;;
+;; ONE DIRECTION IS A FAILURE AND THE OTHER IS A REPORT, and the asymmetry is
+;; the argument, not a compromise.  A key that is *read* and never written is
+;; provably dead code: PROP answers NIL, the branch behind it never runs, and
+;; nothing ever signals.  There is no arrangement of the program in which that is
+;; what somebody meant.  A key that is *written* and never read is a different
+;; animal, because PROPS is D20's published interface for exactly this -- state
+;; hung on an object the writer does not own, for a reader the core does not know
+;; about.  :PID is the fact river's unreliable_pid event carries; a status bar
+;; that wants it reads it from outside.  Failing on that would be a gate ordering
+;; the program to grow a consumer, which is how a check starts writing the
+;; design.  So it is printed, every build, in full: visible enough that a key
+;; nobody can name a reader for gets noticed, and honest about which of the two
+;; questions it is answering.
+;;
+;; WHAT IT CANNOT SEE, SAID PLAINLY.  A key computed at runtime -- (prop node
+;; key) where KEY is a variable -- is invisible to a scan of literals.  One
+;; function in the tree does that, NODE-WINDOW-PROP, and it is named in
+;; *PROP-ACCESSORS* below rather than special-cased: an accessor that forwards a
+;; key has to be listed or the reads through it are unseen, which is the same
+;; bargain gate 12 makes about classifying a document.  Being absent from the
+;; list cannot make the gate quieter, only louder -- an unlisted forwarder's keys
+;; look unread, and unread is the half that fails.
+;;
+;; TESTS AND TOOLS ARE NOT THE PROGRAM.  The scan is src/, lattice/ and
+;; examples/: the core, the one shipped extension and the four worked examples.
+;; A key written only by a test is not written, which is the same ruling gate 11
+;; makes about options and for the same reason -- the suite is allowed to reach
+;; into places the program does not, and a check that counted it would be
+;; satisfiable from the file that is supposed to be doing the checking.
+(defparameter *prop-writers*
+  '((setf . :pairs) (psetf . :pairs)
+    (push . :second) (pushnew . :second)
+    (pop . :first) (incf . :first) (decf . :first) (remf . :first))
+  "Operators that write through a place, and which argument the place is.
+
+:PAIRS is every other argument, SETF-style.  The rest take exactly one place,
+PUSH and PUSHNEW second and the others first.
+
+A place is counted as a write and *not* as a read, including for the
+read-modify-writes: (PUSH x (PROP node :k)) does consult the old list, but a key
+that is only ever pushed onto is not a key anything in the program looks at, and
+calling that a read would make the report below meaningless.")
+
+(defparameter *prop-accessors*
+  (list (cons (sym "latticewm/core:prop") 2)
+        (cons (sym "latticewm/policy:node-window-prop") 2))
+  "Every function that takes a property key, and where the key sits in the call.
+
+The number is the position in the form, counting the operator as zero -- so 2 is
+the second argument, which is where both of these take it.
+
+PROP is the accessor; NODE-WINDOW-PROP forwards to it, and it is the bridge a
+window rule's colour crosses to reach an appearance generic that was handed a
+*node* rather than a window.  Its reads are real reads and this is where the gate
+is told so.")
+
+(defun prop-key-of (form)
+  "The literal property key FORM accesses, or NIL if it is not a literal access."
+  (let ((position (and (consp form) (symbolp (car form))
+                       (cdr (assoc (car form) *prop-accessors*)))))
+    (when position
+      (let ((argument (nth position form)))
+        (and (keywordp argument) argument)))))
+
+(defun prop-write-places (form)
+  "The subforms of FORM that are in a write position."
+  (let ((rule (and (consp form) (symbolp (car form))
+                   (cdr (assoc (car form) *prop-writers*)))))
+    (case rule
+      (:pairs (loop for tail on (cdr form) by #'cddr collect (car tail)))
+      (:second (and (consp (cdr form)) (consp (cddr form)) (list (third form))))
+      (:first (and (consp (cdr form)) (list (second form))))
+      (t '()))))
+
+(defun prop-sites (path)
+  "Two lists: the property keys PATH reads, and the ones it writes.
+
+*PACKAGE* follows PATH's own IN-PACKAGE forms, which is what makes reading the
+file the right instrument: every abbreviation the file uses for the core --
+c:prop here, prop inside latticewm/core itself -- resolves to the same symbol
+without this gate having to know the nicknames exist.
+
+Two passes over the same conses, because a write position has to be *subtracted*
+from the reads: the place in (SETF (PROP node :k) v) is a PROP form like any
+other, and the only thing that distinguishes it is the form it is nested in.  The
+first pass remembers the place cells themselves, and the second skips them by
+identity."
+  (let ((reads '()) (writes '()) (places '()))
+    (labels ((collect-writes (form)
+               (when (consp form)
+                 (dolist (place (prop-write-places form))
+                   (let ((key (prop-key-of place)))
+                     (when key
+                       (pushnew key writes)
+                       (push place places))))
+                 (collect-writes (car form))
+                 (collect-writes (cdr form))))
+             (collect-reads (form)
+               (when (consp form)
+                 (let ((key (prop-key-of form)))
+                   (when (and key (not (member form places :test #'eq)))
+                     (pushnew key reads)))
+                 (collect-reads (car form))
+                 (collect-reads (cdr form)))))
+      (with-open-file (in path)
+        (let ((*package* *package*)
+              (*read-eval* nil))
+          (loop for form = (read in nil :eof)
+                until (eq form :eof)
+                do (when (and (consp form) (symbolp (car form))
+                              (string= (symbol-name (car form)) "IN-PACKAGE"))
+                     (let ((package (find-package (second form))))
+                       (when package (setf *package* package))))
+                   (collect-writes form)
+                   (collect-reads form)))))
+    (values reads writes)))
+
+(let ((reads (make-hash-table))
+      (writes (make-hash-table))
+      (files (append (directory "src/**/*.lisp")
+                     (directory "lattice/*.lisp")
+                     (directory "examples/*.lisp"))))
+  (dolist (path files)
+    (handler-case
+        (multiple-value-bind (read-keys written-keys) (prop-sites path)
+          (dolist (key read-keys) (pushnew (relative path) (gethash key reads)
+                                           :test #'string=))
+          (dolist (key written-keys) (pushnew (relative path) (gethash key writes)
+                                              :test #'string=)))
+      (error (condition)
+        ;; A file this cannot read is a gate that cannot run, not a gate that
+        ;; passes.  Reader conditionals and every abbreviation in the tree read
+        ;; fine; anything that does not is worth hearing about immediately.
+        (fail 13 "~a does not read: ~a" (relative path) condition))))
+  (let ((unwritten '()) (write-only '()) (keys '()))
+    (maphash (lambda (key files) (declare (ignore files)) (pushnew key keys)) reads)
+    (maphash (lambda (key files) (declare (ignore files)) (pushnew key keys)) writes)
+    (dolist (key keys)
+      (unless (gethash key writes)
+        (push (format nil "~(~a~) -- read in ~{~a~^, ~}" key (gethash key reads))
+              unwritten))
+      (unless (gethash key reads)
+        (push (format nil "~(~a~) -- written in ~{~a~^, ~}" key (gethash key writes))
+              write-only)))
+    (format t "  files scanned~46t~d~%  property keys~46t~d~%~
+               ~2twritten, and read by nothing here~46t~d~%~
+               ~2tread, and written by nothing at all~46t~d~%"
+            (length files) (length keys) (length write-only) (length unwritten))
+    ;; The report half.  Printed in full rather than counted, because the whole
+    ;; use of it is that a reader can look at a name and ask who wants it.
+    (dolist (row (sort write-only #'string<))
+      (format t "    published, nothing here reads it: ~a~%" row))
+    (when unwritten
+      (fail 13 "~d propert~:@p the program reads and nothing writes:~{~%    ~a~}~%~
+                ~4tThe read is always NIL, so whatever depends on it never~%~
+                ~4thappens -- and it never *fails* either, because an absent~%~
+                ~4tkey is a legal answer.  Write it, or delete the read and~%~
+                ~4tthe behaviour it was standing in for.  A method whose whole~%~
+                ~4tbody is CALL-NEXT-METHOD is a method the documentation~%~
+                ~4tdescribes and the program does not have."
+            (length unwritten) (sort unwritten #'string<)))
+    (unless unwritten
+      (format t "  every key the program reads is written by something~%"))))
 
 ;;; ---------------------------------------------------------------- verdict
 

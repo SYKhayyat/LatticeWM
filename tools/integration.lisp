@@ -305,6 +305,33 @@ command to run instead makes the window's lifetime ours."
                 (find app-id (all-windows) :key #'c:window-app-id :test #'equal))
               seconds))
 
+;;; -------------------------------------------------- reaching a later system
+;;;
+;;; THE LATTICE IS NOT LOADED IN THIS IMAGE UNTIL ONE SECTION LOADS IT, and it
+;;; must not be.  Every section before that one is the *core* against a real
+;;; compositor, and an extension that registers eighteen commands and twenty-eight
+;;; methods before they run would have them asking their questions of a
+;;; different program.  That is gate 4's ruling about a clean image, applied to
+;;; the one place where it is a *sequence* rather than a separate process.
+;;;
+;;; Which means the names cannot be read yet: LOAD reads this whole file before
+;;; running any of it, and LATTICE:ENABLE is not a readable symbol until the
+;;; section has already loaded the system.  So the section resolves them when it
+;;; calls them, which is the same thing tools/gates.lisp does for the same
+;;; reason.
+
+(defun late-call (name &rest arguments)
+  "Call the function named by the string NAME, resolved now rather than at read
+time."
+  (apply (read-from-string name) arguments))
+
+(defun late-value (name)
+  "The value of the special variable named by the string NAME."
+  (symbol-value (read-from-string name)))
+
+(defun (setf late-value) (value name)
+  (setf (symbol-value (read-from-string name)) value))
+
 ;;; ------------------------------------------------------- driving the program
 ;;;
 ;;; Every command below runs the way a command run from a REPL runs: queued onto
@@ -1322,6 +1349,102 @@ are what a person means by the arrangement, and both are copy-stable."
                    "and with no panels running it reserves nothing")))
          (skip "a panel or a screen locker: no layer-shell client is available ~
                 headless, so the exclusive-zone arithmetic is unexercised"))
+
+       ;; ------------------------------------------------------------------
+       ;; THE EXTENSION, AND THE ONE REQUEST NOTHING HAD EVER SENT.
+       ;;
+       ;; P:CLIP-RECT is river's set_content_clip_box, which DESIGN calls the
+       ;; best find in the whole protocol: a cell half over the viewport edge is
+       ;; cropped *and its border is redrawn at the crop edge*, free, by the
+       ;; compositor.  The lattice's method for it read a property that nothing
+       ;; in the tree wrote, so it fell through to the shipped `nothing
+       ;; overhangs, clip nothing' on every call for its entire life, and no unit
+       ;; test could tell -- an absent property is a legal answer and NIL is a
+       ;; legal return.  Gate 13 is the check for the property.
+       ;;
+       ;; THIS IS THE HALF ONLY A COMPOSITOR CAN SETTLE.  A clip box outside the
+       ;; window's content is river's invalid_clip_box error, which does not
+       ;; return a value -- it takes the connection down.  So the question "is
+       ;; the box we compute one river will accept" cannot be asked of a model,
+       ;; of a gate, or of a unit test, and it is the only question left once the
+       ;; arithmetic is covered.  It is also the first time anything in this file
+       ;; has run the extension against a real compositor at all.
+       (section "the plane, and the clip box river accepts"
+         (let ((a (window-named "latticewm-a" 1)))
+           (cond
+             ((null a) (missing "no window, so no cell to crop"))
+             ((not (handler-case
+                       (progn (handler-bind ((warning #'muffle-warning))
+                                (asdf:load-system "lattice"))
+                              t)
+                     (error (condition)
+                       (check nil "the lattice system loads: ~a" condition))))
+              nil)
+             (t
+              (let ((area (outer-rect (current-policy) (current-output)))
+                    (mode (late-value "lattice:*zoom-mode*"))
+                    (width (late-value "lattice:*cell-width*"))
+                    (height (late-value "lattice:*cell-height*")))
+                (unwind-protect
+                     (progn
+                       ;; Three quarters of the plane's rect per cell, so the
+                       ;; second of two cells is certain to hang over the edge
+                       ;; whatever size the client decides to take.  Full height,
+                       ;; so the overhang is on one axis and the numbers below
+                       ;; say which.
+                       (setf (late-value "lattice:*zoom-mode*") :fixed
+                             (late-value "lattice:*cell-width*")
+                             (floor (* 3 (c:rect-w area)) 4)
+                             (late-value "lattice:*cell-height*") (c:rect-h area))
+                       (check (wm (lambda ()
+                                    (late-call "lattice:enable"
+                                               :cols 2 :rows 1 :keys nil)))
+                              "the lattice is enabled live, two cells wide")
+                       (check (settle) "and the plane laid out")
+                       (check (late-call "lattice:current-grid")
+                              "the root of the workspace is a plane")
+                       (check (stand-on a) "standing on the window")
+                       (verb "move-to-cell" 1 0)
+                       (check (settle) "and it is in cell 1,0, the trailing cell")
+                       ;; C:WINDOW-RECT rather than RECT-OF, and the difference
+                       ;; is the point of GRAVITY: the layout assigned the cell's
+                       ;; rectangle, the client came back two pixels narrower
+                       ;; than that, and PLACE-RECT centred the shortfall.  The
+                       ;; clip box is computed against the rectangle the window
+                       ;; actually got, which is the one river is being told
+                       ;; about, so that is the one to compare with.
+                       (let ((placed (c:window-rect a)))
+                         (cond
+                           ((null placed)
+                            (check nil "the window still has a placement"))
+                           ((<= (c:rect-right placed) (c:rect-right area))
+                            (skip "the client took a size that fits inside the ~
+                                   plane's rect, so nothing overhangs to crop"))
+                           (t
+                            (check t "the cell overhangs the plane by ~d pixels"
+                                   (- (c:rect-right placed) (c:rect-right area)))
+                            (let ((clip (r::emitted a :clip)))
+                              (check (and (consp clip) (= 4 (length clip)))
+                                     "and a content clip box was sent: ~a" clip)
+                              (when (and (consp clip) (= 4 (length clip)))
+                                (destructuring-bind (x y w h) clip
+                                  (declare (ignore y h))
+                                  (check (= x (c:rect-x placed))
+                                         "starting at the window's own left edge")
+                                  (check (= w (- (c:rect-right area) x))
+                                         "and ~d pixels wide: the part of it that ~
+                                          is on screen" w)))
+                              (check (settle)
+                                     "and river accepted it -- another sequence ~
+                                      completes")
+                              (check (server-running *server*)
+                                     "with the connection still up, so the box ~
+                                      was in range"))))))
+                  (setf (late-value "lattice:*zoom-mode*") mode
+                        (late-value "lattice:*cell-width*") width
+                        (late-value "lattice:*cell-height*") height)
+                  (wm (lambda () (late-call "lattice:disable")))
+                  (settle)))))))
 
        ;; ------------------------------------------------------------------
        ;; SHUTDOWN RUNS ONCE.  QUIT and RESTART-WM each ran the hooks and saved

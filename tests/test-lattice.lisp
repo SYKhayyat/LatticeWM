@@ -612,6 +612,151 @@ is exactly when to switch *ZOOM-MODE* to :FIXED"))))
         (is (= 1000 (c:rect-x last))
             "and the trailing one overhangs, to be cropped by the clip box")))))
 
+(test the-trailing-cell-is-actually-clipped-and-not-only-said-to-be
+  ;; THIS TEST NAMED THE CROP AND CHECKED THE ARITHMETIC ABOVE IT.  The one
+  ;; before this asserts where the trailing track *starts*, calls it "to be
+  ;; cropped by the clip box", and never asks CLIP-RECT anything — which is
+  ;; exactly how a method whose bounds nothing wrote passed for its whole life.
+  ;; :LATTICE/VIEWPORT-BOUNDS was read here and written nowhere, so CLIP-RECT
+  ;; fell through to the shipped `nothing overhangs, clip nothing' every time.
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (l:*zoom-mode* :fixed)
+         (l:*cell-width* 500)
+         (l:*cell-height* 600)
+         (l:*cell-gap* 0)
+         (rect (c:make-rect 0 0 1200 600)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 3
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (dotimes (x 3) (setf (c:child-at grid (l:cell x 0)) (leaf "w")))
+    (let ((placed (p:layout-children policy grid rect)))
+      (is (= 3 (length placed)))
+      (flet ((clip (x)
+               (let* ((node (c:child-at grid (l:cell x 0)))
+                      (box (cdr (assoc (l:cell x 0) placed :test #'equal))))
+                 (p:clip-rect policy node box))))
+        (is (null (clip 0)) "a cell wholly on screen is not clipped at all")
+        (is (null (clip 1)) "nor the second one, which ends exactly at 1000")
+        (let ((clip (clip 2)))
+          (is-true clip "the trailing cell IS clipped")
+          (is (= 1000 (c:rect-x clip)))
+          (is (= 200 (c:rect-w clip))
+              "cropped to the 200 pixels of it that are on screen, not 500")
+          (is (= 600 (c:rect-h clip))
+              "and full height: the overhang is on one axis only"))))))
+
+(test the-clip-follows-the-plane-and-is-not-remembered
+  ;; The bounds are rewritten by every relayout, so they follow the output, the
+  ;; reserved space and the gaps without anything having to invalidate them.  A
+  ;; cached first answer is the failure this rules out: pan by one cell and the
+  ;; cell that was cropped is whole, and a different one is cropped.
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (l:*zoom-mode* :fixed)
+         (l:*cell-width* 500)
+         (l:*cell-height* 600)
+         (l:*cell-gap* 0)
+         (rect (c:make-rect 0 0 1200 600)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 3
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (dotimes (x 4) (setf (c:child-at grid (l:cell x 0)) (leaf "w")))
+    (flet ((clip-of (x)
+             (let* ((placed (p:layout-children policy grid rect))
+                    (node (c:child-at grid (l:cell x 0)))
+                    (box (cdr (assoc (l:cell x 0) placed :test #'equal))))
+               (and box (p:clip-rect policy node box)))))
+      (is-true (clip-of 2) "at origin 0, cell 2 is the partial one")
+      (setf (l:viewport-origin (l:grid-viewport grid)) (l:cell 1 0))
+      (is (null (clip-of 2))
+          "after one pan it is whole, because the bounds moved with the layout")
+      (is-true (clip-of 3) "and cell 3 is the partial one now"))))
+
+(test a-cell-that-has-run-clean-off-the-edge-is-not-placed-at-all
+  ;; A partial cell is cropped; a cell with nothing on screen at all is *hidden*,
+  ;; which under this layout means omitted, because LAYOUT-CHILDREN's omissions
+  ;; are what the driver marks invisible.  Placed-but-offscreen is the one
+  ;; outcome that must not happen: river shows a window unless told otherwise,
+  ;; so it would be drawn at a negative offset over somebody else's desktop.
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (l:*zoom-mode* :fixed)
+         (l:*cell-width* 500)
+         (l:*cell-height* 600)
+         (l:*cell-gap* 0)
+         (rect (c:make-rect 0 0 1200 600)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 4
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (dotimes (x 4) (setf (c:child-at grid (l:cell x 0)) (leaf "w")))
+    (let ((placed (p:layout-children policy grid rect)))
+      (is (= 3 (length placed))
+          "three of the four asked-for columns touch the screen")
+      (is (null (assoc (l:cell 3 0) placed :test #'equal))
+          "the fourth starts at 1500 and is not on it"))
+    (let* ((placements (p:layout-node policy grid rect))
+           (gone (find-if (lambda (pl) (equal (list (l:cell 3 0)) (second pl)))
+                          placements)))
+      (is-true gone "it is still visited")
+      (is-false (fourth gone) "and marked invisible, so its window is hidden"))))
+
+(test resizing-a-column-works-under-fixed-zoom-too
+  ;; RESIZE-COLUMN's first-use warning tells you that :FIT panning resizes
+  ;; windows on a non-uniform lattice and that :FIXED is the way out.  Under
+  ;; :FIXED the weights were dropped on the floor — every track was exactly
+  ;; *CELL-WIDTH* — so the advice sent you to the mode where the thing you had
+  ;; just done stopped working, silently.
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (l:*zoom-mode* :fixed)
+         (l:*cell-width* 400)
+         (l:*cell-height* 300)
+         (l:*cell-gap* 0)
+         (rect (c:make-rect 0 0 2000 900)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 3
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (dotimes (x 3) (setf (c:child-at grid (l:cell x 0)) (leaf "w")))
+    (setf (l:col-width grid 1) 2)
+    (let* ((rects (l:cell-rects policy grid rect))
+           (first (cdr (assoc (l:cell 0 0) rects :test #'equal)))
+           (wide (cdr (assoc (l:cell 1 0) rects :test #'equal)))
+           (after (cdr (assoc (l:cell 2 0) rects :test #'equal))))
+      (is (= 400 (c:rect-w first)))
+      (is (= 800 (c:rect-w wide)) "twice the weight is twice the pixels")
+      (is (= 400 (c:rect-x wide)) "and it starts where the first one ended")
+      (is (= 1200 (c:rect-x after)) "the one after it is pushed along by 800")
+      (is (= 400 (c:rect-w after))
+          "and is still its own width: absolute sizes do not redistribute"))
+    ;; The point of :FIXED, restated as a test: panning across a non-uniform
+    ;; lattice does not change the width of anything.
+    (setf (l:viewport-origin (l:grid-viewport grid)) (l:cell 1 0))
+    (let* ((rects (l:cell-rects policy grid rect))
+           (wide (cdr (assoc (l:cell 1 0) rects :test #'equal))))
+      (is (= 800 (c:rect-w wide))
+          "the resized column is 800 wide wherever the viewport sits"))))
+
+(test the-drawn-map-asks-how-wide-a-cell-really-is
+  ;; MAP-MODE-P divided the output by the column count, which is the :FIT
+  ;; answer and nothing at all under :FIXED — so a :FIXED lattice zoomed out
+  ;; past the threshold's worth of *columns* put the drawn map up over cells
+  ;; that were still full size, and no window on screen was anywhere near small
+  ;; enough for it.
+  (let* ((grid (grid-of))
+         (l:*cell-gap* 0)
+         (l:*map-threshold* 320)
+         (rect (c:make-rect 0 0 1920 1080)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 8
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (let ((l:*zoom-mode* :fit))
+      (is-true (l:map-mode-p grid rect)
+               "eight :FIT columns of 1920 are 240 wide, so the map is right"))
+    (let ((l:*zoom-mode* :fixed)
+          (l:*cell-width* 960))
+      (is-false (l:map-mode-p grid rect)
+                "eight :FIXED columns are 960 wide however many fit on screen"))
+    (let ((l:*zoom-mode* :fixed)
+          (l:*cell-width* 200))
+      (is-true (l:map-mode-p grid rect)
+               "and a genuinely tiny :FIXED cell still gets the map"))))
+
 ;;; ======================================================== housekeeping
 
 (test tidy-drops-empty-cells-but-not-the-one-you-are-in
