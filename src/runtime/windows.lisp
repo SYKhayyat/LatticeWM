@@ -14,11 +14,8 @@
 
 (in-package #:latticewm/runtime)
 
-(defvar *unplaced* '()
-  "Windows that have appeared but have not yet been placed.
-
-Drained at the start of each manage sequence.  See the file header for why
-this exists rather than placing on arrival.")
+;;; *UNPLACED* is declared in runtime/server.lisp, with the rest of the state
+;;; that loads before the things that consult it.
 
 (defun attach-window (proxy)
   "Register a newly announced river_window_v1 and start listening to it."
@@ -254,8 +251,14 @@ it a policy question."
   "Take WINDOW out of the tree and onto the scratchpad."
   (guarded "on-minimize" (p:on-minimize (p:current-policy) *world* window))
   ;; No explicit hide: the window is out of the tree, so the next layout does
-  ;; not place it, and the emitter hides everything it did not place.  Hiding
-  ;; here as well would be a rendering request outside a render sequence.
+  ;; not place it, and HIDE-UNPLACED-WINDOWS hides everything the layout did
+  ;; not place.  Hiding here as well would be a rendering request outside a
+  ;; render sequence.
+  ;;
+  ;; That second sentence was written before it was true.  The emitter walked
+  ;; placements only, so a window taken *out* of the tree was never mentioned
+  ;; again and river went on drawing it where it was — minimize left the window
+  ;; on screen, and the model was correct throughout.
   (let ((float (c:float-of-window *world* window)))
     (when (eq float (c:world-focused-float *world*))
       (setf (c:world-focused-float *world*) nil)))

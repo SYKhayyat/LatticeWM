@@ -45,8 +45,9 @@ a requirement. Per-distribution package names are in [[file:INSTALL.org][INSTALL
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, ten gates, 1000+ checks
-make check         # the above, plus a real river driven headlessly
+make               # build, ten gates, 1400+ checks
+make check         # the above, plus a real river driven headlessly -- and it
+                   # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
 #+end_src
 
@@ -391,14 +392,16 @@ failed session, which is the worst possible moment to find one.
 #+begin_src sh
 make          # build, gates, tests
 make test     # the unit suite alone
-make integration  # a real river, headless, driven for two seconds
+make integration  # a real river, headless, driven for a few seconds
 make check    # all of the above -- what CI should run
 make run      # river nested inside your current session
 make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Ten CI gates run on every build: zero compiler warnings under =safety 3=; every
+Ten gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+as well, which is what "CI" ought to have meant when this line first claimed
+it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core, within a
 line budget and above a method floor; the core running with the lattice absent;
 codegen counts matching the pinned protocol XML; the runtime-to-policy line
@@ -410,9 +413,27 @@ reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
 =make integration= is the one that is different in kind. It runs river on a
 headless backend, connects to it as the ordinary Wayland client this program
-is, opens a window and asserts on what comes back — because every other check
-in the project *constructs* state, and the bugs that survive live exactly where
-constructed state cannot reach. It found one on its first run.
+is, opens windows, drives the real commands from outside a protocol sequence,
+and asserts on what came back — because every other check in the project
+*constructs* state, and the bugs that survive live exactly where constructed
+state cannot reach.
+
+It has found five. Four are fixed: pointer bindings enabled through the wrong
+interface, so Super+drag did nothing; a window that left the tree — by being
+minimized, or by being on the workspace you walked away from — never being
+hidden, so the model was right and the screen was wrong; =new-workspace= moving
+the cursor to a workspace it never put on the screen; and =op_start_pointer=
+sent outside the manage sequence that is the only place it is legal, so
+Super+drag did nothing for a second time and a different reason. Not one of them
+is visible to a test that builds its own world.
+
+The fifth is open and is a packaging decision rather than a bug to patch:
+*=nix build= now fails, and should.* River bumped =river_window_manager_v1= from
+4 to 5 in a patch release, the flake pins a channel rather than a river, and the
+vendored protocol is version 4 — so the flake was building a session entry that
+could not start, and succeeded, because nothing in that build had ever connected
+to the river it pins. =nix-shell=, =make=, =make check= and CI are unaffected
+and green. [[file:PLAN.org::#log8][PLAN.org §log8]] has the two ways out.
 
 * Documentation
 
@@ -431,10 +452,26 @@ spawning, closing, splits, floating, the empty-pane spawn, persistence, and
 the lattice — walking cell to cell across an infinite plane, carrying windows
 between cells, and zooming out to a grid.
 
-Verified against a *headless river* on every run of =make check=: connecting,
-version negotiation, receiving an output and its size, a complete manage and
-render sequence, the shared-memory overlay path, the three input globals
-binding, and a real client window being announced, placed and sized.
+Verified against a *headless river* on every run of =make check= — a hundred
+and fifty-odd assertions in twenty-one sections, none of which can pass without
+a compositor having agreed: connecting and version negotiation; an output with
+the name and size river gave it; the manage and render sequences; the
+shared-memory overlay path and its HiDPI arithmetic; the echo area's own
+surface and the space it reserves; every key in the keymap becoming a real
+binding object, and a key bound at runtime becoming one more; the pointer
+bindings; a client window announced, placed, sized and focused; the emitter's
+diff re-sending nothing when nothing changed; two windows in disjoint
+rectangles; a dozen commands driven from outside a protocol sequence the way a
+script drives them; floating, drag-move, drag-resize, fullscreen and minimize;
+workspaces, tags, named scratchpads, undo and redo; the saved layout written
+and read back with a real window's tags in it; and the control socket
+answering one line per form.
+
+=make check= fails when river or a terminal emulator is missing rather than
+skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. What it
+still cannot reach is named out loud in its own output every run: a physically
+scaled output, libinput devices, and a layer-shell client, none of which a
+headless backend has.
 
 *Input configuration* — device enumeration, key repeat, and compiling and
 installing a keyboard layout — has been driven end to end against a real river
@@ -451,10 +488,22 @@ and the two-monitor arrangement itself has not been sat in front of. Nothing is
 claimed here that is not either tested or stated as untested;
 [[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of which is which.
 
-Other things that are honestly newer than the rest: HiDPI scaling of what the
-window manager draws itself, the layer-shell path that panels and screen
-lockers use, and pointer drag-resize. All three are exercised by the test
-suite; none has years behind it.
+Other things that are honestly newer than the rest. *HiDPI scaling of what the
+window manager draws itself* is exercised against a real =wl_shm=: a 2x canvas
+is allocated at twice the device size, reports its logical size unchanged, and
+takes text and fills in logical coordinates. What is not exercised is a display
+that is actually scaled, because a headless backend is 1x. *Pointer
+drag-resize* is exercised as far as the arithmetic goes — a cumulative delta
+moves the window exactly that far and repeating it does not move it again — and
+the bindings river made are counted, but no physical pointer is ever pressed.
+*The layer-shell path that panels and screen lockers use* is exercised only as
+far as the global binding and an empty reservation: there is no headless
+layer-shell client to open a panel with, and the exclusive-zone arithmetic has
+been read and not run.
+
+That paragraph used to say all three were exercised by the test suite. They
+were not: there was no test reference to =surface.lisp=, =layer.lisp=,
+=pointer.lisp= or =outputs.lisp= of any kind.
 
 * License
 

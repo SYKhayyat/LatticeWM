@@ -1569,3 +1569,138 @@ lattice".
 - The ~cell~ column in the recorder is unreliable during ~move~: it reported
   ~cell (0 . 0)~ while the cursor was at ~(-4 . 0)~. Probably the hook reading
   before the layout settles rather than a real bug, and unverified either way.
+
+* Eighth session — 2026-08-06: the harness that could not grow
+:PROPERTIES:
+:CUSTOM_ID: log8
+:END:
+
+=tools/integration.lisp= was the project's best idea and its least-used one. It
+runs a real river headlessly, receives state instead of constructing it, and
+found a live bug on its first run — and then it stopped at eighteen checks
+against the eight and a half thousand lines of =src/runtime/= they were meant to
+cover, in a tree where the optional extension has *seven times* the test density
+of the runtime every user touches.
+
+That was not a lack of will. It was a shape problem. The file was one 250-line
+=LET=: the nineteenth check meant finding the right nesting depth inside
+somebody else's binding form, and one error anywhere abandoned every check after
+it. *A harness whose marginal check is expensive gets exactly as many checks as
+its first sitting.*
+
+** What changed
+
+Rebuilt around a *section*: a name and a body that catches its own errors, so a
+broken section costs one section. The fixtures — a compositor, a window manager,
+clients, a settled round trip, a command run the way a script runs one — are
+functions rather than scope. Read in a package that =:use=​s the real ones, so a
+check is written in the vocabulary the program is written in.
+
+Eighteen checks became a hundred and sixty in twenty-one sections. =make check=
+now sets =LATTICEWM_REQUIRE_INTEGRATION=1=, so a missing river or a missing
+terminal emulator — which is the default state of a CI container — fails instead
+of printing a paragraph and exiting 0. And there is a CI workflow, so "ten CI
+gates run on every build" stopped meaning "when a human types make".
+
+Skips are counted in two kinds, because they are not the same kind. A *missing
+dependency* is a tool that should have been installed and is fatal under that
+variable. A *structural skip* — libinput devices, a physically scaled output, a
+layer-shell client — is something a headless backend cannot have, is printed
+every run, and is never fatal, because making it fatal would only teach people
+to unset the variable.
+
+** The four it found, all live, none reachable by a unit test
+
+- *A window that leaves the tree is never hidden.* =EMIT-RENDERING-STATE= walked
+  *placements*, so it could hide a window the layout mentioned and marked
+  invisible — and said nothing at all about one the layout never mentioned. Two
+  ordinary things produce that: =minimize=, whose shipped =ON-MINIMIZE= takes
+  the window out of the tree entirely, and *every workspace you are not on*,
+  because =OUTPUT-CONTENT= hands the layout one workspace and no other. River
+  went on drawing both. =MINIMIZE-WINDOW='s own comment claimed "the emitter
+  hides everything it did not place", which was the specification of a function
+  that did not exist; it exists now and is called =HIDE-UNPLACED-WINDOWS=.
+- *=new-workspace= switched the cursor and not the screen.* The stack knows
+  which child is selected; the *output* knows which one it is displaying; and
+  =OUTPUT-CONTENT= reads the output. =workspace= set both and =new-workspace=
+  set one, so "add a workspace and switch to it" left you looking at the one you
+  came from with the status line confidently reporting the new number. Both go
+  through =SHOW-WORKSPACE= now.
+- *=op_start_pointer= was sent outside the only sequence that may carry it.*
+  Manage-only request, event-handler caller: refused, logged, lost. River never
+  entered pointer-op mode, never sent an =op_delta=, and Super+drag did nothing
+  at all — for the second time in this project's life and for a different reason
+  than the first. =DEFER-TO-MANAGE= is =CLOSE-WINDOW-LATER='s solution named, so
+  the next one costs a =LAMBDA= rather than a slot.
+- *A lost wakeup left the screen thirty seconds stale.* =WAKE-EVENT-LOOP= sets a
+  flag and throws into the loop's =CATCH=; when the interrupt lands while the
+  loop is *outside* it, the throw has nowhere to go, the flag stays set, and the
+  loop then walks into a thirty-second wait with another thread's work sitting
+  in the queue. That is the exact symptom =WAKE-EVENT-LOOP='s own docstring was
+  written to fix, reached by the one path its fix did not cover. =WAIT-FOR-WORK=
+  consumes the flag now: finding it set costs one extra turn of the loop.
+
+The first three are invisible to a test that builds its own world, because in
+every one of them *the model was right and the screen was wrong*. The fourth is
+invisible to any test that is not driving the program from another thread — which
+is what a script, the control socket and a SWANK REPL all do.
+
+** And a fifth, which is the one the design named as the largest threat
+
+Putting the integration suite into =flake.nix='s build phase — the only
+automated path that gates a store path — made it fail immediately, and correctly.
+
+The flake pins =nixos-unstable=, not a river version. River bumped
+=river_window_manager_v1= from *4 to 5* between 0.4.5 and 0.4.6, which is a
+patch release; the locked nixpkgs has 0.4.6 and the vendored XML is version 4.
+So the startup check does exactly what it was written to do and refuses to
+start.
+
+*That means the flake has been building a session entry that cannot start.*
+=nix build= succeeded, =installPhase= wrote a =wayland-sessions= desktop file
+running =${pkgs.river}/bin/river -c $out/bin/latticewm=, and logging in got a
+version-mismatch paragraph at a login screen. It succeeded because nothing in
+the build phase had ever connected to the river the same derivation pins —
+which is the whole argument for the change that exposed it.
+
+=flake.nix:8-16= says this in advance, in as many words: "river-window-management-v1
+is young, and a pre-release protocol can break within a version number rather
+than politely bumping to v2. A flake pins the compositor and the window manager
+as one versioned pair, upgraded deliberately or never." It did not pin them as a
+pair. It pinned a channel.
+
+This is left failing rather than papered over, because the two ways out are both
+real decisions and neither belongs to the person who found it: re-vendor the
+protocol from the pinned river and bump =+WINDOW-MANAGEMENT-VERSION+=, or pin a
+river the vendored XML matches. =nix-shell= uses the ambient channel — 0.4.5,
+version 4 — and =make check= is green there, which is where every number in this
+section comes from.
+
+** And one hazard in the unit suite
+
+=tests/test-surface.lisp='s live-redefinition test restored the shipped
+=LAYOUT-CHILDREN= twice: correctly with =REMOVE-METHOD=, and then again by
+=DEFMETHOD=-ing a hand-copied duplicate onto =CONVENTIONAL-POLICY=. The shipped
+method is on =LAYOUT-POLICY= and was never removed, so the "restore" left a
+frozen copy of the split algorithm in a test file on a *strictly more specific*
+class for the rest of the image — and every later suite, the whole lattice suite
+included, dispatched split layout through it. The bodies matched, so it was
+invisible. The day =layout.lisp= changed, the suite would have kept testing the
+old version and kept passing.
+
+Which is exactly the failure [[file:FINDINGS.org][FINDINGS.org]] core edit 3 exists to prevent, reintroduced
+by the test that proves core edit 3 works. Deleted.
+
+** Open
+
+- The three structural skips are still skips. A layer-shell client that can run
+  headless would close the largest of them, and the exclusive-zone arithmetic is
+  the only shipped path that has been read and never run.
+- =pointer.lisp= is tested as far as its arithmetic. No physical button is ever
+  pressed, and the headless backend has no pointer to press one with.
+- The unit suite is still 0.05 test-lines per source-line in =src/runtime/=
+  against 0.39 in =lattice/=. The integration suite closes some of that from the
+  other end; it does not make the ratio a good one.
+- *=nix build= fails, on the protocol version, and should.* See the fifth
+  finding above. Nothing else in the project is affected: =make=, =make check=,
+  =nix-shell= and the CI workflow are all green.

@@ -261,7 +261,59 @@ set changes, or overlapping windows flicker between frames."
     ;; The floats come back as placements rather than being appended by the
     ;; caller, so that RENDER-ORDER is handed the whole render list and its
     ;; answer is the whole answer.
-    (emit-render-order policy (append (nreverse shown) (emit-floats policy)))))
+    (let ((render-list (append (nreverse shown) (emit-floats policy))))
+      (hide-unplaced-windows render-list)
+      (emit-render-order policy render-list))))
+
+(defun hide-unplaced-windows (render-list)
+  "Hide every live window the layout did not place at all.
+
+WITHOUT THIS, `NOT PLACED' AND `PLACED AND INVISIBLE' MEAN DIFFERENT THINGS TO
+RIVER, AND ONLY ONE OF THEM IS HANDLED ABOVE.  The loop in EMIT-RENDERING-STATE
+walks *placements*, so it can only hide a window the layout mentioned and marked
+invisible.  A window the layout never mentions is not hidden by it — it is
+simply not spoken about, and river goes on drawing it exactly where it was.
+
+Two ordinary things produce a window the layout never mentions, and both were
+broken:
+
+  * *Minimize.*  The shipped ON-MINIMIZE takes the window out of the tree
+    entirely, which is the stated requirement — `minimized windows leave the
+    tiling tree and the remaining windows retile without them'.  So the next
+    layout has nothing to say about it.  MINIMIZE-WINDOW's own comment claimed
+    `the emitter hides everything it did not place', which is what this function
+    is named after and what was not true until it existed.
+
+  * *Every workspace you are not on.*  OUTPUT-CONTENT returns the workspace the
+    output is showing, so COMPUTE-LAYOUT lays out that subtree and no other.
+    The windows on workspace 1 are not invisible placements when you are on
+    workspace 2; they are absent.
+
+Both are invisible to a unit test, because a unit test asks the model what it
+thinks rather than asking river what it was told, and the model was right both
+times.  The integration suite found them by reading the diff table — which is
+the record of what actually went out on the wire — after a real minimize and a
+real workspace switch.
+
+*UNPLACED WINDOWS ARE EXEMPT.*  A window river has announced but which has not
+reached PLACE-UNPLACED-WINDOWS yet is not a window that should be hidden; it is
+a window nobody has decided about, and hiding it would make every new window
+flash.  Diffed like everything else here, so the common case — nothing to hide —
+is one walk of a list that is almost always short."
+  (let ((placed (make-hash-table :test #'eq)))
+    (dolist (placement render-list)
+      (let ((node (first placement)))
+        (when (typep node 'c:leaf)
+          (let ((window (c:leaf-window node)))
+            (when window (setf (gethash window placed) t))))))
+    (dolist (window (all-windows))
+      (let ((proxy (c:window-proxy window)))
+        (when (and proxy
+                   (c:window-live-p window)
+                   (not (gethash window placed))
+                   (not (member window *unplaced*)))
+          (when-changed (window :shown nil)
+            (guarded "hide" (w:window-hide proxy))))))))
 
 (defun leaf-focus-state (path cursor)
   "What kind of focus the pane at PATH has: T, :CURSOR, or NIL.

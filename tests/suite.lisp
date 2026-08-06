@@ -7,6 +7,17 @@
 ;;;;
 ;;;; So: everything in src/model/ and src/policy/ is tested here, with no
 ;;;; compositor, no protocol, and no globals.
+;;;;
+;;;; THAT FIRST SENTENCE IS TRUE AND WAS TAKEN TOO FAR.  It is a statement about
+;;;; *this* file, not about the project: tools/integration.lisp runs a real river
+;;;; headlessly in a couple of seconds and asserts on what came back, and every
+;;;; bug it has found lives in code where the model was right and the screen was
+;;;; wrong — which is precisely the class this suite cannot see, because a test
+;;;; that constructs the world can only ever ask the world what it thinks.
+;;;;
+;;;; The rule for which file a check belongs in: if it can be established by
+;;;; constructing state, it belongs here, where it is cheaper and faster.  If it
+;;;; is only true when a compositor agreed, it belongs there.
 
 (defpackage #:latticewm/tests
   (:use #:cl #:fiveam)

@@ -124,17 +124,37 @@ once, exactly when there is something to deliver."
   "Block until the compositor speaks, or another thread wakes us.
 
 Zero wakeups while nothing is happening, which is the whole point.  The
-timeout is a backstop against a bug in the above, not a polling interval."
-  (catch 'wake
-    (handler-case
-        (if fd
-            (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
-            (sleep 0.05))
-      (error () nil)
-      (sb-sys:interactive-interrupt () nil)))
-  ;; Whatever woke us, the queue is about to be drained, so the next caller
-  ;; should send a fresh interrupt.
-  (bt:with-lock-held (*wakeup-lock*) (setf *wakeup-pending* nil)))
+timeout is a backstop against a bug in the above, not a polling interval.
+
+*A WAKEUP THAT IS ALREADY PENDING MEANS DO NOT WAIT AT ALL*, and that is the
+half of this that was missing.  WAKE-EVENT-LOOP sets the flag and then throws
+into the CATCH below; if the interrupt lands while the loop is *outside* the
+catch — anywhere in the four calls above this one, which is most of the time
+under load — the throw has no tag to reach, IGNORE-ERRORS swallows it, and the
+flag is left set.  The loop then walked straight into this wait and blocked for
+the full poll interval with the other thread's work sitting in the queue.
+
+Thirty seconds of a correct model and a stale screen, exactly the symptom
+WAKE-EVENT-LOOP's own docstring describes and was written to fix, reached by
+the one path its fix did not cover.  It is rare — it needs the interrupt to
+land inside a window a few microseconds wide — and it is not rare enough: the
+integration suite hit it about one run in five, driving the window manager from
+another thread the way a script or a REPL does.
+
+So the flag is *consumed* here rather than merely cleared.  Finding it set costs
+one extra turn of the loop, which drains the queue and comes back."
+  (unless (bt:with-lock-held (*wakeup-lock*)
+            (prog1 *wakeup-pending* (setf *wakeup-pending* nil)))
+    (catch 'wake
+      (handler-case
+          (if fd
+              (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
+              (sleep 0.05))
+        (error () nil)
+        (sb-sys:interactive-interrupt () nil)))
+    ;; Whatever woke us, the queue is about to be drained, so the next caller
+    ;; should send a fresh interrupt.
+    (bt:with-lock-held (*wakeup-lock*) (setf *wakeup-pending* nil))))
 
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."

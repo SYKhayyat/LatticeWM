@@ -24,6 +24,17 @@ Declared here, before anything that consults it, because the whole point is
 that code all over the runtime can ask \"am I allowed to write to the socket
 from here?\" — and the answer must never depend on load order.")
 
+(defvar *unplaced* '()
+  "Windows that have appeared but have not yet been placed.
+
+Drained at the start of each manage sequence; see runtime/windows.lisp's header
+for why placement is deferred rather than done on arrival.
+
+Declared here rather than there for the same reason *WM-THREAD* is: the
+emitter loads first and has to ask \"has anybody decided where this goes yet?\"
+before it may hide a window it did not place, and the answer must not depend on
+load order.")
+
 
 ;;; ------------------------------------------------- declared event handlers
 ;;;
@@ -118,6 +129,10 @@ the wl_output itself, and river_output_v1 is not one.")
                :documentation "wl_compositor, for surfaces of our own.")
    (shm :initform nil :accessor server-shm
         :documentation "wl_shm, for the pixels we draw ourselves.")
+   (pending-manage-work :initform '() :accessor server-pending-manage-work
+                        :documentation
+                        "Thunks waiting for a manage sequence, newest first.
+See DEFER-TO-MANAGE, which is the general case of the pile above it.")
    (seats :initform '() :accessor server-seats
           :documentation "List of SEAT.")
    (windows :initform (make-hash-table :test #'eq) :accessor server-windows

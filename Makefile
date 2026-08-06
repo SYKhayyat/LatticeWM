@@ -4,13 +4,17 @@
 # dependency: nothing under src/ knows that nix exists, and if shell.nix is
 # deleted the project still builds.  That is the test.
 #
-#   ./bootstrap.sh  fetch the dependencies (any Linux, no nix, once)
-#   make            build and run the gates
-#   make test       the unit suite
-#   make image      dump ./latticewm, one executable
-#   make run        run nested inside the current Wayland session
-#   make surface    regenerate doc/EXTENSION-SURFACE.txt
-#   make install    ./latticewm, a session entry and a man page into $(PREFIX)
+#   ./bootstrap.sh   fetch the dependencies (any Linux, no nix, once)
+#   make             build and run the gates
+#   make test        the unit suite
+#   make integration a real river, headless, driven as a client
+#   make check       all of the above -- what CI runs, and what to run before
+#                    pushing.  Fails rather than skips when river or a terminal
+#                    emulator is missing; REQUIRE_INTEGRATION=0 to forgive that
+#   make image       dump ./latticewm, one executable
+#   make run         run nested inside the current Wayland session
+#   make surface     regenerate the generated documents under doc/
+#   make install     ./latticewm, a session entry and a man page into $(PREFIX)
 
 LISP        ?= sbcl
 PREFIX      ?= $(HOME)/.local
@@ -83,17 +87,39 @@ test: toolchain
 
 # THE ONE TEST THAT RECEIVES STATE RATHER THAN CONSTRUCTING IT.  Runs river on
 # a headless backend, connects to it as the ordinary Wayland client this
-# program is, opens a window, and asserts on what comes back.  About two
-# seconds, no screen, no graphics card.
+# program is, opens windows, drives the real commands, and asserts on what
+# comes back.  No screen, no graphics card.
 #
 # It found a real bug on its first run — pointer bindings enabled through the
-# wrong interface, silent, Super+drag doing nothing — which is the whole
-# argument for it existing.  Skips with a message when river is absent; set
-# LATTICEWM_REQUIRE_INTEGRATION=1 to make that a failure instead.
+# wrong interface, silent, Super+drag doing nothing — and three more when it was
+# grown to cover the runtime rather than the connection: a window that left the
+# tree was never hidden, `new-workspace' moved the cursor somewhere it never put
+# on screen, and op_start_pointer was sent outside the one sequence that may
+# carry it.  That is the whole argument for it existing.
+#
+# Skips with a message when river is absent; set REQUIRE_INTEGRATION=1 to make
+# that a failure instead.
+REQUIRE_INTEGRATION ?=
+
 integration: toolchain
-	@$(RUN) --load tools/integration.lisp
+	@LATTICEWM_REQUIRE_INTEGRATION="$(REQUIRE_INTEGRATION)" \
+	  $(RUN) --load tools/integration.lisp
 
 # What CI should run, and what to run before pushing.
+#
+# A GREEN `check' THAT VERIFIED NOTHING IS WORSE THAN A RED ONE.  This used to
+# run `integration' without that variable, so on a machine with no river — which
+# is the default state of a CI container — the one test that receives state
+# printed a paragraph, exited 0, and the build was green.  Worse, three of the
+# things this project's README says are verified on every run of `make check'
+# were skipped when no terminal emulator was on PATH, which is also the default
+# state of a CI container.
+#
+# So `check' demands them.  Target-specific variables are inherited by
+# prerequisites, so this reaches `integration' without a second target.  Use
+# `make integration' for the forgiving version, or `make check
+# REQUIRE_INTEGRATION=0' if you want the old behaviour back and know why.
+check: REQUIRE_INTEGRATION = 1
 check: build gates test integration
 
 # save-lisp-and-die does not cost live redefinition: the dumped core retains
@@ -179,4 +205,4 @@ distclean: clean
 	@rm -rf .deps
 
 help:
-	@sed -n '1,16p' Makefile
+	@sed -n '1,20p' Makefile

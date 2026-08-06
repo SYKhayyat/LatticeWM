@@ -87,15 +87,24 @@ operation, so the check is here as well."
       (t (start-pointer-op-1 seat kind window float :edges edges)))))
 
 (defun start-pointer-op-1 (seat kind window float &key edges)
-  "The half of START-POINTER-OP that assumes there is something to drag."
+  "The half of START-POINTER-OP that assumes there is something to drag.
+
+THE TWO REQUESTS BELOW ARE MANAGE-SEQUENCE-ONLY AND THE ONLY CALLER IS AN EVENT
+HANDLER, WHICH IS NOT A SEQUENCE.  So they were sent, refused, logged and lost
+— river never entered its pointer-op mode, never sent an op_delta, and
+Super+drag did nothing at all, for the second time and for a different reason
+than the first.  The bookkeeping stays here where the caller needs it; the
+protocol half waits for a sequence that may legally carry it."
   (let ((operation (%make-pointer-op :kind kind :window window :float float
                                      :rect (c:copy-rect (c:float-rect float))
                                      :edges edges)))
     (setf (seat-pointer-op seat) operation)
-    (guarded "op_start_pointer" (w:seat-op-start-pointer (seat-proxy seat)))
-    (when (eq kind :resize)
-      (guarded "inform_resize_start"
-        (w:window-inform-resize-start (c:window-proxy window))))
+    (defer-to-manage
+      (lambda ()
+        (guarded "op_start_pointer" (w:seat-op-start-pointer (seat-proxy seat)))
+        (when (eq kind :resize)
+          (guarded "inform_resize_start"
+            (w:window-inform-resize-start (c:window-proxy window))))))
     (run-hooks :pointer-op kind window)
     (logmsg :debug "pointer ~(~a~) started on ~s" kind window)
     operation))
@@ -105,11 +114,16 @@ operation, so the check is here as well."
   (let ((operation (seat-pointer-op seat)))
     (when operation
       (setf (seat-pointer-op seat) nil)
-      (when (eq (pointer-op-kind operation) :resize)
-        (let ((proxy (c:window-proxy (pointer-op-window operation))))
-          (when proxy
-            (guarded "inform_resize_end" (w:window-inform-resize-end proxy)))))
-      (guarded "op_end" (w:seat-op-end (seat-proxy seat)))
+      ;; Deferred for the same reason the start is: op_end and
+      ;; inform_resize_end are window-management state, and op_release arrives
+      ;; as an event.
+      (let ((kind (pointer-op-kind operation))
+            (proxy (c:window-proxy (pointer-op-window operation))))
+        (defer-to-manage
+          (lambda ()
+            (when (and (eq kind :resize) proxy)
+              (guarded "inform_resize_end" (w:window-inform-resize-end proxy)))
+            (guarded "op_end" (w:seat-op-end (seat-proxy seat))))))
       (run-hooks :pointer-op nil (pointer-op-window operation))
       (logmsg :debug "pointer ~(~a~) finished" (pointer-op-kind operation))
       (mark-dirty)

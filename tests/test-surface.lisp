@@ -624,18 +624,30 @@ not the same as a test that renders it.  These five are the rendering."
         (list (cons 0 (c:make-rect 0 0 77 100))))
       (unwind-protect
            (is (= 77 (first-width)) "no restart, no rebuild, no lost state")
-        ;; Put the shipped method back.
+        ;; PUT THE SHIPPED METHOD BACK BY REMOVING THE OVERRIDE, AND BY NOTHING
+        ;; ELSE.  There used to be a DEFMETHOD here as well, restating
+        ;; LAYOUT-CHILDREN's body onto CONVENTIONAL-POLICY -- which does not
+        ;; restore anything, because the shipped method is on LAYOUT-POLICY
+        ;; (src/policy/layout.lisp) and was never removed.  What it did was
+        ;; leave a frozen copy of the split algorithm in a test file, on a
+        ;; *strictly more specific* class, for the rest of the image: every
+        ;; later suite, including the whole lattice suite, then dispatched split
+        ;; layout through it.  The bodies matched, so it was invisible; the day
+        ;; layout.lisp changed, the suite would have kept testing the old
+        ;; version and kept passing.
+        ;;
+        ;; Which is exactly the failure FINDINGS.org core edit 3 exists to
+        ;; prevent -- the class a user is told to specialize must never be the
+        ;; class the defaults are defined on -- reintroduced by the test that
+        ;; proves core edit 3 works.
         (remove-method #'p:layout-children
                        (find-method #'p:layout-children '()
                                     (list (find-class 'p:conventional-policy)
                                           (find-class 'c:split)
-                                          (find-class 't))))
-        (defmethod p:layout-children ((policy p:conventional-policy)
-                                      (split c:split) rect)
-          (mapcar #'cons (c:container-addresses split)
-                  (c:divide-rect rect (c:split-axis split) (c:weights split)
-                                 :gap (p:gaps policy split)))))
-      (is (= 50 (first-width)) "and the restore took effect the same way"))))
+                                          (find-class 't)))))
+      (is (= 50 (first-width))
+          "and removing the override restores the shipped method, because the
+shipped method is on the superclass and was never touched"))))
 
 (test adding-a-slot-to-a-live-class-migrates-existing-instances
   ;; SPIKE-WEEK0 §ext-3, which is what settled DEFCLASS over DEFSTRUCT for core

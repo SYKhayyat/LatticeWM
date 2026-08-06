@@ -52,17 +52,56 @@
             pname = "latticewm";
             version = "0.1.0";
             src = ./.;
-            nativeBuildInputs = [ lisp ];
+            # river and foot are build inputs because the integration test needs
+            # a compositor to receive state from and a client to open a window.
+            # Both run headless — WLR_BACKENDS=headless, no DRM, no seat — which
+            # is the only reason this is possible inside a build sandbox.
+            nativeBuildInputs = [ lisp pkgs.river pkgs.foot ];
 
-            # The same steps `make` runs.  The gates and the tests are part of
-            # the build rather than a separate check, because a window manager
-            # that fails its own gates should not become a store path.
+            # The same steps `make check` runs.  The gates and the tests are
+            # part of the build rather than a separate check, because a window
+            # manager that fails its own gates should not become a store path.
+            #
+            # THE INTEGRATION TEST IS PART OF IT NOW, AND ITS ABSENCE WAS THE
+            # HOLE.  This was the one automated path in the project — there is a
+            # CI workflow beside it now, but this is the one that gates the
+            # store path — and it ran build, gates, test and image and omitted
+            # the only test that receives state rather than constructing it.
+            # LATTICEWM_REQUIRE_INTEGRATION makes a missing river or a missing
+            # terminal a failure rather than a paragraph and an exit 0; in a
+            # sandbox with both named above, that is a statement about this
+            # derivation rather than about the machine it was built on.
+            #
+            # *IF THIS PHASE FAILS ON THE PROTOCOL VERSION, THAT IS THE POINT,
+            # AND IT IS THE THING THE HEADER OF THIS FILE SAYS IS THE LARGEST
+            # THREAT TO THE PROJECT.*  The pin above is `nixos-unstable', not a
+            # river version — so the compositor moves when the lock moves, and
+            # river bumped river_window_manager_v1 from 4 to 5 between 0.4.5 and
+            # 0.4.6, which is a *patch* release.  The vendored XML is version 4.
+            #
+            # So this derivation was building a window manager that refuses to
+            # start against the river the very same derivation puts in its
+            # session entry: `nix build' succeeded, `install' wrote a
+            # wayland-sessions file, and logging in got a version-mismatch
+            # message at a login screen.  It succeeded because nothing in the
+            # build phase had ever connected to the pinned river.  Now something
+            # does.
+            #
+            # There are two honest ways out and they are not this file's to
+            # choose: re-vendor the protocol from the pinned river and bump
+            # +WINDOW-MANAGEMENT-VERSION+, or pin a river the vendored XML
+            # matches.  `nix-shell' uses the ambient channel, which is 0.4.5 at
+            # the time of writing, and works.
             buildPhase = ''
               export HOME=$TMPDIR
+              export XDG_RUNTIME_DIR=$TMPDIR/run
+              mkdir -p "$XDG_RUNTIME_DIR"
               export CL_SOURCE_REGISTRY="${wayflanSrc}//:$PWD//"
               sbcl --non-interactive --load tools/build.lisp
               sbcl --non-interactive --load tools/gates.lisp
               sbcl --non-interactive --load tools/test.lisp
+              LATTICEWM_REQUIRE_INTEGRATION=1 \
+                sbcl --non-interactive --load tools/integration.lisp
               sbcl --non-interactive --load tools/image.lisp
             '';
 

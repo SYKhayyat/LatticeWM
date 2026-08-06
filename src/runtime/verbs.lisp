@@ -339,6 +339,32 @@ with the fourth.  See P:MAKE-WORKSPACE."
   (or (guarded "make-workspace" (p:make-workspace (policy) *world* index))
       (c:make-leaf)))
 
+(defun show-workspace (stack index)
+  "Put workspace INDEX on the screen and stand the cursor in it.
+
+THE OUTPUT AND THE STACK ARE TWO DIFFERENT FACTS AND BOTH HAVE TO MOVE.  The
+stack knows which of its children is *selected*; the output knows which one it
+is *displaying*; and P:OUTPUT-CONTENT — the thing that decides what gets laid
+out at all — reads the output's answer and not the stack's.  On one monitor
+they look like the same fact right up until they disagree.
+
+NEW-WORKSPACE made them disagree.  It set the selection and jumped the cursor
+and never touched the output, so `add a workspace and switch to it' added one,
+moved the cursor into it, and left the screen showing the workspace you came
+from — with the windows still on it, the status line confidently reporting the
+new number, and every key doing something invisible.  That is the same failure
+RESTORE-OUTPUT-WORKSPACES has a paragraph about, reached by a different road,
+and it survived because the model was right the whole time.
+
+So both commands go through here."
+  (let ((output (current-output)))
+    (when output (setf (c:prop output :workspace) index))
+    (setf (c:container-selection stack) index)
+    (p:jump-cursor (policy) *world* (list index))
+    (run-hooks :workspace-changed index)
+    (notify "~a ~d" (p:world-role-name *world* stack) (1+ index))
+    index))
+
 (defun grow-workspaces-to (stack index)
   "Make sure workspace INDEX exists, creating every workspace up to it.
 
@@ -365,19 +391,14 @@ as switching a tab — and 'infinite workspaces' costs nothing, because a stack
 grows."
   (with-relayout
     (let ((stack (workspace-stack))
-          (output (current-output))
           (index (max 0 (1- number))))
       (when stack
         (grow-workspaces-to stack index)
         ;; The *output* changes workspace, not the world.  With one monitor
         ;; these are the same statement; with two they are emphatically not,
         ;; and treating them as the same is how a second monitor ends up
-        ;; mirroring the first.
-        (when output (setf (c:prop output :workspace) index))
-        (setf (c:container-selection stack) index)
-        (p:jump-cursor (policy) *world* (list index))
-        (run-hooks :workspace-changed index)
-        (notify "~a ~d" (p:world-role-name *world* stack) (1+ index))))))
+        ;; mirroring the first.  See SHOW-WORKSPACE.
+        (show-workspace stack index)))))
 
 (defcommand next-workspace (&optional (step 1))
   "Switch to the next workspace, wrapping."
@@ -398,10 +419,9 @@ grows."
       (when stack
         (let ((index (1+ (c:container-selection stack))))
           (c:insert-child stack index (fresh-workspace index))
-          (setf (c:container-selection stack) index)
-          (p:jump-cursor (policy) *world* (list index))
-          (run-hooks :workspace-changed index)
-          (notify "~a ~d" (p:world-role-name *world* stack) (1+ index)))))))
+          ;; SHOW-WORKSPACE rather than the four lines it replaced, because one
+          ;; of the four was missing here and the screen stayed where it was.
+          (show-workspace stack index))))))
 
 (defcommand send-to-workspace (number &key (follow nil))
   "Move the focused pane to workspace NUMBER, counting from one.

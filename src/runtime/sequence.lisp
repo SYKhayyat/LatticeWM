@@ -72,6 +72,38 @@ queue and wake the loop instead."
      (guarded "manage_dirty" (w:wm-manage-dirty (server-manager *server*))))
     (t (call-in-wm-thread #'request-manage))))
 
+(defun defer-to-manage (thunk)
+  "Run THUNK inside a manage sequence: now if we are in one, at the next if not.
+
+TWENTY-NINE REQUESTS ARE MANAGE-SEQUENCE-ONLY AND ALMOST NOTHING RUNS INSIDE A
+MANAGE SEQUENCE.  Commands run from key bindings, from a REPL and from the
+control socket; event handlers run from the dispatch loop.  None of those is a
+sequence, so a manage-only request sent from one is refused — logged by
+GUARDED, and otherwise completely silent.
+
+CLOSE-WINDOW-LATER is that problem solved once, for one request, after Super+q
+had been refused on every machine from the first day.  This is the same
+solution named, so the next one costs a LAMBDA instead of a slot.
+
+The caller keeps whatever bookkeeping is its own and hands over only the part
+that has to wait, so nothing downstream has to know that the wait happened."
+  (cond
+    ((eq w:*sequence* :manage) (funcall thunk) t)
+    ((null *server*) nil)
+    (t (push thunk (server-pending-manage-work *server*))
+       (request-manage)
+       t)))
+
+(defun drain-manage-work ()
+  "Run everything DEFER-TO-MANAGE queued, oldest first.  Manage only.
+
+Taken off the server before any of it runs, so a thunk that queues more work
+gets the *next* sequence rather than looping inside this one."
+  (let ((work (nreverse (server-pending-manage-work *server*))))
+    (setf (server-pending-manage-work *server*) '())
+    (dolist (thunk work)
+      (guarded "deferred manage work" (funcall thunk)))))
+
 (defun after-command ()
   "Called after a key binding runs.  Push the consequences out.
 
@@ -172,6 +204,7 @@ question about a blank."
       ;; does not name one lands wherever the compositor last decided.
       (set-default-layer-output (current-output)))
     (place-unplaced-windows)
+    (drain-manage-work)
     (when (server-dirty *server*)
       (setf (server-dirty *server*) nil)
       (relayout))

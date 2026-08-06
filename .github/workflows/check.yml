@@ -1,0 +1,63 @@
+# `make check', on every push, on a machine nobody owns.
+#
+# THE README SAID "TEN CI GATES RUN ON EVERY BUILD" AND THERE WAS NO CI.  There
+# was no .github/, no .builds/, and no hosted anything: the gates ran when a
+# human typed `make', which is a different claim and a weaker one.  The only
+# automated path was the flake's build phase, and it omitted the integration
+# test entirely — so the one check that receives state rather than constructing
+# it was the one check nothing ran unattended.
+#
+# Two jobs, deliberately, because they answer two different questions.
+#
+#   check  — the whole of `make check': build, ten gates, the unit suite, and
+#            the integration suite against a headless river, with
+#            REQUIRE_INTEGRATION=1 so a missing compositor or terminal is a
+#            failure rather than a paragraph and an exit 0.  Run under
+#            nix-shell, which is where the pinned river lives.
+#
+#   plain  — the same build with *no nix at all*, from bootstrap.sh, because
+#            PLAN.org §packaging says "nothing in src/ may know that nix exists;
+#            if the flake is deleted the project still builds — that is the
+#            test", and a test nobody runs is a sentence.  It stops before the
+#            integration suite, because a bare runner has no river; that is the
+#            forgiving mode, and it says `skip' out loud.
+
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: build, gates, tests, headless river
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      # XDG_RUNTIME_DIR is where the Wayland socket and the shm files go, and a
+      # GitHub runner has none — river would take /tmp and the test would take
+      # river's word for it, which is exactly the assumption start-river exists
+      # to avoid making.
+      - name: make check
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          nix-shell --run 'make check'
+
+  plain:
+    name: no nix, from bootstrap.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install sbcl
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+      - name: bootstrap and build
+        run: |
+          ./bootstrap.sh
+          make build gates test
