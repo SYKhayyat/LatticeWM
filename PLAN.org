@@ -2745,3 +2745,36 @@ a change rather than a person noticing:
 
 Neither was noticed by reading. Both were reported by the build, with the file and the
 line, which is exactly the state PLAN §log8 was written to reach.
+
+** The stall that could not be reproduced, and what to do about one of those
+
+[[file:FINDINGS.org::#two-outputs][§two-outputs]] recorded a 67-second stall in the
+first screencopy after a panel appeared — steady state 0.05s, no reproduction in a
+dozen attempts — and was careful to say the resemblance to the old lost wakeup was "a
+place to look and not a finding". It is still not reproduced and still not diagnosed.
+What was done about it splits into three honest parts.
+
+*Ruled out.* =grim= speaks =wlr-screencopy= to river, and this program is not in that
+path. A stalled screenshot is river's or grim's unless the window manager was holding
+something river needed, and the only thing it holds is a manage sequence.
+
+*Closed.* The mechanism the number resembles. Two poll intervals is sixty seconds and
+the observation was sixty-seven. ~WAIT-FOR-WORK~ consumed the wakeup flag once, above
+the ~CATCH~ — and between that read and the catch being established there are a few
+instructions, in which an interrupt throws at a tag that does not exist yet, is
+swallowed, and leaves a flag the read has already gone past. That is the same
+microseconds-wide gap as the finding it was written to fix, one step along. Consuming
+the flag a second time *inside* the catch closes it: an arrival before the catch is
+seen by the second read, one after it has somewhere to land, and there is no third
+case.
+
+*Instrumented.* ~NOTE-LOST-WAKEUP~ says so, once, when a wait runs its full length with
+work already in the queue — the signature, because whatever queued it was supposed to
+have woken us. A full wait is normal on an idle desktop and a queue is normal on a busy
+one; only the two together mean anything. One comparison per wakeup.
+
+The general point is about what to do with a defect you cannot reproduce. Guessing at a
+cause and "fixing" it is how a program acquires changes nobody can justify. Doing
+nothing is how the same hour gets spent again next month. The third option — close the
+mechanism you can prove is reachable, and leave an instrument that will name the next
+occurrence — costs an afternoon and is the only one that improves the odds either way.

@@ -488,6 +488,49 @@ still the shipped rule, and something else is now writable."
        has to run"))
 
 ;;; ==================================================================
+;;; THE WAKEUP THAT GOES MISSING
+;;; ==================================================================
+;;;
+;;; A lost wakeup is not an error: the loop waits its full interval, wakes on
+;;; the timeout, drains the queue and carries on, and what the user sees is a
+;;; screen that was stale for half a minute and is now correct.  It has cost
+;;; this project two separate findings and the second was reached "by the one
+;;; path the first fix did not cover".
+
+(test a-pending-wakeup-is-taken-once-and-only-once
+  (let ((r::*wakeup-pending* t))
+    (is (r::consume-wakeup) "the first caller finds it")
+    (is (null r::*wakeup-pending*) "and takes it")
+    (is (null (r::consume-wakeup)) "so the second finds nothing")))
+
+(test a-wait-that-ran-its-whole-length-with-work-queued-says-so
+  (let ((p::*notes-said* (make-hash-table :test #'eq))
+        (r::*wm-thread-queue* (list (lambda () nil))))
+    (r::note-lost-wakeup (- (get-internal-real-time)
+                            (* 2 r::*poll-interval*
+                               internal-time-units-per-second)))
+    (is (gethash :lost-wakeup p::*notes-said*)
+        "waiting the whole interval with something already in the queue is the
+         signature, because whatever put it there was supposed to wake us")))
+
+(test an-idle-wait-and-a-short-one-say-nothing
+  ;; Both halves of the test matter: waiting the full interval is *normal* on a
+  ;; desktop nobody is touching, and a queue is normal on a busy one.  Only the
+  ;; two together mean anything, and a diagnostic that fires on either alone is
+  ;; one nobody will read by the time it matters.
+  (let ((p::*notes-said* (make-hash-table :test #'eq)))
+    (let ((r::*wm-thread-queue* '()))
+      (r::note-lost-wakeup (- (get-internal-real-time)
+                              (* 2 r::*poll-interval*
+                                 internal-time-units-per-second)))
+      (is (null (gethash :lost-wakeup p::*notes-said*))
+          "a full wait with nothing queued is an idle desktop"))
+    (let ((r::*wm-thread-queue* (list (lambda () nil))))
+      (r::note-lost-wakeup (get-internal-real-time))
+      (is (null (gethash :lost-wakeup p::*notes-said*))
+          "and work that arrived while we were awake is the ordinary case"))))
+
+;;; ==================================================================
 ;;; TWO MONITORS, AND THE ONE WORKSPACE BETWEEN THEM
 ;;; ==================================================================
 ;;;

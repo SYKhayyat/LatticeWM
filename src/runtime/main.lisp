@@ -188,6 +188,44 @@ once, exactly when there is something to deliver."
       ;; will drain the queue when it does, so this call is complete.
       nil)))
 
+(defun consume-wakeup ()
+  "Take the pending wakeup if there is one, and say whether there was.
+
+Read *and* clear under one lock, because the two halves are the whole point:
+finding the flag set means the interrupt that goes with it may never arrive,
+and leaving it set means the next caller does not send one."
+  (bt:with-lock-held (*wakeup-lock*)
+    (prog1 *wakeup-pending* (setf *wakeup-pending* nil))))
+
+(defun note-lost-wakeup (started)
+  "Say so, once, if this wait ran its whole length with work already queued.
+
+THE INSTRUMENT FOR A DEFECT THAT LEAVES NO TRACE.  A lost wakeup is not an
+error: the loop waits its full interval, wakes on the timeout, drains the queue
+and carries on, and what the user sees is a screen that was stale for thirty
+seconds and is now correct.  Nothing signals, nothing logs, and by the time
+anybody looks the evidence is a working window manager.
+
+This is that evidence.  Waiting the whole interval is normal on an idle
+desktop; waiting the whole interval with something already *in* the queue is
+not, because the thing that put it there was supposed to have woken us.  The
+two together are the signature, they cost one comparison per wakeup, and they
+are the difference between the next report saying `it froze for about a minute'
+and saying which mechanism froze.
+
+FINDINGS.org records a 67-second stall that did not reproduce in a dozen
+attempts and was written down as `not known to be the same thing'.  Two poll
+intervals is 60 seconds.  If it happens again, this says so."
+  (let ((elapsed (/ (float (- (get-internal-real-time) started))
+                    internal-time-units-per-second)))
+    (when (and (>= elapsed *poll-interval*)
+               (bt:with-lock-held (*wm-thread-lock*) *wm-thread-queue*))
+      (note-once :lost-wakeup
+                 "the event loop waited ~,1f seconds with work already queued, ~
+                  which means a wakeup was lost.  The screen was stale for that ~
+                  long.  Please report this with the log."
+                 elapsed))))
+
 (defun wait-for-work (fd)
   "Block until the compositor speaks, or another thread wakes us.
 
@@ -210,19 +248,35 @@ integration suite hit it about one run in five, driving the window manager from
 another thread the way a script or a REPL does.
 
 So the flag is *consumed* here rather than merely cleared.  Finding it set costs
-one extra turn of the loop, which drains the queue and comes back."
-  (unless (bt:with-lock-held (*wakeup-lock*)
-            (prog1 *wakeup-pending* (setf *wakeup-pending* nil)))
-    (catch 'wake
-      (handler-case
-          (if fd
-              (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
-              (sleep 0.05))
-        (error () nil)
-        (sb-sys:interactive-interrupt () nil)))
-    ;; Whatever woke us, the queue is about to be drained, so the next caller
-    ;; should send a fresh interrupt.
-    (bt:with-lock-held (*wakeup-lock*) (setf *wakeup-pending* nil))))
+one extra turn of the loop, which drains the queue and comes back.
+
+*AND IT IS CONSUMED TWICE, WHICH CLOSES THE LAST OF THE WINDOW.*  Consuming it
+once above still leaves a gap: between that read and the CATCH being
+established there are a few instructions, and an interrupt delivered in them
+throws at a tag that does not exist yet, is swallowed, and leaves a flag the
+first read has already gone past.  The second consume is *inside* the catch, so
+every arrival is covered — before the catch, the flag is still set and this sees
+it; after it, the throw has somewhere to land.  There is no third case.
+
+That gap is microseconds wide and this program has already been bitten twice by
+gaps that size, both times for thirty seconds a go.  See NOTE-LOST-WAKEUP for
+what says so if there is ever a fourth."
+  (unless (consume-wakeup)
+    (let ((started (get-internal-real-time)))
+      (catch 'wake
+        ;; The second consume.  See above: this is the arrival that lands
+        ;; before the catch exists, which the first one cannot see.
+        (unless (consume-wakeup)
+          (handler-case
+              (if fd
+                  (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
+                  (sleep 0.05))
+            (error () nil)
+            (sb-sys:interactive-interrupt () nil))))
+      ;; Whatever woke us, the queue is about to be drained, so the next caller
+      ;; should send a fresh interrupt.
+      (consume-wakeup)
+      (note-lost-wakeup started))))
 
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."

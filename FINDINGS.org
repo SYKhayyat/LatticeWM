@@ -829,6 +829,34 @@ document was written about one that never existed.
   because *The screen was up to thirty seconds stale* is in the table above and
   was a lost wakeup, not because this is known to be the same thing.
 
+  *Still not reproduced, and still not diagnosed.* What was done about it is
+  worth separating into the two honest halves.
+
+  What can be ruled out: =grim= speaks =wlr-screencopy= to river, and this
+  program is not in that path at all. A stall in a screenshot is river's or
+  grim's unless the window manager was holding something river needed, and the
+  only thing it holds is a manage sequence.
+
+  What can be closed: the *mechanism* the number resembles. Two poll intervals
+  is sixty seconds and the observation is sixty-seven. ~wait-for-work~ consumed
+  the wakeup flag once, above the ~catch~ — and between that read and the catch
+  being established there are a few instructions, in which an interrupt throws
+  at a tag that does not exist yet, is swallowed, and leaves a flag the read has
+  already gone past. That is the *same* microsecond-wide gap as the finding
+  above it, one step further along, and it is closed by consuming the flag a
+  second time *inside* the catch: an arrival before the catch is seen by the
+  second read, one after it has somewhere to land, and there is no third case.
+
+  And what is left is an instrument rather than a conclusion.
+  ~note-lost-wakeup~ says so, once, when a wait runs its full length *with work
+  already in the queue* — which is the signature, because whatever queued it was
+  supposed to have woken us. Waiting the full interval is normal on an idle
+  desktop and a queue is normal on a busy one; only the two together mean
+  anything. It costs one comparison per wakeup, and it is the difference between
+  the next report saying "it froze for about a minute" and saying which
+  mechanism froze. *That is the right outcome for an unreproducible defect: not
+  a fix, and not silence.*
+
 * Found by looking at the machine instead of at the program
 :PROPERTIES:
 :CUSTOM_ID: spin
