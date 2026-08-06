@@ -159,7 +159,3 @@ right then left returns you exactly where you started (DESIGN D20)."
   (ecase axis
     (:horizontal (if (minusp sign) :left :right))
     (:vertical (if (minusp sign) :up :down))))
-
-(defun axis-of (direction)
-  "Alias for DIRECTION-AXIS, for call sites that read better this way."
-  (direction-axis direction))

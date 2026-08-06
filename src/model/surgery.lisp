@@ -67,29 +67,27 @@ something has to be there."
           finally (return root))))
 
 ;;; ----------------------------------------------------------------- insert
-
-(defun tree-insert-at (root path node &key (focus-path nil focus-supplied))
-  "Insert NODE into ROOT so that it comes to occupy PATH.
-
-PATH's parent must be a container.  For a dense container this shifts the
-existing children from that address on; for a sparse one it simply fills the
-address.
-
-Returns (values ROOT REPAIRED-FOCUS).  When FOCUS-PATH is supplied it is
-tracked across the insertion; otherwise the path of NODE itself is returned,
-which is what a spawn wants."
-  (let* ((parent-path (parent-path path))
-         (address (path-last path))
-         (parent (resolve-path root parent-path))
-         (focused (and focus-supplied (resolve-path root focus-path))))
-    (unless (container-p parent)
-      (error "Cannot insert at ~s: its parent ~s is not a container." path parent))
-    (insert-child parent address node)
-    (values root
-            (cond (focused (or (node-path-to root focused)
-                               (repair-path root focus-path)))
-                  (focus-supplied (repair-path root focus-path))
-                  (t (or (node-path-to root node) (repair-path root path)))))))
+;;
+;; THERE IS NO TREE-INSERT-AT, AND THERE WAS ONE HERE FOR THE LIFE OF THE
+;; PROJECT WITH NOTHING ON THE OTHER END OF IT.  It took a path, resolved the
+;; parent, checked it was a container, called INSERT-CHILD and repaired the
+;; focus -- twenty lines with an error branch, exported on the model surface,
+;; never called, never tested, named by no document.
+;;
+;; It was never called because a spawn does not insert at a path.  Every one of
+;; them arrives at a *leaf* and either takes its place or divides it, which is
+;; TREE-REPLACE-AT and TREE-SPLIT-AT (src/policy/lifecycle.lisp:37 and :45), and
+;; the three places that genuinely add a child to a known container -- a new
+;; workspace, a new tab -- hold the container already and call INSERT-CHILD on
+;; it directly.  The path-shaped insert was the member of the family that
+;; symmetry asked for and no caller ever did.
+;;
+;; Its error branch is the argument for taking it out rather than leaving it.
+;; An untested error path on a published surface is worse than an absent
+;; function: the absent one fails at read time in the reader's editor, and this
+;; one would have failed at run time, in a config, in a branch nobody had
+;; executed.  INSERT-CHILD is the real extension point, it is a generic, and it
+;; is on doc/CONTAINER-SURFACE.txt where a container kind will find it.
 
 ;;; ----------------------------------------------------------------- remove
 

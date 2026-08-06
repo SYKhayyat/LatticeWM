@@ -576,23 +576,13 @@ costume, and it would teach people to distrust the real ones."
     (1 (first (children s)))
     (t s)))
 
-(defun weight-at (split address)
-  "SPLIT's weight for the child at ADDRESS, or 1 when there is none."
-  (or (nth address (weights split)) 1))
-
-(defun set-weight (split address value)
-  "Set SPLIT's weight at ADDRESS to VALUE, which must be positive."
-  (when (and (integerp address) (< -1 address (length (weights split))))
-    (setf (nth address (weights split)) (max 1/1000 value)))
-  value)
-
-(defun normalized-weights (split)
-  "SPLIT's weights scaled to sum to 1."
-  (let* ((ws (weights split))
-         (total (reduce #'+ ws :initial-value 0)))
-    (if (plusp total)
-        (mapcar (lambda (w) (/ w total)) ws)
-        (make-list (length ws) :initial-element (/ 1 (max 1 (length ws)))))))
+;; The weights are read through the WEIGHTS accessor and changed through
+;; ADJUST-WEIGHT, and that is the whole of the interface.  WEIGHT-AT, SET-WEIGHT
+;; and NORMALIZED-WEIGHTS stood beside it, exported, for the life of the project
+;; with no caller, no test and no line of documentation: DIVIDE-RECT normalises
+;; the weights itself because it is the only thing that needs them normalised,
+;; and a resize is a transfer rather than an assignment, so there was never a
+;; place for a bare setter.  Gate 16 is what noticed.
 
 (defun adjust-weight (split address delta)
   "Move DELTA of SPLIT's total weight into the child at ADDRESS from the next one.

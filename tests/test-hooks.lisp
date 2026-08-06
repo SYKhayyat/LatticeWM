@@ -247,3 +247,67 @@ it has a writable state directory."
                "~s is in the generated document" (first row)))
     (is-true (search (format nil "~d hooks" (length (p:all-hooks))) printed)
              "and it counts them from the image rather than from a sentence")))
+
+;;; ------------------------------------------- advice, and the way back off it
+
+;; THE THIRD MECHANISM'S THIRD SHAPE, AND IT HAD NO TEST AT ALL.  A generic
+;; decides, an option supplies an answer, a hook notices — and a *command
+;; wrapper* runs around the whole of a command and can refuse it.  Layout undo
+;; is built on it and nothing else, and until this the only thing that had ever
+;; exercised it was layout undo.
+;;
+;; REMOVE-COMMAND-WRAPPER is why this is here.  It was exported, defined, and
+;; reached by nothing: no caller, no test, and doc/EXTENDING.org taught
+;; ADD-COMMAND-WRAPPER without ever saying how to take one off.  A wrapper runs
+;; around *every* command, so the half-written one is the one that stops the
+;; desktop responding to keys, and the off switch is the only way back short of
+;; a restart.  Gate 16 is what noticed it was unreachable.
+
+(defvar *wrapper-marks* '()
+  "What ran, innermost last, for the wrapper test below.")
+
+(p:defcommand command-for-wrapper-test ()
+  "Exists so that the wrapper chain has something to run around."
+  (push :command *wrapper-marks*)
+  :ran)
+
+(defun outer-wrapper-for-test (command arguments thunk)
+  (declare (ignore command arguments))
+  (push :outer *wrapper-marks*)
+  (funcall thunk))
+
+(defun inner-wrapper-for-test (command arguments thunk)
+  (declare (ignore command arguments))
+  (push :inner *wrapper-marks*)
+  (funcall thunk))
+
+(test a-command-wrapper-composes-and-comes-off-again
+  (let ((p::*command-wrappers* '()))
+    (p:add-command-wrapper 'inner-wrapper-for-test)
+    (p:add-command-wrapper 'outer-wrapper-for-test)
+    (let ((*wrapper-marks* '()))
+      (is (eq :ran (p:run-command "command-for-wrapper-test"))
+          "what the command returned is what RUN-COMMAND returns")
+      (is (equal '(:outer :inner :command) (reverse *wrapper-marks*))
+          "added later runs outside, which is what the docstring promises"))
+    ;; The half this exists for.
+    (p:remove-command-wrapper 'outer-wrapper-for-test)
+    (let ((*wrapper-marks* '()))
+      (p:run-command "command-for-wrapper-test")
+      (is (equal '(:inner :command) (reverse *wrapper-marks*))
+          "the removed wrapper is gone and the one beside it is untouched"))
+    (p:remove-command-wrapper 'inner-wrapper-for-test)
+    (let ((*wrapper-marks* '()))
+      (p:run-command "command-for-wrapper-test")
+      (is (equal '(:command) (reverse *wrapper-marks*))
+          "and taking off the last one leaves the command running bare"))
+    (is (null p::*command-wrappers*)
+        "removing every wrapper empties the list rather than leaving a stub")))
+
+(test removing-a-wrapper-that-was-never-added-is-not-an-error
+  ;; It is called from a REPL, by somebody whose wrapper has just wedged their
+  ;; session, who does not remember whether the ADD took.  Signalling there
+  ;; would be answering "is it off?" with a debugger.
+  (let ((p::*command-wrappers* (list 'inner-wrapper-for-test)))
+    (is (null (p:remove-command-wrapper 'outer-wrapper-for-test)))
+    (is (equal '(inner-wrapper-for-test) p::*command-wrappers*))))

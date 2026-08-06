@@ -477,6 +477,12 @@ every command and keeps the snapshot only when the tree actually changed. A
 session recorder, a modal layer that vetoes commands, and a per-command timer
 are all the same shape.
 
+~(remove-command-wrapper 'time-commands)~ takes it off again, and you will want
+it: a wrapper runs around *every* command, so the one you are still writing is
+the one that can make the window manager stop responding to keys. Wrapping from
+a REPL and unwrapping when it misbehaves is how this gets developed, and it is
+the only way back out short of a restart.
+
 *Give the function a name and add the symbol, not ~#'the-function~ and not a
 lambda.* The list holds whatever you give it, and a function object is a
 snapshot: redefining the function afterwards leaves the hook calling the old

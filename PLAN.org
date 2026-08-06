@@ -327,7 +327,7 @@ a weak model editing a monolith.
 All six run on every commit from day one. They are cheap and they are the only automated
 defence the project has.
 
-/There are twelve now. The six planned here are below; the six that were added are in
+/There are sixteen now. The six planned here are below; the ten that were added are in
 [[#gates-added][§gates-added]], because each of them exists for a bug that had already
 shipped and the bug is the reason./
 
@@ -379,7 +379,7 @@ lattice that is three hundred lines of methods is the thesis holding. One that i
 thousand lines re-implementing geometry is the thesis failing while wearing the gate's
 uniform.
 
-** The eight that were added
+** The ten that were added
 :PROPERTIES:
 :CUSTOM_ID: gates-added
 :END:
@@ -619,6 +619,61 @@ existed were individually reasonable and all pointed somewhere else.
     not a broken method but an invisible fact. It is a ratchet against the next extension
     overriding a reader with no knob offered and nobody noticing for a month — which is
     exactly how long ~*smart-gaps*~ lasted.
+16. *Every name the published packages export names something, and something reaches it.*
+    ~replace-child~ was exported from ~latticewm/core~ and defined nowhere at all — a
+    ~defgeneric~ that does not exist, on the advertised container protocol. It was found
+    by reading, fixed by hand, and nothing was put in the way of the next one.
+    ~world-props~ was already the next one, sitting beside ~make-world~ in the same
+    export list, left behind when the accessor was renamed to ~props~ and shared with
+    ~node~.
+
+    *An export is a promise, and this is the failure mode where the compiler is no help
+    at all.* ~export~ interns the symbol, so ~(c:world-props *world*)~ in a config file
+    reads perfectly and dies at run time with an undefined function — which reads as a
+    bug in the user's config rather than as a hole in ours.
+
+    And five more were defined, exported, and reached by nothing: ~tree-insert-at~,
+    ~weight-at~, ~set-weight~, ~normalized-weights~ and ~axis-of~. No caller in ~src/~,
+    ~lattice/~ or ~examples/~; no test; no line of any document. ~axis-of~ is the one
+    that says what this is — its whole docstring was "alias for ~direction-axis~, for
+    call sites that read better this way", and there were no call sites.
+
+    *Why no existing gate could see it.* Gate 2 asks whether a generic is documented,
+    gate 6 how much behaviour is answered from outside ~src/~, gate 11 whether an option
+    is read, gate 13 whether a property key is written, gate 14 whether a hook is
+    attached to. Every one of them is a question about a *mechanism*, and every mechanism
+    has a registry the gate can enumerate. A plain exported function belongs to no
+    mechanism and appears in no registry. It is a line somebody typed in ~package.lisp~,
+    and the only thing that had ever checked that line against the program was a person
+    reading it.
+
+    *Two instruments, because the places that can reach a name are not alike.* ~src/~,
+    ~lattice/~ and ~examples/~ are read the way [[#gates-added][gate 13]] reads them, by
+    symbol identity, so every nickname is the same name and a docstring is a string
+    rather than a form. A form's own name is subtracted from what it mentions, which is
+    what stops a recursive call and a ~return-from~ counting as somebody wanting the
+    function. ~tests/~, ~tools/~ and the documents are searched as text, which is gate
+    14's bargain for gate 14's reason — the test packages need fiveam and the gates run
+    without it. ~tests/~ goes through ~code-of~ so prose cannot answer for it; ~tools/~
+    cannot, because gate 2 reaches its readers through strings like
+    ~"latticewm/policy:all-options"~, so a string counts there only when the *entire*
+    string is one package-qualified name. That is what the ~call~ idiom writes and it is
+    not a shape a sentence can fall into.
+
+    *The first draft of this gate failed that test and reported it.* Its own preamble
+    named the five dead functions, ~tools/~ was scanned raw, and all five came back
+    reached by a build tool — [[#gates][gate 3]]'s "a gate must not be satisfiable by
+    being told it passes", live, in the gate written to catch dead names.
+
+    *It fails one direction and reports the other*, which is gate 13's asymmetry for gate
+    13's reason. Reached by nothing at all is dead by every definition available. Reached
+    only by a suite or only by a document is *printed*: these two packages exist to be
+    called from outside this repository, so a model function the program itself never
+    needs is exactly what a published API looks like. Thirteen names are in that position
+    and the list is on every build, so a reader can ask of any line on it who it is for.
+    ~remove-command-wrapper~ was on it and should not have been — the guide taught
+    ~add-command-wrapper~ and never said how to take one off, which is the function you
+    want at the moment a half-written wrapper has stopped the desktop answering keys.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

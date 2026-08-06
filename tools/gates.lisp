@@ -1,23 +1,26 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are fifteen.  Eight of the nine that were added were added because they
-;;;; had already found something; gate 15 is the ninth, it passed the day it
+;;;; are sixteen.  Nine of the ten that were added were added because they
+;;;; had already found something; gate 15 is the tenth, it passed the day it
 ;;;; was written, and it says so where it stands rather than here.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other fourteen run here, against the loaded image.
+;;;; The other fifteen run here, against the loaded image.
 ;;;;
 ;;;; Eleven of them ask the program a question.  Gate 12 asks the *documents*
 ;;;; one, which is the half of this project the other eleven cannot see; gate
 ;;;; 13 asks the *source*, because the one thing a keyword property key cannot
 ;;;; be asked about is what the compiled image thinks of it; gate 14 asks
 ;;;; the *test suites*, because the one thing neither the image nor the source
-;;;; can say about an extension point is whether anybody has ever used it; and
+;;;; can say about an extension point is whether anybody has ever used it;
 ;;;; gate 15 asks the image and then the source, in that order, because whether
 ;;;; a method overrides another is a fact about the method list and whether it
-;;;; composes with the one it overrides is a fact only the text has.
+;;;; composes with the one it overrides is a fact only the text has; and gate 16
+;;;; asks all four at once -- the image for what a published name denotes, and
+;;;; the source, the suites and the documents for whether anything at all wants
+;;;; it -- because a name nobody reaches is not visible from any one of them.
 
 (require :asdf)
 (require :sb-introspect)
@@ -1726,6 +1729,319 @@ ten other methods around it, cannot answer for this one."
             (loop for (option name) in (sort offenders #'string<
                                              :key (lambda (row) (symbol-name (first row))))
                   append (list option name))))))
+
+;;; --------------------------------------------------------------- gate 16
+
+(banner 16 "every name the published packages export is one somebody can reach")
+;; AN EXPORT IS A PROMISE, AND TWO OF THEM WERE PROMISES THE IMAGE COULD NOT
+;; KEEP.  REPLACE-CHILD was exported from LATTICEWM/CORE and defined nowhere at
+;; all -- a DEFGENERIC that does not exist, on the advertised container
+;; protocol.  It was found by reading, fixed by hand, and nothing was put in
+;; the way of the next one; WORLD-PROPS was already the next one, sitting beside
+;; MAKE-WORLD in the same export list, left behind when the accessor was renamed
+;; to PROPS and shared with NODE.
+;;
+;; The failure mode is specific and it is not a compile error.  EXPORT interns
+;; the symbol, so a config file saying (c:world-props *world*) reads perfectly
+;; and dies at run time with an undefined function -- which looks like a bug in
+;; the user's config rather than a hole in ours.  A name on a published surface
+;; is either something or it is a trap.
+;;
+;; AND FIVE MORE WERE DEFINED, EXPORTED, AND REACHED BY NOTHING: TREE-INSERT-AT,
+;; WEIGHT-AT, SET-WEIGHT, NORMALIZED-WEIGHTS and AXIS-OF.  No caller in src/,
+;; lattice/ or examples/; no test; no line of any document.  AXIS-OF is the one
+;; that says what this is: its whole docstring was "Alias for DIRECTION-AXIS,
+;; for call sites that read better this way", and there were no call sites.
+;;
+;; WHY NO EXISTING GATE COULD SEE IT.  Gate 2 asks whether a generic is
+;; documented, gate 6 how much behaviour is answered from outside src/, gate 11
+;; whether an option is read, gate 13 whether a property key is written, gate 14
+;; whether a hook is attached to.  Every one of them is a question about a
+;; *mechanism* -- a generic, an option, a prop, a hook -- and each mechanism has
+;; a registry the gate can enumerate.  A plain exported function belongs to no
+;; mechanism and appears in no registry.  It is a line somebody typed in
+;; package.lisp, and until this gate the only thing that had ever checked that
+;; line against the program was a person reading it.
+;;
+;; TWO QUESTIONS, AND THE SECOND IS THE EXPENSIVE ONE.
+;;
+;;   1. Does the export name anything?  A function, a value, a class or a type.
+;;      Nothing at all is a failure, always, with no exemption -- there is no
+;;      arrangement of a program in which a published name that denotes nothing
+;;      is what somebody meant.
+;;
+;;   2. Does anything reach it?  A caller in the program, a test, a build tool,
+;;      or a sentence in a document somebody could read and then call it from a
+;;      config file.  None of the four is dead by every definition available:
+;;      not used, not tested, not documented, not findable.
+;;
+;; TWO INSTRUMENTS, BECAUSE THE FOUR PLACES ARE NOT ALIKE.  src/, lattice/ and
+;; examples/ are READ, the way gate 13 reads them: a symbol is matched by
+;; *identity*, so c:axis-of, r::axis-of, AXIS-OF inside LATTICEWM/CORE itself
+;; and a package-local nickname nobody has invented yet are all one name, and a
+;; docstring discussing AXIS-OF is a string rather than a symbol and so cannot
+;; answer for code that does not exist.  A form's own name is subtracted from
+;; what that form mentions, which is what stops a recursive call, a RETURN-FROM
+;; and a DECLAIM from counting as somebody wanting the function -- LAST-LEAF-PATH
+;; calls itself and TREE-TRANSPLANT returns from itself, and neither is a reader.
+;;
+;; tests/, tools/ and the documents are searched as *text*, which is gate 14's
+;; bargain and taken here for gate 14's reason: the test packages need fiveam,
+;; the gates must run without it, and a name is still a name.  tests/ is read
+;; through CODE-OF so the paragraph you are reading could not satisfy it.  tools/
+;; is not, and that is deliberate: gate 2 reaches UNDOCUMENTED-GENERICS through
+;; the string "latticewm/policy:undocumented-generics", because a tool that runs
+;; before the system is loaded cannot name its symbols, and blanking the strings
+;; would make this gate blind to the gate above it.
+;;
+;; The named cost of that: a comment in tools/ or a sentence in a document that
+;; merely mentions a dead name keeps it alive here.  That is a gate that can be
+;; made quieter by prose and never louder, which is the acceptable direction --
+;; and lamdan/ is excluded from the documents for exactly this reason, since a
+;; critique naming a function as dead must not be the thing that saves it.
+;;
+;; WHAT IS EXEMPT FROM QUESTION 2, EACH FOR A DIFFERENT REASON:
+;;
+;;   generics -- an uncalled generic is the extension surface doing its job, and
+;;     how much of it anybody answers is gate 6's question, asked with a number.
+;;   commands -- reached by *name* from a keymap and from M-x, so having no
+;;     caller is the normal and correct state for all seventy-four of them.
+;;   names DEFSTRUCT and DEFCLASS generate -- RECT-P arrives with MAKE-RECT and
+;;     RECT-X as a set, and asking a project to write (:predicate nil) to quiet a
+;;     gate is the gate writing the design.  SBCL is asked rather than the source
+;;     guessed at: it records the DEFSTRUCT-DESCRIPTION a name came from.
+;;   variables -- gate 11 already asks whether an option is read, and it asks it
+;;     better, from the cross-reference rather than from a scan.
+;;
+;; THE TWO PUBLISHED PACKAGES, AND NOT THE THIRD.  LATTICEWM/CORE and
+;; LATTICEWM/POLICY are the surface DESIGN names -- "the lattice depends only on
+;; the core's exported policy package" -- and they are what doc/EXTENSION-SURFACE
+;; and doc/CONTAINER-SURFACE describe.  LATTICEWM/RUNTIME is not published in
+;; that sense and its exports are overwhelmingly commands and protocol wrappers,
+;; which are covered by gate 2 and gate 5 and would arrive here as seventy-seven
+;; false positives.  Extending this to it means answering for those first.
+;;
+;; THE ASYMMETRY IS GATE 13'S, FOR GATE 13'S REASON.  Reached by nothing is a
+;; failure.  Reached only by a suite or only by a document is *printed*: these
+;; two packages exist to be called from outside this repository, so a model
+;; function the program itself never needs is exactly what a published API looks
+;; like -- and a reader who can see the list can ask, of any line on it, who it
+;; is for.
+(flet ((program-mentions (path table)
+         "Record every interned symbol PATH's forms name, minus the ones they define."
+         (with-open-file (in path)
+           (let ((*package* *package*)
+                 (*read-eval* nil))
+             (labels ((defined (form)
+                        (let ((head (and (consp form) (symbolp (car form))
+                                         (symbol-name (car form)))))
+                          (when (and head (eql 0 (search "DEF" head)))
+                            (let ((name (second form)))
+                              (cond ((symbolp name) (list name))
+                                    ((and (consp name) (eq (car name) 'cl:setf))
+                                     (list (second name)))
+                                    ;; (DEFSTRUCT (RECT (:CONSTRUCTOR ...)) ...)
+                                    ((and (consp name) (symbolp (car name)))
+                                     (list (car name)))
+                                    (t '()))))))
+                      (skip-p (form)
+                        ;; A DECLAIM names a function to talk about its type, not
+                        ;; to call it, and the FTYPE proclamations in model/
+                        ;; sit beside the very DEFUNs this is asking about.
+                        (and (consp form) (symbolp (car form))
+                             (member (symbol-name (car form))
+                                     '("DECLAIM" "PROCLAIM") :test #'string=)))
+                      (walk (form defined)
+                        (cond ((and form (symbolp form))
+                               ;; #:FOO in a DEFPACKAGE reads as an uninterned
+                               ;; symbol, so the export list cannot be the thing
+                               ;; that answers for an export.  Nothing to special
+                               ;; case: an uninterned symbol has no package.
+                               (when (and (symbol-package form)
+                                          (not (member form defined)))
+                                 (pushnew (relative path) (gethash form table)
+                                          :test #'string=)))
+                              ((consp form) (walk (car form) defined)
+                                            (walk (cdr form) defined)))))
+               (loop for form = (read in nil :eof)
+                     until (eq form :eof)
+                     do (when (and (consp form) (eq (first form) 'cl:in-package))
+                          (setf *package* (or (find-package (second form)) *package*)))
+                        (unless (skip-p form)
+                          (walk form (defined form))))))))
+       (text-of (path mode)
+         "PATH's text: :CODE with comments and strings gone, :RAW as written,
+:TOOL as code plus the string literals that are wholly a qualified name.
+
+:TOOL is the whole reason this is not just CODE-OF, and it is narrow on
+purpose.  Gate 2 reaches the undocumented-generic readers through strings like
+\"latticewm/policy:all-options\", because a tool that runs before the system is
+loaded cannot name its symbols -- so blanking every string in tools/ makes this
+gate blind to the gate above it.  Keeping every string instead makes it blind to
+what it is for: the first draft of this gate kept them, and the five dead names
+in its own preamble came back reported as reached by a build tool.
+
+So a string counts only when the *entire* string is one package-qualified name.
+That is exactly what the CALL and SYM idiom writes and it is not a shape prose
+can fall into: a sentence mentioning latticewm/core:tree-move has a space in it,
+and this one is the proof, since it does not answer for TREE-MOVE."
+         (handler-case
+             (case mode
+               (:code (format nil "~{~a~^~%~}" (mapcar #'cdr (code-lines path))))
+               (:raw (with-open-file (in path :external-format :utf-8)
+                       (let ((buffer (make-string (file-length in))))
+                         (subseq buffer 0 (read-sequence buffer in)))))
+               (t
+                (let* ((text (with-open-file (in path :external-format :utf-8)
+                               (let ((buffer (make-string (file-length in))))
+                                 (subseq buffer 0 (read-sequence buffer in)))))
+                       (end (length text))
+                       (names '())
+                       (index 0))
+                  ;; CODE-OF's walk, kept only for the string bodies: the #\;
+                  ;; and #\\ clauses are here so that a semicolon inside a string
+                  ;; does not start a comment and a #\" literal does not open one.
+                  (loop while (< index end)
+                        do (let ((c (char text index)))
+                             (cond
+                               ((char= c #\\) (incf index 2))
+                               ((char= c #\;)
+                                (setf index (or (position #\Newline text :start index)
+                                                end)))
+                               ((char= c #\")
+                                (let ((stop (loop with i = (1+ index)
+                                                  while (< i end)
+                                                  do (cond ((char= (char text i) #\\)
+                                                            (incf i 2))
+                                                           ((char= (char text i) #\")
+                                                            (return i))
+                                                           (t (incf i)))
+                                                  finally (return end))))
+                                  (let ((body (subseq text (1+ index) (min stop end))))
+                                    (when (and (find #\: body)
+                                               (every (lambda (ch)
+                                                        (or (alphanumericp ch)
+                                                            (find ch "-*+%/&:")))
+                                                      body))
+                                      (push body names)))
+                                  (setf index (min end (1+ stop)))))
+                               (t (incf index)))))
+                  (format nil "~{~a~^~%~}~%~{~a~^~%~}"
+                          (mapcar #'cdr (code-lines path)) names))))
+           (error () "")))
+       (names-token-p (text token)
+         "True when TEXT contains TOKEN as a whole name rather than as a part.
+
+The boundary set includes the constituents of a Lisp name -- so ADJUST-WEIGHT
+does not answer for WEIGHT and latticewm/policy does not answer for POLICY --
+but not the colon, because latticewm/policy:undocumented-generics and
+c:axis-of are how a name is written when it is genuinely being used."
+         (let ((n (length token))
+               (end (length text)))
+           (loop for at = (search token text) then (search token text :start2 (1+ at))
+                 while at
+                 do (let ((before (and (plusp at) (char text (1- at))))
+                          (after (and (< (+ at n) end) (char text (+ at n)))))
+                      (flet ((constituent (c)
+                               (and c (or (alphanumericp c) (find c "-*+%/&")))))
+                        (unless (or (constituent before) (constituent after))
+                          (return t))))))))
+  (let* ((packages (remove nil (list (find-package "LATTICEWM/CORE")
+                                     (find-package "LATTICEWM/POLICY"))))
+         (program (make-hash-table))
+         (elsewhere '())
+         (missing '())
+         (unreached '())
+         (published '())
+         (scanned 0))
+    ;; The program, by symbol identity.
+    (dolist (path (append (directory (merge-pathnames "src/**/*.lisp" *root*))
+                          (directory (merge-pathnames "lattice/*.lisp" *root*))
+                          (directory (merge-pathnames "examples/*.lisp" *root*))))
+      (incf scanned)
+      (handler-case (program-mentions path program)
+        (error (condition)
+          ;; A file this cannot read is a gate that cannot run, not a gate that
+          ;; passes -- the same ruling gate 13 makes about the same files.
+          (fail 16 "~a does not read: ~a" (relative path) condition))))
+    ;; Everything else, as text: (region . text) pairs, searched once per name.
+    (dolist (path (directory (merge-pathnames "tests/*.lisp" *root*)))
+      (incf scanned)
+      (push (cons "a suite" (string-downcase (text-of path :code))) elsewhere))
+    (dolist (path (directory (merge-pathnames "tools/*.lisp" *root*)))
+      (incf scanned)
+      (push (cons "a build tool" (string-downcase (text-of path :tool)))
+            elsewhere))
+    (dolist (path (append (directory (merge-pathnames "*.org" *root*))
+                          (directory (merge-pathnames "doc/*.org" *root*))
+                          (directory (merge-pathnames "doc/*.txt" *root*))
+                          (directory (merge-pathnames "doc/latticewm.1" *root*))
+                          (directory (merge-pathnames "doc/latticewm-config.5" *root*))))
+      (incf scanned)
+      (push (cons "a document" (string-downcase (text-of path :raw))) elsewhere))
+    (dolist (package packages)
+      (do-external-symbols (symbol package)
+        (when (eq (symbol-package symbol) package)
+          (push symbol published)
+          (let ((function (and (fboundp symbol) (not (macro-function symbol))
+                               (fdefinition symbol))))
+            (cond
+              ;; Question 1.
+              ((not (or (fboundp symbol) (boundp symbol) (find-class symbol nil)
+                        (sb-int:info :type :kind symbol)))
+               (push symbol missing))
+              ;; Question 2, once the exempt kinds are out of the way.
+              ((or (null (or function (macro-function symbol)))
+                   (typep function 'generic-function)
+                   (call "latticewm/policy:find-command" symbol)
+                   ;; SBCL records the DEFSTRUCT a generated name came from as
+                   ;; the source transform it installed for it.
+                   (consp (ignore-errors
+                           (nth-value 0 (sb-int:info :function :source-transform
+                                                     symbol))))))
+              ((gethash symbol program))
+              (t
+               ;; Not used by the program.  Whatever else names it decides
+               ;; between the report and the failure, and nothing does both.
+               (let ((token (string-downcase (symbol-name symbol))))
+                 (push (cons symbol
+                             (remove-duplicates
+                              (loop for (region . text) in elsewhere
+                                    when (names-token-p text token) collect region)
+                              :test #'string= :from-end t))
+                       unreached))))))))
+    (let ((dead (remove-if #'cdr unreached))
+          (outward (remove-if-not #'cdr unreached)))
+      (format t "  files scanned~46t~d~%  names published~46t~d~%~
+                 ~2tpublished, and the program does not use them~46t~d~%~
+                 ~2treached by nothing at all~46t~d~%"
+              scanned (length published) (length outward) (length dead))
+      ;; The report half, in full rather than counted, because its whole use is
+      ;; that a reader can look at a name and ask who it is for.
+      (dolist (row (sort outward #'string< :key (lambda (r) (symbol-name (car r)))))
+        (format t "    reached only by ~{~a~^ and ~}: ~(~a~)~%" (cdr row) (car row)))
+      (when missing
+        (fail 16 "~d export~:p that name~:[s~;~] nothing at all:~{~%    ~(~a~)~}~%~
+                  ~4tEXPORT interns the symbol, so (~(~a~) ...) in a config~%~
+                  ~4tfile reads perfectly and dies at run time with an~%~
+                  ~4tundefined function -- which reads as a bug in the~%~
+                  ~4tuser's config rather than a hole in ours.  Define it,~%~
+                  ~4tor take the line out of package.lisp."
+              (length missing) (rest missing)
+              (sort (mapcar #'symbol-name missing) #'string<)
+              (first (sort (copy-list missing) #'string< :key #'symbol-name))))
+      (when dead
+        (fail 16 "~d published function~:p reached by nothing:~{~%    ~(~a~)~}~%~
+                  ~4tNo caller in src/, lattice/ or examples/; no test; no~%~
+                  ~4tbuild tool; no line of any document.  It is not used, not~%~
+                  ~4texercised, and not findable, so the surface advertises~%~
+                  ~4tsomething nobody has ever run.  Delete it, or give it the~%~
+                  ~4tone reader that makes it real -- a caller, a test, or a~%~
+                  ~4tsentence in doc/EXTENDING.org telling somebody it is there."
+              (length dead)
+              (sort (mapcar (lambda (row) (symbol-name (car row))) dead) #'string<)))
+      (unless (or missing dead)
+        (format t "  every published name is defined and reachable~%")))))
 
 ;;; ---------------------------------------------------------------- verdict
 

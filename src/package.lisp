@@ -141,7 +141,7 @@ deliberately decomposed so that policy can redirect it.")
    ;; directions
    #:+directions+ #:direction-p #:direction-axis #:direction-sign
    #:opposite-direction #:direction-horizontal-p #:direction-vertical-p
-   #:axis-of #:direction-for
+   #:direction-for
    ;; nodes
    #:node #:props #:prop #:node-id #:node-label
    #:leaf #:leaf-window #:make-leaf #:leaf-empty-p
@@ -175,10 +175,12 @@ deliberately decomposed so that policy can redirect it.")
    #:resolve-path #:resolve-chain #:path-valid-p #:node-path-to
    #:node-contains-p
    #:parent-path #:path-last #:path-append #:path-equal
-   ;; weights
-   #:weight-at #:set-weight #:normalized-weights #:adjust-weight
+   ;; weights.  Read through WEIGHTS, changed through ADJUST-WEIGHT; WEIGHT-AT,
+   ;; SET-WEIGHT and NORMALIZED-WEIGHTS were here with no caller, no test and no
+   ;; document, and gate 16 is what asks now.
+   #:adjust-weight
    ;; surgery: pure functions on a root, returning (values root path)
-   #:tree-insert-at #:tree-remove-at #:tree-replace-at
+   #:tree-remove-at #:tree-replace-at
    #:tree-split-at #:tree-swap #:tree-move #:tree-transplant
    #:default-split-join-p
    #:repair-path #:first-leaf-path #:last-leaf-path #:leaf-paths
@@ -204,7 +206,13 @@ deliberately decomposed so that policy can redirect it.")
    ;; the world
    #:world #:world-root #:world-cursor #:world-outputs #:world-inputs
    #:world-scratchpad
-   #:world-floats #:make-world #:world-props #:world-focused-float
+   ;; A world's props are reached through PROPS, the same accessor a node's are:
+   ;; it is one slot on two classes on purpose, so a rule written against a node
+   ;; works against the world.  WORLD-PROPS was the accessor's name before that
+   ;; and stayed in this list after the rename, exported and denoting nothing --
+   ;; REPLACE-CHILD fifty lines above, found the same way and fixed the same way.
+   ;; Gate 16 is the thing that will not let it happen a third time.
+   #:world-floats #:make-world #:world-focused-float
    #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
