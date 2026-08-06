@@ -537,6 +537,30 @@ read."
                                      count (char/= a b)))))
                    names)))))
 
+(defmacro printing (&body body)
+  "Run BODY, which writes to standard output, and exit 0.
+
+CLOSING THE PIPE IS NOT AN ERROR, and every listing flag used to treat it as
+one.  `latticewm --extension-surface | head' printed five lines and then a
+sixteen-frame SBCL backtrace, because SBCL turns EPIPE into a condition rather
+than letting the default SIGPIPE disposition kill the process the way every
+other program on the system does.  So the one command a person runs first to
+see whether a flag is worth reading in full ended in what looks like a crash.
+It applied to --list-options, --list-commands, --list-keys, --help and both
+surfaces: five documents whose whole purpose is to be piped into a pager or a
+grep.
+
+Answering 0 rather than SIGPIPE's 141 is deliberate: `head' exiting first is
+the reader's decision and not this program's failure, and a non-zero status
+there breaks `set -o pipefail' in exactly the scripts most likely to use these
+flags.  The output is flushed inside the handler's reach, so a broken pipe
+during the *final* flush at exit is caught here too rather than escaping into
+the debugger hook."
+  `(progn
+     (handler-case (progn ,@body (finish-output))
+       (#+sbcl sb-int:broken-pipe #-sbcl stream-error () nil))
+     (sb-ext:exit :code 0 :abort t)))
+
 (defun main ()
   "Entry point for the dumped image.
 
@@ -568,7 +592,7 @@ useful if a non-zero exit means what it says."
                   "Run `latticewm --help' for the whole command line.")
           (sb-ext:exit :code 2)))
       (cond
-        ((flag "--help") (write-string +usage+) (sb-ext:exit :code 0))
+        ((flag "--help") (printing (write-string +usage+)))
         ((flag "--version")
          (format t "~&LatticeWM ~a (river_window_manager_v1 v~d, ~
                     river_xkb_bindings_v1 v~d)~%"
@@ -588,17 +612,16 @@ useful if a non-zero exit means what it says."
            (format t "~&~:[~a already exists; left alone~;wrote ~a~]~%"
                    path (config-file))
            (sb-ext:exit :code 0)))
-        ((flag "--list-options") (print-options) (sb-ext:exit :code 0))
-        ((flag "--list-commands") (print-commands) (sb-ext:exit :code 0))
+        ((flag "--list-options") (printing (print-options)))
+        ((flag "--list-commands") (printing (print-commands)))
         ((flag "--list-keys")
-         (install-default-keymap) (print-keymap) (sb-ext:exit :code 0))
-        ((flag "--extension-surface")
-         (p:print-extension-surface) (sb-ext:exit :code 0))
+         (install-default-keymap)
+         (printing (print-keymap)))
+        ((flag "--extension-surface") (printing (p:print-extension-surface)))
         ;; The other surface.  A policy changes what the window manager
         ;; decides; a container kind changes what it can hold, and until this
         ;; existed the second one had no generated document at all.
-        ((flag "--container-surface")
-         (c:print-container-surface) (sb-ext:exit :code 0))
+        ((flag "--container-surface") (printing (c:print-container-surface)))
         (t
          (let* ((port (argument-value arguments "--swank-port"))
                 (started (start :swank-port (cond ((null port) :default)

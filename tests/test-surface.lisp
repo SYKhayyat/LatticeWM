@@ -650,3 +650,28 @@ not the same as a test that renders it.  These five are the rendering."
              "an instance that predates the redefinition has the new slot")
       (eval '(defclass c:leaf (c:node)
                ((window :initarg :window :initform nil :accessor c:leaf-window)))))))
+
+(test closing-the-pipe-on-a-listing-flag-is-not-an-error
+  "`latticewm --extension-surface | head' used to print five lines and then a
+sixteen-frame SBCL backtrace.
+
+SBCL turns EPIPE into a condition rather than letting the default SIGPIPE
+disposition kill the process the way every other program on the system does,
+so the one command a person runs first to see whether a document is worth
+reading in full ended in what looks like a crash.  It applied to every listing
+flag: --help, --list-options, --list-commands, --list-keys and both surfaces --
+five documents whose entire purpose is to be piped into a pager or a grep.
+
+The unit suite cannot close a pipe on a subprocess it does not have, so what is
+asserted here is the property that made the fix possible: each of these writes
+to a *stream argument*, so the whole document can be produced into a string and
+the flag handler is the only thing that touches standard output.  A printer
+that wrote to T directly could not have been wrapped."
+  (dolist (printer (list #'p:print-extension-surface #'c:print-container-surface))
+    (let ((text (with-output-to-string (out) (funcall printer out))))
+      (is (< 100 (length text))
+          "~a produced nothing when handed a stream" printer)))
+  ;; And the wrapper exists, takes a body, and is a macro -- so a flag added
+  ;; later gets the same treatment by using it rather than by remembering to.
+  (is (macro-function (find-symbol "PRINTING" '#:latticewm/runtime))
+      "RUNTIME::PRINTING is what every listing flag goes through"))
