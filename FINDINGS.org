@@ -525,7 +525,10 @@ about the world, and the harness is the thing you control.*
   WL-1", and cleared when grim exited. The integration suite could only assert
   this from constructed state; a screenshot tool is a real one.
 
-** The multi-monitor collapse came back, through a door the fix did not cover
+** The multi-monitor collapse came back, through a door the fix did not cover — *fixed, and there were two more doors*
+:PROPERTIES:
+:CUSTOM_ID: collapse
+:END:
 
 The table above records *Multi-monitor drew every window twice*, and
 =output-content='s docstring names the symptom precisely enough to quote:
@@ -567,6 +570,59 @@ one-workspace stack is the right answer. The integration suite runs a headless
 river, whose backend announces one output. The unit suite constructs worlds and
 so constructs their outputs. Every instrument was pointed at a one-monitor
 world, and the defect needs two monitors *and* a restore to exist.
+
+*** The fix, and the sentence above that was too kind to the design
+
+"The two mechanisms are each correct and their /order/ is not" is the shape of a
+scheduling mistake, and it named the door rather than the room. The room is
+this: *nothing owned the invariant.* =ensure-workspaces-for-outputs= was named
+after a moment — "called when an output appears" is the first line of its
+docstring — and six places wrote =(prop output :workspace)= directly, each of
+them individually right.
+
+So the restore is one door of at least three, and the second one needs no
+restore, no saved file and no unusual state at all:
+
+#+begin_example
+  clean two-monitor start:  (("HEADLESS-2" 0) ("HEADLESS-1" 1))  :distinct 2
+  cursor is on: "HEADLESS-2"
+  after (workspace 2):      (("HEADLESS-2" 1) ("HEADLESS-1" 1))  :distinct 1
+#+end_example
+
+*Two monitors, one keystroke, and the layout has collapsed.* ~show-workspace~
+set the property with no reference to what the other screen was showing. The
+third door is ~focus-window-anywhere~ in =runtime/tags.lisp=, which does the
+same thing when you follow a tagged window to its workspace.
+
+The repair is three things, and the middle one is the one that generalises:
+
+- ~ensure-workspaces-for-outputs~ states the *property* rather than the moment:
+  every output shows a workspace, no two show the same one, and the stack is
+  grown until that is possible. It repairs a duplicate assignment and an index
+  that has fallen out of range, neither of which it used to look at.
+- *It is asserted before every layout.* =RELAYOUT= is the one path to a screen,
+  it is idempotent, and in the case where nothing is wrong it is a ~length~, a
+  comparison and one pass over the outputs. No door into the workspace stack has
+  to remember any more, because there is nothing to remember.
+- ~show-workspace-on~ is the single writer of the property, and the two screens
+  *trade*: the other monitor takes the workspace this one was showing. Moving
+  the keyboard to the monitor that already has it — what i3 does — is a
+  defensible reading of the same request and is not this one, because here the
+  cursor is a place in a model rather than a consequence of which screen is
+  active.
+
+And ~output-content~'s clamp stays, demoted to a guard: it is what an extension
+that writes the property itself gets instead of a black screen. When two outputs
+do come back with the same node, the emitter now says so once, in the log,
+naming the symptom — which is the one thing that never happened in the whole
+history of this bug.
+
+*Measured both ways, on two real outputs, through the control socket.* Before:
+one workspace, both outputs on it, one distinct node between two screens, and
+two nodes placed twice each. After: two workspaces, two distinct nodes, nothing
+placed twice — and the clean-start switch above trades to =(("HEADLESS-2" 1)
+("HEADLESS-1" 0))= instead of collapsing. Six unit tests, in the case nobody had
+constructed: *a world with two outputs in it.*
 
 ** The drawn map paints over the echo area
 

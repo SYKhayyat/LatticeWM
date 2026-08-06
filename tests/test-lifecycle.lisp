@@ -457,6 +457,133 @@ still the shipped rule, and something else is now writable."
           "an index past the end of the stack is dropped, not clamped to it"))))
 
 ;;; ==================================================================
+;;; TWO MONITORS, AND THE ONE WORKSPACE BETWEEN THEM
+;;; ==================================================================
+;;;
+;;; MEASURED ON TWO REAL OUTPUTS, and invisible to everything that existed at
+;;; the time.  ENSURE-WORKSPACES-FOR-OUTPUTS was called when an output appeared
+;;; and nowhere else; restoring a saved layout replaces the workspace stack
+;;; afterwards, so a layout saved on one monitor and reloaded on two left one
+;;; workspace for two outputs.  OUTPUT-CONTENT clamps an index into range, both
+;;; outputs clamped to the same one, and the second monitor went black while its
+;;; status line reported `workspace 1/1, 0,0, 1 window'.
+;;;
+;;; Nothing could see it and the list of what looked is the finding: gate 14
+;;; fires every hook during the integration run, and :LAYOUT-RESTORED fires
+;;; there with *one* output, where a one-workspace stack is the right answer.
+;;; The integration suite drives a headless river, whose backend announces one
+;;; output.  The unit suite constructs worlds, and so constructs their outputs —
+;;; which is what these tests are, pointed at the case nobody had constructed.
+
+(defun two-monitor-world (workspaces &key (names '("WL-1" "WL-2")))
+  "A world with WORKSPACES workspaces and one output per name."
+  (let* ((stack (c:make-stack (leaves workspaces)))
+         (world (c:make-world :root stack))
+         (outputs (mapcar (lambda (name) (make-instance 'c:output :name name))
+                          names)))
+    (setf (c:world-outputs world) outputs)
+    (values world stack outputs)))
+
+(test a-layout-restored-onto-more-monitors-than-it-was-saved-with-does-not-collapse
+  (multiple-value-bind (world stack outputs) (two-monitor-world 1)
+    (destructuring-bind (left right) outputs
+      (let ((policy (make-instance 'p:conventional-policy)))
+        (let ((p:*policy* policy))
+          ;; The state as it was actually measured: the props are right, and
+          ;; there is one workspace for the two of them to be right about.
+          (setf (c:prop left :workspace) 0
+                (c:prop right :workspace) 1)
+          (is (eq (p:output-content policy world left)
+                  (p:output-content policy world right))
+              "without the repair both outputs clamp onto the one workspace
+               there is, which is the whole bug")
+          (p:ensure-workspaces-for-outputs world)
+          (is (= 2 (c:container-count stack))
+              "the stack grows to cover the monitors that are actually there")
+          (is (not (eq (p:output-content policy world left)
+                       (p:output-content policy world right)))
+              "and no two monitors are showing the same node"))))))
+
+(test two-outputs-that-both-claim-one-workspace-are-moved-apart
+  ;; The other half of the invariant, and the one the original lacked: the
+  ;; stack is big enough and the *assignment* is wrong.  Reachable from a state
+  ;; file written before this rule existed, and from an extension that writes
+  ;; the property itself.
+  (multiple-value-bind (world stack outputs) (two-monitor-world 4)
+    (destructuring-bind (left right) outputs
+      (setf (c:prop left :workspace) 2
+            (c:prop right :workspace) 2)
+      (let ((p:*policy* (make-instance 'p:conventional-policy)))
+        (p:ensure-workspaces-for-outputs world)
+        (is (= 4 (c:container-count stack))
+            "nothing is created, because there were enough already")
+        (is (= 2 (c:prop left :workspace))
+            "the first output keeps what it had")
+        (is (not (eql 2 (c:prop right :workspace)))
+            "and the second is moved off it")
+        (is (< -1 (c:prop right :workspace) 4)
+            "onto a workspace that exists")))))
+
+(test an-output-pointing-past-the-end-of-the-workspace-list-is-brought-back
+  (multiple-value-bind (world stack outputs) (two-monitor-world 2)
+    (declare (ignore stack))
+    (destructuring-bind (left right) outputs
+      (setf (c:prop left :workspace) 0
+            (c:prop right :workspace) 9)
+      (let ((p:*policy* (make-instance 'p:conventional-policy)))
+        (p:ensure-workspaces-for-outputs world)
+        (is (= 1 (c:prop right :workspace))
+            "an index with nothing behind it is repaired rather than clamped
+             onto whatever the last workspace happens to be")))))
+
+(test the-invariant-does-nothing-at-all-when-nothing-is-wrong
+  ;; It runs before every layout, so `cheap and idempotent' is part of the
+  ;; contract rather than an implementation note.
+  (multiple-value-bind (world stack outputs) (two-monitor-world 5)
+    (destructuring-bind (left right) outputs
+      (setf (c:prop left :workspace) 3
+            (c:prop right :workspace) 1)
+      (let ((p:*policy* (make-instance 'p:conventional-policy)))
+        (dotimes (n 3) (p:ensure-workspaces-for-outputs world))
+        (is (= 5 (c:container-count stack)) "no workspace was created")
+        (is (= 3 (c:prop left :workspace)))
+        (is (= 1 (c:prop right :workspace))
+            "and nobody was moved")))))
+
+(test switching-to-a-workspace-the-other-monitor-is-showing-trades-for-it
+  ;; The third door, and no restore is involved: two monitors, ask for the
+  ;; workspace the other one has, and both monitors used to end up on it.
+  (multiple-value-bind (world stack outputs) (two-monitor-world 4)
+    (destructuring-bind (left right) outputs
+      (setf (c:prop left :workspace) 0
+            (c:prop right :workspace) 2)
+      (let ((r::*world* world) (p:*policy* (make-instance 'p:conventional-policy)))
+        (r::show-workspace-on left 2)
+        (is (= 2 (c:prop left :workspace))
+            "the monitor you are looking at shows what you asked for")
+        (is (= 0 (c:prop right :workspace))
+            "and the other one takes the workspace you left, rather than
+             mirroring you")
+        (is (= 4 (c:container-count stack))
+            "and nothing was created to do it")))))
+
+(test trading-with-an-output-that-has-nothing-to-trade-leaves-the-invariant-to-fix-it
+  (multiple-value-bind (world stack outputs) (two-monitor-world 3)
+    (declare (ignore stack))
+    (destructuring-bind (left right) outputs
+      (setf (c:prop right :workspace) 1)
+      (let ((r::*world* world) (p:*policy* (make-instance 'p:conventional-policy)))
+        (r::show-workspace-on left 1)
+        (is (= 1 (c:prop left :workspace)))
+        (is (null (c:prop right :workspace))
+            "the other output is left with nothing, which is a state that
+             exists for as long as it takes to lay out")
+        (p:ensure-workspaces-for-outputs world)
+        (is (and (c:prop right :workspace)
+                 (/= 1 (c:prop right :workspace)))
+            "and the layout gives it one of its own before anything is drawn")))))
+
+;;; ==================================================================
 ;;; WHAT A NEW WORKSPACE IS MADE OF
 ;;; ==================================================================
 ;;;

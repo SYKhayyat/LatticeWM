@@ -738,17 +738,23 @@ running nested, which is where the devices exist. The libinput half of it
 as a decision, and cannot be exercised without real hardware behind it; the
 integration test says =skip= there rather than passing quietly.
 
-*Multi-monitor has been executed against two outputs, and has a known bug
-there.* river's Wayland backend takes =WLR_WL_OUTPUTS=2= and gives two real
-outputs at two origins, which is not two physical panels but is the same code;
-that run happened on 2026-08-06 and is written up in
+*Multi-monitor has been executed against two outputs, and the bug found there is
+fixed.* river's Wayland backend takes =WLR_WL_OUTPUTS=2= and its headless
+backend takes =WLR_HEADLESS_OUTPUTS=2=; either gives two real outputs at two
+origins, which is not two physical panels but is the same code. That run
+happened on 2026-08-06 and is written up in
 [[file:FINDINGS.org::#two-outputs][FINDINGS.org §two-outputs]]. One overlay per
-output is correct. A clean two-output start is correct. *Restoring a layout
-saved with fewer workspaces than there are outputs is not*: the workspace stack
-is not regrown after the restore, every output clamps to the last workspace, and
-the second monitor goes black while the model reports it is fine. Dock a laptop
-that saved its layout undocked and you will see it. Nothing is claimed here that
-is not either tested or stated as untested;
+output is correct, and a clean two-output start is correct. What was not: two
+outputs could end up showing the same workspace — after restoring a layout saved
+with fewer workspaces than there are monitors, and, it turned out, after a
+single press of a workspace key on a perfectly ordinary two-monitor session —
+and every window was then placed twice while the second monitor went black.
+*Every output shows a workspace of its own and no two show the same one* is a
+property the layout re-establishes on every pass now, rather than something the
+six places that assign one each had to remember; two monitors switching
+workspaces trade rather than collide. Measured before and after against two
+outputs, and covered by unit tests that build a world with two outputs in it.
+Nothing is claimed here that is not either tested or stated as untested;
 [[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of which is which.
 
 Other things that are honestly newer than the rest. *HiDPI scaling of what the

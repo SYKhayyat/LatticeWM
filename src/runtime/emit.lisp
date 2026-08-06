@@ -66,10 +66,28 @@ shows.  With a single output — which is every laptop — it is one call."
       ((null outputs)
        (guarded "layout" (p:layout-node policy root (c:make-rect 0 0 1920 1080))))
       (t
-       (let ((placed '()))
+       (let ((placed '())
+             (shown '()))
          (dolist (output outputs (nreverse placed))
            (multiple-value-bind (node prefix)
                (guarded "output-content" (p:output-content policy *world* output))
+             ;; SAID ONCE, AND ONLY WHEN IT HAPPENS.  Two outputs answering with
+             ;; the same node is the mistake OUTPUT-CONTENT's docstring names:
+             ;; every window is placed twice, the second placement wins, and the
+             ;; layout collapses onto the last output while the model reports
+             ;; that all is well.  It reached a real two-monitor desktop once,
+             ;; through a door the fix for it did not cover, and the thing that
+             ;; made it expensive is that nothing anywhere said a word.
+             ;; ENSURE-WORKSPACES-FOR-OUTPUTS makes it unreachable for the
+             ;; shipped policy; this is what an extension gets instead of a
+             ;; black screen.
+             (when (and node (member node shown))
+               (note-once :duplicate-output-content
+                          "~a and another output are showing the same node, so ~
+                           every window on it will be placed twice and the ~
+                           second screen will be blank.  See OUTPUT-CONTENT."
+                          (or (c:output-name output) "an output")))
+             (push node shown)
              (when node
                ;; Paths come back relative to NODE; rebase them onto the root so
                ;; that a placement is addressable globally and the cursor can be
@@ -144,6 +162,16 @@ should err towards calling it rather than reasoning about whether they must."
     (return-from relayout :deferred))
   (when force
     (clrhash (server-emitted *server*)))
+  ;; EVERY OUTPUT NEEDS A WORKSPACE OF ITS OWN, AND THIS IS THE PLACE THAT
+  ;; CANNOT BE FORGOTTEN.  It used to be asked only when an output appeared, so
+  ;; anything that replaced the workspace stack afterwards — a restored layout
+  ;; is the one that bit — left two monitors sharing one workspace, which draws
+  ;; every window twice and blacks out the second screen.  Asserting it here
+  ;; means no door into the workspace stack has to remember, because there is
+  ;; no way to reach a screen except through this function.  Idempotent, and a
+  ;; LENGTH and a comparison in the case where nothing is wrong, which is every
+  ;; call but a handful in the life of a session.
+  (guarded "workspaces for outputs" (p:ensure-workspaces-for-outputs *world*))
   ;; SET BEFORE THE LAYOUT AND LEFT STANDING, exactly like the two PROPs below.
   ;; BORDER-WIDTH is asked once by WINDOW-DIMENSIONS on the way down and once by
   ;; EMIT-BORDERS on the way out and the two have to agree; so does anything

@@ -276,7 +276,7 @@ You never edit this package.")
    #:*resize-amount*
    #:join-existing-split-p #:split-join-predicate
    ;; logging, and the boundary every policy method is called behind
-   #:logmsg #:guarded #:with-abandon #:install-debugger-hook
+   #:logmsg #:note-once #:guarded #:with-abandon #:install-debugger-hook
    #:*log-level* #:*log-stream* #:+log-levels+
    #:*log-file* #:*log-max-bytes* #:*log-keep* #:*log-to-stderr*
    #:default-log-file #:resolved-log-file #:close-log-file #:log-backtrace
@@ -450,6 +450,7 @@ You never edit this package.")
    #:argument-type-documentation
    #:*argument-types*
    #:logmsg
+   #:note-once
    #:guarded
    #:with-abandon
    #:install-debugger-hook

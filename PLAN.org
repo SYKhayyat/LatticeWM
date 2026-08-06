@@ -2553,3 +2553,39 @@ Two repairs, and the second is the one that generalises past this check:
 
 *Verified:* six consecutive =make integration= runs, six passes, against two in four and
 two in six on the same tree beforehand.
+
+** Every output shows a workspace of its own, and nothing owned that
+
+FINDINGS.org's writeup of the collapse ends "the two mechanisms are each correct
+and their /order/ is not", which is the shape of a scheduling mistake and names the
+door rather than the room. The room is that *nothing owned the invariant*:
+~ENSURE-WORKSPACES-FOR-OUTPUTS~ was named after a moment — "called when an output
+appears" — and six places wrote the =:workspace= property directly, each of them
+individually right.
+
+Which means the restore is one door of three, and the second needs no restore, no
+saved file and no unusual state at all. Measured against two headless outputs through
+the control socket, on a clean start:
+
+: clean two-monitor start:  (("HEADLESS-2" 0) ("HEADLESS-1" 1))  :distinct 2
+: after (workspace 2):      (("HEADLESS-2" 1) ("HEADLESS-1" 1))  :distinct 1
+
+Two monitors, one keystroke, layout collapsed. The third door is
+~FOCUS-WINDOW-ANYWHERE~, which does the same when you follow a tagged window.
+
+Three repairs, and the middle one is the general lesson:
+
+- ~ENSURE-WORKSPACES-FOR-OUTPUTS~ states the property rather than the moment, and
+  repairs a duplicate assignment and an out-of-range index — neither of which it used
+  to look at.
+- *It is asserted before every layout.* ~RELAYOUT~ is the one path to a screen; it is
+  idempotent and costs a ~length~ and a comparison when nothing is wrong. No door has
+  to remember, because there is nothing to remember. That is the difference between a
+  procedure and an invariant, and it is the same difference [[#log5][§log5]] found
+  between a convention and a surface.
+- ~SHOW-WORKSPACE-ON~ is the single writer, and the screens *trade*.
+
+~OUTPUT-CONTENT~'s clamp is demoted to a guard, and the emitter says so once in the
+log when two outputs do come back with the same node — the one thing that never
+happened in the whole history of this bug.
+

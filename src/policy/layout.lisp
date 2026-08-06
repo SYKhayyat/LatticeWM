@@ -291,7 +291,13 @@ window sliced in half."
 The index lives on the output's PROPS rather than in a slot, because which
 workspace a monitor is showing is exactly the kind of state that should not
 require a core class to grow a field — and because an extension that wants a
-different rule needs somewhere to put its own answer."
+different rule needs somewhere to put its own answer.
+
+THE CLAMP ON THE LAST LINE IS A GUARD AND NOT A DECISION, and for a while it
+was the only thing standing between two monitors and a collapsed layout — see
+ENSURE-WORKSPACES-FOR-OUTPUTS, which now runs before every layout so that an
+index out of range cannot arrive here at all.  It stays because an extension
+may write this property itself and a `nil' answer here is a black screen."
   (let ((stack (c:world-workspaces world)))
     (if (null stack)
         (values (c:world-root world) '())
@@ -316,30 +322,71 @@ until one exists.  ENSURE-WORKSPACES-FOR-OUTPUTS makes sure one does."
         0
         (min (or position 0) (max 0 (1- (c:container-count stack)))))))
 
-(defun ensure-workspaces-for-outputs (world)
-  "Grow the workspace list so every output can have one of its own.
+(defun free-workspace-index (taken count &optional preferred)
+  "The workspace an output can have, given the ones TAKEN by other outputs.
 
-Called when an output appears.  Without it, a second monitor arrives, finds
-only one workspace, and mirrors the first — which looks like a bug in the
-layout rather than an absence of workspaces."
+PREFERRED when it is in range and nobody has it, otherwise the lowest index
+nobody has.  COUNT is guaranteed to exceed the number of outputs by the time
+this is called, so there is always one — the last clause is a guard against
+being called out of order rather than a case that happens."
+  (if (and (integerp preferred) (< -1 preferred count)
+           (not (member preferred taken)))
+      preferred
+      (or (loop for index from 0 below count
+                unless (member index taken) return index)
+          0)))
+
+(defun ensure-workspaces-for-outputs (world)
+  "Every output shows a workspace, and no two outputs show the same one.
+
+THIS IS AN INVARIANT AND NOT A STEP IN A PROCEDURE, which is the whole of what
+was wrong with it.  It used to be called from exactly one place — the moment an
+output appeared — and its docstring described that moment rather than the
+property.  Restoring a saved layout afterwards replaces the workspace stack
+with the saved one, and nothing asked the question a second time: a layout
+saved on one monitor and reloaded on two left one workspace for two outputs,
+OUTPUT-CONTENT clamped both of them to the last valid index, and the two
+outputs returned the identical node.  Every window is then placed twice, the
+second placement wins, and the second monitor is black while the model insists
+everything is fine.  Both mechanisms were correct and their *order* was not,
+which is why every gate and both suites passed — there is no state in which
+either one is wrong on its own.
+
+So it is asserted before every layout now (see RELAYOUT) as well as when an
+output arrives, and it is idempotent and cheap: when the counts already agree
+it is a LENGTH, a comparison and one pass over the outputs.
+
+Three things, in this order:
+
+  * grow the stack until there are at least as many workspaces as outputs.
+    MAKE-WORKSPACE, not MAKE-LEAF: a monitor plugged in after startup must get
+    the same kind of workspace as the ones made at startup, or the second
+    screen shows a pane where the first shows a plane;
+  * give a workspace to any output that has not got one;
+  * and move an output off a workspace another output is already showing, or
+    off an index that is no longer in range.  That third clause is the one the
+    original lacked, and it is what makes this a repair rather than a
+    precaution — the state it fixes is reachable from a restore, from an
+    unplugged monitor, and from an extension that writes the property itself."
   (let ((stack (c:world-workspaces world))
-        (wanted (length (c:world-outputs world))))
+        (outputs (c:world-outputs world)))
     (when stack
-      (loop while (< (c:container-count stack) wanted)
+      (loop while (< (c:container-count stack) (length outputs))
             do (let ((index (c:container-count stack)))
-                 ;; MAKE-WORKSPACE, not MAKE-LEAF: a monitor plugged in after
-                 ;; startup must get the same kind of workspace as the ones
-                 ;; made at startup, or the second screen shows a pane where
-                 ;; the first shows a plane.
                  (c:insert-child stack index
                                  (or (guarded "make-workspace"
                                        (make-workspace (current-policy) world index))
                                      (c:make-leaf)))))
-      (loop for output in (c:world-outputs world)
-            for index from 0
-            do (unless (c:prop output :workspace)
-                 (setf (c:prop output :workspace)
-                       (min index (1- (c:container-count stack))))))
+      (let ((count (c:container-count stack))
+            (taken '()))
+        (loop for output in outputs
+              for position from 0
+              for index = (c:prop output :workspace)
+              do (unless (and (integerp index) (< -1 index count)
+                              (not (member index taken)))
+                   (setf index (free-workspace-index taken count position)
+                         (c:prop output :workspace) index))
+                 (push index taken)))
       stack)))
 
 (defmethod outer-rect ((policy layout-policy) (output c:output))

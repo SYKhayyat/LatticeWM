@@ -211,6 +211,25 @@ nobody is reading.  T and NIL force it.")
                        (string-downcase level) format arguments))))
   nil)
 
+(defvar *notes-said* (make-hash-table :test #'eq)
+  "The KEYs NOTE-ONCE has already said something about.")
+
+(defun note-once (key format &rest arguments)
+  "Say something at :WARN the first time KEY comes up, and never again.
+
+For the diagnostics that live on a path taken sixty times a second.  A relayout
+notices things — two outputs showing one workspace, a policy answering
+nonsense — that are worth exactly one line in the log and are worth *nothing*
+repeated until the log is unreadable, which is the same as not saying it.
+
+KEY is compared with EQ and is normally a keyword naming the condition rather
+than the message, so that a message with a monitor's name in it does not
+become a different note on each screen."
+  (unless (gethash key *notes-said*)
+    (setf (gethash key *notes-said*) t)
+    (apply #'logmsg :warn format arguments))
+  nil)
+
 (defun log-backtrace (&optional (count 30))
   "Put a backtrace in the log.  Never signals."
   (ignore-errors

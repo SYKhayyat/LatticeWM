@@ -131,8 +131,10 @@ nothing."
            (let ((stack (workspace-stack)))
              (when (and stack (first path))
                (setf (c:container-selection stack) (first path))
-               (let ((output (current-output)))
-                 (when output (setf (c:prop output :workspace) (first path))))))
+               ;; Through SHOW-WORKSPACE-ON, so that following a window to a
+               ;; workspace the *other* monitor is showing trades for it rather
+               ;; than putting both monitors on one workspace.
+               (show-workspace-on (current-output) (first path))))
            (p:jump-cursor (policy) *world* path)
            (mark-dirty)
            (request-manage)

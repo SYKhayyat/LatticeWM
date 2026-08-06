@@ -200,6 +200,38 @@ the compositor's side."
     (logmsg :info "output removed: ~s" output))
   nil)
 
+(defun show-workspace-on (output index)
+  "Make OUTPUT display workspace INDEX, and trade with whoever had it.
+
+THE ONE WRITER OF :WORKSPACE, which is what was missing.  Six places set that
+property directly and each of them was individually right; between them they
+could put two monitors on one workspace, and two outputs showing one workspace
+is the layout collapsing onto the last of them with the second screen blank.
+Switching workspaces on a two-monitor desktop reached it without any restore
+being involved: show workspace 2 while the other monitor is already showing 2
+and both monitors were showing 2.
+
+*They trade.* The other screen takes the workspace this one was showing, which
+is the answer that leaves both monitors displaying something and leaves you
+looking at what you asked for.  The alternative — moving the keyboard to the
+monitor that already has it — is what i3 does and is a defensible reading of
+the same request; it is not this one, because here the cursor is a place in a
+model rather than a consequence of which screen is active, and a command that
+moved it to another monitor would be answering a question nobody asked.
+
+If the other output had nothing to trade back it is left with no workspace, and
+ENSURE-WORKSPACES-FOR-OUTPUTS gives it one before anything is drawn."
+  (when (and output (integerp index))
+    (let ((other (output-showing-workspace index))
+          (was (c:prop output :workspace)))
+      (when (and other (not (eq other output)))
+        (setf (c:prop other :workspace) was)
+        (logmsg :debug "~a takes workspace ~@[~d~] from ~a"
+                (or (c:output-name other) "an output")
+                (and was (1+ was))
+                (or (c:output-name output) "an output")))
+      (setf (c:prop output :workspace) index))))
+
 (defun rehome-orphaned-workspace (index)
   "Make sure the workspace INDEX was showing is still on a screen somewhere.
 
@@ -216,7 +248,7 @@ no outputs left at all there is nothing to be done and nothing to see."
         (when (and adopter (c:world-focused-float *world*))
           (setf (c:world-focused-float *world*) nil))
         (when adopter
-          (setf (c:prop adopter :workspace) index)
+          (show-workspace-on adopter index)
           (let ((stack (c:world-workspaces *world*)))
             (when stack (setf (c:container-selection stack) index)))
           (p:repair-cursor (p:current-policy) *world*)

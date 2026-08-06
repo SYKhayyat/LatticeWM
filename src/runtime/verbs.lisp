@@ -356,9 +356,14 @@ new number, and every key doing something invisible.  That is the same failure
 RESTORE-OUTPUT-WORKSPACES has a paragraph about, reached by a different road,
 and it survived because the model was right the whole time.
 
-So both commands go through here."
+So both commands go through here.
+
+AND THROUGH SHOW-WORKSPACE-ON, which is the half that only matters on two
+monitors: asking for a workspace the other screen is already showing used to
+put both screens on it, and two outputs showing one workspace is a collapsed
+layout and a blank second monitor.  They trade there."
   (let ((output (current-output)))
-    (when output (setf (c:prop output :workspace) index))
+    (show-workspace-on output index)
     (setf (c:container-selection stack) index)
     (p:jump-cursor (policy) *world* (list index))
     (run-hooks :workspace-changed index)
