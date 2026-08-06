@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, eleven gates, 1400+ checks
+make               # build, twelve gates, 1400+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -104,6 +104,17 @@ letters are what you use on your hundredth.
 | =Super+e=               | equalize this container (=Shift= for all)   |
 | =Shift+Super+q=         | clear the pane                              |
 
+#+CLAIM: (every (lambda (row) (equal (rest row) (lookup-key *keymap* (kbd (first row)))))
+#+CLAIM:        '(("Super+Return" "terminal") ("Super+d" "split" :horizontal)
+#+CLAIM:          ("Super+s" "split" :vertical) ("Super+q" "close")
+#+CLAIM:          ("Super+h" "focus" :left) ("Super+j" "focus" :down)
+#+CLAIM:          ("Super+k" "focus" :up) ("Super+l" "focus" :right)
+#+CLAIM:          ("Super+Left" "focus" :left) ("Super+Right" "focus" :right)
+#+CLAIM:          ("Super+Tab" "focus-next") ("Super+Shift+Tab" "focus-previous")
+#+CLAIM:          ("Super+Shift+h" "move" :left) ("Super+Ctrl+h" "resize" :left)
+#+CLAIM:          ("Super+Alt+h" "swap" :left) ("Super+e" "equalize")
+#+CLAIM:          ("Super+Shift+e" "equalize-all") ("Super+Shift+q" "clear")))
+
 ** Windows
 
 | =Super+Space=       | float this window / put it back      |
@@ -115,6 +126,14 @@ letters are what you use on your hundredth.
 | =Super+z=           | undo the last layout change (=Shift+Super+z= redoes) |
 | =Super+-=           | show/hide a named scratchpad (=Shift+Super+-= puts one away) |
 | =Super+t=           | tag this window (=Shift+Super+t= jumps to a tag) |
+
+#+CLAIM: (every (lambda (row) (equal (rest row) (lookup-key *keymap* (kbd (first row)))))
+#+CLAIM:        '(("Super+space" "toggle-float") ("Super+grave" "focus-float")
+#+CLAIM:          ("Super+f" "toggle-fullscreen") ("Super+m" "minimize")
+#+CLAIM:          ("Super+Shift+m" "restore-last") ("Super+w" "tab")
+#+CLAIM:          ("Super+Shift+w" "untab") ("Super+bracketleft" "tab-previous")
+#+CLAIM:          ("Super+bracketright" "tab-next") ("Super+z" "undo")
+#+CLAIM:          ("Super+Shift+z" "redo")))
 
 Minimize leaves the tiling tree rather than collapsing it, so restoring puts
 the window back where it was. Floating and unfloating do the same, so looking
@@ -140,6 +159,14 @@ plain left-click cannot be used with any application.
 | =Shift+Super+1= … =Shift+Super+0= | send this window there |
 | =Super+n=                   | a new workspace             |
 | =Super+PageUp= / =PageDown= | previous / next workspace   |
+
+#+CLAIM: (every (lambda (row) (equal (rest row) (lookup-key *keymap* (kbd (first row)))))
+#+CLAIM:        '(("Super+1" "workspace" 1) ("Super+0" "workspace" 10)
+#+CLAIM:          ("Super+Shift+1" "send-to-workspace" 1)
+#+CLAIM:          ("Super+Shift+0" "send-to-workspace" 10)
+#+CLAIM:          ("Super+n" "new-workspace")
+#+CLAIM:          ("Super+Prior" "previous-workspace")
+#+CLAIM:          ("Super+Next" "next-workspace")))
 
 Workspaces are one-based, so the key and the number on it agree.
 
@@ -355,15 +382,10 @@ Four worked examples are in =examples/=, including a whole alternate layout
 model in one method and a new *container kind* — niri's scrolling strip — in
 sixty lines. [[file:doc/EXTENDING.org][doc/EXTENDING.org]] walks through them.
 
-=tools/wmeval= evaluates a form inside the running window manager from a shell,
-CI, or an agent, over SWANK's wire protocol and without Emacs:
-
-#+begin_src sh
-wmeval '(length (all-windows))'
-wmeval '(setf *gaps* 8)' '(relayout :force t)'
-#+end_src
-
 * Scripting it
+:PROPERTIES:
+:CUSTOM_ID: scripting
+:END:
 
 There is a control socket — a Unix socket in =$XDG_RUNTIME_DIR=, mode 0600 —
 and the binary is its own client:
@@ -382,6 +404,10 @@ A SWANK server is available too and is *off by default*: it offers arbitrary
 code execution over TCP with no authentication step, which is right for a
 development tool and wrong for something that starts before you have done
 anything. Turn it on with =--swank-port 4005=, and it binds to loopback.
+=tools/wmeval= speaks SWANK's wire protocol directly rather than the socket, so
+it is the one thing here that needs that flag.
+
+#+CLAIM: (null (option-default :swank-port))
 
 #+begin_src sh
 latticewm --check-config    # load your init.lisp, report problems, exit
@@ -402,7 +428,7 @@ make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Eleven gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Twelve gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -413,11 +439,28 @@ pinned XML; how many policy generics have ever been answered from *outside*
 =src/= staying above a floor; every declared hook run and every run hook declared; every
 event handled existing on the interface it is handled for; the image, the
 installer and the shipped configuration agreeing about where an extension
-lives; no container kind named by class outside its own definition; and every
-registered option read by something. The
+lives; no container kind named by class outside its own definition; every
+registered option read by something; and every claim these documents make
+about the program still being true of it. The
 reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
 
-Gate 11 is the newest and it is a question the other ten could not ask.
+Gate 12 is the newest and it is the only one that reads a sentence. Eleven
+gates point at the code and none of them can see a paragraph, so when SWANK
+was turned off by default — correctly; it was unauthenticated code execution
+started before the user had done anything — the first instruction in the
+extension guide became false and every check passed. The same had already
+happened three times over: this file said the layer-shell and HiDPI paths were
+"exercised by the test suite" when nothing referenced them, =*smart-gaps*= was
+documented as working while nothing read it, and the plan's own written
+ceiling of thirty policy generics went on saying thirty while the count
+reached sixty-five. So a document is now declared *current* or *historical*,
+every option a current document names must exist, and any sentence can be
+pinned to the image with a =#+CLAIM:= line that the build evaluates. It cannot
+find a false sentence nobody annotated, and nothing honest can; what it can do
+is make one pinnable for the cost of a line, and refuse to let a document
+arrive unclassified.
+
+Gate 11 came before it and is a question the other ten could not ask.
 =*smart-gaps*= was registered, exported, documented, printed by
 =--list-options= and described as working in a generated document — and read
 by nothing, from the commit that added it until the one that added the gate.
@@ -442,6 +485,8 @@ the system's behaviour should live above the boundary — is right, so gate 6 no
 asks it directly and unmovably: *how many policy generics has anybody outside
 =src/= ever specialised?* The answer today is 15 of 65, which is a much less
 flattering number than 0.99 and is the actual state of the extension surface.
+
+#+CLAIM: (= 65 (length (policy-generics)))
 
 =make integration= is the one that is different in kind. It runs river on a
 headless backend, connects to it as the ordinary Wayland client this program

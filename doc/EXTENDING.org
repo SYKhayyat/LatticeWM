@@ -45,11 +45,12 @@ Both are generated from the running image, so neither can be out of date, and
 both list the methods *you* have added — which is how you check that your
 configuration file was actually loaded.
 
-And a session that is already up, over the control socket:
+And a session that is already up, over the control socket — which is on by
+default and needs no flag:
 
 #+begin_src sh
-wmeval --tree        # the layout right now
-wmeval --state       # cursor, window count, active policy
+latticewm --eval '(world-cursor *world*)'      # where focus is right now
+latticewm --eval '(policy-name (current-policy))'
 #+end_src
 
 And from inside, ~describe~ works on everything:
@@ -148,7 +149,8 @@ Three rules, and the third is the one that bites:
    the common case.
 3. *Do not reimplement the caller.* If you find yourself copying a shipped
    method in order to change three lines of it, the thing you want to change is
-   probably its own generic. Look for it in ~wmeval --surface~ first.
+   probably its own generic. Look for it in ~latticewm --extension-surface~
+   first.
 
 ** A worked one
 
@@ -197,9 +199,12 @@ applies it to everything already plugged in.
 | ~input-settings~ | how should this keyboard or touchpad be configured? |
 | ~keyboard-layout-for~ | which xkb layout does this keyboard want? |
 
-~wmeval --surface~ prints every one with its contract and with the methods that
-currently answer it — including yours, which is how you check that your file
-was actually loaded. Do not count them from this table; ask.
+~latticewm --extension-surface~ prints every one with its contract and with the
+methods that currently answer it — including yours, which is how you check that
+your file was actually loaded. Do not count them from this table; ask. There
+are sixty-five, and this table shows the dozen you are most likely to want.
+
+#+CLAIM: (= 65 (length (policy-generics)))
 
 ** The six protocols
 
@@ -486,15 +491,34 @@ key names the verb and the verb collects its own object.
 
 This is the part the language was chosen for, so it is worth doing properly.
 
-1. Start the window manager. SWANK is listening on port 4005.
-2. Connect: ~M-x slime-connect~ from Emacs, or use ~wmeval~ from a shell.
-3. Evaluate. Watch. Correct. Evaluate again.
+1. Start the window manager. The control socket is already there: a Unix socket
+   in =$XDG_RUNTIME_DIR=, mode 0600, on by default.
+2. Evaluate into it with =latticewm --eval=, from a shell, a script, or an agent.
+3. Watch. Correct. Evaluate again.
 
 #+begin_src sh
-wmeval '(setf *gaps* 20)' '(relayout)'
-wmeval '(defmethod border-width ((p conventional-policy) node focused)
-          (if focused 6 1))' '(relayout :force t)'
+latticewm --eval '(setf *gaps* 20)' --eval '(relayout)'
+latticewm --eval '(defmethod border-width ((p conventional-policy) node focused)
+                    (if focused 6 1))' --eval '(relayout :force t)'
 #+end_src
+
+*SWANK is off by default and you have to ask for it.* It is a TCP server
+offering arbitrary code execution with no authentication step, which is right
+for a development tool and wrong for something that starts before you have done
+anything, so it is opt-in and binds to loopback:
+
+#+CLAIM: (null (option-default :swank-port))
+#+CLAIM: (eq t (option-default :ipc-socket))
+
+#+begin_src sh
+latticewm --swank-port 4005      # or (setf *swank-port* 4005) in init.lisp
+#+end_src
+
+With it running, ~M-x slime-connect~ from Emacs gets you the full editor
+integration — completion, the inspector, and a backtrace you can restart from —
+which is worth the flag for a session you intend to spend the afternoon in. The
+socket is what to reach for otherwise: it needs no flag, no editor and no Lisp
+on the far end.
 
 Two things to know:
 
@@ -516,8 +540,8 @@ tree is intact, and you can fix the function from inside the desktop it is
 misplacing windows in.
 
 #+begin_src sh
-wmeval --state          # what does it think is going on?
-wmeval --tree           # what is the layout actually?
+latticewm --eval '(world-cursor *world*)'    # where does it think focus is?
+latticewm --eval '(length (all-windows))'    # what does it think it is managing?
 latticewm --log-level debug
 #+end_src
 
@@ -539,3 +563,38 @@ Recorded so you do not spend an afternoon trying.
 - *Focus is a place, not a window.* Structural. Everything downstream assumes a
   cursor into the tree exists. Every behaviour you would want from the
   window-model is reachable as policy on top of this one; the reverse is not.
+
+* If you change this page
+
+Every sentence here is a claim about a program that moves, and this page has
+been wrong before: its development loop opened with "SWANK is listening on port
+4005" for as long as it took somebody to read it after SWANK was turned off by
+default, with eleven build gates passing the whole time.
+
+So gate 12 reads this file. Two things follow for anyone editing it.
+
+*Every earmuffed name you write in code markup has to be a real option.*
+Automatic; you do not have to do anything. Name one the program does not have
+and the build fails with the line number. This also means you cannot use an
+earmuffed placeholder — write "an option" rather than a fake one — which is a
+small cost and the reason the check has no false positives to argue with.
+
+*Any sentence can be pinned to the running program with one line.* A =#+CLAIM:=
+keyword holds a form, which is read in ~latticewm/user~ — the same package your
+configuration file is read in, so it says what you would say — and evaluated
+against the loaded image on every build. NIL fails, naming the file, the line,
+the form, and the sentence above it.
+
+#+begin_example
+There are sixty-five policy generics.
+#+CLAIM: (= 65 (length (policy-generics)))
+#+end_example
+
+Consecutive =#+CLAIM:= lines are one run, and every complete form in the run is
+one claim, so a long one can be spread over several lines. The form has to
+name something the program owns — ~#+CLAIM: t~ is itself a failure, because a
+gate that can be told it passes is not a gate.
+
+It cannot catch a false sentence nobody pinned, and nothing honest could. What
+it does is make the pinning cost one line, so the sentences that carry a number
+or a default can stop being promises.

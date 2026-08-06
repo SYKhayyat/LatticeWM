@@ -523,6 +523,9 @@ consequences had all four shapes at once:
 - *Nothing anywhere said how many members there are.* This file's own
   [[#free][what you get for free]] list is the closest thing, and it lists what a
   kind /inherits/ rather than what it must answer. The number is *nineteen*.
+
+  #+CLAIM: (= 19 (length (container-protocol-generics)))
+
   Six of them have defaults that are correct for a dense integer-addressed
   container and wrong for anything else, which is what makes skipping them
   silent: a grid written with the source open answered the obvious six, loaded
@@ -649,7 +652,15 @@ the most expensive of the three: it needs somebody to distrust a green build.
 *These numbers were wrong here for three commits* — this block said 1,049 lines
 and 16 defmethods while [[#short][the short version]] forty lines above said 1,941
 and 26, in the same file. The lattice's line count appeared in four places and
-three of them disagreed. Nothing checks that a sentence in an =.org= file is
-still true about the program, which is the gate this project does not have; gate
-3 prints the live numbers on every build, so the honest instruction to a reader
-is to believe =make gates= over this table.
+three of them disagreed.
+
+That sentence used to end "nothing checks that a sentence in an =.org= file is
+still true about the program, which is the gate this project does not have."
+*It has it now* — gate 12, which classifies every prose document as current or
+historical, checks that every option a current one names exists, and evaluates
+any sentence pinned with a =#+CLAIM:= line against the loaded image.
+
+It does not pin the two numbers in this table, and the reason is worth saying:
+they are facts about *files*, and a claim may only ask the running program,
+because a claim that can read the source could be satisfied by the source. Gate
+3 counts them on every build instead. Believe =make gates= over this table.

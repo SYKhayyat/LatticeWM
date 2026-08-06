@@ -91,6 +91,7 @@ What the launcher commands run.
 .B *modifier*
 The modifier every default binding hangs off, :SUPER by default.  Change this
 one value and the whole keymap moves with it.
+.\" CLAIM: (eq :super (option-default :modifier))
 .TP
 .B *xkb-layout* *xkb-variant* *xkb-options* *xkb-model* *xkb-rules*
 The keyboard layout itself, e.g. \(lqde\(rq or \(lqus,de\(rq.  This changes
@@ -147,6 +148,8 @@ window.  With
 on \(em the default \(em the outer gap and the border are dropped when a single
 pane is alone on a screen, because there is nothing there for either to
 separate.  An empty pane beside a window is a second pane and keeps both.
+.\" CLAIM: (eq t (option-default :smart-gaps))
+.\" CLAIM: (option-readers :smart-gaps)
 .IP
 The first three share a name with a policy generic, and the relationship is
 always the same: the generic is the extension point and the option is what its
@@ -235,6 +238,7 @@ and
 It offers arbitrary code execution with no authentication step, which is right
 for a development tool and wrong for something that starts before the user has
 done anything.
+.\" CLAIM: (null (option-default :swank-port))
 .SH FILES
 .TP
 .I ~/.config/latticewm/init.lisp

@@ -108,6 +108,15 @@ already established that ~set_content_clip_box~ renders the partial trailing cel
 cleanly, with the border redrawn at the clip edge, free, from the compositor. D22 traded
 a cosmetic problem that the compositor solves for a functional one that it does not.
 
+*And that ruling was itself reversed while this paragraph went on stating it.*
+[[#log][§log]] records the reason — on a uniform lattice ~exact-fit~ panning resizes
+nothing, and columns are uniform until somebody resizes one, so the cost the ruling
+above was avoiding is a cost only the people who have already opted into it pay.
+~*zoom-mode*~ ships as ~:FIT~; both solvers are still two methods on one generic, so
+the flip is one ~setf~ in either direction. D22 stands.
+
+#+CLAIM: (eq :fit (option-default :zoom-mode))
+
 This is a one-line default change, not a redesign, and it is reversible by config.
 
 * Architecture
@@ -183,6 +192,19 @@ hold in their head is not a surface.
 
 Thirteen. If this list reaches thirty, the decomposition has gone wrong in the direction
 of ceremony. If it drops below ten, it has gone wrong in the direction of a monolith.
+
+*That was written on day one and the list is at sixty-five.* The threshold was
+right to write down and wrong to leave unrevised: it was blown through by a factor
+of two while this paragraph went on saying thirty, which is what a number nobody is
+made to argue with does. The live version of it is
+[[file:tests/test-surface.lisp::24][=tests/test-surface.lisp:24=]], whose ~(<= 10 n 65)~
+sits under a comment recording every occasion the ceiling was raised and why —
+that is where the reasoning now lives, and it is the file to argue with before
+adding number sixty-six. The count itself is printed by gate 2 on every build,
+and gate 6 prints the number that matters more: how many of them anything outside
+=src/= has ever answered.
+
+#+CLAIM: (= 65 (length (policy-generics)))
 
 * What extensibility is actually worth here
 :PROPERTIES:
@@ -292,7 +314,7 @@ a weak model editing a monolith.
 All six run on every commit from day one. They are cheap and they are the only automated
 defence the project has.
 
-/There are eleven now. The six planned here are below; the five that were added are in
+/There are twelve now. The six planned here are below; the six that were added are in
 [[#gates-added][§gates-added]], because each of them exists for a bug that had already
 shipped and the bug is the reason./
 
@@ -344,7 +366,7 @@ lattice that is three hundred lines of methods is the thesis holding. One that i
 thousand lines re-implementing geometry is the thesis failing while wearing the gate's
 uniform.
 
-** The five that were added
+** The six that were added
 :PROPERTIES:
 :CUSTOM_ID: gates-added
 :END:
@@ -388,6 +410,47 @@ existed were individually reasonable and all pointed somewhere else.
     compiler's answer is about the program, sees a read inside a macro expansion, and
     cannot be satisfied by prose. The same function answers the generated document's
     ~read by:~ line, so the check and the documentation cannot disagree about it.
+12. *Every claim the documents make about the program is still true of it.*
+    [[file:doc/EXTENDING.org][doc/EXTENDING.org]]'s development loop opened with
+    "Start the window manager. SWANK is listening on port 4005." ASSESSMENT U1 turned
+    SWANK off by default, correctly, and the first instruction in the extension guide
+    became false. Eleven gates, two test suites and a CI workflow passed on every build
+    after that, because *not one of them can read a paragraph.*
+
+    It was not an isolated slip. README said the HiDPI, layer-shell and drag-resize
+    paths were "all three exercised by the test suite" and none of the three had a
+    single test reference. ~*smart-gaps*~ was documented as working in three places
+    while nothing read it — gate 11 catches the option and nothing caught the
+    sentences. [[#generics][§generics]] above said "if this list reaches thirty" while
+    the list stood at sixty-five. And the lattice's line count appeared in four places
+    and three of them disagreed, in two files, one of which contradicted itself forty
+    lines apart.
+
+    *This is the gate a project with this thesis cannot do without.* The bet in
+    [[#extensibility-real][§extensibility-real]] routes entirely through /there is a
+    documented generic for the thing you want to change/: a stranger who cannot trust
+    the document is a stranger reading the source, which is the situation the document
+    exists to prevent. Every other gate defends the code from the code. This one
+    defends the reader.
+
+    Three checks, deliberately of different kinds. *Every prose file is classified* —
+    /current/, describing the program as it is, or /historical/, a dated record frozen
+    on purpose — and a file in neither fails, so a new document cannot arrive unread.
+    *Every option a current document names is registered*, automatically and without
+    anyone's cooperation, read from code markup rather than raw text because org's bold
+    syntax is also asterisks and a check with false positives is a check that gets
+    weakened. And *~#+CLAIM:~ makes a sentence executable*: an org keyword holding a
+    form, read in ~latticewm/user~ — the package a config file is read in — and
+    evaluated against the loaded image, failing the build with the file, the line, the
+    form and the sentence above it. A claim must name something the program owns, or
+    ~#+CLAIM: t~ would be a gate that can be told it passes.
+
+    *What it does not do, said plainly:* it cannot find a false sentence nobody
+    annotated, and there is no honest way to make it. What it can do is make a sentence
+    pinnable for the cost of one line, catch the naming rot automatically, and refuse a
+    document that arrives unclassified. The claim count is printed with no floor,
+    because prose is deleted along with the thing it described; the two automatic
+    checks are what stop it becoming a no-op if the claims went away.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:
@@ -623,6 +686,23 @@ labels, pan animation, bonds, the ~compact~ family, workspaces beyond a flat lis
 Cutting ~wl_shm~ is a bonus rather than a loss: it removes the least-proven part of
 wayflan from the critical path.
 
+*Four of those came back, and the reason is the same reason in each case: ~wl_shm~
+turned out to be cheap.* It is =src/runtime/surface.lisp=, written once, and it has
+five consumers — the cursor, the echo area, the help overlay, the drawn map and the
+coordinate overlay. Once the first one existed the rest were a few hundred lines
+between them. So the drawn map shipped (=lattice/map.lisp=, which opens by arguing
+DESIGN's ruling on it rather than accepting the cut), and named cells shipped with it
+(~name-cell~, ~goto-name~, ~goto-named-cell~). Workspaces went past a flat list too:
+they are a stack at the root of the tree with no configured count.
+
+What stayed cut: ephemeral jump labels, pan animation, bonds ([[file:DESIGN.org::#d16][D16]]),
+and the ~compact~ family — the last on merit rather than budget, since
+[[file:DESIGN.org::#d6][D6]] made the lattice infinite and there is no scarcity to
+compact *for*.
+
+#+CLAIM: (find-command "name-cell")
+#+CLAIM: (find-command "goto-name")
+
 *One thing is deliberately un-cut, and the reason matters.* DESIGN calls two-dimensional
 navigation "the single biggest design risk" and names three mitigations: the minimap,
 named cells, and the coordinate overlay ([[file:DESIGN.org::#d5][D5]]). The cut list
@@ -656,7 +736,7 @@ not reopen them as research.
 | Config schema | ~~/.config/latticewm/init.lisp~. Plain Lisp, loaded at startup. Every P1 fork a ~defparameter~. |
 | Multi-monitor | One model, one viewport per output. |
 | ~exit_session~ / ~stop~ / ~set_xcursor_theme~ | ~exit_session~ bound to a quit command. ~stop~ unused; hot-swap is kill-and-relaunch. ~set_xcursor_theme~ read from config at startup. |
-| Flat bindings or submaps | Flat for v0.1. ~ensure_next_key_eaten~ submaps in Phase 6. |
+| Flat bindings or submaps | Flat for v0.1. ~ensure_next_key_eaten~ submaps in Phase 6. *Reversed:* submaps shipped in v0.1 — the =Super+?= chord, recorded in [[#log2][§log2]]. |
 | The name | Keep *LatticeWM* until something better arrives. It is a rename, not a decision. |
 
 * Checkpoints and abort conditions

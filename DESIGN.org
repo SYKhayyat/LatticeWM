@@ -64,6 +64,95 @@ River ships *six* protocols, not two. ~manage_start~ and
 prebuilt, and runs nested — so the "get access to a machine running river"
 critical path in [[#next][Next actions]] never existed.
 
+* What of this is still true
+:PROPERTIES:
+:CUSTOM_ID: still-true
+:END:
+
+*Read this before the two thousand lines below it.* Freezing this document was
+right and stays right — editing a design record into agreement with whatever
+shipped destroys its only value, which is showing where the plan was wrong. But
+freezing was cheap on day 15 and expensive on day 25, because a stranger now
+pays the whole file to find out which parts are load-bearing. This section is
+the map. It does not correct anything below; it says what happened to it.
+
+*The short version.* Of the twenty-two numbered decisions, sixteen shipped as
+written. One was overturned inside this document ([[#d11][D11]], by
+[[#d22][D22]]). One shipped with its mechanism replaced ([[#d19][D19]]). One
+shipped under a name neither this file nor the plan used ([[#d20][D20]]). Three
+were never built ([[#d13][D13]], [[#d15][D15]], [[#d16][D16]]), and one of those
+three for a reason this document would have accepted. Nothing below has been
+edited.
+
+** The decisions, and what became of them
+
+| | Decision | What happened |
+|---+---+---|
+| [[#d1][D1]] | Four-layered addressing | *Shipped.* =lattice/grid.lisp=; ~goto~ takes the coordinates. |
+| [[#d2][D2]] | Origin ~(0,0)~, +Y is up | *Shipped*, and the "one sign inversion at the boundary" held literally: it is ~lattice/policy.lisp:148~ and nowhere else. |
+| [[#d3][D3]] | Two motion speeds, raw step the default | *Shipped* as the ~step-address~ / ~motion-escapes-p~ pair, which is also how a policy replaces it. |
+| [[#d4][D4]] | Direct coordinate jump | *Shipped* as ~goto~. |
+| [[#d5][D5]] | Coordinate overlay | *Shipped*, =lattice/overlay.lisp=. Named in [[file:PLAN.org::#cuts][PLAN §cuts]] as the one anti-get-lost mitigation that must not be cut, and it was not. |
+| [[#d6][D6]] | The lattice is genuinely infinite | *Shipped*, and it is load-bearing downstream: it is the reason ~compact~ was never needed. |
+| [[#d7][D7]] | Three verbs — zoom, resize, pan — that never overlap | *Shipped.* The lattice's command list is exactly those three families. |
+| [[#d8][D8]] | Spreadsheet geometry | *Shipped.* |
+| [[#d9][D9]] | Cells contain recursive split trees | *Shipped*, and it became the whole model rather than a cell-level detail — see [[file:PLAN.org::#delta-1][PLAN Delta 1]], which built it once instead of twice. |
+| [[#d10][D10]] | Zoom is an integer multiplier | *Shipped* as ~*zoom-ladder*~ — 1, 2, 4, 6, 8. |
+| [[#d11][D11]] | Pan and zoom never resize a window | *Overturned by [[#d22][D22]], in this document.* |
+| [[#d12][D12]] | Bulk resize | *Shipped* as ~equalize~, ~equalize-all~ and ~equalize-cells~. |
+| [[#d13][D13]] | ~compact~ as an explicit command | *Not built*, on merit rather than budget: [[#d6][D6]] made the plane infinite, so there is no scarcity to compact for. The opening/closing half of the decision shipped. |
+| [[#d14][D14]] | Spawn placement: three modes, config picks | *Shipped* as ~*spawn-mode*~, with ~spawn-target~ underneath it for anyone who wants a fourth. |
+| [[#d15][D15]] | Shift semantics, row-local versus plane-wide | *Not built.* No trace of it in the tree. |
+| [[#d16][D16]] | Glue means bond, not merge | *Not built.* Cut in [[file:PLAN.org::#cuts][PLAN §cuts]] and never restored. |
+| [[#d17][D17]] | Closing collapses, clearing does not, the empty pane is first-class | *Shipped*, and the empty pane turned out to be more central than this section expected — see [[#d18][D18]]. |
+| [[#d18][D18]] | Focus is a place, not a window | *Shipped, and it is the single most load-bearing decision in the project.* README leads with it. It is why =src/runtime/surface.lisp= has to exist: a focused empty pane has no window to hang a border on, so the cursor has to be drawn. ~focus-target~ is the generic that makes it replaceable. |
+| [[#d19][D19]] | Typing in an empty pane spawns something there | *Outcome shipped; the mechanism was replaced.* ~ate_unbound_key~ carries no arguments at all, so it cannot say which key was typed. The keys are bound for real and enabled only while the cursor is on an empty pane, which is strictly better and is recorded in [[file:FINDINGS.org][FINDINGS.org]]. |
+| [[#d20][D20]] | Entry resolves geometrically; no focus memory | *Shipped*, under a different name: the generic this document and [[file:PLAN.org::#generics][PLAN §generics]] both call ~resolve-entry~ is ~entry-address~, and it takes two arguments neither of them anticipated. |
+| [[#d21][D21]] | The conventional layer ships first; the lattice is an extension | *Shipped, and it is the one decision that was turned into an experiment and run.* [[file:FINDINGS.org][FINDINGS.org]] is the result, gate 3 and gate 4 are the daily check, and [[file:PLAN.org::#delta-2][PLAN Delta 2]] is why it happened on day one rather than in week three. |
+| [[#d22][D22]] | Zoom is exact fit (overturns [[#d11][D11]]) | *Shipped*, though not in a straight line: [[file:PLAN.org::#delta-3][PLAN Delta 3]] reversed it back to D11, and the log reversed that again. ~*zoom-mode*~ is ~:FIT~. Both solvers ship as two methods on one generic, so it is one ~setf~ either way. |
+
+#+CLAIM: (eq :fit (option-default :zoom-mode))
+#+CLAIM: (every #'find-command '("goto" "name-cell" "equalize-all" "clear"))
+#+CLAIM: (every (lambda (g) (member g (policy-generics)))
+#+CLAIM:        '(step-address motion-escapes-p spawn-target entry-address
+#+CLAIM:          focus-target))
+#+CLAIM: (not (member 'resolve-entry (policy-generics)))
+
+** What else has expired
+
+- *The schedule, the phases and the cut list* are [[file:PLAN.org][PLAN.org]]'s, not
+  this file's, and PLAN.org superseded them as it went. Four things this
+  document's cut list removed came back — the drawn map, ~wl_shm~, named cells,
+  and workspaces past a flat list — because ~wl_shm~ turned out to be one file
+  with five consumers rather than a subsystem.
+- *The protocol measurement* in [[#how][How to use this document]] above expired
+  and then came back: river 0.4.6 shipped version 5 with 44 events in a patch
+  release, which is what this file measured against master.
+- *[[#open][The open questions]]* were all decided, in one pass, in
+  [[file:PLAN.org::#fiat][PLAN §fiat]]. Do not reopen them here.
+- *[[#next][Next actions]]* is a day-one artifact and is entirely spent.
+- *[[file:SPIKE-WEEK0.org][SPIKE-WEEK0.org]]*, which this file links to nineteen
+  times, answered one question — can wayflan drive river's window-management
+  protocol at all — and answered it yes on 2026-07-29. Everything in it is
+  either settled or superseded by the working program. Follow those links for
+  the record of how it was established, not to find out what is true.
+
+** Where the current truth lives instead
+
+Nothing in this file is checked by anything, and it should not be — a frozen
+record that a build gate could fail is not frozen. The documents that *are*
+checked, and what checks them:
+
+| [[file:README.org][README.org]], [[file:INSTALL.org][INSTALL.org]], [[file:doc/EXTENDING.org][doc/EXTENDING.org]], [[file:FINDINGS.org][FINDINGS.org]], the two man pages | *current* to gate 12 — every option they name has to exist, and every ~#+CLAIM:~ line in them is evaluated against the running image on every build |
+| =doc/EXTENSION-SURFACE.txt=, =doc/CONTAINER-SURFACE.txt=, =doc/COMMANDS.txt=, =doc/OPTIONS.txt=, =doc/KEYS.txt= | generated from the running program by ~make surface~; they cannot drift |
+| [[file:FINDINGS.org][FINDINGS.org]] | additionally, the result of [[#d21][D21]]'s experiment — gate 3 prints its headline numbers on every build |
+| [[file:PLAN.org][PLAN.org]] | a live specification with a session log appended; the log is a record like this file, the front half is not |
+
+This file, [[file:PLAN.org][PLAN.org]] and [[file:ASSESSMENT.org][ASSESSMENT.org]] are
+*historical* to gate 12: it does not check the sentences in them, because a
+dated record is allowed to have been overtaken. Sentences in them can still be
+pinned individually with a ~#+CLAIM:~ line, and the ones above are.
+
 * Context and constraints
 :PROPERTIES:
 :CUSTOM_ID: context

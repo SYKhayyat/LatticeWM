@@ -1,12 +1,15 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are eleven, and the five that were added are the five that found
+;;;; are twelve, and the six that were added are the six that found
 ;;;; something.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other ten run here, against the loaded image.
+;;;; The other eleven run here, against the loaded image.
+;;;;
+;;;; Eleven of them ask the program a question.  Gate 12 asks the *documents*
+;;;; one, which is the half of this project the other eleven cannot see.
 
 (require :asdf)
 (require :sb-introspect)
@@ -777,6 +780,390 @@ where install.sh puts it" problems)))
           (length unread) (sort (mapcar (lambda (s) (string-downcase (symbol-name s)))
                                         unread)
                                 #'string<))))
+
+;;; --------------------------------------------------------------- gate 12
+
+(banner 12 "the prose says things about the program, and something asks")
+;; THE GATE THE PROJECT WROTE DOWN AS MISSING AND THEN DID NOT WRITE.
+;;
+;; FINDINGS.org §census, on discovering that the lattice's line count appeared
+;; in four places and three of them disagreed: "Nothing checks that a sentence
+;; in an .org file is still true about the program, which is the gate this
+;; project does not have."  This is that gate.
+;;
+;; THE ROT IS NOT HYPOTHETICAL AND IT IS NOT COSMETIC.  Every instrument this
+;; project owns points at the code.  Gate 2 asks whether a generic has a
+;; docstring; gate 7 asks whether a hook is run; gate 8 asks whether an event
+;; exists; gate 11 asks whether an option is read.  Not one of them can see a
+;; paragraph.  So:
+;;
+;;   * doc/EXTENDING.org opened its development loop with "Start the window
+;;     manager.  SWANK is listening on port 4005."  ASSESSMENT U1 turned SWANK
+;;     off by default -- correctly; it was unauthenticated arbitrary code
+;;     execution started before the user had done anything -- and the first
+;;     instruction in the extension guide became false.  Eleven gates and two
+;;     test suites passed on every build afterwards.
+;;
+;;   * README's Status section said HiDPI scaling, the layer-shell path and
+;;     pointer drag-resize were "all three exercised by the test suite".  None
+;;     of the three had a single test reference.
+;;
+;;   * PLAN §generics said "Thirteen.  If this list reaches thirty, the
+;;     decomposition has gone wrong in the direction of ceremony."  The list
+;;     was at sixty-five and the sentence had never been revised, so the
+;;     project's own written threshold was blown through by a factor of two
+;;     with nothing to notice.
+;;
+;;   * *SMART-GAPS* was documented as working in three places while nothing
+;;     read it.  Gate 11 now catches the option; nothing caught the sentences.
+;;
+;; A PROJECT WHOSE THESIS IS THAT THE REASONING OUTLIVES THE AUTHOR CANNOT
+;; TREAT ITS PROSE AS UNTESTED CODE.  PLAN §extensibility-real is explicit that
+;; the whole bet routes through "there is a documented generic for the thing
+;; you want to change" -- a stranger who cannot trust the document is a
+;; stranger reading the source, which is the situation the document exists to
+;; prevent.
+;;
+;; THREE CHECKS, AND THEY ARE DELIBERATELY OF DIFFERENT KINDS.
+;;
+;; (a) EVERY PROSE FILE IS CLASSIFIED.  A document is either *current* -- it
+;;     describes the program as it is, and a false sentence in it is a bug --
+;;     or *historical* -- a dated record, correct when written, frozen on
+;;     purpose because editing it into agreement with whatever shipped
+;;     destroys its only value.  DESIGN.org says this of itself: "DESIGN.org is
+;;     the design.  It is frozen."  The distinction is real and it has to be
+;;     written down somewhere a check can read, because the difference between
+;;     "stale" and "a record" is otherwise a matter of who is asking.
+;;
+;;     THE LIST IS CHECKED AGAINST THE DIRECTORY, NOT CONSULTED.  A file in
+;;     neither list fails.  This is gate 5's lesson taken the other way round:
+;;     gate 5 exists because an unlisted protocol XML is invisible, and the fix
+;;     for that was three more hardcoded rows.  Enumerating and demanding
+;;     classification means a new document cannot arrive unchecked, which is
+;;     the failure mode a list of filenames has.
+;;
+;; (b) EVERY OPTION THE CURRENT DOCUMENTS NAME IS REGISTERED.  Automatic, and
+;;     it needs no cooperation from whoever wrote the sentence.  An earmuffed
+;;     name in code markup or a source block is a claim that the program has
+;;     that knob; if it does not, the sentence is *SMART-GAPS* again with the
+;;     mistake one level up.  Restricted to code markup because org's bold
+;;     syntax is also asterisks, so scanning raw text finds *and*, *before* and
+;;     *not* -- a check with a false-positive rate is a check that gets
+;;     weakened, and this one has none.
+;;
+;; (c) #+CLAIM: MAKES A SENTENCE EXECUTABLE.  The general mechanism, because
+;;     (b) can only cover the claims that happen to be spelled as names.  A
+;;     line of the form
+;;
+;;         #+CLAIM: (= 65 (length (policy-generics)))
+;;
+;;     is an org keyword, so it does not render, and it is read and evaluated
+;;     against the loaded image.  NIL fails the gate, naming the file, the
+;;     line, the form and the sentence above it.
+;;
+;;     CLAIMS ARE READ IN LATTICEWM/USER -- the package a config file is read
+;;     in, and the one `latticewm --eval' evaluates into.  A claim can
+;;     therefore say only what a user can say, which is the right constraint:
+;;     it keeps the claims inside the surface the documents are describing, and
+;;     it means any of them can be pasted into a running session and watched.
+;;
+;;     IT ALSO MEANS A CLAIM CANNOT READ A FILE, which is why FINDINGS.org's
+;;     line counts are not pinned here and gate 3 counts them instead.  A check
+;;     that could read the source could be satisfied by the source.
+;;
+;;     A CLAIM MUST CONSULT THE PROGRAM.  `#+CLAIM: t' would otherwise be a
+;;     gate that can be told it passes, which is the failure CODE-OF exists to
+;;     prevent one file over.  So the form must reference at least one symbol
+;;     whose home package is part of the program; a form built from CL symbols
+;;     alone is itself a failure.
+;;
+;; WHAT THIS DOES NOT DO, SAID PLAINLY.  It cannot find a false sentence nobody
+;; annotated, and there is no honest way to make it.  What it can do is make a
+;; sentence pinnable at the cost of one line, catch the naming rot
+;; automatically, and refuse to let a new document arrive unclassified.  The
+;; claim count is printed and has no floor, because prose is deleted along with
+;; the thing it described and a floor would make that a fight; the two
+;; automatic checks are what stop this becoming a no-op if the claims went
+;; away.
+;;
+;; IT RUNS LAST because it evaluates arbitrary claim forms against the image
+;; and installs the shipped keymap to do it, and nothing after it should have
+;; to reason about what a claim left behind.
+
+(defparameter *current-documents*
+  '("README.org" "INSTALL.org" "FINDINGS.org"
+    "doc/EXTENDING.org" "doc/latticewm.1" "doc/latticewm-config.5")
+  "Documents that describe the program as it is.  A false sentence here is a bug.
+
+FINDINGS.org is on this list and DESIGN.org is not, which is the distinction
+worth explaining.  FINDINGS is a report on a system that still exists and its
+numbers are still being read as current -- its own census block was wrong for
+three commits and said so afterwards.  DESIGN is a record of what was decided
+before the code existed, and half its value is showing where that was wrong.")
+
+(defparameter *historical-documents*
+  '("DESIGN.org" "PLAN.org" "ASSESSMENT.org" "SPIKE-WEEK0.org")
+  "Dated records.  Correct when written, frozen on purpose, not to be edited
+into agreement with whatever shipped.
+
+PLAN.org is the awkward one: its front half is a live specification and its
+back half is a session log, and the two want opposite treatment.  It is
+historical here so that the automatic checks do not run over the log, and its
+live sentences carry #+CLAIM: lines instead -- which work in any file.")
+
+(defparameter *generated-documents* '("doc/EXTENSION-SURFACE.txt" "doc/CONTAINER-SURFACE.txt"
+                                      "doc/COMMANDS.txt" "doc/OPTIONS.txt" "doc/KEYS.txt")
+  "Written by `make surface' from the running image.  Not prose, cannot drift,
+and doc/latticewm-config.5 says why that is the reference and it is the map.")
+
+(defun document-lines (path)
+  (with-open-file (in path :external-format :utf-8)
+    (loop for line = (read-line in nil nil) while line collect line)))
+
+(defun marked-tokens (line)
+  "Every token between a pair of ~ or a pair of = on LINE.
+
+Org's code markup, and the reason this gate reads it rather than the raw text:
+*gaps* in a paragraph is bold, and *gaps* in ~...~ is a variable."
+  (let ((out '()))
+    (dolist (delimiter '(#\~ #\=) out)
+      (let ((start 0))
+        (loop for open = (position delimiter line :start start)
+              while open
+              for close = (position delimiter line :start (1+ open))
+              while close
+              do (push (subseq line (1+ open) close) out)
+                 (setf start (1+ close)))))))
+
+(defun source-tokens (line)
+  "Words on LINE with any trailing comment removed.
+
+Inside a Lisp source block the asterisk is unambiguous, so the whole line is
+read -- but a `;' comment in an example is prose again and org bold reappears
+in it, which is exactly where *our* came from."
+  (let* ((code (subseq line 0 (or (position #\; line) (length line))))
+         (out '())
+         (word (make-string-output-stream)))
+    (loop for c across code
+          do (if (or (alphanumericp c) (find c "*-/+<>?!"))
+                 (write-char c word)
+                 (let ((w (get-output-stream-string word)))
+                   (when (plusp (length w)) (push w out))))
+          finally (let ((w (get-output-stream-string word)))
+                    (when (plusp (length w)) (push w out))))
+    out))
+
+(defun earmuffed-p (token)
+  (and (> (length token) 2)
+       (char= #\* (char token 0))
+       (char= #\* (char token (1- (length token))))
+       (every (lambda (c) (or (alpha-char-p c) (digit-char-p c) (char= c #\-)))
+              (subseq token 1 (1- (length token))))))
+
+(defun named-options (path)
+  "Every *earmuffed* name PATH claims the program has, as (NAME . LINE)."
+  (let ((out '()) (in-source nil))
+    (loop for line in (document-lines path)
+          for number from 1
+          for lowered = (string-downcase line)
+          do (cond ((eql 0 (search "#+begin_src" (string-left-trim " " lowered)))
+                    (setf in-source t))
+                   ((eql 0 (search "#+end_src" (string-left-trim " " lowered)))
+                    (setf in-source nil))
+                   (t (dolist (token (if in-source
+                                         (source-tokens line)
+                                         (marked-tokens line)))
+                        (when (earmuffed-p token)
+                          (pushnew (cons (string-downcase token) number) out
+                                   :test #'string= :key #'car))))))
+    (nreverse out)))
+
+(defun claim-prefix (line)
+  "The claim text on LINE, or NIL.  `#+CLAIM:' in org, `.\\\" CLAIM:' in roff."
+  (let ((trimmed (string-left-trim " " line)))
+    (dolist (marker '("#+CLAIM:" ".\\\" CLAIM:"))
+      (when (eql 0 (search marker trimmed :test #'char-equal))
+        (return (subseq trimmed (length marker)))))))
+
+(defun claims-in (path)
+  "Every claim in PATH, as (LINE FORM TEXT PROSE).
+
+Consecutive claim lines are one run, and every complete form the run holds is
+one claim -- so a form may be spread over several lines when it is a list of
+things being asserted at once, and two short claims may sit on two lines
+without becoming one.  The line reported is the line the form itself starts
+on, not the line the run does, because a failure has to name somewhere to
+stand."
+  (let ((lines (document-lines path))
+        (out '()))
+    (loop with index = 0
+          while (< index (length lines))
+          do (let ((text (claim-prefix (nth index lines))))
+               (if (null text)
+                   (incf index)
+                   (let ((start index) (buffer text))
+                     (loop while (and (< (1+ index) (length lines))
+                                      (claim-prefix (nth (1+ index) lines)))
+                           do (incf index)
+                              (setf buffer (concatenate 'string buffer
+                                                        (string #\Newline)
+                                                        (claim-prefix (nth index lines)))))
+                     (let ((prose (loop for back downfrom (1- start) to 0
+                                        for candidate = (string-trim " " (nth back lines))
+                                        unless (or (zerop (length candidate))
+                                                   (claim-prefix candidate))
+                                          return candidate
+                                        finally (return "")))
+                           (position 0))
+                       (loop
+                         ;; Past the whitespace first, so the line reported is
+                         ;; the line the form is written on rather than the
+                         ;; line the one before it ended on.
+                         (setf position (or (position-if-not
+                                             (lambda (c) (member c '(#\Space #\Newline #\Tab)))
+                                             buffer :start position)
+                                            (length buffer)))
+                         (multiple-value-bind (form next)
+                             (handler-case
+                                 (let ((*package* (find-package '#:latticewm/user))
+                                       (*read-eval* nil))
+                                   (read-from-string buffer nil :end-of-claims
+                                                     :start position))
+                               (error (condition)
+                                 (values (list :unreadable (princ-to-string condition))
+                                         (length buffer))))
+                           (when (eq form :end-of-claims) (return))
+                           (push (list (+ 1 start (count #\Newline buffer :end position))
+                                       form
+                                       (string-trim '(#\Space #\Newline #\Tab)
+                                                    (subseq buffer position next))
+                                       prose)
+                                 out)
+                           (setf position next))))
+                     (incf index)))))
+    (nreverse out)))
+
+(defun claim-vocabulary-complaint (form)
+  "NIL when FORM is written in the program's vocabulary, or why it is not.
+
+WITHOUT THIS, `#+CLAIM: t' IS A PASSING CLAIM.  A gate that can be told it
+passes is the failure CODE-OF exists to prevent for the greps, and a claim
+built out of CL symbols alone is the same mistake in a different alphabet.
+
+NAMING SOMETHING IS THE TEST; the orphans are only how the failure is phrased.
+A symbol LATTICEWM/USER had to intern in order to read the form is a symbol no
+latticewm package exports, which is what a claim looks like the day the
+function it asks about is renamed -- so when a claim reaches nothing at all,
+saying which names went nowhere is more use than saying it reached nothing.
+They cannot be the test themselves: a LAMBDA's own parameter is interned the
+same way, and a gate that rejects LAMBDA is a gate nobody can write a claim
+with."
+  (let ((packages (remove nil (mapcar #'find-package
+                                      '("LATTICEWM/CORE" "LATTICEWM/POLICY"
+                                        "LATTICEWM/RUNTIME" "LATTICEWM/WIRE"))))
+        (user (find-package '#:latticewm/user))
+        (found nil)
+        (orphans '()))
+    (labels ((walk (node)
+               (cond ((symbolp node)
+                      (cond ((member (symbol-package node) packages) (setf found t))
+                            ((eq (symbol-package node) user) (pushnew node orphans))))
+                     ((consp node) (walk (car node)) (walk (cdr node))))))
+      (walk form))
+    (unless found
+      (if orphans
+          (format nil "reaches nothing the program owns; ~{~(~a~)~^, ~} ~
+                       ~[~;is~:;are~] in no latticewm package -- renamed, or gone?"
+                  (reverse orphans) (length orphans))
+          "names nothing the program owns, so it cannot be false"))))
+
+;; (a) every prose file is classified.
+(let* ((tracked (sort (mapcar #'relative
+                              (append (directory (merge-pathnames "*.org" *root*))
+                                      (directory (merge-pathnames "doc/*.org" *root*))
+                                      (directory (merge-pathnames "doc/*.1" *root*))
+                                      (directory (merge-pathnames "doc/*.5" *root*))))
+                      #'string<))
+       (known (append *current-documents* *historical-documents*))
+       (unclassified (remove-if (lambda (name) (member name known :test #'string=)) tracked))
+       (missing (remove-if (lambda (name) (member name tracked :test #'string=)) known)))
+  (format t "  current~46t~d~%  historical~46t~d~%"
+          (length *current-documents*) (length *historical-documents*))
+  (when unclassified
+    (fail 12 "~d prose file~:p in neither list:~{~%    ~a~}~%~
+              ~4tSay which it is in tools/gates.lisp gate 12.  A document that~%~
+              ~4tdescribes the program as it is goes in *CURRENT-DOCUMENTS* and~%~
+              ~4tis checked; a dated record goes in *HISTORICAL-DOCUMENTS* and~%~
+              ~4tis left alone.  Arriving unclassified is the one thing it~%~
+              ~4tcannot do, because that is how a document goes unread."
+          (length unclassified) unclassified))
+  (when missing
+    (fail 12 "~d classified document~:p that is not there:~{~%    ~a~}"
+          (length missing) missing)))
+
+;; (b) every option the current documents name is registered.
+(let ((wrong '()) (named 0))
+  (dolist (name *current-documents*)
+    (dolist (row (named-options (merge-pathnames name *root*)))
+      (incf named)
+      (let* ((token (car row))
+             (key (intern (string-upcase (string-trim "*" token)) :keyword))
+             (symbol (find-symbol (string-upcase token) '#:latticewm/user)))
+        (unless (or (call "latticewm/policy:option-boundp" key)
+                    ;; A special that is not a tier-0 option -- *KEYMAP* and
+                    ;; *POLICY* are named all over the extension guide and are
+                    ;; not knobs.  Exported and bound is the test.
+                    (and symbol (boundp symbol)
+                         (member (symbol-package symbol)
+                                 (remove nil (mapcar #'find-package
+                                                     '("LATTICEWM/CORE" "LATTICEWM/POLICY"
+                                                       "LATTICEWM/RUNTIME"))))))
+          (push (format nil "~a:~d  ~a" name (cdr row) token) wrong)))))
+  (format t "  options named by the current documents~46t~d~%" named)
+  (when wrong
+    (fail 12 "~d name~:p the documents say the program has and it does not:~
+              ~{~%    ~a~}~%~
+              ~4tEither the option was renamed or deleted and the sentence was~%~
+              ~4tleft behind, or it never existed.  Both are the same thing to~%~
+              ~4ta reader who types it into a config file and gets nothing."
+          (length wrong) (reverse wrong))))
+
+;; (c) every #+CLAIM: is true.
+;;
+;; The shipped keymap is installed first, because the key tables are the most
+;; read prose in the project and a claim about a binding needs the bindings to
+;; exist.  START never runs in this image, so nothing else has done it.
+(call "latticewm/runtime::install-default-keymap")
+(let ((checked 0) (broken '()))
+  (dolist (name (append *current-documents* *historical-documents*))
+    (dolist (claim (claims-in (merge-pathnames name *root*)))
+      (destructuring-bind (line form text prose) claim
+        (incf checked)
+        (flet ((broke (why)
+                 (push (format nil "~a:~d~%      claim  ~a~%      ~a~%      guarding  ~a"
+                               name line text why
+                               (if (> (length prose) 64)
+                                   (concatenate 'string (subseq prose 0 61) "...")
+                                   prose))
+                       broken)))
+          (cond ((and (consp form) (eq :unreadable (car form)))
+                 (broke (format nil "does not read: ~a" (second form))))
+                ((claim-vocabulary-complaint form)
+                 (broke (claim-vocabulary-complaint form)))
+                (t
+                 (multiple-value-bind (value condition)
+                     (handler-case (values (eval form) nil)
+                       (error (c) (values nil c)))
+                   (cond (condition (broke (format nil "signalled: ~a" condition)))
+                         ((null value) (broke "is false"))))))))))
+  (format t "  #+CLAIM: sentences checked~46t~d~%" checked)
+  (if broken
+      (fail 12 "~d claim~:p the program contradicts:~{~%    ~a~}~%~
+                ~4tThe sentence and the program disagree.  Fix whichever is~%~
+                ~4twrong -- and if it is the sentence, that is the whole~%~
+                ~4treason this gate exists."
+            (length broken) (reverse broken))
+      (format t "  every claim the prose pins is still true~%")))
 
 ;;; ---------------------------------------------------------------- verdict
 

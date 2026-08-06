@@ -30,6 +30,13 @@
 ;;;; six-digit hex length followed by an s-expression.  That is about forty
 ;;;; lines, and it means this works from a shell script, from CI, and from any
 ;;;; agent that can run a command.
+;;;;
+;;;; AND THAT IS WHY IT NEEDS A FLAG THE REST OF THE PROJECT DOES NOT.  SWANK
+;;;; used to start unconditionally on 4005; ASSESSMENT U1 turned it off,
+;;;; correctly, and this tool went from working everywhere to working nowhere
+;;;; without anything saying so.  Start the window manager with `--swank-port
+;;;; 4005', or use `latticewm --eval', which talks to the Unix control socket
+;;;; that is on by default and needs nothing.
 
 (require :sb-bsd-sockets)
 
@@ -41,9 +48,13 @@
              (declare (ignore c))
              (format stream "~
 Nothing is listening on port ~d.~%~%~
-The window manager is either not running, or was started with~%~
---swank-port 0.  Start it with:~%~%~
-  river -c 'latticewm'~%" *port*))))
+SWANK IS OFF BY DEFAULT and this tool is the one thing that needs it: it~%~
+speaks SWANK's wire protocol rather than the control socket.  Start the~%~
+window manager with the port open:~%~%~
+  river -c 'latticewm --swank-port ~d'~%~%~
+Or skip this tool.  The control socket is on by default and the binary is~%~
+its own client:~%~%~
+  latticewm --eval '(length (all-windows))'~%" *port* *port*))))
 
 (defun connect ()
   (let ((socket (make-instance 'sb-bsd-sockets:inet-socket
