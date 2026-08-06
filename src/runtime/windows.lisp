@@ -40,7 +40,7 @@ sequence it is in."
   ;; place in the system where that risk is real.
   (load-time-value
    (declare-handled-events "river_window_v1"
-    '(:app-id :title :identifier :parent :dimensions :dimensions-hint :decoration-hint :closed :fullscreen-requested :exit-fullscreen-requested :minimize-requested :maximize-requested :unmaximize-requested :pointer-move-requested :pointer-resize-requested :show-window-menu-requested :unreliable-pid :presentation-hint))
+    '(:app-id :title :identifier :parent :dimensions :dimensions-hint :decoration-hint :closed :fullscreen-requested :exit-fullscreen-requested :minimize-requested :maximize-requested :unmaximize-requested :pointer-move-requested :pointer-resize-requested :show-window-menu-requested :unreliable-pid :presentation-hint :capture-sessions))
    t)
   (lambda (event &rest arguments)
     (with-abandon
@@ -98,6 +98,11 @@ sequence it is in."
         (:unreliable-pid (setf (c:prop window :pid) (first arguments)))
         (:presentation-hint (setf (c:prop window :presentation-hint)
                                   (first arguments)))
+        ;; Something is recording this window: a screen share, a recorder, a
+        ;; thumbnailer.  Bookkeeping like everything else here -- what is done
+        ;; with it is runtime/capture.lisp's, and nothing about the window's
+        ;; placement changes because of it.
+        (:capture-sessions (note-capture-sessions window (first arguments)))
         (t (logmsg :debug "window event ~s ~s" event arguments))))))
 
 (defun detach-window (window)

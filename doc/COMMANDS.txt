@@ -24,6 +24,16 @@ LatticeWM commands.
 (browser)
   Open a web browser.  Bound to `b' in an empty pane by default.
 
+(captures)
+  Say what is being recorded right now, and by how many sessions.
+  
+  The status line carries a standing REC while anything is being captured, which
+  answers `is something recording?'.  This answers the next question — *what* —
+  and it is worth a command of its own because the answer includes windows you
+  cannot see: a minimized window, or one four cells away, goes on being recorded
+  exactly as it was, which is the whole reason river reports the count per window
+  as well as per screen.
+
 (clear)
   Empty the focused pane but leave it standing.
   

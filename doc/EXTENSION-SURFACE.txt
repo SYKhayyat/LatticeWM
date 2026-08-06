@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-64 generics, 110 options.  Generated from the running image.
+64 generics, 111 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -1175,6 +1175,15 @@ OPTIONS
 
 A double float or NIL.  The scale is libinput's and is not linear; 0.3 is a
 noticeably brisk touchpad and 1.0 is faster than most people can aim.
+
+*announce-capture*
+  now: T
+  Say in the echo area when a screen capture starts or stops.
+
+T is the privacy-preserving default and the reason the events are handled at
+all.  The standing REC segment in the shipped status line is separate and is
+not affected by this — set the option to NIL if you want the fact on screen
+without a line about it every time OBS adds a source.
 
 *argument-naming-convention*
   now: ((:DIRECTION "direction") (:AXIS "axis") (:SIDE "side")

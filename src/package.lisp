@@ -192,6 +192,7 @@ deliberately decomposed so that policy can redirect it.")
    #:window-floating-p #:window-minimized-p #:window-fullscreen-p
    #:window-decoration-hint #:window-rect #:window-tags #:window-home-path
    #:window-preferred-size
+   #:window-capture-sessions #:window-captured-p
    ;; input devices.  Model state for the same reason a window is: policy has
    ;; to be able to ask a device what it is before deciding how to configure
    ;; it, and policy may not depend on the runtime.
@@ -207,6 +208,7 @@ deliberately decomposed so that policy can redirect it.")
    #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
+   #:output-capture-sessions #:output-captured-p #:world-captures
    #:world-node-at #:world-leaf-at #:world-window-at #:world-focus-window
    #:current-workspace #:workspace-path #:world-workspaces))
 
@@ -556,7 +558,7 @@ keybindings, the command registry, and the session loop.")
    #:*cursor-theme* #:*cursor-size* #:*welcome-on-first-run*
    #:*unfloat-returns-home* #:*save-interval-seconds*
    #:*undo-depth* #:*undo-coalesce-seconds* #:*ipc-socket* #:*ipc-timeout-seconds*
-   #:*swank-interface* #:*honour-exclusive-zones*
+   #:*swank-interface* #:*honour-exclusive-zones* #:*announce-capture*
    ;; undo
    #:undo #:redo #:undo-history #:with-undo #:record-undo #:snapshot-layout
    #:layout-snapshot #:undo-ring #:redo-ring #:restore-snapshot

@@ -81,6 +81,11 @@ callers already have one."
                  (setf (c:rect-w (c:output-rect output)) (first arguments)
                        (c:rect-h (c:output-rect output)) (second arguments))
                  (mark-dirty))
+                ;; The whole monitor is being recorded, which is what an
+                ;; ordinary screen share is; the per-window count in
+                ;; runtime/windows.lisp is the rarer half of the same event.
+                (:capture-sessions
+                 (note-capture-sessions output (first arguments)))
                 (:removed (detach-output output proxy))
                 (t nil))
     (attach-layer-shell-output output)

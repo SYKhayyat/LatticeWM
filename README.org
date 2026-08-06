@@ -446,6 +446,15 @@ would have left the program unable to start on any river a user installs today.
 =src/protocol/PINNED= carries the diff and the argument; [[file:PLAN.org::#log8][PLAN.org §log8]] carries
 the decision. =nix build=, =nix-shell=, =make check= and CI are green.
 
+Both of those new events are now handled, which they were not when that
+paragraph was written. The window manager knows how many screen capture
+sessions are reading each window and each screen: it says so when one starts or
+stops, the status line carries a standing =REC= for as long as one lasts, =M-x
+captures= says what is being recorded — including a window you minimized and
+can no longer see — and =:capture-changed= is the hook for a status bar, a
+keyboard light or a script that mutes a microphone. Nothing about placement
+changes; being recorded is information, not a policy.
+
 * Documentation
 
 - [[file:INSTALL.org][INSTALL.org]] — installing on any distribution

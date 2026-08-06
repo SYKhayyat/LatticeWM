@@ -24,9 +24,16 @@ pre-release protocol breaking *within* a version number — is not what happened
 here.  Pinning back would have frozen the pair on a superseded release that
 leaves nixpkgs on its own schedule, and the version check refuses in both
 directions: a build vendored at 4 cannot start on any river a user installs
-today.  Neither of these is handled by the two capture_sessions events being
-unhandled, which is a feature we do not have rather than a protocol we cannot
-speak.
+today.
+
+Both capture_sessions events are now handled.  They were not when this file
+was first written, and the note here said so: "a feature we do not have rather
+than a protocol we cannot speak".  That was true and it was also the argument
+for building the feature, because the one thing you cannot see by looking at
+your own screen is that somebody else can see it too.  The count is recorded on
+the window and on the output, a change is announced in the echo area, the
+shipped status line carries a standing REC for as long as it lasts, and
+:CAPTURE-CHANGED is the hook for anything else — src/runtime/capture.lisp.
 
 The three input protocols moved 1 -> 2 in the same release, each adding a
 `done' event.  They are bound at whatever version is offered rather than

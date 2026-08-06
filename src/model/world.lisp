@@ -38,8 +38,19 @@
 River reports both, so a multi-monitor arrangement is described entirely in
 one space and needs no per-output translation.")
    (scale :initarg :scale :initform 1 :accessor output-scale)
+   (capture-sessions :initform nil :accessor output-capture-sessions
+                     :documentation
+                     "How many screen capture sessions are recording this
+whole monitor, or NIL for `river has not said'.  The same three-valued rule as
+WINDOW-CAPTURE-SESSIONS, for the same reason; OUTPUT-CAPTURED-P is what to
+read.")
    (props :initform '() :accessor props))
   (:documentation "A monitor, as river describes it."))
+
+(defun output-captured-p (output)
+  "Is something recording this whole monitor right now?"
+  (let ((count (output-capture-sessions output)))
+    (and count (plusp count))))
 
 (defmethod print-object ((o output) stream)
   (print-unreadable-object (o stream :type t :identity nil)
@@ -202,3 +213,20 @@ one-element path — or the empty path when the root is not a workspace stack."
 (defun float-of-window (world window)
   "The FLOATING-WINDOW record for WINDOW, or NIL."
   (find window (world-floats world) :key #'float-window))
+
+(defun world-captures (world)
+  "Everything river says is being recorded right now: OUTPUTs first, then
+WINDOWs, each with at least one screen capture session.
+
+*Every* window the model holds, not the ones on screen.  A window keeps being
+recorded while it is minimized, on another workspace, or in a lattice cell four
+screens away — that is the whole point of a per-window capture session — so a
+listing that walked only the tree would go quiet at exactly the moment the
+answer stops being obvious from looking at the screen."
+  (append (remove-if-not #'output-captured-p (world-outputs world))
+          (remove-duplicates
+           (remove-if-not #'window-captured-p
+                          (append (node-windows (world-root world))
+                                  (mapcar #'float-window (world-floats world))
+                                  (world-scratchpad world)))
+           :from-end t)))

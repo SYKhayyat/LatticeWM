@@ -26,7 +26,7 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:minibuffer #:devices))
+           #:container #:minibuffer #:devices #:capture))
 
 (in-package #:latticewm/tests)
 
@@ -48,6 +48,11 @@ failures were the ones that absence predicts.")
 (def-suite devices :in model
   :description "Input device configuration: which settings a device should
 have, which is pure, and how a value reaches the wire, which is not.")
+
+(def-suite capture :in model
+  :description "What the window manager knows about being recorded: the count
+river reports per window and per output, who is told about a change, and what
+the status line says for as long as it lasts.")
 
 (def-suite minibuffer :in model
   :description "Reading a line, which needs no compositor either — the prompt

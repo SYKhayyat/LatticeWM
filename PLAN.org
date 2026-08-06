@@ -1807,3 +1807,76 @@ by the test that proves core edit 3 works. Deleted.
 - *=nix build= fails, on the protocol version, and should.* See the fifth
   finding above. Nothing else in the project is affected: =make=, =make check=,
   =nix-shell= and the CI workflow are all green.
+
+* Ninth session — 2026-08-06: the two events we could speak and did not
+:PROPERTIES:
+:CUSTOM_ID: log9
+:END:
+
+=src/protocol/PINNED= ended with a sentence that was true and was also a to-do
+list: the two =capture_sessions= events river 0.4.6 added are unhandled, "which
+is a feature we do not have rather than a protocol we cannot speak". The
+distinction was the right one to draw — nothing was broken, and the version
+check was not at stake — but it named the feature, and the feature is worth
+having, because *the one thing you cannot see by looking at your own screen is
+that somebody else can see it too*. A screen share you forgot to stop looks
+exactly like a screen share you never started.
+
+River sends a count of active screen capture sessions on each
+=river_window_v1= and each =river_output_v1=, once at creation and again on
+every change. Handling it is four things and one deliberate omission:
+
+- The count is on the model — =c:window-capture-sessions=,
+  =c:output-capture-sessions= — so a policy can read it without depending on
+  the runtime, which is the same rule the app id and the scale live under.
+- Starting and stopping are announced in the echo area, which is this
+  program's only way to talk. =*announce-capture*= turns the line off without
+  turning the fact off.
+- The shipped status line carries a standing =REC= for as long as anything is
+  being recorded. The announcement scrolls away after a few seconds; the fact
+  does not, and the fact is the part that matters.
+- =:capture-changed= is the hook for everything else: a status bar, a light on
+  a keyboard, a script that mutes a microphone. =M-x captures= answers the
+  next question — *what* — and it walks every window the model holds rather
+  than the tree, because a minimized window goes on being recorded and that is
+  exactly when you can no longer see it.
+
+*And nothing about placement changes.* A recorded window is tiled, hidden,
+minimized and closed exactly as it was. Refusing to hide a window somebody is
+recording would be the window manager deciding something the user did not ask
+for, on a compositor perfectly able to go on feeding the capture session; this
+is information, and it is deliberately only information.
+
+** The three-valued count, which is the only subtle part
+
+The stored count starts at NIL — river has not said — and is an integer
+afterwards. Zero would have been the obvious initial value and it makes two
+different things indistinguishable.
+
+The announcement rule needs the difference. A window created while nothing is
+recording must say nothing; a window created *during* a screen share must say
+so; both arrive as the same first event, and only the previous value tells them
+apart. So does the integration check: the count river never sent and the count
+river sent as zero look identical if the initial value is zero, and "the
+handler never ran" is precisely the failure that check exists to catch. It is
+the same shape as the =:name= event that never existed — a handler that does
+nothing, silently, on every machine — and this is what it costs to make that
+shape visible from the outside.
+
+=c:window-captured-p= and =c:output-captured-p= collapse NIL and zero, and are
+what every caller that is not checking the protocol should read.
+
+** Checked
+
+Eight tests in a new =capture= suite, thirty checks: the three-valued count,
+the announcement rule in both directions and its option, the repeat that must
+not re-announce, the listing walking floats and the scratchpad, and the =REC=
+segment appearing and going away. All of that constructs state, which is why it
+is in the unit suite.
+
+The one claim it cannot make is that river sends the events at all — so
+=tools/integration.lisp= grew a "screen capture" section, five checks, which
+asserts that a real river 0.4.6 reported an integer for the output and for a
+client window and that neither is being recorded. It is 165 checks in
+twenty-two sections now. Gate 8 covers the two new handlers by construction:
+both events exist on the interfaces they are handled for, or the gate says so.

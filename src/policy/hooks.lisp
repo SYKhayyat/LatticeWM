@@ -192,6 +192,18 @@ or ask again from a later hook.")
 (defhook :input-removed (device) "Run after an input device is unplugged and
 forgotten.  The device object is still readable; every proxy on it is stale.")
 
+(defhook :capture-changed (subject count) "Run when the number of screen
+capture sessions on a window or an output changes.  SUBJECT is a C:WINDOW or a
+C:OUTPUT and COUNT is how many sessions are now recording it, zero included.
+
+For a recording indicator of your own — a red dot on a status bar, a light on a
+keyboard, a script that mutes a microphone — and for the case the shipped
+indicator deliberately does not cover: reacting to it rather than displaying it.
+
+Fires once per subject at startup as well, with whatever count river reports on
+creation, so a hook that draws something does not have to wait for the first
+change to learn the state.")
+
 (defhook :keyboard-layout-changed (device name) "Run when a keyboard's active
 layout changes, whether we asked for it or the user pressed the xkb toggle.
 NAME is the layout's own name, e.g. \"German\".  For a status bar showing which

@@ -606,6 +606,25 @@ persistence is keyed on river's stable window identifiers."
   (run-shutdown-once)
   (setf (server-running *server*) nil))
 
+(defcommand captures ()
+  "Say what is being recorded right now, and by how many sessions.
+
+The status line carries a standing REC while anything is being captured, which
+answers `is something recording?'.  This answers the next question — *what* —
+and it is worth a command of its own because the answer includes windows you
+cannot see: a minimized window, or one four cells away, goes on being recorded
+exactly as it was, which is the whole reason river reports the count per window
+as well as per screen."
+  (let ((captures (c:world-captures *world*)))
+    (notify "~:[nothing is being recorded~;recording: ~:*~{~a~^, ~}~]"
+            (mapcar (lambda (subject)
+                      (let ((count (capture-sessions-of subject)))
+                        (format nil "~a~@[ (~d)~]"
+                                (capture-subject-name subject)
+                                (and (> count 1) count))))
+                    captures))
+    captures))
+
 (defcommand describe-key (spec)
   "Say what SPEC is bound to, and what that does.  Emacs's C-h k.
 

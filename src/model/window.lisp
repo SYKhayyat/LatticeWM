@@ -44,6 +44,17 @@ the whole basis of the shipped floating rule.")
    (max-width :initform 0 :accessor window-max-width)
    (max-height :initform 0 :accessor window-max-height)
    (decoration-hint :initform nil :accessor window-decoration-hint)
+   (capture-sessions :initform nil :accessor window-capture-sessions
+                     :documentation
+                     "How many screen capture sessions are recording this
+window, or NIL for `river has not said'.
+
+River sends the count once when the window is created and again whenever it
+changes, so NIL means the event has not arrived yet rather than zero — which
+is a distinction worth keeping, because it is the difference between `nobody
+is recording this' and `we are not being told'.  Everything that reads it goes
+through WINDOW-CAPTURED-P, which treats both the same way and is what you
+want unless you are checking that the protocol is being spoken.")
    ;; Disposition.
    (floating :initform nil :accessor window-floating-p)
    (minimized :initform nil :accessor window-minimized-p)
@@ -74,6 +85,15 @@ gone."))
             (and (plusp (window-width w)) (window-width w))
             (and (plusp (window-width w)) (window-height w))
             (not (window-live-p w)))))
+
+(defun window-captured-p (window)
+  "Is something recording this window right now?
+
+The count itself is only interesting when you are writing the indicator; every
+other caller is asking this yes-or-no question, and asking it this way is what
+keeps NIL — river has not said — from reading as a number somewhere."
+  (let ((count (window-capture-sessions window)))
+    (and count (plusp count))))
 
 (defun window-preferred-size (window)
   "The size WINDOW would like, as (values WIDTH HEIGHT), or (values NIL NIL).

@@ -329,7 +329,14 @@ charge. If you want a hook's return value, you wanted a method.
 
 ~:startup :shutdown :window-opened :window-closed :focus-changed
 :layout-changed :workspace-changed :draw-overlays :reserve-space
-:output-added :output-removed :pointer-op~. ~(all-hooks)~ is authoritative.
+:output-added :output-removed :pointer-op :capture-changed~. ~(all-hooks)~ is
+authoritative.
+
+~:capture-changed~ is the one worth naming here, because it is the only fact in
+this list your own screen cannot show you: it fires with a window or an output
+and the number of screen capture sessions now reading it, so a status bar, a
+keyboard light or a script that mutes a microphone can follow a screen share
+without polling anything.
 
 *One hook's return value matters*, and it is the exception that proves the
 rule. ~:reserve-space~ asks how much of an output to keep clear, each function

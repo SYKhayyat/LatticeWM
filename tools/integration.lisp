@@ -749,6 +749,46 @@ are what a person means by the arrangement, and both are copy-stable."
                          "and P:FOCUS-TARGET's answer is what river was told to focus")))))))
 
        ;; ------------------------------------------------------------------
+       ;; THE PAIR OF EVENTS THAT WERE UNHANDLED.  river 0.4.6 added
+       ;; capture_sessions to river_window_v1 and to river_output_v1, and
+       ;; src/protocol/PINNED recorded that we did not listen for either.
+       ;;
+       ;; This is the half of handling them that only a compositor can settle.
+       ;; The unit suite establishes everything about the count, the
+       ;; announcement rule and the listing by constructing state; what it
+       ;; cannot see is whether river *sends* the events, and a count of NIL is
+       ;; precisely the shape of a handler that never ran.  That is why the
+       ;; model keeps NIL and 0 apart -- so this check can tell "nobody is
+       ;; recording" from "we are not being told", which is the failure that
+       ;; would otherwise look identical from the outside.
+       (section "screen capture"
+         (let ((output (first (all-outputs)))
+               (window (window-named "latticewm-a" 1)))
+           (cond
+             ((null output) (missing "no output, so no capture count to receive"))
+             (t
+              (check (poll-until (lambda ()
+                                   (integerp (c:output-capture-sessions output)))
+                                 10)
+                     "river reported the output's capture sessions: ~a"
+                     (c:output-capture-sessions output))
+              (check (not (c:output-captured-p output))
+                     "and nothing is recording this headless screen")))
+           (cond
+             ((null window) (missing "no window, so no per-window capture count"))
+             (t
+              (check (poll-until (lambda ()
+                                   (integerp (c:window-capture-sessions window)))
+                                 10)
+                     "and the window's own count, which is the other half of ~
+                      the event: ~a"
+                     (c:window-capture-sessions window))
+              (check (not (c:window-captured-p window))
+                     "with nothing recording it either")))
+           (check (null (c:world-captures *world*))
+                  "so the listing is empty and the status line says no REC")))
+
+       ;; ------------------------------------------------------------------
        ;; EVERYTHING IS DIFFED, says the emitter's header, and river's spec has
        ;; an `unresponsive' error it will use if we are slow.  A hundred
        ;; unchanged positions re-sent on every keystroke is the failure the diff

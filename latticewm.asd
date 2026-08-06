@@ -127,6 +127,9 @@
        ;; *MODIFIER*, and after help because it is a help page.
        (:file "welcome")
        (:file "emit")
+       ;; capture before windows and outputs: both event handlers call into
+       ;; it, and it needs NOTIFY from echo above.
+       (:file "capture")
        (:file "windows")
        ;; The session, split along its reasons to change.  Order is by
        ;; dependency and each step is deliberate: the loop before the things
@@ -169,6 +172,9 @@ without a compositor — which is the whole model."
      (:file "test-tree")
      (:file "test-motion")
      (:file "test-lifecycle")
+     ;; capture after lifecycle: it borrows FRESH-WORLD, and minimizing a
+     ;; window is half of what it has to walk.
+     (:file "test-capture")
      (:file "test-surface")
      ;; container after surface: the two are siblings, and reading them in this
      ;; order is how the second is meant to be understood.

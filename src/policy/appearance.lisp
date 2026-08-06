@@ -531,6 +531,18 @@ split it, move between the pieces, close one, and find everything else."))
                           (and (plusp scratch) scratch))
                   :normal)
             segments))
+    ;; RECORDING, and standing rather than announced.  The message below says
+    ;; that a capture *started*, and then scrolls away; the thing you actually
+    ;; need is the one fact your own screen cannot show you, for as long as it
+    ;; is true.  Pushed only when there is something to say, so the line is
+    ;; exactly what it was on a machine nobody is recording.
+    (let ((captures (c:world-captures world)))
+      (when captures
+        (push (cons (if (rest captures)
+                        (format nil "REC ~d" (length captures))
+                        "REC")
+                    :accent)
+              segments)))
     ;; A message wins the space when there is one -- it is about what just
     ;; happened, and the hint is about what is always true.
     (let ((message (current-message)))
