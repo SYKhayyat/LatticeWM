@@ -85,9 +85,15 @@ coordinates onto the first, at positions that meant nothing there."
       (r:overlay-hide overlay)
       (setf (c:prop overlay :dirty) '())
       (return-from draw-coordinate-overlay-on nil))
+    ;; THE AREA THE CELLS ARE IN, for the surface as well as for the cells.
+    ;; This drew into an output-sized canvas committed at the output's own
+    ;; rectangle, which is the same mismatch DRAW-MAP-ON had — there it painted
+    ;; over the echo area, and here it was invisible only because the labels are
+    ;; small and everything between them is transparent.  A latent version of a
+    ;; bug that has already been paid for once is worth removing rather than
+    ;; leaving for the day somebody adds a background to it.
     (let* ((area (p:outer-rect policy output))
-           (canvas (r:ensure-overlay overlay (c:rect-w (c:output-rect output))
-                                     (c:rect-h (c:output-rect output)))))
+           (canvas (r:ensure-overlay overlay (c:rect-w area) (c:rect-h area))))
       (when canvas
         ;; Clear only what we drew last time.  A full-screen clear is two
         ;; million writes for a few dozen small labels.  The record lives on
@@ -97,8 +103,8 @@ coordinates onto the first, at positions that meant nothing there."
         (setf (c:prop overlay :dirty) '())
         (let ((background (apply #'r:argb *overlay-background*))
               (foreground (apply #'r:argb *overlay-foreground*))
-              (origin-x (c:rect-x (c:output-rect output)))
-              (origin-y (c:rect-y (c:output-rect output)))
+              (origin-x (c:rect-x area))
+              (origin-y (c:rect-y area))
               (current (current-cell))
               (drawn '()))
           (loop for (address . rect) in (cell-rects policy grid area)
@@ -123,6 +129,6 @@ coordinates onto the first, at positions that meant nothing there."
                                       :scale *overlay-scale*)
                        (push box drawn)))
           (setf (c:prop overlay :dirty) drawn))
-        (r:overlay-commit overlay :rect (c:output-rect output))))))
+        (r:overlay-commit overlay :rect area)))))
 
 (r:add-hook :draw-overlays 'draw-coordinate-overlay)

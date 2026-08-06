@@ -2620,3 +2620,30 @@ an inference where an answer is available.
 *Verified:* river killed with SIGKILL and with SIGTERM, both times the window manager
 logs "compositor closed the connection", saves the layout and exits within a second,
 against for ever before.
+
+** The window manager covering its own echo area
+
+Three expressions, and the interesting part is what checks them. ~DRAW-MAP-ON~ lays
+its cells out in ~OUTER-RECT~ — the output less the gaps and less anything a panel or
+the echo area reserved — and then sized and committed its canvas at ~OUTPUT-RECT~, the
+whole display, so the map's background covered the strip the layout had deliberately
+left alone and the status line was blank for as long as the map was up. Not a
+layer-shell problem, which is what made the first reading of it wrong: a real panel
+sits on a higher layer and survives the map intact. This program covering its own echo
+area.
+
+The same mismatch is in ~lattice/overlay.lisp~ and is invisible there, because the
+coordinate overlay's labels are small and everything between them is transparent.
+Fixed as well. A latent copy of a bug that has already been paid for is worth removing
+rather than leaving for whoever gives it a background.
+
+*It is a screen fact — two rectangles overlapping — so no unit test and no gate can
+reach it.* The integration suite can, and now does: it raises ~*MAP-THRESHOLD*~ above
+the width of the screen, which makes every cell too small by definition, and asks
+river's own two surfaces where they are.
+
+: ok    and it does not touch the echo area's strip: map 0..696, status line 696..720
+: ok    because it is exactly the area the cells were laid out in
+
+Verified by breaking it on purpose: with the old canvas rectangle the same lines read
+=map 0..720= and fail.

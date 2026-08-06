@@ -779,10 +779,12 @@ exclusive-zone arithmetic is correct: the usable area moves from 0,0 1280x696 to
 0,34 1280x662 and the window under it moves down by exactly that. The
 integration suite still says =skip= there, because a build sandbox has no panel
 to open; that is a statement about the sandbox and not about the path. What is
-still unexercised is a screen locker, and the interaction found in the same
-sitting: the lattice's drawn map covers the window manager's own echo area,
-because its canvas is sized to the whole output while its cells are laid out in
-the usable area.
+still unexercised is a screen locker. The interaction found in the same sitting
+— the lattice's drawn map covering the window manager's own echo area, because
+its canvas was sized to the whole output while its cells were laid out in the
+usable area — is fixed, and =make check= now watches it: with the map forced up,
+the two surfaces are asked where they are and the map has to be exactly the area
+the cells were laid out in.
 
 That paragraph used to say all three were exercised by the test suite. They
 were not: there was no test reference to =surface.lisp=, =layer.lisp=,

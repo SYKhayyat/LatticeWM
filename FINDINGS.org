@@ -624,7 +624,10 @@ placed twice — and the clean-start switch above trades to =(("HEADLESS-2" 1)
 ("HEADLESS-1" 0))= instead of collapsing. Six unit tests, in the case nobody had
 constructed: *a world with two outputs in it.*
 
-** The drawn map paints over the echo area
+** The drawn map paints over the echo area — *fixed*
+:PROPERTIES:
+:CUSTOM_ID: map-echo
+:END:
 
 =draw-map-on= lays its cells out in =outer-rect= — which respects reserved space,
 correctly — and then sizes and commits its canvas at =output-rect=, the whole
@@ -644,6 +647,35 @@ status line should go, because nothing decided it should.
 Confirmed rather than inferred: with the map up, =echo-content= still returns
 all five segments and =map-mode-p= is true, and the bar renders empty. The
 policy is right and the screen is wrong, which is this section's whole subject.
+
+*The fix is the sentence above.* The canvas is sized and committed at =area=,
+the rectangle the cells were laid out in — three expressions, all of them
+replacing =output-rect= with the value the same function had already computed
+two lines earlier.
+
+Two things are worth adding. The first is that *the same mismatch was in
+=overlay.lisp= too*, where it is invisible: the coordinate overlay also takes a
+full-screen canvas and commits it at the whole output, and gets away with it
+only because its labels are small and everything between them is transparent.
+It is fixed as well, because a latent copy of a bug that has already been paid
+for once is worth removing rather than leaving for whoever gives it a
+background.
+
+The second is what now checks it, since the reason this survived is that
+*nothing could*. It is a screen fact — two rectangles overlapping — so a unit
+test cannot reach it and neither can a gate. The integration suite runs the
+lattice against a real river, so it raises =*map-threshold*= above the width of
+the screen, which makes every cell too small by definition, and asks river's own
+two surfaces where they are:
+
+#+begin_example
+  ok    the drawn map has an overlay of its own
+  ok    and it does not touch the echo area's strip: map 0..696, status line 696..720
+  ok    because it is exactly the area the cells were laid out in
+#+end_example
+
+Verified by breaking it on purpose, which is the only way to know a check works:
+with the old canvas rectangle the same three lines read =map 0..720= and fail.
 
 ** ~quit~ does not always quit, about one run in three — *withdrawn: it always quit, and the check failed when it quit fastest*
 :PROPERTIES:

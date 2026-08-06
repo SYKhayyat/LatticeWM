@@ -1586,7 +1586,52 @@ are what a person means by the arrangement, and both are copy-stable."
                                       completes")
                               (check (server-running *server*)
                                      "with the connection still up, so the box ~
-                                      was in range"))))))
+                                      was in range")))))
+                       ;; THE DRAWN MAP DOES NOT COVER THE ECHO AREA, and it
+                       ;; did.  DRAW-MAP-ON laid its cells out in OUTER-RECT and
+                       ;; then sized and committed its canvas at the whole
+                       ;; output, so the background fill covered the strip the
+                       ;; echo area had reserved and the status line was blank
+                       ;; for as long as the map was up.  The policy was right
+                       ;; and the screen was wrong, which is the one class of
+                       ;; defect no unit test in this project can reach.
+                       ;;
+                       ;; The threshold is raised rather than the zoom driven
+                       ;; out, because the map is a question about the size of a
+                       ;; cell and this makes every cell too small by definition.
+                       (let ((threshold (late-value "lattice:*map-threshold*")))
+                         (unwind-protect
+                              (progn
+                                (setf (late-value "lattice:*map-threshold*")
+                                      (1+ (c:rect-w area)))
+                                (wm (lambda () (relayout :force t)))
+                                (settle)
+                                (let ((map (first (all-overlays :lattice/map)))
+                                      (echo (first (all-overlays :echo))))
+                                  (check map "the drawn map has an overlay of ~
+                                              its own")
+                                  (when (and map echo)
+                                    (check (overlay-visible-p map)
+                                           "and river is showing it")
+                                    (let ((drawn (overlay-rect map))
+                                          (strip (overlay-rect echo))
+                                          (usable (outer-rect (current-policy)
+                                                              (current-output))))
+                                      (check (null (c:rect-intersect drawn strip))
+                                             "and it does not touch the echo ~
+                                              area's strip: map ~d..~d, status ~
+                                              line ~d..~d"
+                                             (c:rect-y drawn) (c:rect-bottom drawn)
+                                             (c:rect-y strip) (c:rect-bottom strip))
+                                      (check (and (= (c:rect-x drawn) (c:rect-x usable))
+                                                  (= (c:rect-y drawn) (c:rect-y usable))
+                                                  (= (c:rect-w drawn) (c:rect-w usable))
+                                                  (= (c:rect-h drawn) (c:rect-h usable)))
+                                             "because it is exactly the area the ~
+                                              cells were laid out in")))))
+                           (setf (late-value "lattice:*map-threshold*") threshold)
+                           (wm (lambda () (relayout :force t)))
+                           (settle))))
                   (setf (late-value "lattice:*zoom-mode*") mode
                         (late-value "lattice:*cell-width*") width
                         (late-value "lattice:*cell-height*") height)

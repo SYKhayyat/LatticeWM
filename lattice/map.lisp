@@ -126,7 +126,26 @@ one with room for real windows should keep them."
     (p:guarded "map" (draw-map-on output))))
 
 (defun draw-map-on (output)
-  "Draw the plane on OUTPUT, or take the map down there."
+  "Draw the plane on OUTPUT, or take the map down there.
+
+THE SURFACE IS THE AREA THE CELLS WERE LAID OUT IN, and getting that wrong is
+the whole of a bug that reached a real screen.  The cells go in OUTER-RECT —
+which is the output less the gaps and less anything a panel or the echo area
+reserved — and the canvas was sized and committed at OUTPUT-RECT, the whole
+display.  So the background fill covered the strip the layout had deliberately
+left alone, and *the window manager's own status line was blank for as long as
+the map was up*.
+
+It was not a layer-shell problem, which is what made the first reading of it
+wrong: a panel sits on a higher layer and survives the map intact.  It was this
+program covering its own echo area, and the tell was internal to this function
+— AREA and the canvas rectangle disagreed, and the code already knew which one
+was right, because it used it for the cells.
+
+The contrast with OVERLAY-WANTED-P is the instructive part.  That function
+suppresses the *coordinate* overlay under the map and spends four lines saying
+why.  Nothing said the status line should go, because nothing decided it
+should."
   (let* ((grid (current-grid))
          (policy (p:current-policy))
          (overlay (r:overlay-for :lattice/map output)))
@@ -137,12 +156,11 @@ one with room for real windows should keep them."
       (unless (map-mode-p grid area)
         (r:overlay-hide overlay)
         (return-from draw-map-on nil))
-      (let ((canvas (r:ensure-overlay overlay (c:rect-w (c:output-rect output))
-                                      (c:rect-h (c:output-rect output)))))
+      (let ((canvas (r:ensure-overlay overlay (c:rect-w area) (c:rect-h area))))
         (when canvas
           (r:canvas-fill canvas (apply #'r:argb *map-background*))
-          (let ((origin-x (c:rect-x (c:output-rect output)))
-                (origin-y (c:rect-y (c:output-rect output)))
+          (let ((origin-x (c:rect-x area))
+                (origin-y (c:rect-y area))
                 (text-color (apply #'r:argb *map-text-color*))
                 (current (current-cell)))
             (loop for (address . rect) in (cell-rects policy grid area)
@@ -179,6 +197,6 @@ one with room for real windows should keep them."
                                        (max 0 (floor (- (c:rect-w box) 12)
                                                      (r:text-width "m"))))
                                       (apply #'r:argb *map-detail-color*)))))
-          (r:overlay-commit overlay :rect (c:output-rect output)))))))
+          (r:overlay-commit overlay :rect area))))))
 
 (r:add-hook :draw-overlays 'draw-map)
