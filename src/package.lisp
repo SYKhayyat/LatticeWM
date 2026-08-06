@@ -233,6 +233,7 @@ You never edit this package.")
    #:policy #:conventional-policy #:*policy* #:current-policy #:policy-name
    #:define-option #:option #:option-documentation #:all-options
    #:option-default #:option-boundp #:option-readers #:option-reader-name
+   #:option-shadows #:option-shadow-name
    ;; the tier-0 values themselves.  Every P1 fork in the design is here.
    #:*gaps* #:*outer-gaps* #:*border-width*
    #:*focused-border-color* #:*unfocused-border-color* #:*empty-pane-color*

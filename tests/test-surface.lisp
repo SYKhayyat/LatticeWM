@@ -209,6 +209,94 @@ still the wrong symbol."
                 (is (= 12 p:*gaps*) "the keyword and the variable are one thing"))
       (setf (p:option :gaps) before))))
 
+;;; ------------------------------------------- and who takes the answer away
+
+(defclass override-test-policy (p:conventional-policy) ()
+  (:documentation "A policy that answers GAPS itself and never asks the shipped
+method.  The shape gate 15 is about, built here so the assertions do not depend
+on the lattice being loaded — this suite runs against the core alone."))
+
+(defmethod p:gaps ((policy override-test-policy) container)
+  "Deliberately no CALL-NEXT-METHOD: this is the total override."
+  (declare (ignore container))
+  99)
+
+(defmethod p:gaps :around ((policy override-test-policy) (container c:stack))
+  "An :AROUND on the same generic, which is not an override of anything."
+  (call-next-method))
+
+(test an-override-of-the-reader-is-visible-from-the-option
+  "*GAPS* being read by GAPS (LAYOUT-POLICY T) is only half the answer.
+
+The other half is who wins over that method, because a policy that overrides it
+stops reading the option and the user's setting silently decides nothing.  That
+sentence was in three docstrings and no instrument, until *NEW-WORKSPACE* turned
+out to be exactly it: registered, documented, printed by --list-options,
+certified as read by gate 11, and not consulted at all once the lattice is
+enabled.
+
+Asked of the method list rather than of the source, so a method you evaluate at
+a REPL appears immediately and a paragraph never does."
+  (let ((shadows (p:option-shadows :gaps)))
+    (let ((mine (find-if (lambda (shadow)
+                           (search "override-test-policy" (p:option-shadow-name shadow)))
+                         shadows)))
+      (is (not (null mine)) "a method on a subclass of the shipped reader's class is an override")
+      (is (third mine)
+          "it narrows only the policy argument, so it applies wherever the ~
+           reader did")
+      (is (string= "gaps (override-test-policy t)" (p:option-shadow-name mine))
+          "written the way you would specialize it, not as SBCL spells it: ~a"
+          (and mine (p:option-shadow-name mine))))
+    ;; The shipped narrowed override, which is a different statement: a stack
+    ;; answers 0 and every other container still reads *GAPS*.
+    (let ((stack (find-if (lambda (shadow)
+                            (string= "gaps (layout-policy stack)"
+                                     (p:option-shadow-name shadow)))
+                          shadows)))
+      (is (not (null stack)) "GAPS for a STACK overrides the reader for stacks")
+      (is (not (third stack))
+          "and only for stacks, so *GAPS* still reaches everything else"))
+    ;; An :AROUND runs beside the answer rather than instead of it.  A policy
+    ;; that declines to call the next method from one is building a firewall,
+    ;; which is a different act from replacing a default.
+    (is (find-if (lambda (method) (equal '(:around) (method-qualifiers method)))
+                 (closer-mop:generic-function-methods #'p:gaps))
+        "the :AROUND above really is on this generic, so the next check is ~
+         not vacuous")
+    (is (notany (lambda (shadow)
+                  (equal '(:around) (method-qualifiers (second shadow))))
+                shadows)
+        "a qualified method is not an override")))
+
+(test an-option-nothing-can-override-has-no-shadows
+  "The mechanism only applies to an option a *method* reads.
+
+*LOG-FILE* is read by ordinary functions, so there is no dispatch to lose and
+nothing can quietly stop the read happening.  This is here so the previous test
+is known not to be reporting every option in the registry."
+  (is (null (p:option-shadows :log-file))
+      "an option read by plain functions has nothing that can override the read")
+  (is (p:option-readers :log-file)
+      "and it is genuinely read, so the assertion above is not vacuous"))
+
+(test the-generated-surface-prints-who-overrides-an-option
+  "The document is the delivery mechanism.  A fact the image knows and prints
+nowhere is the state *NEW-WORKSPACE* was already in."
+  (let* ((text (with-output-to-string (out) (p:print-extension-surface out)))
+         (lines (with-input-from-string (in text)
+                  (loop for line = (read-line in nil nil) while line collect line)))
+         (total (remove-if-not (lambda (line) (search "  overridden by: " line)) lines))
+         (narrowed (remove-if-not (lambda (line) (search "  overridden for: " line))
+                                  lines)))
+    (is (find-if (lambda (line) (search "gaps (override-test-policy t)" line)) total)
+        "a total override is printed under the option it switches off")
+    (is (find-if (lambda (line) (search "gaps (layout-policy stack)" line)) narrowed)
+        "and a narrowed one under a label that says it is narrowed")
+    (is (notany (lambda (line) (search "gaps (layout-policy stack)" line)) total)
+        "the two labels are not interchangeable: a narrowed override must not ~
+         be reported as taking the option away everywhere")))
+
 ;;; ---------------------------------------------------------- tier 1: a method
 
 (defclass gapless-policy (p:conventional-policy) ()

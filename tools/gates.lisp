@@ -1,19 +1,23 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are fourteen, and the eight that were added are the eight that found
-;;;; something.
+;;;; are fifteen.  Eight of the nine that were added were added because they
+;;;; had already found something; gate 15 is the ninth, it passed the day it
+;;;; was written, and it says so where it stands rather than here.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other thirteen run here, against the loaded image.
+;;;; The other fourteen run here, against the loaded image.
 ;;;;
 ;;;; Eleven of them ask the program a question.  Gate 12 asks the *documents*
 ;;;; one, which is the half of this project the other eleven cannot see; gate
 ;;;; 13 asks the *source*, because the one thing a keyword property key cannot
-;;;; be asked about is what the compiled image thinks of it; and gate 14 asks
+;;;; be asked about is what the compiled image thinks of it; gate 14 asks
 ;;;; the *test suites*, because the one thing neither the image nor the source
-;;;; can say about an extension point is whether anybody has ever used it.
+;;;; can say about an extension point is whether anybody has ever used it; and
+;;;; gate 15 asks the image and then the source, in that order, because whether
+;;;; a method overrides another is a fact about the method list and whether it
+;;;; composes with the one it overrides is a fact only the text has.
 
 (require :asdf)
 (require :sb-introspect)
@@ -1578,6 +1582,150 @@ identity."
                 (sort unexercised #'string<))
           (format t "  every hook is named, attached to and watched by one of ~
                      the three suites~%")))))
+
+;;; ---------------------------------------------------------------- gate 15
+
+(banner 15 "an override that takes an option away offers one of its own")
+;; GATE 11 CHECKED THAT SOMEBODY READS THE OPTION.  IT CANNOT CHECK THAT THE
+;; READ HAPPENS.
+;;
+;; The rule this project settled on is one sentence: the generic is the
+;; extension point, the option is what its shipped method returns, and *a
+;; policy that overrides that method stops reading the option*.  Gate 11 and
+;; OPTION-READERS made the first two clauses facts about the image.  The third
+;; stayed prose, and it is the clause with a user on the other end of it.
+;;
+;; It is not hypothetical.  Load the lattice and MAKE-WORKSPACE is answered by
+;; a method that never reaches the shipped one, so *NEW-WORKSPACE* --
+;; registered, documented, settable, printed by --list-options, and certified
+;; as read by gate 11, which is right, because the method that reads it still
+;; exists and simply never runs -- decides nothing.  Every instrument the
+;; project owns said that option worked.  The single statement of the truth was
+;; the last paragraph of the option's own docstring, and doc/EXTENDING.org,
+;; PLAN.org §generics and README all rotted this way first.
+;;
+;; SO ASK THE METHOD LIST, WHICH IS THE THING THAT KNOWS.  An override is a
+;; primary method at least as narrow as the reader everywhere and narrower
+;; somewhere; a *total* override narrows only the policy argument, so it
+;; applies wherever the reader applied.  OPTION-SHADOWS computes both from the
+;; image and the generated surface prints them under every option, so the
+;; answer to "I set it and my policy ignored it" is now a fact about the
+;; running program.
+;;
+;; WHAT IS LEFT IS THE PART THE IMAGE CANNOT ANSWER.  Whether an override
+;; composes -- whether CALL-NEXT-METHOD is in it -- is not recorded on a
+;; method: SBCL keeps no flag and the compiled body has no constant to find.
+;; It is in the source, so this reads the source, and reads the *form* the
+;; compiler recorded for that method rather than grepping the file, because a
+;; grep for CALL-NEXT-METHOD in lattice/policy.lisp hits eleven methods and a
+;; paragraph of prose.
+;;
+;; AND THE RULE IT ENFORCES IS A TRADE, NOT A BAN.  Overriding wholesale is
+;; legitimate -- the lattice's workspace is a plane, always, and that is the
+;; single method that makes the Z axis exist.  What is not legitimate is doing
+;; it and leaving the user with nothing: they set the documented knob and the
+;; program ignored them.  So a total override either composes, and the option
+;; still reaches, or it reads an option of its own, and the decision is still
+;; tier-0 configurable by somebody who will never write a DEFMETHOD.  The
+;; lattice pays this: it takes *NEW-WORKSPACE* and gives *NEW-WORKSPACE-CELLS*.
+;;
+;; THIS ONE PASSED THE DAY IT WAS WRITTEN, which is worth saying plainly rather
+;; than dressing up.  The other eight added gates each failed first.  What this
+;; found was not a broken method but an invisible fact: one shipped option that
+;; the flagship extension silently switches off, printed nowhere, checkable by
+;; nothing.  It is a ratchet against the sixteenth generic being overridden by
+;; the second extension with no knob offered and nobody noticing for a month.
+(flet ((toplevel-form (path index)
+         "The INDEXth toplevel form of PATH, read in the package it declares.
+
+Not a grep.  SB-INTROSPECT records which form of which file each method came
+from, so this reads that form and nothing else -- prose in the file, and the
+ten other methods around it, cannot answer for this one."
+         (with-open-file (in path :external-format :utf-8)
+           (let ((*package* *package*)
+                 (*read-eval* nil))
+             (loop for position from 0
+                   for form = (handler-case (read in nil :eof) (error () :eof))
+                   until (eq form :eof)
+                   do (when (and (consp form) (eq (first form) 'cl:in-package))
+                        (setf *package* (or (find-package (second form)) *package*)))
+                      (when (= position index) (return form))))))
+       (mentions (tree name)
+         (labels ((walk (form)
+                    (cond ((and form (symbolp form)) (string= (symbol-name form) name))
+                          ((consp form) (or (walk (car form)) (walk (cdr form))))
+                          (t nil))))
+           (walk tree)))
+       (specializer-names (method)
+         (mapcar (lambda (specializer)
+                   (typecase specializer
+                     (closer-mop:eql-specializer
+                      (list 'eql (closer-mop:eql-specializer-object specializer)))
+                     (class (class-name specializer))
+                     (t specializer)))
+                 (closer-mop:method-specializers method))))
+  (let* ((rows (call "latticewm/policy:all-options"))
+         (reads (make-hash-table :test #'equal))
+         (total 0)
+         (composing 0)
+         (traded '())
+         (offenders '()))
+    ;; Every (GENERIC SPECIALIZERS) that reads some option, and which.
+    (dolist (row rows)
+      (dolist (reader (call "latticewm/policy:option-readers" (first row)))
+        (when (and (consp reader) (= 3 (length reader)))
+          (push (second row) (gethash (list (second reader) (third reader)) reads)))))
+    (dolist (row rows)
+      (dolist (shadow (call "latticewm/policy:option-shadows" (first row)))
+        (destructuring-bind (generic method totalp) shadow
+          (when totalp
+            (incf total)
+            (let* ((source (ignore-errors (sb-introspect:find-definition-source method)))
+                   (path (and source (sb-introspect:definition-source-pathname source)))
+                   (index (and source (first (sb-introspect:definition-source-form-path
+                                              source))))
+                   (form (and path index (probe-file path)
+                              (ignore-errors (toplevel-form path index))))
+                   (composes (and form (or (mentions form "CALL-NEXT-METHOD")
+                                           (mentions form "NEXT-METHOD-P"))))
+                   (offered (gethash (list generic (specializer-names method)) reads))
+                   (name (call "latticewm/policy:option-shadow-name" shadow)))
+              (cond (composes (incf composing))
+                    ((null form)
+                     (fail 15 "no source form for ~a, so whether it composes ~
+                               cannot be established.~%~
+                               ~4tThe gate reads the form SB-INTROSPECT recorded ~
+                               for the method;~%~4tif the sources are not beside ~
+                               the image it cannot run at all." name))
+                    (offered
+                     (push (list (second row) name (sort (copy-list offered) #'string<
+                                                         :key #'symbol-name))
+                           traded))
+                    (t (push (list (second row) name) offenders))))))))
+    (format t "  options~46t~d~%  total overrides of a reader~46t~d~%~
+               ~4tof those, composing~46t~d~%~4tof those, trading one option ~
+               for another~46t~d~%"
+            (length rows) total composing (length traded))
+    (dolist (trade (sort traded #'string< :key (lambda (row) (symbol-name (first row)))))
+      (format t "    ~(~a~) is not read under ~a~%~14tit offers ~{~(~a~)~^, ~} instead~%"
+              (first trade) (second trade) (third trade)))
+    (when offenders
+      (fail 15 "~d option~:p an override switches off without replacing:~
+                ~{~%    ~(~a~) is not read under ~a~}~%~
+                ~4tThe method wins wherever the reader applied and never calls~%~
+                ~4tCALL-NEXT-METHOD, so the option decides nothing under that~%~
+                ~4tpolicy -- while --list-options prints it, the generated~%~
+                ~4tsurface documents it and gate 11 certifies it as read.~%~
+                ~4tThat is *smart-gaps* again with a longer fuse.~%~
+                ~4tCompose with CALL-NEXT-METHOD if the shipped answer is~%~
+                ~4tstill wanted, or read an option of your own so the~%~
+                ~4tdecision stays tier-0 for somebody who will never write a~%~
+                ~4tDEFMETHOD.  Overriding wholesale is allowed; doing it~%~
+                ~4tsilently is not."
+            (length offenders)
+            (loop for (option name) in (sort offenders #'string<
+                                             :key (lambda (row) (symbol-name (first row))))
+                  append (list option name))))))
 
 ;;; ---------------------------------------------------------------- verdict
 

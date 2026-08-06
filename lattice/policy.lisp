@@ -353,6 +353,18 @@ program registers and nothing reads, one mechanism over."
                    (call-next-method)))))))
 
 (defmethod p:gaps ((policy lattice-policy) (grid grid))
+  "Pixels between cells, which is *CELL-GAP* and not *GAPS*.
+
+The two are separate knobs on purpose: the gap between panes inside a cell is
+about reading two windows side by side, and the gap between cells is the width
+of the seam that says *this is a different place*.  Somebody who wants a
+seamless plane of gapped windows sets one to zero and the other to eight, and
+a single option could not say that.
+
+Narrowed to GRID, so *GAPS* still answers for every split and stack in the
+tree — including the ones inside a cell.  `latticewm --extension-surface'
+prints this method under *GAPS* as an `overridden for', which is the only
+statement of it a user has to be able to find."
   *cell-gap*)
 
 (defun coordinate-hue (address)
@@ -753,7 +765,15 @@ new workspace* was not a policy decision, so it could not be the lattice's.
 
 INDEX is ignored by the shipped answer — every plane is born alike — and is
 passed because a method that wants 'workspace 1 is the wide one' should not
-have to count the stack to find out which one it is being asked about."
+have to count the stack to find out which one it is being asked about.
+
+IT TAKES *NEW-WORKSPACE* AWAY AND OWES ONE BACK.  This is the whole of a total
+override: it wins wherever the shipped method applied and never calls
+CALL-NEXT-METHOD, so the option that method reads decides nothing while the
+lattice is enabled — printed by --list-options, documented, and inert.  Gate 15
+is the check that says so out loud, and the debt is paid in
+*NEW-WORKSPACE-CELLS*: the same decision, at the same tier, for somebody who
+will never write a DEFMETHOD."
   (declare (ignore index))
   (multiple-value-bind (cols rows origin) (new-workspace-viewport world)
     ;; The cell list is computed rather than left to MAKE-GRID's default,

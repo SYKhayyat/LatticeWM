@@ -575,6 +575,50 @@ existed were individually reasonable and all pointed somewhere else.
     number. Both matter because ~run-hooks~ guards each function separately — correctly,
     since one broken hook must not stop the others — so an arity mistake signals once per
     fire, is caught, and leaves nothing but a log line.
+15. *An override that takes an option away offers one of its own.* Gate 11 above checks
+    that somebody *reads* the option. It cannot check that the read ever *happens*.
+
+    The rule this project settled on is one sentence: /the generic is the extension
+    point, the option is what its shipped method returns, and a policy that overrides
+    that method stops reading the option./ ~option-readers~ and gate 11 made the first
+    two clauses facts about the image. The third stayed prose, and it is the clause with
+    a user on the other end of it — and it was already true of a shipped option. Load
+    the lattice and ~make-workspace~ is answered by a method that never reaches the
+    shipped one, so ~*new-workspace*~ decides nothing: registered, documented, settable,
+    printed by ~--list-options~, and certified as read by gate 11 — which is *right*,
+    because the method that reads it still exists and simply never runs. Every
+    instrument pointed at that option said it worked. The only statement of the truth
+    was the last paragraph of the option's own docstring, which is the artifact
+    [[#gates-added][gate 12]] exists because this project has watched rot four times.
+
+    *So ask the method list, which is the thing that knows.* An override is a primary
+    method at least as narrow as the reader everywhere and narrower somewhere; a /total/
+    override narrows only the policy argument, so it applies wherever the reader applied.
+    ~option-shadows~ computes both from the image and the generated extension surface
+    prints them under every option, beside ~read by:~ — so a policy *you* loaded appears
+    there, and /I set it and my policy ignored it/ has an answer that is a fact about the
+    running program.
+
+    *What is left is the part the image cannot answer.* Whether an override composes —
+    whether ~call-next-method~ is in it — is not recorded on a method: SBCL keeps no flag
+    and the compiled body has no constant to find. It is in the source, so the gate reads
+    the source, and reads the *form the compiler recorded for that method* rather than
+    grepping the file, because a grep for ~call-next-method~ in ~lattice/policy.lisp~
+    hits eleven methods and a paragraph of prose.
+
+    *The rule it enforces is a trade, not a ban.* Overriding wholesale is legitimate —
+    the lattice's workspace is a plane, always, and that one method is the entire Z axis.
+    What is not legitimate is doing it and leaving the person who was setting the option
+    with nothing to set. So a total override either composes, and the option still
+    reaches, or it reads an option of its own, and the decision stays tier-0 for somebody
+    who will never write a ~defmethod~. The lattice pays: it takes ~*new-workspace*~ and
+    gives ~*new-workspace-cells*~.
+
+    *And it passed the day it was written*, which is worth saying plainly rather than
+    dressing up, because the other eight added gates each failed first. What it found was
+    not a broken method but an invisible fact. It is a ratchet against the next extension
+    overriding a reader with no knob offered and nobody noticing for a month — which is
+    exactly how long ~*smart-gaps*~ lasted.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

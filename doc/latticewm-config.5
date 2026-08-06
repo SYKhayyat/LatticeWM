@@ -158,7 +158,13 @@ shipped method returns.  A policy that overrides
 stops reading
 .BR *gaps* .
 .B latticewm \-\-extension\-surface
-prints, under every option, what in the running program reads it.
+prints, under every option, what in the running program reads it \(em and which
+methods win over that reader, so an option a policy you loaded has switched off
+says so rather than looking live.  Enabling the lattice does exactly that to
+.BR *new-workspace* ,
+which is why it offers
+.B *new-workspace-cells*
+in its place.
 .TP
 .B *focused-border-color* *unfocused-border-color* *cursor-border-color*
 Four straight\-alpha floats each.  You write the colour you mean and the wire

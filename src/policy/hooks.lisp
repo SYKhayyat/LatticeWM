@@ -23,6 +23,18 @@
 ;;;; extension surface prints it under every option, and gate 11 fails the
 ;;;; build on an option no method and no function reads.
 ;;;;
+;;;; INCLUDING THE LAST CLAUSE, WHICH STAYED PROSE ONE COMMIT LONGER THAN THE
+;;;; REST OF THE SENTENCE.  "A policy that overrides the method stops reading
+;;;; the option" was true of *NEW-WORKSPACE* the whole time the lattice has
+;;;; existed, and no instrument in the project could see it: the reader is
+;;;; still there, gate 11 still finds it, and it simply never runs.
+;;;; OPTION-SHADOWS asks the method list who wins over a reader, the surface
+;;;; prints that under the option too, and gate 15 requires an override that
+;;;; wins everywhere to compose or to ship an option of its own.  The rule is
+;;;; a trade, not a ban: the lattice takes *NEW-WORKSPACE* and gives
+;;;; *NEW-WORKSPACE-CELLS*, so the decision stays tier-0 for a user who will
+;;;; never write a DEFMETHOD.
+;;;;
 ;;;; AND THE HOOK WAS THE ONE OF THE THREE WITH NOTHING ASKING THAT QUESTION.
 ;;;; Fourteen of the seventeen declared hooks had never been attached to by
 ;;;; anything -- not by the lattice, not by the four worked examples, not by a

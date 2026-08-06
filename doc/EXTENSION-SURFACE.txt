@@ -1196,6 +1196,19 @@ returns.  A policy that overrides that method stops reading the option, and
 setting it does nothing.  Change the option to change the shipped answer;
 write the method to change the decision.
 
+`overridden by' is that second sentence made visible: a method on the same
+generic that wins wherever the reader applied.  Under it the option decides
+nothing, unless the method calls CALL-NEXT-METHOD -- and one that does not is
+required by gate 15 to offer an option of its own instead, so there is always
+a knob, even when it is not this one.  `overridden for' is the same thing
+narrowed to the argument classes it names: GAPS answered separately for a
+STACK does not stop *GAPS* reaching every other container.
+
+Both lists are this image's method list, so a policy you loaded appears in
+them.  That is the point: the answer to `I set it and my policy ignored it'
+is a fact about the program you are running rather than a sentence somebody
+has to remember to keep true.
+
 An option with no readers at all is a documented value wired to nothing.
 There are none: gate 11 fails the build on the first one.
 
@@ -1532,6 +1545,7 @@ reads as a broken keyboard rather than as a place.
 *gaps*
   now: 0
   read by: gaps (layout-policy t)
+  overridden for: gaps (layout-policy stack)
   Pixels of empty space between adjacent panes.  0 is a clean grid; 4 to 8
 gives the airy look, at the cost of that much screen.
 
@@ -1862,6 +1876,12 @@ named, a two-line lambda names better and in the user's own words:
 Specialize MAKE-WORKSPACE instead when the answer belongs to a *policy* rather
 than to a person — that is what the lattice does, and it is why every workspace
 born after `lattice:enable' is a plane rather than a pane.
+
+WHICH MEANS THIS OPTION IS NOT READ AT ALL UNDER THE LATTICE, and that used to
+be a sentence you had to find here and trust.  It is a fact about the image
+now: `latticewm --extension-surface' lists the overriding method under this
+option as an `overridden by', and gate 15 requires an override of that shape to
+offer an option of its own — the lattice offers *NEW-WORKSPACE-CELLS*.
 
 *not-repeatable*
   now: ("repeat" "run-command-by-name" "undo" "redo")

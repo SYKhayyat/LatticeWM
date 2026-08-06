@@ -115,6 +115,131 @@ image rather than a sentence somebody has to remember to keep true."
       (format nil "~(~a ~a~)" (second reader) (or (third reader) '()))
       (format nil "~(~a~)" reader)))
 
+;;; ------------------------------------------- and who takes the answer away
+;;;
+;;; THE SECOND HALF OF THE SENTENCE, WHICH WAS STILL PROSE.  OPTION-READERS
+;;; answers "who looks at this?" and the generated surface prints it, so the
+;;; first half of the rule -- the generic is the extension point, the option is
+;;; what its shipped method returns -- is a fact about the image.  The rest of
+;;; that same sentence is "a policy that overrides the method stops reading the
+;;; option", and *nothing could see an override*.
+;;;
+;;; It is not hypothetical.  Load the lattice and MAKE-WORKSPACE is answered by
+;;; a method that never reaches the shipped one, so *NEW-WORKSPACE* -- a
+;;; registered, documented, settable option that `--list-options' prints and
+;;; gate 11 certifies as read -- decides nothing at all.  That is true, it is
+;;; deliberate, and the only statement of it in the tree was one paragraph at
+;;; the bottom of the option's own docstring, which is the artifact this
+;;; project has already watched rot four times.
+;;;
+;;; So ask the image the whole question.  An override is a fact about the
+;;; generic function's method list: a primary method whose specializers are at
+;;; least as narrow as the reader's everywhere and narrower somewhere.  Two
+;;; kinds, and the difference is the one a user cares about:
+;;;
+;;;   TOTAL     narrower only in the policy argument, so it applies wherever
+;;;             the reader did.  Set the option under that policy and nothing
+;;;             happens unless the method calls CALL-NEXT-METHOD.
+;;;   NARROWED  narrower in some other argument as well -- GAPS for a STACK,
+;;;             GAPS for a lattice GRID.  The option still reaches everywhere
+;;;             that argument is not one of those.
+;;;
+;;; Whether the override composes cannot be asked of the image: SBCL keeps no
+;;; CALL-NEXT-METHOD flag on a method and the compiled body has no constant to
+;;; find.  It can be asked of the source, so gate 15 asks it there and requires
+;;; that a total override which does not compose ship an option of its own.
+;;; This function stops at what the image knows, and the document says exactly
+;;; that much and no more.
+
+(defun option-reader-method (reader)
+  "The method object READER names, or NIL when READER is a plain function."
+  (when (and (consp reader)
+             (symbolp (first reader))
+             (search "METHOD" (symbol-name (first reader)))
+             (fboundp (second reader)))
+    (let ((gf (fdefinition (second reader))))
+      (when (typep gf 'generic-function)
+        (find-if (lambda (method)
+                   (let ((specializers (closer-mop:method-specializers method)))
+                     (and (= (length specializers) (length (third reader)))
+                          (every #'specializer-named-p specializers (third reader)))))
+                 (closer-mop:generic-function-methods gf))))))
+
+(defun specializer-named-p (specializer name)
+  "True when NAME is how SBCL writes SPECIALIZER in a method's function name."
+  (typecase specializer
+    (closer-mop:eql-specializer
+     (equal name (list 'eql (closer-mop:eql-specializer-object specializer))))
+    (class (eq (class-name specializer) name))
+    (t (equal specializer name))))
+
+(defun specializer-narrower-p (narrow wide)
+  "True when NARROW admits no argument WIDE refuses.  NIL for unrelated pairs."
+  (or (eq narrow wide)
+      (and (typep narrow 'closer-mop:eql-specializer)
+           (typep wide 'class)
+           (typep (closer-mop:eql-specializer-object narrow) wide))
+      (and (typep narrow 'class) (typep wide 'class)
+           (subtypep narrow wide))))
+
+(defun overrides-p (candidate method)
+  "True when CANDIDATE wins over METHOD wherever both are applicable.
+
+Primary methods only.  A :BEFORE or :AROUND method is not an override -- it
+runs beside the answer rather than instead of it, and an :AROUND that declines
+to call the next method is a policy deciding to be a firewall, which is a
+different act and one no user mistakes for a setting that did not take."
+  (let ((narrow (closer-mop:method-specializers candidate))
+        (wide (closer-mop:method-specializers method)))
+    (and (null (method-qualifiers candidate))
+         (= (length narrow) (length wide))
+         (every #'specializer-narrower-p narrow wide)
+         (notevery #'eq narrow wide))))
+
+(defun total-override-p (candidate method)
+  "True when CANDIDATE narrows METHOD in the policy argument and nowhere else."
+  (let ((narrow (rest (closer-mop:method-specializers candidate)))
+        (wide (rest (closer-mop:method-specializers method))))
+    (every #'eq narrow wide)))
+
+(defun option-shadows (name)
+  "Every method that takes precedence over a method reading option NAME.
+
+Rows of (GENERIC METHOD TOTALP), in the order the option's readers and each
+generic's method list give them.  Empty for an option read by ordinary
+functions, which nothing can override.
+
+This is the answer to `I set it and my policy ignored it'.  It is also why the
+generated surface prints two labels rather than one: a total override takes
+the option away wherever that policy is in charge, and a narrowed one takes it
+away only for the argument classes it names."
+  (let* ((readers (option-readers name))
+         (methods (remove nil (mapcar #'option-reader-method readers)))
+         (out '()))
+    (loop for reader in readers
+          for method = (option-reader-method reader)
+          when method
+            do (dolist (candidate (closer-mop:generic-function-methods
+                                   (fdefinition (second reader))))
+                 ;; A method that reads this same option is not taking it away,
+                 ;; however specific it is -- it is the shipped answer said
+                 ;; again for a narrower case, and the user's setting still
+                 ;; decides.  Only a method that reads something *else*, or
+                 ;; nothing, can leave them with a knob that does not turn.
+                 (when (and (not (member candidate methods))
+                            (overrides-p candidate method))
+                   (pushnew (list (second reader) candidate
+                                  (total-override-p candidate method))
+                            out :test #'equal))))
+    (nreverse out)))
+
+(defun option-shadow-name (shadow)
+  "SHADOW as a string, written the way you would specialize it."
+  (destructuring-bind (generic method totalp) shadow
+    (declare (ignore totalp))
+    (format nil "~(~a (~{~a~^ ~})~)" generic
+            (mapcar #'c:specializer-name (closer-mop:method-specializers method)))))
+
 (defun all-options ()
   "Every registered tier-0 option, as (KEYWORD VARIABLE VALUE DEFAULT DOC),
 sorted by name."

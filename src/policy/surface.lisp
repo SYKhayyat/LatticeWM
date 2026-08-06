@@ -35,7 +35,13 @@ that the realistic post-expiry maintainer is a cheap model plus whatever
 contributors the release attracts, and a model would rather have a plist."
   (list :generics (mapcar #'c:generic-description (policy-generics))
         :options (mapcar (lambda (row)
-                           (append row (list (option-readers (first row)))))
+                           (let ((shadows (option-shadows (first row))))
+                             (append row
+                                     (list (option-readers (first row))
+                                           (mapcar #'option-shadow-name
+                                                   (remove-if-not #'third shadows))
+                                           (mapcar #'option-shadow-name
+                                                   (remove-if #'third shadows))))))
                          (all-options))))
 
 (defun print-hook-surface (&optional (stream *standard-output*))
@@ -141,14 +147,30 @@ generic is the extension point and the option is what its shipped method~%~
 returns.  A policy that overrides that method stops reading the option, and~%~
 setting it does nothing.  Change the option to change the shipped answer;~%~
 write the method to change the decision.~2%~
+`overridden by' is that second sentence made visible: a method on the same~%~
+generic that wins wherever the reader applied.  Under it the option decides~%~
+nothing, unless the method calls CALL-NEXT-METHOD -- and one that does not is~%~
+required by gate 15 to offer an option of its own instead, so there is always~%~
+a knob, even when it is not this one.  `overridden for' is the same thing~%~
+narrowed to the argument classes it names: GAPS answered separately for a~%~
+STACK does not stop *GAPS* reaching every other container.~2%~
+Both lists are this image's method list, so a policy you loaded appears in~%~
+them.  That is the point: the answer to `I set it and my policy ignored it'~%~
+is a fact about the program you are running rather than a sentence somebody~%~
+has to remember to keep true.~2%~
 An option with no readers at all is a documented value wired to nothing.~%~
 There are none: gate 11 fails the build on the first one.~2%")
     (dolist (row (getf surface :options))
-      (destructuring-bind (key variable value default documentation readers) row
+      (destructuring-bind (key variable value default documentation readers
+                           overridden-by overridden-for)
+          row
         (declare (ignore key))
         (format stream "~(~a~)~%  now: ~s~@[   (default ~s)~]~%~
-                        ~@[  read by: ~{~a~^, ~}~%~]  ~a~2%"
+                        ~@[  read by: ~{~a~^, ~}~%~]~
+                        ~@[  overridden by: ~{~a~^, ~}~%~]~
+                        ~@[  overridden for: ~{~a~^, ~}~%~]  ~a~2%"
                 variable value (unless (equal value default) default)
                 (mapcar #'option-reader-name readers)
+                overridden-by overridden-for
                 documentation)))
     (values)))

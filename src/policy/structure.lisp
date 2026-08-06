@@ -32,7 +32,13 @@ named, a two-line lambda names better and in the user's own words:
 
 Specialize MAKE-WORKSPACE instead when the answer belongs to a *policy* rather
 than to a person — that is what the lattice does, and it is why every workspace
-born after `lattice:enable' is a plane rather than a pane.")
+born after `lattice:enable' is a plane rather than a pane.
+
+WHICH MEANS THIS OPTION IS NOT READ AT ALL UNDER THE LATTICE, and that used to
+be a sentence you had to find here and trust.  It is a fact about the image
+now: `latticewm --extension-surface' lists the overriding method under this
+option as an `overridden by', and gate 15 requires an override of that shape to
+offer an option of its own — the lattice offers *NEW-WORKSPACE-CELLS*.")
 
 (defmethod make-workspace ((policy structure-policy) world index)
   "An empty pane, or whatever *NEW-WORKSPACE* names.

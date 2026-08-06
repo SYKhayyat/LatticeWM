@@ -118,18 +118,50 @@ after that setting it does nothing.
 
 You do not have to remember which options those are, and neither does this
 page. ~latticewm --extension-surface~ prints a ~read by:~ line under every
-option saying what in the running program looks at the value:
+option saying what in the running program looks at the value, and beneath it
+the methods that win over that reader:
 
 #+begin_example
 *gaps*
   now: 0
   read by: gaps (layout-policy t)
+  overridden for: gaps (layout-policy stack), gaps (lattice-policy grid)
+
+*new-workspace*
+  now: :empty
+  read by: make-workspace (structure-policy t t)
+  overridden by: make-workspace (lattice-policy t t)
 #+end_example
 
-That is asked of the compiler's cross-reference data rather than written down,
-so it cannot drift, and an option that nothing reads is a failing build — see
-gate 11 in [[file:../PLAN.org::#gates-added][PLAN.org §gates-added]] for the one
-that shipped.
+That is an image with the lattice enabled, which is why the lattice is in it.
+The copy of this document under =doc/EXTENSION-SURFACE.txt= is generated from
+the core alone and shows only the core's own overrides — ask your own running
+window manager to see yours.
+
+#+CLAIM: (find "gaps (lattice-policy grid)"
+#+CLAIM:       (mapcar #'option-shadow-name (option-shadows :gaps)) :test #'string=)
+#+CLAIM: (find "make-workspace (lattice-policy t t)"
+#+CLAIM:       (mapcar #'option-shadow-name (option-shadows :new-workspace)) :test #'string=)
+
+~read by~ is asked of the compiler's cross-reference data and the two override
+lines are asked of the generic function's method list, so all three are facts
+about the image you are running rather than sentences somebody has to remember
+to keep true. A policy *you* loaded appears in them, which is the point: this
+is the answer to /I set it and my policy ignored it/.
+
+The two labels say different things. ~overridden by~ is a method that wins
+wherever the reader applied — under that policy the option decides nothing,
+unless the method calls ~call-next-method~. ~overridden for~ is the same thing
+narrowed to the argument classes it names, so ~*gaps*~ still reaches every
+container that is not a stack or a lattice cell.
+
+An option that nothing reads is a failing build, and so is an ~overridden by~
+that neither composes nor reads an option of its own — you may replace a
+shipped answer wholesale, but not leave the person who was setting the option
+with nothing to set. The lattice does replace ~make-workspace~ wholesale, and
+pays for it with ~*new-workspace-cells*~. See gates 11 and 15 in
+[[file:../PLAN.org::#gates-added][PLAN.org §gates-added]] for the option that
+shipped wired to nothing and the one that shipped switched off.
 
 * Tier 1 — methods
 

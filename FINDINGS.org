@@ -141,6 +141,21 @@ also where ~:fixed~ zoom stops being half-built.
 the difference between the lattice being an arrangement you set up and being
 the shape of the system. See [[#edit-4][core edit 4]].
 
+*It is also the one that costs the user something, and that went unrecorded for
+the whole life of the extension.* It is a /total/ override — it wins wherever
+the shipped method applied and never calls ~call-next-method~ — so the option
+that method reads, ~*new-workspace*~, decides nothing at all while the lattice
+is enabled. Nothing could see that: the reader still exists, so
+[[file:PLAN.org::#gates-added][gate 11]] certified the option as read, and
+~--list-options~ went on printing it. Two of the rows above are the same shape
+narrowed to one container kind — ~gaps~ takes ~*gaps*~ away for cells, ~gaps~ on
+a stack takes it away for tabs — and those are fine, because the option still
+answers everywhere else. The unconditional one is the one that owes something
+back, and it pays: ~*new-workspace-cells*~ is the same decision at the same
+tier for somebody who will never write a ~defmethod~. Gate 15 is what makes
+that a rule rather than a courtesy, and =latticewm --extension-surface= prints
+the override under the option it switches off.
+
 Plus twelve methods on the *container protocol* — ~container-addresses~,
 ~child-at~, ~(setf child-at)~, ~insert-child~, ~remove-child~,
 ~container-count~, ~default-address~, ~simplify-node~,
