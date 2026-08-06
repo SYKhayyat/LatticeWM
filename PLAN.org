@@ -1698,6 +1698,23 @@ integration suite reports "river_window_manager_v1 is bound at version 5,
 which is the version we generated against". The three structural skips are
 unchanged.
 
+*And the NixOS module, which is the same bug for the one user who cannot read
+a refusal.* Two things were wrong with it and neither had ever been run,
+because =nix flake check= evaluates a module's options and not a system that
+enables it. =programs.latticewm.river= defaulted to =pkgs.river= — the
+*user's* nixpkgs, not this flake's — under a description saying "pinning this
+alongside the window manager is the point of the module". And the session
+entry came from the package, whose =.desktop= hardcodes the river locked at
+build time, so setting the option changed which river you had installed and
+not which one your session ran: an option that did nothing, silently. Worse,
+=sessionPackages= requires =passthru.providedSessions= and the package has
+none, so =programs.latticewm.enable = true= failed to evaluate at all. The
+module now builds the session entry from =cfg.river=, defaults it to the
+locked river, declares its session, and *asserts* the pair — a mismatch fails
+=nixos-rebuild= with both numbers rather than a login screen with neither.
+Evaluated both ways: zero failing assertions matched, the message with the two
+versions when overridden with 0.4.5.
+
 *Gate 5 grew the check that would have caught this in the first place.* It
 counted interfaces, requests, events and enums, and said nothing about the one
 number that actually decides whether the program starts: the version constant

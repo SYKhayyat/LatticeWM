@@ -193,6 +193,39 @@ nix run .#nested     # river with LatticeWM inside the current session
 that nix exists: delete =shell.nix= and =flake.nix= and the project still
 builds, which is the property those two files are held to.
 
+** Installing it as a session, with the module
+
+The flake ships a NixOS module, which is the way to get a login-screen entry
+without =install.sh=:
+
+#+begin_src nix
+{
+  inputs.latticewm.url = "github:SYKhayyat/LatticeWM";
+
+  outputs = { nixpkgs, latticewm, ... }: {
+    nixosConfigurations.yourhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        latticewm.nixosModules.default
+        { programs.latticewm.enable = true; }
+      ];
+    };
+  };
+}
+#+end_src
+
+That is all of it.  =programs.latticewm.river= defaults to the river the flake
+locks — the one the protocol was vendored from — and the session entry is
+built from whatever you set it to, so the pair really is a pair.  Override it
+and a mismatch fails =nixos-rebuild= with the two version numbers in the
+message, rather than at a login screen where there is no terminal to read a
+refusal in.
+
+The module also turns on polkit, =hardware.graphics=, and the wlr xdg-portal,
+because river needs all three to be useful and forgetting one produces
+symptoms that look like the window manager's fault: no screen sharing, no
+file-chooser, no hardware acceleration.
+
 * Checking that it worked
 
 #+begin_src sh

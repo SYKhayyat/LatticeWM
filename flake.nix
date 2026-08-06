@@ -204,18 +204,86 @@
             };
             river = mkOption {
               type = types.package;
-              default = pkgs.river;
+              # THIS WAS `pkgs.river', WHICH IS THE USER'S NIXPKGS AND NOT THIS
+              # ONE — so the module whose whole purpose is pinning the pair
+              # pinned the window manager and let the compositor float, and the
+              # description below said the opposite in as many words.  On a
+              # system whose nixpkgs held a different river, `nixos-rebuild'
+              # succeeded and the failure arrived at a login screen.  That is
+              # the exact shape of the bug this release exists to fix, in the
+              # one place where the person hitting it has no shell to read the
+              # refusal in.
+              default = self.packages.${pkgs.system}.river;
               description = ''
-                The river to run it under.  Pinning this alongside the window
-                manager is the point of the module: the protocol is young, and
-                a river upgrade that changes it should be a deliberate act
-                rather than something that happens on a Tuesday.
+                The river to run it under.  Defaults to the one this flake
+                locks, which is the one the protocol in src/protocol/ was
+                vendored from.  Pinning this alongside the window manager is
+                the point of the module: the protocol is young, and a river
+                upgrade that changes it should be a deliberate act rather than
+                something that happens on a Tuesday.
               '';
             };
           };
           config = mkIf cfg.enable {
+            # AND THE PAIR IS ASSERTED, not merely defaulted.  Overriding
+            # `river' is legitimate — a re-vendored tree wants a newer one —
+            # but overriding it with a river the vendored protocol does not
+            # match produces a window manager that refuses to start, and the
+            # place it refuses is a login screen with no terminal in front of
+            # it.  Failing `nixos-rebuild' instead is the whole argument of
+            # this commit, applied to the one path that reaches a user who
+            # never ran `make'.
+            assertions =
+              let
+                pinned =
+                  let
+                    firstLine = builtins.head (builtins.split "\n"
+                      (builtins.readFile (self + "/src/protocol/PINNED")));
+                    matched = builtins.match "river ([0-9][0-9.]*).*" firstLine;
+                  in
+                  if matched == null then null else builtins.head matched;
+                running = cfg.river.version or "";
+              in
+              [{
+                assertion = pinned == null || running == "" || running == pinned;
+                message = ''
+                  programs.latticewm.river is river ${running}, but the protocol
+                  in ${cfg.package.pname or "latticewm"} was vendored from river
+                  ${toString pinned}.  LatticeWM checks river-window-management-v1's
+                  version at startup and refuses to run on a mismatch, so this
+                  would fail at your login screen rather than here.
+
+                  Either leave programs.latticewm.river at its default, which is
+                  the river this flake locks, or re-vendor the protocol -- see
+                  INSTALL.org, "Moving to a newer river".
+                '';
+              }];
+
             environment.systemPackages = [ cfg.package cfg.river ];
-            services.displayManager.sessionPackages = [ cfg.package ];
+
+            # THE SESSION ENTRY IS BUILT HERE RATHER THAN TAKEN FROM THE
+            # PACKAGE, because the package's own .desktop hardcodes the river
+            # this flake locked at build time — so `programs.latticewm.river'
+            # was an option that changed which river you had installed and not
+            # which one your session ran.  Setting it did nothing visible and
+            # nothing said so.  Now it is the option it says it is, and the
+            # assertion above is about the river that will actually run.
+            services.displayManager.sessionPackages = [
+              (pkgs.writeTextFile {
+                name = "latticewm-session";
+                destination = "/share/wayland-sessions/latticewm.desktop";
+                text = ''
+                  [Desktop Entry]
+                  Name=LatticeWM
+                  Comment=An extensible window manager for river
+                  Exec=${cfg.river}/bin/river -c ${cfg.package}/bin/latticewm
+                  Type=Application
+                '';
+                # sessionPackages wants to know the session name without
+                # reading the file.
+                passthru.providedSessions = [ "latticewm" ];
+              })
+            ];
             # river needs these to be useful at all.
             security.polkit.enable = true;
             hardware.graphics.enable = mkDefault true;
