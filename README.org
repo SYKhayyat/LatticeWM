@@ -717,6 +717,14 @@ workspaces, tags, named scratchpads, undo and redo; the saved layout written
 and read back with a real window's tags in it; and the control socket
 answering one line per form.
 
+*When river goes away, so does LatticeWM* — within a second, having run its
+shutdown hooks and written the layout out. That sentence was false until
+2026-08-06: an orphaned window manager span a core indefinitely and said nothing,
+because a socket at end of file is readable and nothing in the loop could tell
+that from a socket with a message on it. Six of them were found at 95% CPU each
+on one machine. See [[file:FINDINGS.org::#spin][FINDINGS.org §spin]]; verified
+against a real river killed with =SIGKILL= and with =SIGTERM=.
+
 =make check= fails when river or a terminal emulator is missing rather than
 skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. It was
 *intermittently red on a good tree* — the suite's last check, that =quit= ends

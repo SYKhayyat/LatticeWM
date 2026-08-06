@@ -457,6 +457,37 @@ still the shipped rule, and something else is now writable."
           "an index past the end of the stack is dropped, not clamped to it"))))
 
 ;;; ==================================================================
+;;; THE HANGUP NOTHING REPORTED
+;;; ==================================================================
+;;;
+;;; Kill the compositor and the window manager used to spin a core for as long
+;;; as the machine was up: the socket becomes readable at end of file, the wait
+;;; returns instantly for ever, and wayflan cannot say whether the zero bytes it
+;;; read mean `gone' or `not yet'.  poll(2) can, and R::CONNECTION-HUNG-UP-P is
+;;; the question.
+;;;
+;;; A pipe with its writer closed, because it is the same fd state and a unit
+;;; test can make one in two lines.  The socket case is measured against a real
+;;; river, killed on purpose, and written up in FINDINGS.org.
+
+(test a-descriptor-whose-other-end-is-gone-is-recognised
+  (multiple-value-bind (read-end write-end) (sb-posix:pipe)
+    (unwind-protect
+         (progn
+           (is (null (r::connection-hung-up-p read-end))
+               "an open descriptor with nothing on it has not hung up, which
+                is the case this runs in sixty times a second")
+           (sb-posix:close write-end)
+           (is (r::connection-hung-up-p read-end)
+               "and a descriptor whose other end is gone has"))
+      (ignore-errors (sb-posix:close read-end)))))
+
+(test the-hangup-question-tolerates-being-asked-about-nothing
+  (is (null (r::connection-hung-up-p nil))
+      "DISPLAY-FD answers NIL when wayflan's internals move, and the loop still
+       has to run"))
+
+;;; ==================================================================
 ;;; TWO MONITORS, AND THE ONE WORKSPACE BETWEEN THEM
 ;;; ==================================================================
 ;;;

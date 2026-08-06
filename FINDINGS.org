@@ -754,6 +754,66 @@ document was written about one that never existed.
   because *The screen was up to thirty seconds stale* is in the table above and
   was a lost wakeup, not because this is known to be the same thing.
 
+* Found by looking at the machine instead of at the program
+:PROPERTIES:
+:CUSTOM_ID: spin
+:END:
+
+Every defect above was found by running the window manager and *watching the
+screen*. This one was found by running ~ps~ for an unrelated reason.
+
+Six LatticeWM processes, left over from an earlier session, at 95% of a core
+each. Load average 7.7 on an idle machine. Their river had been dead for an
+hour. Not one of them had written a line to its log since the moment it was
+orphaned, and not one of them had exited.
+
+: PID     ELAPSED     TIME %CPU STAT
+: 103407 01:18:54 00:59:21 75.2 Rsl
+: 106681    59:56 00:54:12 90.4 Rsl
+: 108281    54:18 00:53:14 98.0 Rsl
+
+*The mechanism is exact and it is nobody's bug in particular.* A stream socket
+whose peer has closed is *readable* — a read would return zero rather than block
+— so ~sb-sys:wait-until-fd-usable~ returns immediately, every time, for ever.
+wayflan's ~wl-display-listen~ then asks whether a message is available, and its
+~%read-once~ gets ~0~ back from ~recvmsg~ for end of file and ~0~ for "nothing
+yet, try later", and cannot tell the caller which, because both are the same
+integer. So ~dispatch-events~ reads nothing, signals nothing, and answers ~t~.
+Wait, read nothing, answer ~t~, wait. A busy loop with no error anywhere in it,
+which is the one shape that leaves no trace.
+
+*And it is the failure the design already knew about, reached from the other
+side.* ~display-fd~ exists at all because polling would cost "a laptop that runs
+hot and flat while apparently sitting idle" — its own words. That fix made the
+*idle* case free and left the *dead* case spinning, and the difference between
+the two is one question nobody asked the kernel.
+
+poll(2) answers it. =POLLHUP= is set in the reply whether or not it was asked
+for, and it is the direct statement of what ~select~ structurally cannot say:
+this descriptor is readable /because the other end is gone/. One syscall per
+wakeup, asked after the events have been dispatched so that a compositor exiting
+cleanly — a last message and a hangup in the same read — is drained before it is
+declared dead. The alternative is to infer the hangup from "we woke up and there
+was nothing there", which is an inference where an answer is available.
+
+*Verified:* river killed with =SIGKILL=, and again with =SIGTERM=. Both times
+the window manager logs "compositor closed the connection", runs its shutdown
+hooks, saves the layout and exits within a second — against for ever, silently,
+before.
+
+*The transferable part is the third method this file has now collected.* The
+first was write an extension and trip over something. The second was ask what
+the project checks about itself. The third was distrust a green build. This is a
+fourth and it is the cheapest of all: *look at the machine the program is
+running on.* Six processes at 95% of a core is not a subtle signal, and nothing
+inside the program — no test, no gate, no log line, no screen — was ever going
+to produce it, because from the inside the loop was doing exactly what it was
+told.
+
+It is also why two integration runs failed that afternoon on checks about how
+long a client takes to exit. A machine under load is an instrument out of
+calibration, and the noise was the bug.
+
 * Where the honest claim now stands
 
 DESIGN's §extensibility settled on a deliberately modest claim:

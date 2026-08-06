@@ -2589,3 +2589,34 @@ Three repairs, and the middle one is the general lesson:
 log when two outputs do come back with the same node — the one thing that never
 happened in the whole history of this bug.
 
+** And a window manager whose compositor is gone spun a core
+
+Found by looking at the machine rather than at the program: six leftover LatticeWM
+processes at 95% CPU each, load average 7.7, their river dead for an hour, not one of
+them having written a line to its log since. They were also the reason two integration
+runs failed that afternoon on checks about client timing, which is worth saying
+because a machine under load is an instrument out of calibration.
+
+The mechanism is exact and it is nobody's bug in particular. A stream socket whose
+peer has closed is *readable* — a read would return zero rather than block — so
+=WAIT-UNTIL-FD-USABLE= returns immediately, for ever. wayflan's =WL-DISPLAY-LISTEN=
+then asks whether a message is available, and its =%READ-ONCE= gets 0 from recvmsg for
+end of file and 0 for "nothing yet", and cannot tell the caller which. So
+=DISPATCH-EVENTS= reads nothing, signals nothing, and answers T. Wait, read nothing,
+answer T, wait: a busy loop with no error in it, which is the shape that leaves no
+trace.
+
+That is the exact failure =DISPLAY-FD='s own docstring says it exists to prevent — "a
+laptop that runs hot and flat while apparently sitting idle" — reached by the road its
+fix did not cover, because it fixed the *idle* case and this is the *dead* one.
+
+poll(2) knows. POLLHUP is set in the answer whether or not it was asked for, and it is
+the direct statement of the thing select cannot make: this descriptor is readable
+because the other end is gone. One syscall per wakeup, after the events have been
+dispatched so that a compositor exiting cleanly is drained before it is declared dead.
+The alternative — inferring the hangup from "we woke and there was nothing there" — is
+an inference where an answer is available.
+
+*Verified:* river killed with SIGKILL and with SIGTERM, both times the window manager
+logs "compositor closed the connection", saves the layout and exits within a second,
+against for ever before.

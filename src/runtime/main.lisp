@@ -19,7 +19,14 @@
 ;;; five lines because of that property and not otherwise.
 
 (defun dispatch-events ()
-  "Read and dispatch whatever the compositor has sent.  Returns NIL on hangup."
+  "Read and dispatch whatever the compositor has sent.  Returns NIL on hangup.
+
+*THIS CANNOT SEE THE COMMONEST HANGUP THERE IS*, which is why
+CONNECTION-HUNG-UP-P exists and is asked directly after every call to this.
+The three conditions below are the ones where a hangup arrives in the middle of
+something: a message half read, a protocol error, a broken stream.  A
+compositor that simply goes away between messages produces none of them — see
+the next function for what it produces instead, which is nothing at all."
   (handler-case
       (progn
         (loop while (wl:wl-display-listen (server-display *server*))
@@ -33,6 +40,67 @@
     (sb-int:simple-stream-error (condition)
       (logmsg :info "connection lost: ~a" condition)
       nil)))
+
+;;; ------------------------------------------------- the hangup nothing reports
+;;;
+;;; KILL THE COMPOSITOR AND THIS PROGRAM USED TO SPIN A CORE FOREVER.  Six of
+;;; them were found on one developer's machine at 95% CPU each, load average
+;;; 7.7, their river long dead, and not one of them had written a line to its
+;;; log since the day it was orphaned.
+;;;
+;;; The mechanism is exact and it is nobody's bug in particular.  When the peer
+;;; closes a stream socket the fd becomes *readable* — a read would not block,
+;;; it would return zero — so SB-SYS:WAIT-UNTIL-FD-USABLE returns immediately,
+;;; every time, for ever.  wayflan's WL-DISPLAY-LISTEN then asks whether a
+;;; message is available: its %READ-ONCE calls recvmsg, gets 0 for end of file
+;;; and 0 for `nothing yet, try later', and cannot tell the caller which,
+;;; because both are the same integer.  So DISPATCH-EVENTS above reads nothing,
+;;; signals nothing, and answers T.  Wait, read nothing, answer T, wait: a busy
+;;; loop with no error in it, which is the one shape that leaves no trace.
+;;;
+;;; That is the exact failure DISPLAY-FD's own docstring says it exists to
+;;; prevent — "a laptop that runs hot and flat while apparently sitting idle" —
+;;; reached by a road its fix did not cover, because it fixed the *idle* case
+;;; and this is the *dead* one.
+;;;
+;;; poll(2) knows.  POLLHUP is set in the answer whether or not it was asked
+;;; for, and it is the direct statement of the thing select cannot say: this
+;;; descriptor is readable because the other end is gone.  One syscall per
+;;; wakeup, and the alternative — inferring the hangup from "we woke up and
+;;; there was nothing there" — is an inference where an answer is available.
+
+(sb-alien:define-alien-type nil
+  ;; struct pollfd, which is fixed by the kernel ABI: int, short, short.
+  (sb-alien:struct pollfd
+    (fd sb-alien:int)
+    (events sb-alien:short)
+    (revents sb-alien:short)))
+
+(defconstant +pollin+ #x001 "There is something to read.")
+(defconstant +pollerr+ #x008 "An error on the descriptor.")
+(defconstant +pollhup+ #x010 "The other end hung up.")
+(defconstant +pollnval+ #x020 "The descriptor is not open.")
+
+(defun connection-hung-up-p (fd)
+  "Has the other end of FD gone away?
+
+Asked after the events have been dispatched, so that a socket carrying both a
+last message and a hangup — which is what a compositor exiting cleanly looks
+like — is drained before it is declared dead.
+
+NIL when FD is NIL, because DISPLAY-FD could not find the descriptor and the
+loop is in its degraded sleeping mode, where a spin is not possible anyway."
+  (when fd
+    (ignore-errors
+     (sb-alien:with-alien ((fds (sb-alien:struct pollfd)))
+       (setf (sb-alien:slot fds 'fd) fd
+             (sb-alien:slot fds 'events) +pollin+
+             (sb-alien:slot fds 'revents) 0)
+       (let ((ready (sb-unix:unix-poll (sb-alien:addr fds) 1 0)))
+         (and (integerp ready) (plusp ready)
+              (logtest (sb-alien:slot fds 'revents)
+                       (logior +pollhup+ +pollerr+ +pollnval+))
+              t))))))
 
 (defun display-fd (display)
   "The file descriptor behind DISPLAY's socket, or NIL.
@@ -166,6 +234,13 @@ one extra turn of the loop, which drains the queue and comes back."
           do (with-abandon
                (drain-wm-queue)
                (unless (dispatch-events)
+                 (setf (server-running *server*) nil))
+               ;; The other way a session ends, and the one nothing signalled.
+               ;; See CONNECTION-HUNG-UP-P: without this the loop spins a core
+               ;; for as long as the machine is up.
+               (when (and (server-running *server*)
+                          (connection-hung-up-p fd))
+                 (logmsg :info "compositor closed the connection")
                  (setf (server-running *server*) nil))
                ;; After the whole batch of events, not inside any of them: a
                ;; device announces itself with twenty-odd events and
