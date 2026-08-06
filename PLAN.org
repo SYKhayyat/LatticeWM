@@ -2778,3 +2778,25 @@ cause and "fixing" it is how a program acquires changes nobody can justify. Doin
 nothing is how the same hour gets spent again next month. The third option — close the
 mechanism you can prove is reachable, and leave an instrument that will name the next
 occurrence — costs an afternoon and is the only one that improves the odds either way.
+
+** Checked
+
+~make check~: eighteen gates, 1,760 unit checks, and the integration suite against a
+real river, green at every commit in this session. Beyond that, three things were
+measured rather than argued:
+
+- *The two-monitor collapse, before and after, on two real outputs.* river's headless
+  backend takes =WLR_HEADLESS_OUTPUTS=2=, so the case the whole finding is about needs
+  no hardware and no nested session — which makes it the second time in two sessions
+  that "cannot be reached without a machine" turned out to be one environment variable.
+- *The orphaned window manager, killed two ways.* SIGKILL and SIGTERM to river, and the
+  window manager logs, saves and exits within a second either way.
+- *Three checks broken on purpose*, because a check nobody has seen fail is a check
+  nobody has tested: the drawn map's overlap check reads =map 0..720= against a status
+  line at 696, the status-line budget check reads 202 columns of 158, and gate 1 names
+  the typo'd symbol in the file it now compiles.
+
+And two of the project's own tripwires fired before a human noticed anything: the
+policy-generic ceiling in ~tests/test-surface.lisp~, and gate 12 on four documents
+whose prose had gone stale in the same commit. That is the machinery working as
+designed, and it is the first time it has stopped a change rather than recorded one.

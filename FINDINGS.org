@@ -510,6 +510,16 @@ build sandbox and false of any machine with a package manager on it. That is
 worth stating as a shape: *an untested path is a claim about the harness, not
 about the world, and the harness is the thing you control.*
 
+*Every defect in this section is now closed, and each subheading says how.* Four
+were fixed, one was *withdrawn* — the program had never done what it was accused
+of, and the check accusing it was the thing that was wrong — and one is
+unreproduced, with the mechanism it resembled closed and an instrument left
+behind. Two of the fixes turned out to be larger than the report: the
+multi-monitor collapse had *three* doors rather than one, and the status line's
+clipping was a missing budget on a documented generic rather than a drawing
+mistake. And one defect was found while working on the others by running =ps=,
+which is [[#spin][its own section]].
+
 ** What ran for the first time and was right
 
 - *The exclusive-zone arithmetic.* A real panel taking 34px at the top moves
@@ -773,7 +783,7 @@ fastest is worse than no check, because the story it tells is coherent: a
 shutdown that sometimes hangs is a completely believable bug, and a page of this
 document was written about one that never existed.
 
-** Smaller, from the same sitting
+** Smaller, from the same sitting — *two fixed, one unreproduced*
 
 - *The status line is hard-clipped mid-word at the right edge*, with nothing to
   say it was clipped. =echo-content= ends "...Super+- zoom out"; the screen ends
