@@ -492,6 +492,148 @@ became the single thing that pushes work to the screen; ~output-content~ became
 a policy generic. In each case the bug was a symptom of a decision that had not
 been made explicitly, and the fix was to make it.
 
+* The first run on two outputs, and on a real panel
+:PROPERTIES:
+:CUSTOM_ID: two-outputs
+:END:
+
+Run 2026-08-06, nested inside a KWin session: river 0.4.6 on the Wayland
+backend with =WLR_WL_OUTPUTS=2=, driven through the control socket, read back
+through =grim= — which speaks =wlr-screencopy= to the nested river, so the
+pixels are the ones river composited and not a photograph of somebody's desk.
+
+*The two things README called unreachable were reachable, and one environment
+variable was the whole difference.* The Status section said the layer-shell
+path had "no headless layer-shell client to open a panel with" and that
+multi-monitor "has been executed against one display". Both were true of the
+build sandbox and false of any machine with a package manager on it. That is
+worth stating as a shape: *an untested path is a claim about the harness, not
+about the world, and the harness is the thing you control.*
+
+** What ran for the first time and was right
+
+- *The exclusive-zone arithmetic.* A real panel taking 34px at the top moves
+  =outer-rect= from 0,0 1280x696 to 0,34 1280x662, and the window under it moves
+  down by exactly that. Read and not run for two weeks; run now, correct on the
+  first try.
+- *One overlay per output.* Both outputs drew their own drawn-map surface,
+  independently, at their own origin. This is the per-output work the Status
+  section listed as written-but-unexercised.
+- *A clean two-output start.* Two outputs, two workspaces, distinct nodes.
+- *The capture announcement, against a real capture client.* =grim='s screencopy
+  session raised =REC= in the status line, announced "recording started: screen
+  WL-1", and cleared when grim exited. The integration suite could only assert
+  this from constructed state; a screenshot tool is a real one.
+
+** The multi-monitor collapse came back, through a door the fix did not cover
+
+The table above records *Multi-monitor drew every window twice*, and
+=output-content='s docstring names the symptom precisely enough to quote:
+
+#+begin_quote
+Returning the same node for two outputs is a mistake with a specific and
+confusing symptom, so it is worth naming: every window gets placed twice, the
+second placement wins, and the whole layout silently collapses onto the last
+output while the model insists everything is fine. That was the first
+implementation.
+#+end_quote
+
+It is also the current implementation, under one condition: *a saved layout with
+fewer workspaces than there are outputs at the next start.*
+
+Measured, with a layout saved on one output and reloaded on two: two outputs,
+*one* workspace, output props correctly assigned 0 and 1 — and
+=output-content= clamping both to the last valid index, so the two outputs
+return the identical node. The second monitor is entirely black. No window, no
+empty-pane welcome, no focus border. Its status line says =workspace 1/1=,
+=0,0=, =1 window=, which is the model insisting everything is fine, verbatim as
+predicted.
+
+Spawn a window while looking at the first monitor and it opens on the second,
+and the cursor follows it there, because =current-output= derives from where the
+cursor rests and the cursor went where the layout put it.
+
+*Why the fix did not cover it.* =ensure-workspaces-for-outputs= exists for
+exactly this and its docstring says so — "without it, a second monitor arrives,
+finds only one workspace, and mirrors the first". It is called when an output
+appears. Restoring a saved layout afterwards replaces the workspace stack with
+the saved one, and nothing asks the question a second time. The two mechanisms
+are each correct and their *order* is not, which is why every gate and both
+suites pass: there is no state in which either one is wrong on its own.
+
+*Why nothing could see it.* Gate 14 fires every declared hook during the
+integration run, and =:layout-restored= fires — with one output, where a
+one-workspace stack is the right answer. The integration suite runs a headless
+river, whose backend announces one output. The unit suite constructs worlds and
+so constructs their outputs. Every instrument was pointed at a one-monitor
+world, and the defect needs two monitors *and* a restore to exist.
+
+** The drawn map paints over the echo area
+
+=draw-map-on= lays its cells out in =outer-rect= — which respects reserved space,
+correctly — and then sizes and commits its canvas at =output-rect=, the whole
+screen. So the background fill covers the strip the layout deliberately left
+alone, and the status line is blank for as long as the map is up.
+
+It is *not* a layer-shell problem: a panel sits on a higher layer and survives
+the map intact, which is what made the first reading of this wrong. It is the
+window manager covering its own echo area.
+
+The tell is internal to the function: =area= and the canvas rect disagree, and
+the code already knows which one is right, because it used it for the cells.
+And the contrast is instructive — =overlay-wanted-p= suppresses the *coordinate*
+overlay under the map and spends four lines explaining why. Nothing says the
+status line should go, because nothing decided it should.
+
+Confirmed rather than inferred: with the map up, =echo-content= still returns
+all five segments and =map-mode-p= is true, and the bar renders empty. The
+policy is right and the screen is wrong, which is this section's whole subject.
+
+** ~quit~ does not always quit, about one run in three
+
+=make check= was run seven times over the session. Twice, the last check of the
+integration suite failed:
+
+#+begin_example
+---- shutting down
+  ok    the shutdown hooks run once however many times shutdown is asked for (1 run)
+  ok    and the layout was written on the way out
+  FAIL  and QUIT ends the session
+#+end_example
+
+Two failures in seven runs, with nothing else changed between them and no
+leftover processes — the four-run sequence that produced the second failure
+started from a clean tree. The budget is not the problem: =poll-until= waits ten
+real seconds for =server-running= to go false, which is not a tight assertion
+about a shutdown.
+
+So *=quit= sometimes does not end the session within ten seconds*, and this is
+the first defect in this file that was found by running the suite repeatedly
+rather than by running it once. It matters twice over: it is a window manager
+that sometimes does not exit when told, and =make check= now requires the
+integration suite, so CI is red about a third of the time on a tree where
+nothing is wrong with the change under test — which is the condition under which
+people learn to re-run a build instead of reading it.
+
+Not diagnosed here, and worth *not* guessing at: the shape resembles the lost
+wakeup in the table above, where =wake-event-loop= set a flag and threw into a
+CATCH that was not on the stack, and the loop then sat in a thirty-second wait
+with work already queued. That one was hit about one run in five. The
+resemblance is a place to look and not a finding.
+
+** Smaller, from the same sitting
+
+- *The status line is hard-clipped mid-word at the right edge*, with nothing to
+  say it was clipped. =echo-content= ends "...Super+- zoom out"; the screen ends
+  "...past a cell edge = next cel". The help screen had this bug once already —
+  it is the ninth row of the table above.
+- *=tools/hardware-check.lisp= names a function that does not exist*,
+  =current-viewport=, and so warns on every startup that loads it.
+- *One 67-second stall*, in the first screencopy after a panel first appeared;
+  steady state is 0.05s and it did not reproduce in a dozen attempts. Recorded
+  because *The screen was up to thirty seconds stale* is in the table above and
+  was a lost wakeup, not because this is known to be the same thing.
+
 * Where the honest claim now stands
 
 DESIGN's §extensibility settled on a deliberately modest claim:

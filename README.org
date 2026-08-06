@@ -718,7 +718,12 @@ and read back with a real window's tags in it; and the control socket
 answering one line per form.
 
 =make check= fails when river or a terminal emulator is missing rather than
-skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. What it
+skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. It is also
+*intermittently red on a good tree*: the suite's last check, that =quit= ends the
+session within ten seconds, failed twice in seven runs on 2026-08-06 with
+nothing else changed. Undiagnosed; see
+[[file:FINDINGS.org::#two-outputs][FINDINGS.org §two-outputs]]. A red =check= is
+worth reading before it is worth re-running. What it
 still cannot reach is named out loud in its own output every run: a physically
 scaled output, libinput devices, and a layer-shell client, none of which a
 headless backend has.
@@ -730,12 +735,17 @@ running nested, which is where the devices exist. The libinput half of it
 as a decision, and cannot be exercised without real hardware behind it; the
 integration test says =skip= there rather than passing quietly.
 
-*Multi-monitor is written and has been executed against one display.* The
-per-output work — deriving the current output from the cursor's rectangle
-rather than its window, one overlay per output rather than one globally, and
-hotplug releasing what an unplugged monitor held — is done and is unit-tested,
-and the two-monitor arrangement itself has not been sat in front of. Nothing is
-claimed here that is not either tested or stated as untested;
+*Multi-monitor has been executed against two outputs, and has a known bug
+there.* river's Wayland backend takes =WLR_WL_OUTPUTS=2= and gives two real
+outputs at two origins, which is not two physical panels but is the same code;
+that run happened on 2026-08-06 and is written up in
+[[file:FINDINGS.org::#two-outputs][FINDINGS.org §two-outputs]]. One overlay per
+output is correct. A clean two-output start is correct. *Restoring a layout
+saved with fewer workspaces than there are outputs is not*: the workspace stack
+is not regrown after the restore, every output clamps to the last workspace, and
+the second monitor goes black while the model reports it is fine. Dock a laptop
+that saved its layout undocked and you will see it. Nothing is claimed here that
+is not either tested or stated as untested;
 [[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of which is which.
 
 Other things that are honestly newer than the rest. *HiDPI scaling of what the
@@ -746,10 +756,16 @@ that is actually scaled, because a headless backend is 1x. *Pointer
 drag-resize* is exercised as far as the arithmetic goes — a cumulative delta
 moves the window exactly that far and repeating it does not move it again — and
 the bindings river made are counted, but no physical pointer is ever pressed.
-*The layer-shell path that panels and screen lockers use* is exercised only as
-far as the global binding and an empty reservation: there is no headless
-layer-shell client to open a panel with, and the exclusive-zone arithmetic has
-been read and not run.
+*The layer-shell path that panels and screen lockers use* has been run against a
+real panel — waybar, layer =top=, 34 pixels of exclusive zone — and the
+exclusive-zone arithmetic is correct: the usable area moves from 0,0 1280x696 to
+0,34 1280x662 and the window under it moves down by exactly that. The
+integration suite still says =skip= there, because a build sandbox has no panel
+to open; that is a statement about the sandbox and not about the path. What is
+still unexercised is a screen locker, and the interaction found in the same
+sitting: the lattice's drawn map covers the window manager's own echo area,
+because its canvas is sized to the whole output while its cells are laid out in
+the usable area.
 
 That paragraph used to say all three were exercised by the test suite. They
 were not: there was no test reference to =surface.lisp=, =layer.lisp=,
