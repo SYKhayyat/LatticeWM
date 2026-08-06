@@ -1698,9 +1698,13 @@ integration suite reports "river_window_manager_v1 is bound at version 5,
 which is the version we generated against". The three structural skips are
 unchanged.
 
-*And CI had been red, which nothing here had noticed.* The previous commit's
+*And CI was red on its first run, which nothing here had noticed.* The
+workflow landed on 2026-08-06 and the commit that added it is the commit whose
 =check= job failed — the =plain= job, which has no river and skips the
-integration suite, passed. That is the same shape as the flake: a runner whose
+integration suite, passed. Four runs exist in total: that one, and the three
+green ones on this work. (The commit that recorded this said CI "had been red
+for a month", which is wrong and is corrected here rather than rewritten
+there: the workflow is one day old.) That is the same shape as the flake: a runner whose
 =nixos-unstable= channel holds 0.4.6 running a tree vendored at 4. The claim
 in [[file:README.org][README]] that "=nix-shell=, =make=, =make check= and CI are unaffected and
 green" was true of every path with a 0.4.5 river on it and false of the one
