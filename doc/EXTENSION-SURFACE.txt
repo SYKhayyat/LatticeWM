@@ -1185,8 +1185,23 @@ underneath for people who do.
 OPTIONS
 ============================================================================
 
+`read by' is every function and method in this image that looks at the value,
+asked of the compiler rather than of the source text.  It is here to answer
+the question the two mechanisms make unavoidable: *I set it and nothing
+happened*.
+
+When the only reader is a method -- `gaps (layout-policy t)' -- then the
+generic is the extension point and the option is what its shipped method
+returns.  A policy that overrides that method stops reading the option, and
+setting it does nothing.  Change the option to change the shipped answer;
+write the method to change the decision.
+
+An option with no readers at all is a documented value wired to nothing.
+There are none: gate 11 fails the build on the first one.
+
 *accel-profile*
   now: NIL
+  read by: option-settings
   How pointer speed responds to how fast you move.
 
   NIL        leave the device's own default alone
@@ -1196,6 +1211,7 @@ OPTIONS
 
 *accel-speed*
   now: NIL
+  read by: option-settings
   Pointer speed, from -1 (slowest) through 0 (the device's default) to 1.
 
 A double float or NIL.  The scale is libinput's and is not linear; 0.3 is a
@@ -1203,6 +1219,7 @@ noticeably brisk touchpad and 1.0 is faster than most people can aim.
 
 *announce-capture*
   now: T
+  read by: note-capture-sessions
   Say in the echo area when a screen capture starts or stops.
 
 T is the privacy-preserving default and the reason the events are handled at
@@ -1218,6 +1235,7 @@ without a line about it every time OBS adds a source.
         (:SHELL-COMMAND "command" "program") (:KEY "spec" "key")
         (:NAME "name" "label") (:STRING "text" "string" "title")
         (:SEXP "form" "expression"))
+  read by: argument-type-for (input-policy t t)
   Which kind of value a command's parameter holds, keyed by its name.
 
 A convention rather than a declaration, so that a command written the obvious
@@ -1236,14 +1254,17 @@ say so rather than putting up a prompt that cannot be answered.
 
 *border-width*
   now: 2
+  read by: border-width (appearance-policy t t)
   Border thickness in pixels, drawn by the compositor around every window.
 
 *browser*
   now: "firefox"
+  read by: browser
   The web browser the `browser' command runs.
 
 *click-method*
   now: NIL
+  read by: option-settings
   How a touchpad press becomes a left, middle or right click.
 
   NIL             leave the device's own default alone
@@ -1257,6 +1278,7 @@ more often than a global setting could.
 
 *click-to-focus*
   now: T
+  read by: on-window-interaction
   Clicking a window moves the cursor to it.
 
 On by default, because a pointer that can point at a window but not focus it is
@@ -1265,12 +1287,14 @@ rather than by watching buttons, so it covers touch and tablet input too.
 
 *click-to-raise*
   now: T
+  read by: focus-window-from-pointer
   Clicking a floating window puts it on top of the other floats.
 
 Only floats: tiled windows do not overlap, so raising one means nothing.
 
 *collapse-degenerate-splits*
   now: T
+  read by: should-collapse-p (structure-policy split)
   Dissolve a split once it is down to one child.
 
 T is Emacs's behaviour and keeps the tree shallow.  NIL is i3's, where an
@@ -1278,6 +1302,7 @@ emptied container persists and can be filled again.
 
 *cursor-border-color*
   now: (0.28 0.42 0.62 1.0)
+  read by: border-color (appearance-policy t t)
   Border colour of the pane holding the cursor while a *float* has the keyboard.
 
 Between the focused and the unfocused colour, deliberately, because that is
@@ -1291,14 +1316,17 @@ completely quiet while a float is up.
 
 *cursor-size*
   now: 24
+  read by: apply-cursor-theme
   The xcursor size in logical pixels.
 
 *cursor-theme*
   now: NIL
+  read by: apply-cursor-theme
   The xcursor theme name, or NIL to leave the compositor's default alone.
 
 *disable-while-typing*
   now: T
+  read by: option-settings
   Ignore the touchpad briefly after a keystroke, so a palm does not move the
 cursor mid-sentence.
 
@@ -1308,6 +1336,7 @@ blame on the machine rather than on a setting.
 
 *drag-lock*
   now: NIL
+  read by: option-settings
   Keep a tap-drag going across a brief lift of the finger.
 
   NIL       off
@@ -1319,10 +1348,12 @@ astonishing the first time it happens.
 
 *echo-accent*
   now: (0.4 0.65 1.0 1.0)
+  read by: draw-echo-area-on
   Colour for the part of the echo area that says where you are.
 
 *echo-area*
   now: T
+  read by: draw-echo-area, echo-reserved-height
   Show a status line along the bottom of the screen.
 
 It reports where the cursor is, what is on this workspace, and the last
@@ -1331,11 +1362,13 @@ lose the only permanent indication of which cell you are in.
 
 *echo-background*
   now: (0.09 0.09 0.12 0.92)
+  read by: draw-echo-area-on
   Echo area background, as (R G B A).  Slightly translucent by default so it
 reads as an overlay rather than as a window.
 
 *echo-divider*
   now: (0.28 0.28 0.34 1.0)
+  read by: draw-echo-area-on
   Colour of the separators between echo-area segments.
 
 Dim on purpose: a separator is punctuation, and punctuation you notice is
@@ -1343,18 +1376,22 @@ punctuation that is too loud.
 
 *echo-foreground*
   now: (0.75 0.78 0.85 1.0)
+  read by: draw-echo-area-on
   Echo area text colour.
 
 *echo-height*
   now: 24
+  read by: draw-echo-area-on, echo-reserved-height
   Height of the echo area in pixels.
 
 *echo-message-seconds*
   now: 6
+  read by: current-message
   How long a message stays in the echo area before it is dropped.
 
 *echo-position*
   now: :BOTTOM
+  read by: draw-echo-area-on, echo-reserved-edges
   Which edge the echo area sits on: :BOTTOM or :TOP.
 
 Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
@@ -1363,6 +1400,7 @@ the bottom, and any setup where something else already owns that edge.
 
 *echo-scale*
   now: 1
+  read by: draw-echo-area-on, echo-reserved-height
   Integer scale factor for echo-area text.
 
 1 is the font's own size — sixteen pixels tall, which is an ordinary status
@@ -1373,18 +1411,22 @@ at any size.
 
 *editor*
   now: "emacs"
+  read by: editor
   The editor the `editor' command runs.
 
 *empty-hint-color*
   now: (0.7 0.75 0.86 1.0)
+  read by: draw-empty-panes-on
   Text colour of the hint inside the focused empty pane.
 
 *empty-outline-color*
   now: (0.3 0.32 0.4 0.55)
+  read by: draw-empty-panes-on
   Outline colour of an unfocused empty pane.
 
 *empty-pane-color*
   now: (0.42 0.56 0.78 1.0)
+  read by: border-color (appearance-policy t t)
   Border colour drawn around a focused empty pane.
 
 Deliberately bright.  DESIGN D18 accepts, as a cost of focus being a place,
@@ -1395,10 +1437,12 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-hint*
   now: T
+  read by: draw-empty-panes-on
   Show which keys open something, inside the focused empty pane.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
+  read by: hint-lines, key-unbound (input-policy t t), echo-content (appearance-policy t)
   DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up
@@ -1410,15 +1454,18 @@ default, typing `ls` at an empty pane opens a terminal showing `s`.
 
 *file-manager*
   now: "thunar"
+  read by: files
   The file manager the `files' command runs.
 
 *float-dialogs*
   now: T
+  read by: should-float-p (lifecycle-policy window)
   Float windows that river reports as having a parent — dialogs, file
 pickers and similar.
 
 *float-fixed-size-limit*
   now: (900 . 700)
+  read by: should-float-p (lifecycle-policy window)
   The largest a fixed-size window may be and still be floated for it.
 
 A window that pins its minimum and maximum size to the same value is announcing
@@ -1437,10 +1484,12 @@ that gets said.  Set it to NIL to float every fixed-size window, or to
 
 *float-fraction*
   now: 3/5
+  read by: default-float-rect (lifecycle-policy window output)
   Fraction of the output a floated window takes when it has no opinion.
 
 *float-on-drag*
   now: T
+  read by: start-pointer-op
   Dragging a *tiled* window with the move binding floats it first.
 
 The alternative is that the drag does nothing, which is worse than either
@@ -1450,6 +1499,7 @@ windows that are already floating.
 
 *focus-after-close*
   now: :STAY
+  read by: focus-after-remove (motion-policy t t t)
   Where the cursor goes when the focused window closes.
 
   :STAY  the deepest surviving place along the old path (the default).
@@ -1462,14 +1512,17 @@ something can teleport you across your desktop.
 
 *focus-follows-mouse*
   now: NIL
+  read by: on-pointer-enter, attach-seat
   Move the cursor to whatever pane the pointer is over.
 
 *focus-new-windows*
   now: T
+  read by: on-window-open (lifecycle-policy t window)
   Move the cursor onto a window when it appears.
 
 *focused-border-color*
   now: (0.4 0.65 1.0 1.0)
+  read by: border-color (appearance-policy t t)
   Border colour of the focused pane, as (R G B A) from 0.0 to 1.0.
 
 Do not make this subtle.  Focus may rest on an *empty* pane, which has no
@@ -1478,15 +1531,18 @@ reads as a broken keyboard rather than as a place.
 
 *gaps*
   now: 0
+  read by: gaps (layout-policy t)
   Pixels of empty space between adjacent panes.  0 is a clean grid; 4 to 8
 gives the airy look, at the cost of that much screen.
 
 *help-background*
   now: (0.07 0.07 0.1 0.94)
+  read by: draw-help-overlay
   Help overlay background, as (R G B A).
 
 *help-columns*
   now: 2
+  read by: draw-help-overlay
   How many columns of bindings the help overlay uses.
 
 Two, not three.  Three fits more rows and truncates almost every description,
@@ -1495,22 +1551,27 @@ the wrong half.
 
 *help-key-color*
   now: (0.45 0.7 1.0 1.0)
+  read by: draw-help-overlay
   Colour of the key in the help overlay.
 
 *help-scale*
   now: 1
+  read by: draw-help-overlay
   Integer scale factor for help-overlay text.
 
 *help-text-color*
   now: (0.78 0.8 0.86 1.0)
+  read by: draw-help-overlay
   Colour of the description in the help overlay.
 
 *history-length*
   now: 100
+  read by: history-push
   How many past entries each minibuffer history ring keeps.
 
 *honour-client-move-requests*
   now: T
+  read by: on-client-resize-request, on-client-move-request
   Let a window start its own drag when you grab its titlebar.
 
 Clients that draw their own decorations ask for this through xdg-shell and
@@ -1519,6 +1580,7 @@ inert, which reads as the window manager being broken rather than as a policy.
 
 *honour-exclusive-zones*
   now: T
+  read by: layer-reserved-edges
   Lay windows out inside the area panels have left, rather than over them.
 
 T is what everybody means by having a status bar: the bar takes its strip and
@@ -1532,6 +1594,7 @@ edge, at any size, with no per-panel configuration and nothing to keep in sync.
 
 *input-rules*
   now: NIL
+  read by: apply-input-rules
   Per-device settings, as a list of (MATCHER . PLIST).
 
 The tier-0 answer to the fact that one set of global values cannot describe a
@@ -1556,6 +1619,7 @@ device present actually supports.
 
 *ipc-socket*
   now: T
+  read by: ipc-socket-path
   Listen on a Unix domain socket for forms to evaluate.
 
 T uses the default path — $XDG_RUNTIME_DIR/latticewm-$WAYLAND_DISPLAY.sock — a
@@ -1567,6 +1631,7 @@ Wayland socket beside it draws.  It is what SWANK should have been and is not.
 
 *ipc-timeout-seconds*
   now: 10
+  read by: evaluate-for-ipc, call-in-wm-thread-sync
   How long a single form may run before the socket gives up waiting.
 
 The client gets an answer either way, which is the point: a form that wedges
@@ -1575,6 +1640,7 @@ than a shell that hangs forever with no indication of which side is stuck.
 
 *keyboard-layout*
   now: "us"
+  read by: adopt-shift-map-for, current-shift-map
   Which shift map to use, by name.  See (SHIFT-MAP-NAMES).
 
 Shipped: "us", "uk", "de", "fr", "dvorak" and "colemak".  A list of
@@ -1587,6 +1653,7 @@ it rather than a constant behind a function.
 
 *keys-hint*
   now: T
+  read by: keys-hint (appearance-policy t)
   Keep a one-line reminder of the essential keys in the status line, until
 the keymap has been opened at least once.
 
@@ -1606,10 +1673,12 @@ hint has done its job and goes away by itself rather than nagging forever.
 
 *left-handed*
   now: NIL
+  read by: option-settings
   Swap the left and right buttons.
 
 *log-file*
   now: :DEFAULT
+  read by: resolved-log-file
   Where to write the log, as a pathname — or :DEFAULT, or NIL.
 
   :DEFAULT   $XDG_STATE_HOME/latticewm/latticewm.log
@@ -1627,6 +1696,7 @@ it by hand from a shell behaves the way you expect.
 
 *log-keep*
   now: 3
+  read by: rotate-log-file
   How many rotated log files to keep beside the current one.
 
 They are named latticewm.log.1 and so on, oldest discarded.  Three is enough
@@ -1635,6 +1705,7 @@ looked.
 
 *log-level*
   now: :INFO
+  read by: logmsg
   How much to say: :DEBUG, :INFO, :WARN, :ERROR, or NIL for silence.
 
 :DEBUG is verbose enough to follow every placement decision and is what to
@@ -1642,6 +1713,7 @@ turn on before reporting anything.
 
 *log-max-bytes*
   now: 2097152
+  read by: ensure-log-file
   Rotate the log file once it passes this many bytes.  NIL never rotates.
 
 A window manager runs for weeks and logs a line per relayout at :DEBUG, so an
@@ -1650,6 +1722,7 @@ use and a couple of hours of debugging.
 
 *manage-timeout-seconds*
   now: 5
+  read by: call-with-watchdog
   Abandon a manage sequence that has run this long.  NIL to never abandon.
 
 THE FAILURE THIS EXISTS FOR IS THE WORST ONE THIS PROGRAM HAS.  River waits
@@ -1674,6 +1747,7 @@ finishes should ever meet it; it is a backstop, not a budget.
 
 *manage-warn-seconds*
   now: 0.25
+  read by: call-with-watchdog
   Log a warning when a manage sequence takes longer than this.  NIL to stop.
 
 A number rather than a failure, in the shape of gate 6: the point is that a
@@ -1682,6 +1756,7 @@ about four frames, which is where a person starts to feel it.
 
 *middle-emulation*
   now: NIL
+  read by: option-settings
   Pressing left and right together counts as a middle click.
 
 For the machines that have two physical buttons and no third.  NIL leaves the
@@ -1689,22 +1764,27 @@ device's default, which is off.
 
 *minibuffer-candidates-shown*
   now: 6
+  read by: prompt-segments
   How many completion candidates the echo area lists at once.
 
 *minibuffer-caret-color*
   now: (0.95 0.75 0.35 1.0)
+  read by: draw-echo-area-on
   Colour of the caret — the bar showing where what you type will go.
 
 *minibuffer-completion-color*
   now: (0.5 0.55 0.65 1.0)
+  read by: draw-echo-area-on
   Colour of the completion hint after what you have typed.
 
 *minibuffer-prompt-color*
   now: (0.95 0.75 0.35 1.0)
+  read by: draw-echo-area-on
   Colour of the prompt in the echo area.
 
 *modifier*
   now: :SUPER
+  read by: modifier-string, keys-hint (appearance-policy t), welcome-rows (appearance-policy)
   The modifier every default binding uses.
 
 :SUPER is the only one that does not collide with something an application
@@ -1715,6 +1795,7 @@ already wants.
         (:ALT . :MOD1) (:MOD1 . :MOD1) (:META . :MOD1) (:M . :MOD1)
         (:MOD3 . :MOD3) (:SUPER . :MOD4) (:MOD4 . :MOD4) (:LOGO . :MOD4)
         (:WIN . :MOD4) (:S . :MOD4) (:HYPER . :MOD5) (:MOD5 . :MOD5))
+  read by: modifier-mask
   What people type, mapped to what the protocol calls it.
 
 Both `super' and `mod4' work, and so do `C-' and `ctrl', because muscle memory
@@ -1727,6 +1808,7 @@ a config file can do it without a method:
 
 *motion-reference-rect*
   now: (0 0 1920 1080)
+  read by: motion-rects
   The nominal output used to compute geometry for motion when no layout has
 been drawn yet, as (X Y WIDTH HEIGHT).
 
@@ -1735,6 +1817,7 @@ which across a boundary.  You will not need to change this.
 
 *move-into-occupied*
   now: :SPLIT
+  read by: move-into-occupied (structure-policy t t t)
   What dropping a window onto an occupied pane means: :SPLIT, :SWAP or :STACK.
 
 :SPLIT is shipped because it is the only one that never destroys structure.
@@ -1742,6 +1825,7 @@ SWAP remains a separate verb with its own binding, so nothing is lost.
 
 *natural-scroll*
   now: NIL
+  read by: option-settings
   Scroll content in the direction of the fingers, as on a phone.
 
 NIL matches libinput's default and the behaviour of a mouse wheel.  Set it per
@@ -1752,10 +1836,12 @@ mouse, which is what most people who want it at all actually want:
 
 *new-child-side*
   now: :AFTER
+  read by: new-child-side (structure-policy t t)
   Which side of the existing pane a new sibling lands on: :AFTER or :BEFORE.
 
 *new-workspace*
   now: :EMPTY
+  read by: make-workspace (structure-policy t t)
   What a workspace contains at the moment it comes into existence.
 
   :EMPTY      one empty pane.  DESIGN D19's starting state, and the shipped
@@ -1779,6 +1865,7 @@ born after `lattice:enable' is a plane rather than a pane.
 
 *not-repeatable*
   now: ("repeat" "run-command-by-name" "undo" "redo")
+  read by: command-repeatable-p (input-policy t t)
   Commands that REPEAT should look straight through, by name.
 
 Four of them, for two reasons.  `repeat' itself, because repeating a repeat is
@@ -1794,6 +1881,7 @@ is a method on the generic rather than an entry here.
 
 *numlock*
   now: NIL
+  read by: apply-lock-state
   Turn num lock on for every keyboard as it appears.
 
 T is what somebody with a full-size keyboard and a numeric keypad wants and
@@ -1801,10 +1889,12 @@ nothing else does.
 
 *outer-gaps*
   now: 0
+  read by: outer-rect (layout-policy output)
   Pixels of empty space between the layout and the edge of the output.
 
 *overlay-buffer-idle*
   now: T
+  read by: overlay-hide
   Release an overlay's pixel buffer while it is hidden.
 
 A full-screen ARGB buffer is about four megabytes, and the help screen and the
@@ -1816,6 +1906,7 @@ Set to NIL if you would rather have the allocation happen once.
 
 *pointer-bindings*
   now: ((:MOVE :BTN-LEFT (:SUPER)) (:RESIZE :BTN-RIGHT (:SUPER)))
+  read by: attach-pointer-bindings
   Which button, with which modifiers, starts which interactive operation.
 
 A list of (OPERATION BUTTON MODIFIERS).  OPERATION is :MOVE or :RESIZE — or
@@ -1835,6 +1926,7 @@ to select text.
 
 *pointer-resize-minimum*
   now: (120 . 80)
+  read by: pointer-drag-rect (input-policy t t t t t t)
   The smallest a window may be dragged to, as (WIDTH . HEIGHT) in pixels.
 
 Not zero, because a window dragged down to nothing cannot be dragged back —
@@ -1842,6 +1934,7 @@ its corner is no longer anywhere the pointer can reach.
 
 *pointer-snap*
   now: 12
+  read by: snap-coordinate
   Snap a dragged window to within this many pixels of an output edge.
 
 Zero turns it off.  Twelve gives the behaviour where a window dropped near an
@@ -1850,6 +1943,7 @@ worth having and the one people notice is missing.
 
 *readline-chords*
   now: "abdefgknpuwy"
+  read by: capture-keys (input-policy)
   Which Ctrl-letter chords a prompt reads.
 
 The keys fingers press at a prompt without being asked: C-a, C-e, C-k, C-w and
@@ -1864,6 +1958,7 @@ method.
 
 *repeat-delay*
   now: NIL
+  read by: option-settings
   Milliseconds a key must be held before it starts repeating, or NIL.
 
 300 is brisk, 600 is the usual default, and below about 200 an ordinary
@@ -1871,6 +1966,7 @@ keypress starts repeating before your finger has left it.
 
 *repeat-rate*
   now: NIL
+  read by: option-settings
   Key repeats per second once a held key starts repeating, or NIL for the
 compositor's default.
 
@@ -1879,6 +1975,7 @@ two are one decision and river takes them in one request.
 
 *resize-amount*
   now: 1/20
+  read by: resize-pane
   How much one press of the resize key moves a divider.
 
 A fraction of the container: 1/20 is five percent of the pane's parent, which
@@ -1888,6 +1985,7 @@ ask for a coarser one without changing this.
 
 *save-interval-seconds*
   now: 5
+  read by: save-state-if-needed
   How long the layout may sit changed before it is written out.
 
 Not zero, because a layout change happens a hundred times a second while a
@@ -1901,6 +1999,7 @@ any crash, any kill -9 and any compositor exit lost the session layout.
 
 *scroll-button*
   now: NIL
+  read by: option-settings
   The button held down for :ON-BUTTON-DOWN scrolling, as an evdev code.
 
 274 is BTN_MIDDLE, which is the one anybody means.  NIL leaves the device's
@@ -1908,6 +2007,7 @@ default.  Only consulted when *SCROLL-METHOD* is :ON-BUTTON-DOWN.
 
 *scroll-factor*
   now: NIL
+  read by: option-settings
   Multiply every scroll event's distance by this.
 
 A positive real, or NIL for the compositor's default of 1.  This is river's own
@@ -1917,6 +2017,7 @@ and it is the right answer for `my scrolling is too fast in every application'
 
 *scroll-method*
   now: NIL
+  read by: option-settings
   How scrolling is expressed on a touchpad or trackpoint.
 
   NIL              leave the device's own default alone
@@ -1930,6 +2031,7 @@ configuration every ThinkPad user recreates by hand on every new machine.
 
 *shift-map*
   now: NIL
+  read by: current-shift-map
   An explicit shift map, overriding *KEYBOARD-LAYOUT*, or NIL to use it.
 
 Kept because it was the documented way to do this and configurations in the
@@ -1945,6 +2047,7 @@ To adjust a shipped layout rather than replace it, append to it:
 
 *show-empty-panes*
   now: T
+  read by: draw-empty-panes
   Draw an outline around empty panes, and the spawn hints inside the focused
 one.
 
@@ -1954,10 +2057,24 @@ because it is a good idea.
 
 *smart-gaps*
   now: T
-  Drop gaps and borders entirely when a workspace holds exactly one window.
+  read by: solo-window
+  Drop the screen-edge gap and the border when one pane is alone on a screen.
+
+*One pane, not one window*, and the difference is three cases.  An empty pane
+beside a window is a second pane and keeps both borders, because DESIGN D18
+makes focus a place and an unmarked empty pane reads as a broken keyboard.
+Three tabs on a workspace are one pane, because that is what is on the screen.
+A floating window is not a pane at all, so it neither counts nor changes.
+
+Inner gaps need no case: DIVIDE-RECT spends GAP once per *boundary between*
+children, so a single pane already spends none.
+
+Set to NIL to keep the gap and the border however few windows are up.  A
+window rule that sets :BORDER-WIDTH still wins, on the window it names.
 
 *spawn-mode*
   now: :SPLIT
+  read by: spawn-target (structure-policy t t)
   Where a new window goes.  DESIGN D14 rules that all three ship.
 
   :SPLIT       split the focused pane and put it beside — Emacs, hyprland.
@@ -1969,6 +2086,7 @@ taught.
 
 *split-axis*
   now: :LONGER
+  read by: split-axis-for (structure-policy t t)
   How a fresh split is cut.
 
   :LONGER      along whichever axis is longer, so panes tend towards square.
@@ -1981,6 +2099,7 @@ fixed-axis window managers is to add a 'split the other way' binding.
 
 *swank-interface*
   now: "127.0.0.1"
+  read by: start-swank
   Which address SWANK binds to when it is on.
 
 Loopback, explicitly, rather than whatever the default happens to be — because
@@ -1991,6 +2110,7 @@ your session to anybody who can route to it.
 
 *swank-port*
   now: NIL
+  read by: start-swank, start
   The TCP port SWANK listens on, or NIL for no SWANK server.
 
 *OFF BY DEFAULT, AND THAT IS A DELIBERATE CHANGE FROM 4005.*  SWANK offers
@@ -2012,12 +2132,14 @@ See also *SWANK-INTERFACE*, which decides who may reach it.
 
 *tap-and-drag*
   now: T
+  read by: option-settings
   Tap, then hold and move, to drag without pressing the pad down.
 
 Only meaningful where *TAP-TO-CLICK* is on.  Matches libinput's default.
 
 *tap-to-click*
   now: T
+  read by: option-settings
   Tap a touchpad to click, rather than pressing it down.
 
 T on every touchpad that supports it and ignored by everything that does not,
@@ -2031,10 +2153,12 @@ not to respond to taps reads as broken rather than as conservative.
 
 *terminal*
   now: "foot"
+  read by: terminal
   The terminal emulator the `terminal' command runs.
 
 *ui-font*
   now: NIL
+  read by: font-for (appearance-policy t)
   The font to draw interface text in, by name, or NIL for the built-in one.
 
     (setf *ui-font* "ter-118n")
@@ -2050,6 +2174,7 @@ Per-role control is one method rather than one option -- see FONT-FOR.
 
 *undo-coalesce-seconds*
   now: 0.6
+  read by: record-undo
   Merge repeated changes made within this long into one undo step.
 
 Holding the resize key produces forty tree changes a second, and forty undo
@@ -2058,6 +2183,7 @@ records every change separately.
 
 *undo-depth*
   now: 32
+  read by: undo-command-wrapper, record-undo
   How many previous layouts to keep.  0 turns undo off entirely.
 
 Thirty-two is far more than anybody walks back through and costs a few hundred
@@ -2066,6 +2192,7 @@ and the windows in it are shared rather than copied.
 
 *unfloat-returns-home*
   now: T
+  read by: unfloat-window
   Put an unfloated window back where it was floated from, if that place survives.
 
 T is the symmetry with minimize and restore, and the argument ON-RESTORE's
@@ -2080,10 +2207,12 @@ is what you want if you use floating as a way of *moving* windows around.
 
 *unfocused-border-color*
   now: (0.22 0.22 0.26 1.0)
+  read by: border-color (appearance-policy t t)
   Border colour of every pane that is not focused.
 
 *warn-on-rebinding*
   now: T
+  read by: define-key
   Say so when DEFINE-KEY replaces a binding with a *different* command.
 
 Rebinding is the point of a keymap and is not worth mentioning.  Silently
@@ -2100,6 +2229,7 @@ says nothing.
 
 *warn-on-undeclared-hooks*
   now: T
+  read by: add-hook
   Complain when ADD-HOOK is given a name no DEFHOOK declared.
 
 An undeclared hook is not an error -- ADD-HOOK works on any name, and an
@@ -2118,6 +2248,7 @@ hooks and would rather not hear about it.
 
 *welcome-on-first-run*
   now: T
+  read by: maybe-show-welcome
   Show the welcome overlay the first time LatticeWM starts.
 
 Once only, and it writes a marker under $XDG_STATE_HOME so it never appears
@@ -2126,6 +2257,7 @@ demand either way.
 
 *window-rules*
   now: NIL
+  read by: window-rule-for (lifecycle-policy window)
   Declarative per-window overrides, as a list of (MATCH . OVERRIDES).
 
 MATCH is a plist selecting windows; OVERRIDES is a plist of what to do with
@@ -2155,6 +2287,7 @@ are supported and this one requires no Lisp beyond a quoted list.
 
 *xkb-layout*
   now: NIL
+  read by: keyboard-layout-for (input-policy t)
   The keyboard layout the compositor should use: "us", "de", "us,de".
 
 NIL — the default — leaves whatever river started with, which comes from
@@ -2177,11 +2310,13 @@ you set this and nothing else.
 
 *xkb-model*
   now: NIL
+  read by: keyboard-layout-for (input-policy t)
   The XKB model, e.g. "pc105".  NIL uses the default, which is nearly always
 right on anything made this century.
 
 *xkb-options*
   now: NIL
+  read by: keyboard-layout-for (input-policy t)
   XKB options, comma separated, e.g. "ctrl:nocaps,grp:alt_shift_toggle".
 
 `ctrl:nocaps' — caps lock becomes control — is the single most requested one
@@ -2189,10 +2324,12 @@ and is most of why this option exists.
 
 *xkb-rules*
   now: NIL
+  read by: keyboard-layout-for (input-policy t)
   The XKB rules set, e.g. "evdev".  NIL uses the default.
 
 *xkb-variant*
   now: NIL
+  read by: keyboard-layout-for (input-policy t)
   The XKB variant, e.g. "nodeadkeys", "dvorak", "colemak", or NIL.
 
 Comma separated, one per layout, when *XKB-LAYOUT* names several.

@@ -181,4 +181,16 @@ default, typing `ls` at an empty pane opens a terminal showing `s`.")
   "Fraction of the output a floated window takes when it has no opinion.")
 
 (define-option *smart-gaps* t
-  "Drop gaps and borders entirely when a workspace holds exactly one window.")
+  "Drop the screen-edge gap and the border when one pane is alone on a screen.
+
+*One pane, not one window*, and the difference is three cases.  An empty pane
+beside a window is a second pane and keeps both borders, because DESIGN D18
+makes focus a place and an unmarked empty pane reads as a broken keyboard.
+Three tabs on a workspace are one pane, because that is what is on the screen.
+A floating window is not a pane at all, so it neither counts nor changes.
+
+Inner gaps need no case: DIVIDE-RECT spends GAP once per *boundary between*
+children, so a single pane already spends none.
+
+Set to NIL to keep the gap and the border however few windows are up.  A
+window rule that sets :BORDER-WIDTH still wins, on the window it names.")

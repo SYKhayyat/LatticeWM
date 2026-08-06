@@ -104,7 +104,31 @@ than principled, both options ship and configuration picks the default" — so
 these are not preferences somebody guessed at, they are the places the design
 declined to decide for you.
 
-~wmeval --options~ lists all of them with their reasoning.
+~latticewm --list-options~ lists all of them with their reasoning.
+
+** Which wins, the option or the generic
+
+Some options share a name with a generic — ~*gaps*~ and ~gaps~, ~*border-width*~
+and ~border-width~ — and the relationship is always the same one: *the generic
+is the extension point, and the option is what its shipped method returns.*
+Change the option to change the shipped answer. Write the method to change the
+decision. A policy that overrides the method stops reading the option, and
+after that setting it does nothing.
+
+You do not have to remember which options those are, and neither does this
+page. ~latticewm --extension-surface~ prints a ~read by:~ line under every
+option saying what in the running program looks at the value:
+
+#+begin_example
+*gaps*
+  now: 0
+  read by: gaps (layout-policy t)
+#+end_example
+
+That is asked of the compiler's cross-reference data rather than written down,
+so it cannot drift, and an option that nothing reads is a failing build — see
+gate 11 in [[file:../PLAN.org::#gates-added][PLAN.org §gates-added]] for the one
+that shipped.
 
 * Tier 1 — methods
 

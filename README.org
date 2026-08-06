@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, ten gates, 1400+ checks
+make               # build, eleven gates, 1400+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -402,7 +402,7 @@ make image    # dump ./latticewm
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Ten gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Eleven gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -413,8 +413,24 @@ pinned XML; how many policy generics have ever been answered from *outside*
 =src/= staying above a floor; every declared hook run and every run hook declared; every
 event handled existing on the interface it is handled for; the image, the
 installer and the shipped configuration agreeing about where an extension
-lives; and no container kind named by class outside its own definition. The
+lives; no container kind named by class outside its own definition; and every
+registered option read by something. The
 reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
+
+Gate 11 is the newest and it is a question the other ten could not ask.
+=*smart-gaps*= was registered, exported, documented, printed by
+=--list-options= and described as working in a generated document — and read
+by nothing, from the commit that added it until the one that added the gate.
+Gate 2 asks whether every generic is documented; gate 9 asks whether the
+installer and the image agree about the option *list*; a unit test asks whether
+each option's symbol is the one a configuration file would set, which is the
+check that found twenty-four unsettable options. All of them ask the registry
+about itself. Being registered, documented, installable and settable are four
+promises an option makes, and it makes a fifth: that somebody looks. Gate 11
+asks SBCL's own cross-reference data who reads each one, so it is a fact about
+the compiled program rather than about its spelling — a docstring mentioning
+the name does not satisfy it and a read inside a macro expansion does not
+escape it.
 
 Gate 6 used to be the runtime-to-policy *line ratio*, and deleting it is the
 one gate change worth mentioning in a README. A ratio of directory line counts

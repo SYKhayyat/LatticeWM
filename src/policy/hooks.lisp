@@ -12,6 +12,16 @@
 ;;;; Use a hook when you want to update a status bar, log something, or start a
 ;;;; program.  Use a method when you want to change a decision.  If you find
 ;;;; yourself wanting a hook's return value, you wanted a method.
+;;;;
+;;;; THE THIRD MECHANISM IS THE OPTION, and it is not a third answer to the
+;;;; same question -- it is what a generic's shipped method returns.  Change
+;;;; the option to change the shipped answer; write the method to change the
+;;;; decision; a policy that overrides the method stops reading the option.
+;;;; That relationship used to live only in prose, which is why *SMART-GAPS*
+;;;; could be a documented value wired to nothing.  It is data now:
+;;;; OPTION-READERS answers it from the compiled image, the generated
+;;;; extension surface prints it under every option, and gate 11 fails the
+;;;; build on an option no method and no function reads.
 
 (in-package #:latticewm/policy)
 

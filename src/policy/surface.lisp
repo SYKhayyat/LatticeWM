@@ -34,7 +34,9 @@ deliberately machine-readable first and pretty second — PLAN.org's framing is
 that the realistic post-expiry maintainer is a cheap model plus whatever
 contributors the release attracts, and a model would rather have a plist."
   (list :generics (mapcar #'c:generic-description (policy-generics))
-        :options (all-options)))
+        :options (mapcar (lambda (row)
+                           (append row (list (option-readers (first row)))))
+                         (all-options))))
 
 (defun undocumented-generics ()
   "Every extension-surface generic with no docstring.  Gate 2 fails on any."
@@ -71,10 +73,24 @@ new container kind answers rather than what a new policy answers -- and it is~%~
 printed by `latticewm --container-surface'.~2%")
     (c:print-generic-descriptions (getf surface :generics) stream)
     (format stream "~&~76,,,'=<~>~%OPTIONS~%~76,,,'=<~>~2%")
+    (format stream "~
+`read by' is every function and method in this image that looks at the value,~%~
+asked of the compiler rather than of the source text.  It is here to answer~%~
+the question the two mechanisms make unavoidable: *I set it and nothing~%~
+happened*.~2%~
+When the only reader is a method -- `gaps (layout-policy t)' -- then the~%~
+generic is the extension point and the option is what its shipped method~%~
+returns.  A policy that overrides that method stops reading the option, and~%~
+setting it does nothing.  Change the option to change the shipped answer;~%~
+write the method to change the decision.~2%~
+An option with no readers at all is a documented value wired to nothing.~%~
+There are none: gate 11 fails the build on the first one.~2%")
     (dolist (row (getf surface :options))
-      (destructuring-bind (key variable value default documentation) row
+      (destructuring-bind (key variable value default documentation readers) row
         (declare (ignore key))
-        (format stream "~(~a~)~%  now: ~s~@[   (default ~s)~]~%  ~a~2%"
+        (format stream "~(~a~)~%  now: ~s~@[   (default ~s)~]~%~
+                        ~@[  read by: ~{~a~^, ~}~%~]  ~a~2%"
                 variable value (unless (equal value default) default)
+                (mapcar #'option-reader-name readers)
                 documentation)))
     (values)))

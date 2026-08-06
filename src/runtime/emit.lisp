@@ -81,6 +81,28 @@ shows.  With a single output — which is every laptop — it is one call."
                    (push (list child (append prefix path) rect visible)
                          placed)))))))))))
 
+(defun solo-windows (policy)
+  "(OUTPUT . WINDOW) for every output whose workspace shows one window alone.
+
+Computed once, before the layout, because the answer is needed *by* the layout
+— OUTER-RECT drops the screen-edge gap and WINDOW-DIMENSIONS sizes the window
+against a border that BORDER-WIDTH is about to say is zero — and again during
+the emit, where the border is actually sent.  Two computations would be two
+chances to disagree, and the disagreement's shape is a window sized for a
+border it does not get.
+
+The probe rectangle is the output's own, before the gap and the reserved space
+come out of it.  It is a rectangle only so that LAYOUT-CHILDREN can be asked
+which children it would place; a few pixels either way cannot change a count
+that has to be exactly one."
+  (let ((out '()))
+    (dolist (output (all-outputs) (nreverse out))
+      (let ((node (guarded "output-content" (p:output-content policy *world* output))))
+        (when node
+          (let ((window (guarded "solo-window"
+                          (p:solo-window policy node (c:output-rect output)))))
+            (when window (push (cons output window) out))))))))
+
 (defun draw-overlays ()
   "Draw everything we render ourselves, and place it above the windows.
 
@@ -122,6 +144,13 @@ should err towards calling it rather than reasoning about whether they must."
     (return-from relayout :deferred))
   (when force
     (clrhash (server-emitted *server*)))
+  ;; SET BEFORE THE LAYOUT AND LEFT STANDING, exactly like the two PROPs below.
+  ;; BORDER-WIDTH is asked once by WINDOW-DIMENSIONS on the way down and once by
+  ;; EMIT-BORDERS on the way out and the two have to agree; so does anything
+  ;; that asks afterwards, which is why this is not a binding that unwinds.
+  ;; It has to precede COMPUTE-LAYOUT because the layout is one of its readers.
+  ;; See P:*SOLO-WINDOWS*.
+  (setf p:*solo-windows* (solo-windows (p:current-policy)))
   (let* ((policy (p:current-policy))
          (placements (compute-layout)))
     (setf (c:prop *world* :last-placements) placements

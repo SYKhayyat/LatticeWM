@@ -232,7 +232,7 @@ You never edit this package.")
    ;; policy objects and tier-0 options
    #:policy #:conventional-policy #:*policy* #:current-policy #:policy-name
    #:define-option #:option #:option-documentation #:all-options
-   #:option-default #:option-boundp
+   #:option-default #:option-boundp #:option-readers #:option-reader-name
    ;; the tier-0 values themselves.  Every P1 fork in the design is here.
    #:*gaps* #:*outer-gaps* #:*border-width*
    #:*focused-border-color* #:*unfocused-border-color* #:*empty-pane-color*
@@ -247,6 +247,7 @@ You never edit this package.")
    #:layout-children #:layout-node #:window-dimensions #:gravity
    #:gaps #:border-width #:border-color #:visible-p #:render-order
    #:clip-rect #:outer-rect #:reserved-space #:run-reserve-hooks
+   #:*solo-windows* #:solo-window #:output-solo-window #:solo-node-p
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
    #:echo-content #:cursor-place-name
    ;; --- motion and focus -----------------------------------------------

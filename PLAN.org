@@ -292,6 +292,10 @@ a weak model editing a monolith.
 All six run on every commit from day one. They are cheap and they are the only automated
 defence the project has.
 
+/There are eleven now. The six planned here are below; the five that were added are in
+[[#gates-added][§gates-added]], because each of them exists for a bug that had already
+shipped and the bug is the reason./
+
 1. *Zero compiler warnings* under ~(declaim (optimize (safety 3) (speed 1)))~ with
    ~ftype~ on every exported function. Verified in
    [[file:SPIKE-WEEK0.org::#ext-7][spike §ext-7]] to catch wrong arity, wrong-typed
@@ -339,6 +343,51 @@ numbers alongside pass/fail — *the lattice's ~defmethod~ count and its total l
 lattice that is three hundred lines of methods is the thesis holding. One that is two
 thousand lines re-implementing geometry is the thesis failing while wearing the gate's
 uniform.
+
+** The five that were added
+:PROPERTIES:
+:CUSTOM_ID: gates-added
+:END:
+
+Not one of these was foreseen here, and that is the interesting part: every one exists
+because something had already shipped broken, and in every case the instruments that
+existed were individually reasonable and all pointed somewhere else.
+
+7. *Every declared hook is run, and every run hook is declared.* ~:focus-changed~ was
+   declared, documented "for status bars", printed in the generated surface, and run by
+   nothing. A hook is a promise about when a function will be called and nothing checked
+   the caller existed.
+8. *Every event we handle exists on the interface we handle it for.* The output ~:name~
+   event we listened for is not on the interface we bind, so outputs had no names, on
+   every machine, in silence.
+9. *The image, the installer and the sample config agree.* Three independently
+   maintained lists of where an extension lives, and they disagreed.
+10. *No container kind is named by class outside its own definition.* ~copy-node~ was a
+    ~typecase~ over the concrete container classes, so the lattice's grid matched no
+    clause and copied with no children — and ~serialize-node~ had the identical shape
+    and dropped the whole lattice on every restart.
+11. *Every registered option is read by something.* ~*smart-gaps*~ was a
+    ~define-option~, an export, and a docstring promising to drop gaps and borders when
+    a workspace holds one window. ~--list-options~ printed it, the generated extension
+    surface described it as working, the config man page listed it beside ~*gaps*~, and
+    nothing in the program read the value.
+
+    *Being registered, documented, installable and settable are four promises an option
+    makes, and it makes a fifth: that somebody looks.* Every instrument the project had
+    asked the registry a question about itself — gate 2 about docstrings, gate 9 about
+    the installed list, ~every-option-is-reachable-from-a-config-file~ about whether the
+    symbol a user would set is the symbol registered, which is the check that found
+    [[#log3][§log3]]'s twenty-four unsettable options. That test is the direct template
+    for this gate and it is the right shape: /compare two artifacts that are maintained
+    independently, because that is the comparison no human ever performs./ There the two
+    were the registry and the user package. Here they are the registry and the compiled
+    program.
+
+    It asks SBCL's cross-reference data rather than the source text. A grep for the name
+    counts the ~defparameter~, the export, four docstrings and the man page; the
+    compiler's answer is about the program, sees a read inside a macro expansion, and
+    cannot be satisfied by prose. The same function answers the generated document's
+    ~read by:~ line, so the check and the documentation cannot disagree about it.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

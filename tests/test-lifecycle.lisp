@@ -626,3 +626,121 @@ still the shipped rule, and something else is now writable."
             "~s encodes to a single line" text)
         (is (string= (remove #\Return text) (funcall restore encoded))
             "and decodes back to exactly itself")))))
+
+;;; ==================================================================
+;;; SMART GAPS — one pane has nothing to be separated from
+;;; ==================================================================
+;;;
+;;; *SMART-GAPS* WAS REGISTERED, DOCUMENTED, EXPORTED AND READ BY NOTHING, from
+;;; the commit that added it until the one these tests came with.  Gate 11 is
+;;; what stops the next one; these are about the behaviour, and in particular
+;;; about the three cases the option's original docstring got wrong.  It said
+;;; "when a workspace holds exactly one window", and a promise nobody
+;;; implements is a design claim nobody checks against the rest of the design.
+
+(defun solo (policy node &optional (rect (c:make-rect 0 0 1000 500)))
+  (p:solo-window policy node rect))
+
+(test smart-gaps-sees-one-window-alone-on-a-workspace
+  (let* ((pol (policy))
+         (leaf (leaf-with "solo")))
+    (is (eq (c:leaf-window leaf) (solo pol leaf))
+        "a workspace that is one leaf holding one window")
+    (is (eq (c:leaf-window leaf)
+            (solo pol (c:make-stack (list leaf))))
+        "and the same window through a container that places only it")))
+
+(test smart-gaps-does-not-fire-on-an-empty-pane
+  "THE CASE THE ORIGINAL WORDING MOST OBVIOUSLY COVERED AND MUST NOT.
+
+A split holding one window and one empty pane holds exactly one window.
+Dropping the borders there is precisely the failure D18 names: focus is a
+*place*, an empty pane has no window to hang a border on, and an unmarked one
+reads as a broken keyboard rather than as a place."
+  (let* ((pol (policy))
+         (window (leaf-with "only")))
+    (is (null (solo pol (c:make-split :horizontal (list window (c:make-leaf)))))
+        "one window and one empty pane is two panes")
+    (is (null (solo pol (c:make-leaf)))
+        "and an empty workspace has no window to be alone")))
+
+(test smart-gaps-counts-panes-on-the-screen-not-windows-in-the-tree
+  (let* ((pol (policy))
+         (a (leaf-with "a"))
+         (b (leaf-with "b"))
+         (c (leaf-with "c")))
+    (is (null (solo pol (c:make-split :horizontal (list a b))))
+        "two tiled windows are two panes")
+    (is (eq (c:leaf-window a) (solo pol (c:make-stack (list a b c) 0)))
+        "three tabs are one pane -- that is what is on the screen")
+    (is (eq (c:leaf-window c) (solo pol (c:make-stack (list a b c) 2)))
+        "and it is whichever tab is selected, because LAYOUT-CHILDREN is asked
+rather than a second copy of the rule being kept here")))
+
+(test smart-gaps-is-off-when-the-option-is-off
+  (let ((p:*smart-gaps* nil))
+    (is (null (solo (policy) (leaf-with "solo")))
+        "the one place the option is read")))
+
+(test smart-gaps-drops-the-border-and-nothing-else-does
+  (let* ((pol (policy))
+         (leaf (leaf-with "solo"))
+         (other (leaf-with "other"))
+         (p:*border-width* 3))
+    (is (= 3 (p:border-width pol leaf nil))
+        "no relayout has happened, so there is no screen to be alone on")
+    (let ((p:*solo-windows* (list (cons :an-output (c:leaf-window leaf)))))
+      (is (= 0 (p:border-width pol leaf nil)))
+      (is (= 3 (p:border-width pol other nil))
+          "a window that is not the solo one keeps its border")
+      (setf (c:prop (c:leaf-window leaf) :border-width) 5)
+      (is (= 5 (p:border-width pol leaf nil))
+          "a window rule is a narrower statement than a global and still wins"))))
+
+(test smart-gaps-drops-the-screen-edge-gap-and-keeps-the-reserved-space
+  (let* ((pol (policy))
+         (output (make-instance 'c:output :rect (c:make-rect 0 0 1000 500)))
+         (window (win "solo"))
+         (p:*outer-gaps* 12))
+    (let ((normal (p:outer-rect pol output))
+          (solo (let ((p:*solo-windows* (list (cons output window))))
+                  (p:outer-rect pol output))))
+      ;; Asserted as a difference rather than against absolute numbers,
+      ;; because RESERVED-SPACE runs the :RESERVE-SPACE hooks and the echo
+      ;; area is on one of them.  The difference is the gap and only the gap,
+      ;; which is the claim.
+      (is (= 12 (- (c:rect-x normal) (c:rect-x solo))))
+      (is (= 24 (- (c:rect-w solo) (c:rect-w normal))))
+      (is (= (- (c:rect-h solo) 24) (c:rect-h normal))
+          "the reserved strip is untouched: a status bar drew in it"))))
+
+(test smart-gaps-needs-no-case-for-the-inner-gap
+  "The claim GAPS' docstring makes, asserted rather than asserted-in-prose.
+
+DIVIDE-RECT spends GAP once per *boundary between* children, so a container
+with one child already spends none and a solo workspace has nothing for an
+inner gap to sit between.  If that ever stops being true, the smart-gaps
+implementation grows a third reader and this fails first."
+  (let ((one (c:divide-rect (c:make-rect 0 0 100 50) :horizontal '(1) :gap 20)))
+    (is (= 1 (length one)))
+    (is (= 100 (c:rect-w (first one))))))
+
+(test smart-gaps-sizes-the-window-for-the-border-it-actually-gets
+  "THE BUG A SECOND COMPUTATION WOULD HAVE PRODUCED.
+
+BORDER-WIDTH is asked twice per relayout -- by WINDOW-DIMENSIONS on the way
+down, to size the window inside its pane, and by EMIT-BORDERS on the way out,
+to send the border.  River draws borders *around* the content rectangle, so if
+those two disagree the window overflows its pane by twice the difference.
+That is why the runtime computes the solo set once and binds it around both
+passes instead of asking twice."
+  (let* ((pol (policy))
+         (leaf (leaf-with "solo"))
+         (rect (c:make-rect 0 0 100 50))
+         (p:*border-width* 3))
+    (let ((p:*solo-windows* (list (cons :an-output (c:leaf-window leaf)))))
+      (multiple-value-bind (w h) (p:window-dimensions pol leaf rect)
+        (is (= 100 w) "no border, so the window gets the whole pane")
+        (is (= 50 h))
+        (is (= 0 (p:border-width pol leaf nil))
+            "and that is the same number the emitter will send")))))

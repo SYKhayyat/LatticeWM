@@ -140,7 +140,22 @@ a mouse and they want opposite things, which is what this exists for.
 prints every device present with its name, its kind, what it supports and what
 is currently in force.
 .TP
-.B *gaps* *outer-gaps* *border-width*
+.B *gaps* *outer-gaps* *border-width* *smart-gaps*
+Pixels between panes, between the layout and the screen edge, and around a
+window.  With
+.B *smart-gaps*
+on \(em the default \(em the outer gap and the border are dropped when a single
+pane is alone on a screen, because there is nothing there for either to
+separate.  An empty pane beside a window is a second pane and keeps both.
+.IP
+The first three share a name with a policy generic, and the relationship is
+always the same: the generic is the extension point and the option is what its
+shipped method returns.  A policy that overrides
+.B gaps
+stops reading
+.BR *gaps* .
+.B latticewm \-\-extension\-surface
+prints, under every option, what in the running program reads it.
 .TP
 .B *focused-border-color* *unfocused-border-color* *cursor-border-color*
 Four straight\-alpha floats each.  You write the colour you mean and the wire

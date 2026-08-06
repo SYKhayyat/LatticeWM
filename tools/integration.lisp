@@ -829,6 +829,64 @@ are what a person means by the arrangement, and both are copy-stable."
                      "while a forced relayout clears the cache and re-sends")))))
 
        ;; ------------------------------------------------------------------
+       ;; SMART GAPS, AND THE REASON IT IS CHECKED HERE RATHER THAN ONLY IN THE
+       ;; UNIT SUITE.  *SMART-GAPS* was registered, exported, documented and
+       ;; read by nothing for the whole life of the option: the model was
+       ;; perfectly consistent with itself and the screen was wrong, which is
+       ;; the exact class every bug this file has found belongs to.  A test
+       ;; that constructs a world can assert BORDER-WIDTH returns zero.  Only a
+       ;; compositor can say the zero was sent.
+       ;;
+       ;; This section runs while exactly one window is up, which is the state
+       ;; the option is about, and it puts it back before the next one opens.
+       (section "smart gaps"
+         (let ((window (window-named "latticewm-a" 1)))
+           (cond
+             ((null window) (missing "no window, so nothing is alone on a screen"))
+             ((/= 1 (on-screen-count))
+              (skip "~d panes are on the screen, so this one is not alone"
+                    (on-screen-count)))
+             (t
+              (settle)
+              (check p:*smart-gaps* "the shipped default is on")
+              (let ((leaf (c:leaf-holding (c:world-root *world*) window)))
+                (check (eql 0 (p:border-width (current-policy) leaf nil))
+                       "and the policy answers zero for the window that is alone"))
+              (let ((borders (r::emitted window :borders)))
+                (check (and (consp borders) (eql 0 (first borders)))
+                       "and the border width river was sent is ~s"
+                       (and (consp borders) (first borders))))
+              ;; THE OPTION, LIVE.  Turning it off has to bring the border and
+              ;; the screen-edge gap back on the next relayout, which is the
+              ;; property that was false: the value was settable, printed as
+              ;; working, and connected to nothing.
+              (let ((screen (c:output-rect (current-output)))
+                    (gapped nil)
+                    (ungapped nil))
+                (wm (lambda () (setf p:*outer-gaps* 20)))
+                (settle)
+                (setf ungapped (outer-rect (current-policy) (current-output)))
+                (check (= (c:rect-w ungapped) (c:rect-w screen))
+                       "with the option on, a 20px outer gap costs nothing: ~d of ~d"
+                       (c:rect-w ungapped) (c:rect-w screen))
+                (wm (lambda () (setf p:*smart-gaps* nil)))
+                (settle)
+                (setf gapped (outer-rect (current-policy) (current-output)))
+                (check (= (- (c:rect-w ungapped) 40) (c:rect-w gapped))
+                       "and with it off the same gap costs 40: ~d against ~d"
+                       (c:rect-w gapped) (c:rect-w ungapped))
+                (let ((borders (r::emitted window :borders)))
+                  (check (and (consp borders) (eql p:*border-width* (first borders)))
+                         "and the border came back at ~d" p:*border-width*))
+                ;; Put the world back for the sections below, which assume the
+                ;; shipped values.
+                (wm (lambda () (setf p:*smart-gaps* t p:*outer-gaps* 0)))
+                (settle)
+                (check (= (c:rect-w (outer-rect (current-policy) (current-output)))
+                          (c:rect-w screen))
+                       "and the shipped values are restored"))))))
+
+       ;; ------------------------------------------------------------------
        (section "two windows and the tree"
          (let ((a (window-named "latticewm-a" 1))
                (b (open-window "latticewm-b")))

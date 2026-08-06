@@ -1,11 +1,12 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are ten, and the four that were added are the four that found something.
+;;;; are eleven, and the five that were added are the five that found
+;;;; something.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
 ;;;;
 ;;;; Gate 1 lives in tools/build.lisp because it has to run *during* the load.
-;;;; The other nine run here, against the loaded image.
+;;;; The other ten run here, against the loaded image.
 
 (require :asdf)
 (require :sb-introspect)
@@ -720,6 +721,62 @@ where install.sh puts it" problems)))
                 generic of your own with a method per kind."
             (reverse found))
       (format t "  no container kind is named by class outside model/node.lisp~%")))
+
+;;; --------------------------------------------------------------- gate 11
+
+(banner 11 "every registered option is read by something")
+;; THE BUG THIS EXISTS FOR SHIPPED FOR THE WHOLE LIFE OF THE OPTION.
+;;
+;; *SMART-GAPS* was a DEFINE-OPTION, an export, and a docstring promising to
+;; "drop gaps and borders entirely when a workspace holds exactly one window".
+;; `latticewm --list-options' printed it.  doc/EXTENSION-SURFACE.txt described
+;; it as working.  doc/latticewm-config.5 listed it beside *GAPS*.  Nothing in
+;; the program read it.  Ten gates, 1469 unit checks and 165 integration checks
+;; passed on every one of those builds.
+;;
+;; NOT ONE OF THOSE INSTRUMENTS WAS POINTED THE WRONG WAY.  Gate 2 asks whether
+;; every generic and command is documented.  Gate 9 asks whether the image, the
+;; installer and the sample config agree about the option *list*.
+;; TESTS/TEST-SURFACE's EVERY-OPTION-IS-REACHABLE-FROM-A-CONFIG-FILE asks
+;; whether each option's symbol is the one a config file would set — the check
+;; that found twenty-four unsettable options, and the best check in the suite.
+;; Every one of them asks the registry a question about itself.  Being
+;; registered, being documented, being installable and being settable are four
+;; promises an option makes, and it makes a fifth: that somebody looks.
+;;
+;; THE CHECK IS THE SAME SHAPE AS THE ONE THAT FOUND THE TWENTY-FOUR, which is
+;; why it is worth writing down as a shape rather than as a rule: compare two
+;; artifacts that are maintained independently, because that is the comparison
+;; no human ever performs.  There the two were the registry and the user
+;; package.  Here they are the registry and the compiled program.
+;;
+;; ASK THE COMPILER, NOT THE TEXT.  Every other file-reading check in here
+;; greps, and greps are why CODE-OF exists.  A grep for an option's name counts
+;; its own DEFPARAMETER, its export, four docstrings that mention it and the man
+;; page, so it would have to be taught to ignore all of those and would still
+;; be wrong about a read inside a macro expansion.  SBCL recorded who
+;; references what while it was compiling the system.  That is a fact about the
+;; program, it costs a hash lookup, and it cannot be satisfied by prose.
+;;
+;; IT RUNS AFTER GATE 6 because gate 6 has by then loaded the lattice and the
+;; four worked examples, and an option the lattice alone reads is read.
+(let* ((rows (call "latticewm/policy:all-options"))
+       (unread '()))
+  (dolist (row rows)
+    (let ((readers (call "latticewm/policy:option-readers" (first row))))
+      (when (null readers) (push (second row) unread))))
+  (format t "  registered options~46t~d~%" (length rows))
+  (format t "  read by nothing~46t~d~%" (length unread))
+  (when unread
+    (fail 11 "~d registered option~:p nothing in the program reads:~{~%    ~(~a~)~}~%~
+              ~4tIt is printed by --list-options, described in the generated~%~
+              ~4textension surface and settable from a config file, and it~%~
+              ~4tdoes nothing.  Read it, or delete it -- a knob wired to~%~
+              ~4tnothing is worse than a missing feature, because the~%~
+              ~4tdocumentation agrees with the user that it should have worked."
+          (length unread) (sort (mapcar (lambda (s) (string-downcase (symbol-name s)))
+                                        unread)
+                                #'string<))))
 
 ;;; ---------------------------------------------------------------- verdict
 

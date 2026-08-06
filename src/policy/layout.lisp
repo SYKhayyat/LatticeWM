@@ -17,10 +17,113 @@
 (in-package #:latticewm/policy)
 
 ;;; ==================================================================
+;;; SMART GAPS — one pane has nothing to be separated from
+;;; ==================================================================
+;;;
+;;; *SMART-GAPS* WAS REGISTERED, EXPORTED, DOCUMENTED AND READ BY NOTHING.
+;;; It shipped from the commit that added it until the one that added this
+;;; paragraph: a DEFINE-OPTION, an export, and a paragraph in the generated
+;;; extension surface saying it worked.  `latticewm --list-options' printed it.
+;;; The config man page listed it.  Ten gates, the unit suite and the
+;;; integration suite all passed, because every one of them asks the registry
+;;; what it contains and none of them asked the *program* whether it looks.
+;;; Gate 11 is the answer to that and it is the more important half of this
+;;; change; this is the half that makes the document true.
+;;;
+;;; AND THE DOCSTRING DID NOT SURVIVE BEING IMPLEMENTED, which is the finding
+;;; underneath the finding.  It said "when a workspace holds exactly one
+;;; window", and an option nobody implements is a design claim nobody checks
+;;; against the rest of the design.  Three cases break it:
+;;;
+;;;   * AN EMPTY PANE IS A PANE.  A split holding one window and one empty
+;;;     pane holds exactly one window, and dropping the border there is
+;;;     precisely the failure D18 names -- focus is a *place*, an empty pane
+;;;     has no window to hang a border on, and an unmarked one "reads as a
+;;;     broken keyboard rather than as a place".  The one case the literal
+;;;     wording most obviously covers is the one case it must not.
+;;;
+;;;   * TABS HOLD MORE WINDOWS THAN THEY SHOW.  A workspace that is a stack of
+;;;     three shows one.  Gaps and borders are about what is on the screen, so
+;;;     three tabs are one pane, and this is also what sway's smart_gaps does.
+;;;
+;;;   * FLOATS ARE NOT TILED.  A float is not in the tree, has its own border,
+;;;     and is not what a gap between panes separates.
+;;;
+;;; So the rule is what the eye can check: the workspace puts exactly one pane
+;;; on the screen and that pane holds a window.  Everything else keeps its
+;;; gaps and its borders.
+
+(defvar *solo-windows* '()
+  "(OUTPUT . WINDOW) for each output showing a single window and nothing else.
+
+Rebuilt by the runtime at the head of every relayout, before the layout that
+reads it, and *left standing* afterwards — the same shape as the world's
+:LAST-PLACEMENTS and :RECT-INDEX, and for the same reason.  It is not scratch
+state for the duration of a call; it is what the last layout decided, and
+anything that asks OUTER-RECT or BORDER-WIDTH afterwards has to get the answer
+that is on the screen.
+
+BOUND FOR THE DURATION WAS THE FIRST VERSION AND IT WAS WRONG.  Under it these
+two generics answered one thing inside a relayout and another outside one, so
+`(outer-rect (current-policy) (current-output))' at a REPL described a screen
+nobody was looking at.  The integration suite caught it in the section written
+to prove the option works, which is the second time that file has found the
+difference between the model and the screen inside a change that had already
+passed the unit suite.
+
+Empty until a relayout has happened, so a unit test and a freshly built world
+see the plain behaviour: this is a property of a *screen*, and until there is
+one there is nothing to be alone on.")
+
+(defun solo-window (policy node rect)
+  "The window NODE shows, when NODE shows exactly one pane and it holds one.
+
+RECT is the rectangle NODE is about to be laid out in.  It is needed because
+`which children get placed' is a layout decision — a stack shows its
+selection, a grid shows the cells inside its viewport — and asking
+LAYOUT-CHILDREN is how this finds out without keeping a second copy of that
+decision.  A second copy is what would rot: the lattice would go on placing
+cells this function had never heard of.
+
+NIL when *SMART-GAPS* is off, which is the one place that option is read."
+  (when *smart-gaps*
+    (let ((panes '()))
+      (labels ((walk (node)
+                 ;; Two panes is already the answer, so stop: a workspace of
+                 ;; forty windows costs the same as a workspace of two.
+                 (when (< (length panes) 2)
+                   (if (c:container-p node)
+                       (dolist (entry (layout-children policy node rect))
+                         (let ((child (c:child-at node (car entry))))
+                           (when (and child (visible-p policy child))
+                             (walk child))))
+                       (push node panes)))))
+        (walk node))
+      (and (= 1 (length panes))
+           (typep (first panes) 'c:leaf)
+           (c:leaf-window (first panes))))))
+
+(defun output-solo-window (output)
+  "The window alone on OUTPUT this relayout, or NIL."
+  (cdr (assoc output *solo-windows* :test #'eq)))
+
+(defun solo-node-p (node)
+  "True when NODE is the leaf holding a window that is alone on its screen."
+  (let ((window (and (typep node 'c:leaf) (c:leaf-window node))))
+    (and window (rassoc window *solo-windows* :test #'eq) t)))
+
+;;; ==================================================================
 ;;; LAYOUT
 ;;; ==================================================================
 
 (defmethod gaps ((policy layout-policy) container)
+  "Pixels between adjacent panes.
+
+NO SMART-GAPS CASE HERE, and it is not an omission.  DIVIDE-RECT spends
+GAP * (n - 1) pixels, so a container with one child already spends none; a
+solo workspace has nothing for an inner gap to sit between.  The two places
+the option can be seen are the inset from the screen edge and the border, and
+those are where it is read."
   (declare (ignore container))
   *gaps*)
 
@@ -146,8 +249,14 @@ the leaf changes every time the window moves."
     (and window (c:prop window key))))
 
 (defmethod border-width ((policy appearance-policy) node focusedp)
+  "Border thickness in pixels, or 0 for the one window alone on its screen.
+
+A window rule's width still wins over the smart-gaps zero: somebody who marked
+a window out asked for that width on that window, and a rule is a narrower
+statement than a global."
   (declare (ignore focusedp))
-  (or (node-window-prop node :border-width) *border-width*))
+  (or (node-window-prop node :border-width)
+      (if (solo-node-p node) 0 *border-width*)))
 
 (defmethod border-color ((policy appearance-policy) node focusedp)
   "Four straight-alpha floats.  The wire layer premultiplies; see W:COLOR-COMPONENT.
@@ -238,8 +347,13 @@ layout rather than an absence of workspaces."
 
 RESERVED-SPACE is where a status bar takes its strip out, so that windows are
 laid out around it rather than under it.  Everything downstream honours the
-result without knowing why it is that shape."
-  (let ((rect (c:rect-inset (c:output-rect output) *outer-gaps*)))
+result without knowing why it is that shape.
+
+The outer gap goes when one window is alone on the screen — see *SMART-GAPS*.
+The reserved space does not: a status bar asked for its strip because it is
+drawing in it, and the number of windows underneath is not its business."
+  (let ((rect (c:rect-inset (c:output-rect output)
+                            (if (output-solo-window output) 0 *outer-gaps*))))
     (destructuring-bind (top right bottom left) (reserved-space policy output)
       (c:make-rect (+ (c:rect-x rect) left)
                    (+ (c:rect-y rect) top)
