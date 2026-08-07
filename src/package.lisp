@@ -254,7 +254,8 @@ You never edit this package.")
    #:*empty-pane-keys* #:*float-fraction* #:*smart-gaps*
    ;; --- layout ---------------------------------------------------------
    #:layout-children #:layout-node #:window-dimensions #:gravity
-   #:gaps #:border-width #:border-color #:visible-p #:render-order
+   #:gaps #:border-width #:border-color #:border-state #:border-color-for
+   #:visible-p #:render-order
    #:clip-rect #:outer-rect #:reserved-space #:run-reserve-hooks
    #:*solo-windows* #:solo-window #:output-solo-window #:solo-node-p
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs

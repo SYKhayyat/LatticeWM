@@ -258,22 +258,56 @@ statement than a global."
   (or (node-window-prop node :border-width)
       (if (solo-node-p node) 0 *border-width*)))
 
+(defmethod border-state ((policy appearance-policy) node focusedp)
+  "The four shipped states, and the order they are asked in.
+
+:EMPTY beats :FOCUSED because an empty focused pane is the one case where the
+border is the *only* decoration there is — there is no window in it to look at
+— so which pane you are in has to be readable from the border alone."
+  (cond ((and focusedp (c:empty-pane-p node)) :empty)
+        ((eq focusedp :cursor) :cursor)
+        (focusedp :focused)
+        (t :unfocused)))
+
+(defmethod border-color-for ((policy appearance-policy) state)
+  "The colour of a state nothing else answered for.
+
+Not an error: an extension that invents a state and forgets its colour should
+draw a plain border rather than stop the frame, and this is also the method
+that answers for :UNFOCUSED, which is every border on the screen but one."
+  (declare (ignore state))
+  (values-list *unfocused-border-color*))
+
+(defmethod border-color-for ((policy appearance-policy) (state (eql :focused)))
+  (values-list *focused-border-color*))
+
+(defmethod border-color-for ((policy appearance-policy) (state (eql :cursor)))
+  (values-list *cursor-border-color*))
+
+(defmethod border-color-for ((policy appearance-policy) (state (eql :empty)))
+  (values-list *empty-pane-color*))
+
 (defmethod border-color ((policy appearance-policy) node focusedp)
   "Four straight-alpha floats.  The wire layer premultiplies; see W:COLOR-COMPONENT.
 
 FOCUSEDP is T, :CURSOR or NIL — see RUNTIME:LEAF-FOCUS-STATE.  :CURSOR is
 truthy, so testing it as a boolean is still correct; testing it as a keyword is
-how you get the third colour."
-  (let ((color (cond ((and focusedp (c:empty-pane-p node)) *empty-pane-color*)
-                     ;; A rule's colour wins, and only for the focused state:
-                     ;; a window somebody marked out is worth marking out when
-                     ;; you are in it, and colouring it when you are not would
-                     ;; make every unfocused pane compete for attention.
-                     ((and focusedp (node-window-prop node :border-color)))
-                     ((eq focusedp :cursor) *cursor-border-color*)
-                     (focusedp *focused-border-color*)
-                     (t *unfocused-border-color*))))
-    (values-list color)))
+how you get the third colour.
+
+THE COMPOSITION OF TWO GENERICS AND NOTHING ELSE, which is the whole of the
+change: what state this border is in, and what colour that state is drawn in.
+It used to be one COND with all five branches in it, so a policy wanting a
+fourth state — urgent, tagged, recording — copied the branch, and every
+extension that did was a fork of a decision that runs per window per frame."
+  (let ((rule (and focusedp (node-window-prop node :border-color))))
+    ;; A rule's colour wins, and only for the focused state: a window somebody
+    ;; marked out is worth marking out when you are in it, and colouring it
+    ;; when you are not would make every unfocused pane compete for attention.
+    ;; It cannot collide with :EMPTY — an empty pane holds no window, so no
+    ;; rule has ever been applied to it.
+    (if rule
+        (values-list rule)
+        (border-color-for policy (border-state policy node focusedp)))))
 
 (defmethod clip-rect ((policy layout-policy) node rect)
   "Nothing overhangs in the conventional layer, so nothing is clipped.

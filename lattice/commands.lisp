@@ -467,23 +467,9 @@ nothing at all."
     ;; ON-FOCUS-CHANGE plus the :FOCUS-CHANGED hook, and a status bar that
     ;; shows the address needs to hear about this one most of all.
     (p:repair-cursor (p:current-policy) world)
-    (tag-cell-parity)
     (r:relayout :force t)
     (r:logmsg :info "lattice enabled: ~dx~d viewport" cols rows)
     t))
-
-(defun tag-cell-parity ()
-  "Mark each cell's subtree with its coordinate parity, for the border tint.
-
-Done as a PROP rather than a slot, because it is presentation state that the
-node has no business carrying permanently — which is precisely what PROPS is
-for, and precisely the case DESIGN D20 predicted an extension would need."
-  (let ((grid (current-grid)))
-    (when grid
-      (maphash (lambda (address node)
-                 (setf (c:prop node :lattice/parity)
-                       (evenp (+ (cell-x address) (cell-y address)))))
-               (grid-cells grid)))))
 
 (defun install-lattice-keys (&optional (keymap r:*keymap*))
   "Bind the lattice commands.  Generated, like the core keymap.

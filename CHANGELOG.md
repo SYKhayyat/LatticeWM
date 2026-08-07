@@ -139,6 +139,23 @@ be able to do before anyone else can depend on it.
   Names already spoken for are `shadowing-import`ed first, so a collision costs
   one name rather than an unknown prefix of the vocabulary.
 
+- **`border-color` was a closed `cond` forty lines from `font-for`, which had
+  solved the same problem correctly.** `font-for` takes a role keyword in
+  dispatch position and its docstring celebrates that "an extension can invent
+  one"; `border-color` encoded the three focus states in a five-branch `cond`,
+  so a policy wanting a fourth border state — urgent, tagged, recording — forked
+  the branch, on the decision that runs per window per frame. It is now the
+  composition of `border-state`, which says which state a border is in, and
+  `border-color-for`, which says what that state looks like, with the state in
+  dispatch position for both. Each shipped state is one method reading one
+  option, so it is exactly as replaceable as an invented one, and a state
+  nobody gave a colour draws a plain border rather than stopping the frame.
+- `*lattice-border-parity*` is gone. Its own docstring said it was superseded
+  by `*coordinate-tint*`, and the branch in the lattice's `border-color` was
+  kept alive to satisfy it — a superseded knob surviving the build that exists
+  to find dead knobs. The `:lattice/parity` property and `tag-cell-parity`,
+  which existed to feed it, went with it.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

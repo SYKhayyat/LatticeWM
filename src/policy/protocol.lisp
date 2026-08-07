@@ -275,7 +275,47 @@ Note this is also the only decoration an *empty focused pane* can have, and an
 empty pane that does not obviously have the cursor reads as a broken keyboard
 rather than as a place — DESIGN D18 lists that as an accepted cost with the
 cursor being unmissable as the mitigation.  Do not make the focused colour
-subtle."))
+subtle.
+
+TO ADD A BORDER STATE — urgent, tagged, recording — DO NOT OVERRIDE THIS.
+Answer BORDER-STATE with a keyword of your own and BORDER-COLOR-FOR for that
+keyword.  This method is the composition of the two and there is nothing in it
+to copy."))
+
+(defgeneric border-state (policy node focusedp)
+  (:documentation
+   "Which border state NODE is in, as a keyword.
+
+The shipped answers are :FOCUSED, :CURSOR, :EMPTY and :UNFOCUSED, and FOCUSEDP
+is the three-valued thing described under BORDER-COLOR.  A state a border can
+be in is not the same question as the colour it is drawn in, and this is the
+first half.
+
+    (defmethod border-state ((policy conventional-policy) node focusedp)
+      (if (node-window-prop node :urgent) :urgent (call-next-method)))
+
+A KEYWORD RATHER THAN A BOOLEAN, AND FOR THE SAME REASON FONT-FOR TAKES ONE.
+This decision used to live inside BORDER-COLOR as a five-branch COND closed at
+three states by construction, forty lines from FONT-FOR — whose docstring
+celebrates that a role is a keyword so *an extension can invent one*.  The same
+file held both patterns and the decision that runs per window per frame had the
+one you cannot extend without copying it."))
+
+(defgeneric border-color-for (policy state)
+  (:documentation
+   "The colour of a border in STATE, as (values R G B A), straight alpha.
+
+The second half of BORDER-COLOR, with STATE in dispatch position, so a state
+somebody invented gets a colour without touching anything shipped:
+
+    (defmethod border-color-for ((policy conventional-policy) (state (eql :urgent)))
+      (values 1.0 0.35 0.2 1.0))
+
+Each of the four shipped states is answered by its own method returning its own
+option, which is what makes them exactly as replaceable as an invented one.  A
+state with no method at all gets the unfocused colour rather than an error, on
+the same generosity as FONT-FOR's default: an extension that invents a state
+and forgets the colour should draw a plain border, not stop the frame."))
 
 (defgeneric visible-p (policy node)
   (:documentation

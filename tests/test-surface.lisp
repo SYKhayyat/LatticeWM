@@ -166,8 +166,40 @@
   ;; in tests/test-container.lisp.  A container protocol member is an obligation
   ;; on an extension author rather than an option offered to one, so `too many'
   ;; means something different there and a shared ceiling would say nothing.
+  ;; SIXTY-SIX TO SIXTY-EIGHT IS THE EIGHTH MOVE, AND IT IS TWO GENERICS FOR
+  ;; ONE DECISION -- which is the ratio the fourth move said to watch for, so
+  ;; here is why it is the right one here rather than the beginning of a slide.
+  ;;
+  ;;   BORDER-STATE      which state a border is in, as a keyword.
+  ;;   BORDER-COLOR-FOR  what colour that state is drawn in.
+  ;;
+  ;; The hardcoded answer they replace: BORDER-COLOR was a five-branch COND
+  ;; closed at three focus states by construction, forty lines from FONT-FOR --
+  ;; which had the same problem, put the state in a *dispatch position* as a
+  ;; keyword, and whose docstring celebrates that "an extension can invent
+  ;; one."  The same file held both patterns and the decision that runs per
+  ;; window per frame had the one you cannot extend without copying it.  A
+  ;; policy wanting a fourth border state -- urgent, tagged, recording, which
+  ;; is the most requested thing in any window manager after the tiling model
+  ;; itself -- forked five branches to add one.
+  ;;
+  ;; TWO RATHER THAN ONE BECAUSE THE CLASSIFICATION IS ITSELF A DECISION.
+  ;; FONT-FOR needs only the colour half: its role comes from the call site,
+  ;; because the drawer knows it is the map.  A border's state is *derived from
+  ;; the node*, so "what makes this border urgent" and "what does urgent look
+  ;; like" are two questions with two answers, and an extension that could only
+  ;; override the second would have no way to make anything return :URGENT.
+  ;; One generic would have been the shape that looks smaller and cannot be
+  ;; used.
+  ;;
+  ;; No knob is added: the four shipped states read the four colour options
+  ;; they always read, one method each, which is what makes them exactly as
+  ;; replaceable as an invented one.  And gate 6's count of generics answered
+  ;; from outside src/ does not move, which is the honest direction to report
+  ;; it in -- the lattice's BORDER-COLOR method is unchanged and still wins on
+  ;; its first argument.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 66) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 68) "the extension surface has ~d generics" n)))
 
 (test the-surface-is-what-takes-a-policy-and-nothing-else
   "POLICY-GENERICS used to mean 'every exported generic in the package'.
@@ -1041,6 +1073,74 @@ not the same as a test that renders it.  These five are the rendering."
       (is (= 50 (first-width))
           "and removing the override restores the shipped method, because the
 shipped method is on the superclass and was never touched"))))
+
+(test a-fourth-border-state-costs-two-methods-and-copies-no-branch
+  "The generic that runs per window per frame, and used to be a closed COND.
+
+BORDER-COLOR encoded FOCUSEDP in {T, :CURSOR, NIL} in five branches, forty
+lines from FONT-FOR — which had the same problem, put the state in a dispatch
+position as a keyword, and says in its own docstring that an extension can
+invent one.  A policy wanting a fourth border state forked the branch.
+
+So this is written the way somebody adding `urgent' would write it: one method
+saying which windows are urgent, one saying what urgent looks like, and not one
+line of anything shipped restated."
+  (let ((policy (policy))
+        (node (leaf-with "a")))
+    (is (equal p:*unfocused-border-color*
+               (multiple-value-list (p:border-color policy node nil))))
+    (is (eq :unfocused (p:border-state policy node nil)))
+    (is (eq :focused (p:border-state policy node t)))
+    (is (eq :cursor (p:border-state policy node :cursor)))
+    (is (eq :empty (p:border-state policy (c:make-leaf) t))
+        "an empty focused pane, whose border is the only decoration it has")
+    (defmethod p:border-state ((p p:conventional-policy) n focusedp)
+      (let ((window (and (typep n 'c:leaf) (c:leaf-window n))))
+        (if (and window (equal "a" (c:window-app-id window)))
+            :urgent
+            (call-next-method))))
+    (defmethod p:border-color-for ((p p:conventional-policy) (state (eql :urgent)))
+      (values 1.0 0.0 0.0 1.0))
+    (unwind-protect
+         (progn
+           (is (eq :urgent (p:border-state policy node nil)))
+           (is (equal '(1.0 0.0 0.0 1.0)
+                      (multiple-value-list (p:border-color policy node nil)))
+               "and the state a nobody invented reaches the screen, unfocused,
+without BORDER-COLOR having heard of it")
+           (is (equal p:*focused-border-color*
+                      (multiple-value-list (p:border-color policy (leaf-with "b") t)))
+               "while everything the extension did not claim is untouched"))
+      (remove-method #'p:border-state
+                     (find-method #'p:border-state '()
+                                  (list (find-class 'p:conventional-policy)
+                                        (find-class 't) (find-class 't))))
+      (remove-method #'p:border-color-for
+                     (find-method #'p:border-color-for '()
+                                  (list (find-class 'p:conventional-policy)
+                                        (closer-mop:intern-eql-specializer :urgent)))))
+    (is (eq :unfocused (p:border-state policy node nil))
+        "and removing the two methods restores the shipped answer, because the
+shipped one is on APPEARANCE-POLICY and was never touched")))
+
+(test a-state-nobody-gave-a-colour-draws-a-plain-border
+  "FONT-FOR's generosity, which is the half of the pattern that is easy to
+leave out: a role it has never heard of gets the default font rather than a
+NO-APPLICABLE-METHOD in the middle of a frame.  An invented border state with
+no colour method gets the unfocused colour for the same reason — an extension
+half-written should draw a boring border, not stop the compositor being told
+anything."
+  (let ((policy (policy)))
+    (is (equal p:*unfocused-border-color*
+               (multiple-value-list (p:border-color-for policy :nothing-defines-this))))
+    (is (equal p:*focused-border-color*
+               (multiple-value-list (p:border-color-for policy :focused)))
+        "and each shipped state is one method reading one option, which is what
+makes it exactly as replaceable as an invented one")
+    (is (equal p:*cursor-border-color*
+               (multiple-value-list (p:border-color-for policy :cursor))))
+    (is (equal p:*empty-pane-color*
+               (multiple-value-list (p:border-color-for policy :empty))))))
 
 (test adding-a-slot-to-a-live-class-migrates-existing-instances
   ;; SPIKE-WEEK0 §ext-3, which is what settled DEFCLASS over DEFSTRUCT for core

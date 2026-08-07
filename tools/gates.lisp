@@ -457,7 +457,7 @@ for.
 
 PLAN.org §generics wrote down the shape and never got it: \"If this list
 reaches thirty, the decomposition has gone wrong in the direction of ceremony.\"
-The list is at sixty-five.  A threshold nobody is ever made to argue with is a
+The list is at sixty-eight.  A threshold nobody is ever made to argue with is a
 decoration, and the way to stop that is to leave no slack to spend quietly.")
 
 (defparameter *outside-method-floor* 22

@@ -160,13 +160,6 @@ overlay.  This is the cheapest useful form of the third.
 0.0 turns it off and gives every cell the same neutral border.  Above about
 0.7 it starts to look like a toy.")
 
-(p:define-option *lattice-border-parity* nil
-  "Tint cell borders by coordinate parity, like a chessboard.
-
-Superseded by *COORDINATE-TINT*, which distinguishes every cell rather than
-only alternate ones, and kept because a chessboard is genuinely easier to read
-at a glance if all you want to know is whether a move happened.")
-
 ;;; ==================================================================
 ;;; LAYOUT
 ;;; ==================================================================
@@ -291,8 +284,6 @@ bound from the enclosing pass, which is a cache, and a stale cache here is the
 failure that does not announce itself."
   (when node
     (setf (c:prop node :lattice/address) address
-          (c:prop node :lattice/parity) (evenp (+ (cell-x address)
-                                                  (cell-y address)))
           (c:prop node :lattice/viewport-bounds) bounds)
     ;; The cell's whole subtree answers for the cell, so a split *inside* a
     ;; cell borders in the cell's colour rather than reverting to neutral.
@@ -433,10 +424,7 @@ coloured thing."
     (let ((address (c:prop node :lattice/address)))
       (cond
         ((or (null address) (<= *coordinate-tint* 0.0))
-         (if (and *lattice-border-parity* (c:prop node :lattice/parity)
-                  (not focusedp))
-             (values (* r 1.35) (* g 1.15) (min 1.0 (* b 1.35)) a)
-             (values r g b a)))
+         (values r g b a))
         (t
          ;; The focused cell is *bright*; the rest are tinted greys.  Both
          ;; carry the cell's hue, so you can always tell which cell you are in
