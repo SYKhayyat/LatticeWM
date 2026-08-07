@@ -561,7 +561,7 @@ spaces the way a shell would split it.
 The child is detached and its output goes nowhere, so a program that writes to
 stderr cannot fill a pipe nobody is reading and block."
   (:interactive :shell-command)
-  (guarded "spawn"
+  (best-effort "spawn"
     (sb-ext:run-program (first command) (rest command)
                         :search t :wait nil
                         :output nil :error nil :input nil))
@@ -599,7 +599,7 @@ would be worse than saying so."
   "Exit the session.  This logs you out."
   (run-shutdown-once)
   (when (server-manager *server*)
-    (guarded "exit_session" (w:wm-exit-session (server-manager *server*))))
+    (best-effort "exit_session" (w:wm-exit-session (server-manager *server*))))
   (setf (server-running *server*) nil))
 
 (defcommand restart-wm ()

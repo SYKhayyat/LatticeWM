@@ -101,9 +101,9 @@ protocol half waits for a sequence that may legally carry it."
     (setf (seat-pointer-op seat) operation)
     (defer-to-manage
       (lambda ()
-        (guarded "op_start_pointer" (w:seat-op-start-pointer (seat-proxy seat)))
+        (best-effort "op_start_pointer" (w:seat-op-start-pointer (seat-proxy seat)))
         (when (eq kind :resize)
-          (guarded "inform_resize_start"
+          (best-effort "inform_resize_start"
             (w:window-inform-resize-start (c:window-proxy window))))))
     (run-hooks :pointer-op kind window)
     (logmsg :debug "pointer ~(~a~) started on ~s" kind window)
@@ -122,8 +122,8 @@ protocol half waits for a sequence that may legally carry it."
         (defer-to-manage
           (lambda ()
             (when (and (eq kind :resize) proxy)
-              (guarded "inform_resize_end" (w:window-inform-resize-end proxy)))
-            (guarded "op_end" (w:seat-op-end (seat-proxy seat))))))
+              (best-effort "inform_resize_end" (w:window-inform-resize-end proxy)))
+            (best-effort "op_end" (w:seat-op-end (seat-proxy seat))))))
       (run-hooks :pointer-op nil (pointer-op-window operation))
       (logmsg :debug "pointer ~(~a~) finished" (pointer-op-kind operation))
       (mark-dirty)
@@ -163,7 +163,7 @@ costs nothing and cannot swallow an ordinary click."
               for button = (ignore-errors (p:pointer-button-code (first spec)))
               for modifiers = (ignore-errors (p:modifier-mask (second spec)))
               when button
-                collect (let ((binding (guarded "get_pointer_binding"
+                collect (let ((binding (best-effort "get_pointer_binding"
                                          (w:seat-get-pointer-binding
                                           (seat-proxy seat) button modifiers)))
                               (kind kind))
@@ -180,7 +180,7 @@ costs nothing and cannot swallow an ordinary click."
                             ;; otherwise completely silent.  Super+drag did
                             ;; nothing at all, and the headless integration
                             ;; test found it on its first run.
-                            (guarded "enable pointer binding"
+                            (best-effort "enable pointer binding"
                               (w:pointer-binding-enable binding)))
                           (cons kind binding))))
   (logmsg :info "~d pointer binding~:p" (length (c:prop seat :pointer-bindings)))

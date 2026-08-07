@@ -237,27 +237,128 @@ become a different note on each screen."
                (sb-debug:print-backtrace :stream out :count count))))
   nil)
 
-;;; ---------------------------------------------------- the two boundaries
+;;; ---------------------------------------------------- the three boundaries
+;;;
+;;; HANDLER-BIND, NOT HANDLER-CASE, AND THAT IS THE WHOLE FIX.
+;;;
+;;; HANDLER-CASE transfers control to the exit point *before* running its
+;;; clause, so by the time anything logs, the stack the error happened on is
+;;; gone.  All three of these used it.  The consequence was that the one class
+;;; of error a live-editable window manager exists to let you fix -- your own
+;;; DEFMETHOD, written at a REPL thirty seconds ago -- was reported as a single
+;;; line of ~A: no frames, no restarts, no route to a debugger.
+;;;
+;;; WITH-ABANDON was worse, because it promised.  Its docstring said "log it
+;;; with a backtrace and carry on" and it called LOG-BACKTRACE from a
+;;; HANDLER-CASE clause -- post-unwind, so it printed the frames of the
+;;; WITH-ABANDON site rather than of the error.  Meanwhile the *only* place in
+;;; the program that captured a true backtrace was INSTALL-DEBUGGER-HOOK, which
+;;; runs from *INVOKE-DEBUGGER-HOOK* before unwinding; and WITH-ABANDON handled
+;;; the error first, so the working path was permanently shadowed by the broken
+;;; one.
+;;;
+;;; A HANDLER-BIND handler runs on the signalling stack.  Log there, then
+;;; transfer.  Two lines, and it is the difference between a bug report and a
+;;; sentence.
+;;;
+;;; AND THE NAME WAS DOING TWO JOBS.  GUARDED's docstring said it was used at
+;;; every boundary where a policy method is called and "deliberately *not* used
+;;; around our own internal calls: swallowing our own bugs would turn them into
+;;; silent misbehaviour."  There were 126 call sites.  Roughly half wrapped a
+;;; w:/river: wire call, and a dozen wrapped our own functions -- (guarded
+;;; "snapshot" ...), (guarded "save-state" ...), (guarded "deferred manage
+;;; work" ...), (guarded "ipc shutdown" ...) -- each of them our own code
+;;; swallowing our own bugs, producing exactly the silent misbehaviour the
+;;; docstring forbids.  Once a boundary marker means anything it means nothing,
+;;; and the log printed "window destroy: ..." beside "layout: ..." with nothing
+;;; to say which one was somebody's bug.
+;;;
+;;; So there are two names for two boundaries:
+;;;
+;;;   GUARDED       user code runs inside ours.  Log it loudly, with frames,
+;;;                 and keep going.  The per-decision granularity is the real
+;;;                 justification and the docstring never gave it: emit.lisp
+;;;                 has ~20 guarded policy calls in one manage sequence, so
+;;;                 abandoning the sequence over one bad CLIP-RECT would cost
+;;;                 the other nineteen windows their placement.
+;;;
+;;;   BEST-EFFORT   a wire call whose object river may already have destroyed.
+;;;                 Expected, not a defect, and a backtrace is noise.
+;;;
+;;; Our own internal calls get neither.  Where one of those was load-bearing --
+;;; a save that must not take the shutdown with it -- it says so at the site.
+
+(define-option *debug-on-error* nil
+  "Let errors reach the debugger instead of being logged and swallowed.
+
+For a REPL that is attached to a running window manager, which is what this
+program is for.  With it set, GUARDED, BEST-EFFORT and WITH-ABANDON decline to
+handle: the condition keeps going, and if SLIME is connected you get the
+debugger, the real stack, and the restarts -- including ABANDON, which is what
+you almost always want to pick.
+
+*WITH NOTHING ATTACHED, SETTING THIS WILL EXIT THE WINDOW MANAGER* on the first
+error, because the debugger hook installed at startup has nowhere to put a
+prompt and says so rather than blocking forever on a stream nobody is reading.
+That is the honest behaviour and it is why this is off by default.
+
+There was no such option.  The whole reported surface of an error in user code
+was one line of text, in a program whose entire thesis is that you edit it
+while it runs.")
 
 (defmacro guarded (context &body body)
-  "Run BODY; log and swallow any error, returning NIL.
+  "Run BODY; log any error with a backtrace and return NIL.
 
-Used at every boundary where a *policy method* is called — that is, at every
-point where user code runs inside ours.  A bad DEFMETHOD written at a live REPL
-must not be able to abort a manage sequence, because an abandoned manage
-sequence is a frozen desktop.  It should produce a log line and a window in the
+The boundary where a *policy method* is called — every point where user code
+runs inside ours.  A bad DEFMETHOD written at a live REPL must not abort a
+manage sequence, because an abandoned manage sequence is a frozen desktop.  It
+should produce a log line, a backtrace naming the method, and a window in the
 wrong place, which you then fix at the same REPL.
 
-Deliberately *not* used around our own internal calls: swallowing our own bugs
-would turn them into silent misbehaviour, which is much harder to find than a
-backtrace."
-  `(handler-case (progn ,@body)
-     (error (condition)
-       (logmsg :error "~a: ~a" ,context condition)
-       nil)))
+Per decision, not per sequence, and that is the point: one bad answer costs
+that answer and nothing else.
+
+For a wire call, use BEST-EFFORT.
+
+For our own internal calls, use neither — swallowing our own bugs turns them
+into silent misbehaviour, which is much harder to find than a backtrace.  The
+exceptions are UNWIND-PROTECT cleanup and SAVE-STATE, where a failure must not
+take the shutdown with it, and each of those carries the argument at the site
+rather than relying on this paragraph.  If you are about to add another, write
+the reason where the call is."
+  (let ((condition (gensym "CONDITION")))
+    `(block guarded
+       (handler-bind
+           ((error (lambda (,condition)
+                     (unless *debug-on-error*
+                       ;; On the signalling stack, so these are the frames of
+                       ;; the error and not of this macro.
+                       (logmsg :error "~a: ~a" ,context ,condition)
+                       (log-backtrace 20)
+                       (return-from guarded nil)))))
+         ,@body))))
+
+(defmacro best-effort (context &body body)
+  "Run BODY; log any error in one line and return NIL.
+
+The boundary where *we* call the compositor.  A request against a proxy river
+has already torn down is an ordinary outcome — a window closes while a manage
+sequence is in flight, an output is unplugged mid-frame — and it is not a
+defect of ours, so it gets a line and no backtrace.
+
+The difference from GUARDED is entirely about who is at fault, which is
+entirely what a log is read for."
+  (let ((condition (gensym "CONDITION")))
+    `(block best-effort
+       (handler-bind
+           ((error (lambda (,condition)
+                     (unless *debug-on-error*
+                       (logmsg :warn "~a: ~a" ,context ,condition)
+                       (return-from best-effort nil)))))
+         ,@body))))
 
 (defmacro with-abandon (&body body)
-  "Run BODY; on any error, log it with a backtrace and carry on.
+  "Run BODY; on any error, log it with a real backtrace and carry on.
 
 Wrapped around each event handler and each iteration of the event loop, so
 that one bad event is abandoned and the loop goes round again.
@@ -267,16 +368,25 @@ learned the hard way: relying on the debugger hook to invoke the restart left
 a path where a type error in an event handler printed a debugger banner to a
 stderr nobody was reading and stopped the window manager dead.  A restart
 nothing invokes is not a safety net.  The hook is still installed, as a second
-line for anything that escapes this."
-  `(restart-case
-       (handler-case (progn ,@body)
-         (error (condition)
-           (logmsg :error "abandoned: ~a" condition)
-           (log-backtrace 20)
-           nil))
-     (abandon ()
-       :report "Abandon this event and keep the window manager running."
-       nil)))
+line for anything that escapes this.
+
+THE BACKTRACE IS REAL NOW.  This called LOG-BACKTRACE from a HANDLER-CASE
+clause, which runs after the unwind, so it printed this macro's own frames
+under a docstring promising the error's.  A HANDLER-BIND handler runs on the
+signalling stack; the ABANDON restart is invoked from inside it, so the
+liveness guarantee is unchanged and the frames are the ones that matter."
+  (let ((condition (gensym "CONDITION")))
+    `(restart-case
+         (handler-bind
+             ((error (lambda (,condition)
+                       (unless *debug-on-error*
+                         (logmsg :error "abandoned: ~a" ,condition)
+                         (log-backtrace 20)
+                         (invoke-restart 'abandon)))))
+           ,@body)
+       (abandon ()
+         :report "Abandon this event and keep the window manager running."
+         nil))))
 
 ;;; ---------------------------------------------------- the debugger hook
 

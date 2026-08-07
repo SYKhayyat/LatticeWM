@@ -257,7 +257,13 @@ problem, which is what makes it worth a paragraph."
                   (1+ wanted) (or (c:output-name (first outputs)) "the output")))))))
 
 (defun save-state (&optional (path (state-file)))
-  "Write the layout out.  Never signals; a failure to save is not fatal."
+  "Write the layout out.  Never signals; a failure to save is not fatal.
+
+OUR OWN CODE, GUARDED DELIBERATELY.  This runs from the event loop's idle
+moment and from EMERGENCY-SHUTDOWN, which is the path where the program has
+already lost; a full disk here must produce a log line and a session that
+keeps running rather than an unhandled condition on the way out the door.
+The docstring's first sentence is the contract every caller relies on."
   (guarded "save-state"
     (ensure-directories-exist path)
     (with-open-file (out path :direction :output :if-exists :supersede

@@ -270,5 +270,10 @@ without a compositor — which is the whole model."
      (:file "test-hooks")
      (:file "test-minibuffer")
      (:file "test-devices")
+     ;; The three error boundaries.  Nothing had ever asked them a question,
+     ;; which is how all three came to be built on HANDLER-CASE -- so the one
+     ;; class of error a live-editable window manager exists to let you fix
+     ;; was reported as a single line with no frames.
+     (:file "test-boundaries")
      (:file "test-examples"))))
   :perform (test-op (o c) (symbol-call :latticewm/tests :run-all)))

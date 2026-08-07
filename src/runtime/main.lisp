@@ -493,6 +493,12 @@ debug it (connecting, binding, the first manage sequence) is still after it."
 sequence, and see the backtrace in the log."))
              (p:log-backtrace 40)
              nil))
+      ;; OUR OWN CODE, GUARDED DELIBERATELY, AND THE REASON IS AT THE SITE
+      ;; because GUARDED's docstring is otherwise a rule this breaks.  These
+      ;; are UNWIND-PROTECT cleanup forms: a failure in the first must not
+      ;; stop the second, and neither must stop the disconnect below, or the
+      ;; session is left with an orphaned compositor object and an unlinked
+      ;; socket.  Everything here has already been asked to save.
       (guarded "shutdown" (run-shutdown-once))
       (guarded "ipc shutdown" (stop-ipc-server))
       (ignore-errors (wl:wl-display-disconnect display))
@@ -515,7 +521,7 @@ ordinary shutdown."
   "Set the xcursor theme, if the configuration asked for one."
   (when *cursor-theme*
     (dolist (seat (server-seats *server*))
-      (guarded "set_xcursor_theme"
+      (best-effort "set_xcursor_theme"
         (w:seat-set-xcursor-theme (seat-proxy seat)
                                   *cursor-theme* *cursor-size*)))))
 

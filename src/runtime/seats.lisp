@@ -106,10 +106,10 @@ hundred objects per cycle on the compositor's side as well as ours.
 The protocol asks us to destroy the object after `removed', which is what frees
 its half."
   (loop for binding being the hash-values of (seat-bound-keys seat)
-        do (guarded "binding destroy" (river:river-xkb-binding-v1.destroy binding)))
+        do (best-effort "binding destroy" (river:river-xkb-binding-v1.destroy binding)))
   (clrhash (seat-bound-keys seat))
   (loop for (nil . binding) in (c:prop seat :capture-bindings)
-        do (guarded "capture binding destroy"
+        do (best-effort "capture binding destroy"
              (river:river-xkb-binding-v1.destroy binding)))
   (setf (c:prop seat :capture-bindings) nil
         (c:prop seat :capture-armed) nil
@@ -120,16 +120,16 @@ its half."
         (c:prop seat :capture-wanted) nil)
   (let ((layer (c:prop seat :layer-shell)))
     (when layer
-      (guarded "layer shell seat destroy"
+      (best-effort "layer shell seat destroy"
         (river:river-layer-shell-seat-v1.destroy layer))
       (setf (c:prop seat :layer-shell) nil)))
   (let ((bindings-seat (seat-bindings-seat seat)))
     (when bindings-seat
-      (guarded "bindings seat destroy"
+      (best-effort "bindings seat destroy"
         (river:river-xkb-bindings-seat-v1.destroy bindings-seat))
       (setf (seat-bindings-seat seat) nil)))
   (setf (server-seats *server*) (remove seat (server-seats *server*)))
-  (guarded "seat destroy" (river:river-seat-v1.destroy proxy))
+  (best-effort "seat destroy" (river:river-seat-v1.destroy proxy))
   (setf (seat-proxy seat) nil)
   ;; Whatever is left needs its bindings re-established, because they were
   ;; per seat and this was not necessarily the only one.
@@ -159,7 +159,7 @@ window-management state."
     (dolist (entry (p:bindable-keys))
       (let ((key (car entry)))
         (unless (gethash key (seat-bound-keys seat))
-          (let ((binding (guarded "get_xkb_binding"
+          (let ((binding (best-effort "get_xkb_binding"
                            (w:bindings-get-xkb-binding
                             bindings (seat-proxy seat) (car key) (cdr key)))))
             (when binding
@@ -177,7 +177,7 @@ window-management state."
                               (:pressed (when (handle-key key) (after-command)))
                               (t nil))))))
                     (wl:wl-proxy-hooks binding))
-              (guarded "enable binding" (w:binding-enable binding)))))))
+              (best-effort "enable binding" (w:binding-enable binding)))))))
     (logmsg :info "~d key~:p bound" (hash-table-count (seat-bound-keys seat)))))
 
 (defun rebind-keys ()
@@ -268,7 +268,7 @@ state — which is the sort of `works on the second try' that costs an afternoon
       (dolist (key wanted)
         (destructuring-bind (keysym . modifiers) key
           (unless (assoc key (c:prop seat :capture-bindings) :test #'equal)
-            (let ((binding (guarded "get_xkb_binding"
+            (let ((binding (best-effort "get_xkb_binding"
                              (w:bindings-get-xkb-binding
                               bindings (seat-proxy seat) keysym modifiers))))
               (when binding
@@ -282,7 +282,7 @@ state — which is the sort of `works on the second try' that costs an afternoon
                 (push (cons (cons keysym modifiers) binding)
                       (c:prop seat :capture-bindings))
                 (when armed
-                  (guarded "capture binding" (w:binding-enable binding))))))))))
+                  (best-effort "capture binding" (w:binding-enable binding))))))))))
   (c:prop seat :capture-bindings))
 
 (defun handle-captured-key (keysym modifiers)
@@ -317,14 +317,14 @@ because this runs on every manage sequence and there are ninety-eight of them."
          (bindings-seat (and seat (seat-bindings-seat seat))))
     (when bindings-seat
       (when *pending-keymap*
-        (guarded "ensure_next_key_eaten"
+        (best-effort "ensure_next_key_eaten"
           (w:bindings-seat-ensure-next-key-eaten bindings-seat)))
       (let ((wanted (capture-wanted-p)))
         (ensure-capture-bindings seat)
         (unless (eq wanted (c:prop seat :capture-armed))
           (setf (c:prop seat :capture-armed) wanted)
           (loop for (nil . binding) in (c:prop seat :capture-bindings)
-                do (guarded "capture binding"
+                do (best-effort "capture binding"
                      (if wanted (w:binding-enable binding)
                          (w:binding-disable binding)))))))))
 

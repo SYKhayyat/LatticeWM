@@ -276,7 +276,8 @@ You never edit this package.")
    #:*resize-amount*
    #:join-existing-split-p #:split-join-predicate
    ;; logging, and the boundary every policy method is called behind
-   #:logmsg #:note-once #:guarded #:with-abandon #:install-debugger-hook
+   #:logmsg #:note-once #:guarded #:best-effort #:with-abandon
+   #:install-debugger-hook #:*debug-on-error*
    #:*log-level* #:*log-stream* #:+log-levels+
    #:*log-file* #:*log-max-bytes* #:*log-keep* #:*log-to-stderr*
    #:default-log-file #:resolved-log-file #:close-log-file #:log-backtrace
@@ -452,6 +453,7 @@ You never edit this package.")
    #:logmsg
    #:note-once
    #:guarded
+   #:best-effort
    #:with-abandon
    #:install-debugger-hook
    #:*log-level*
@@ -520,7 +522,7 @@ keybindings, the command registry, and the session loop.")
    #:overlay-visible-p #:destroy-canvas #:canvas-width #:canvas-height
    #:current-node #:current-leaf #:current-window #:current-path
    #:focused-window #:in-wm-thread-p
-   #:window-river-node #:guarded #:with-abandon
+   #:window-river-node #:guarded #:best-effort #:with-abandon
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*

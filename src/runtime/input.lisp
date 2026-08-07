@@ -262,7 +262,7 @@ re-applying the whole configuration on every reload costs nothing."
            nil)
           ((equalp wire (c:input-device-setting device property)) nil)
           (t
-           (let ((result (guarded "libinput set"
+           (let ((result (best-effort "libinput set"
                            (funcall (input-setting-setter setting) proxy wire))))
              (when result
                (push (libinput-result-hook device property)
@@ -293,7 +293,7 @@ drive, which includes every virtual keyboard a remote-desktop client creates."
      (let ((proxy (c:input-device-proxy device)))
        (when (and proxy (realp value) (plusp value)
                   (not (eql value (c:input-device-setting device :scroll-factor))))
-         (guarded "set_scroll_factor" (w:input-set-scroll-factor proxy (float value)))
+         (best-effort "set_scroll_factor" (w:input-set-scroll-factor proxy (float value)))
          (setf (c:input-device-setting device :scroll-factor) value)
          t)))
     (:map-to-output
@@ -301,7 +301,7 @@ drive, which includes every virtual keyboard a remote-desktop client creates."
            (output (wl-output-named value)))
        (when (and proxy output
                   (not (equal value (c:input-device-setting device :map-to-output))))
-         (guarded "map_to_output" (w:input-map-to-output proxy output))
+         (best-effort "map_to_output" (w:input-map-to-output proxy output))
          (setf (c:input-device-setting device :map-to-output) value)
          t)))
     (t (let ((setting (find-input-setting property)))
@@ -323,7 +323,7 @@ one already in force rather than a zero."
             (delay (or delay (c:input-device-setting device :repeat-delay) 600)))
         (unless (and (eql rate (c:input-device-setting device :repeat-rate))
                      (eql delay (c:input-device-setting device :repeat-delay)))
-          (guarded "set_repeat_info"
+          (best-effort "set_repeat_info"
             (w:input-set-repeat-info proxy (max 0 rate) (max 0 delay)))
           (setf (c:input-device-setting device :repeat-rate) rate
                 (c:input-device-setting device :repeat-delay) delay)
@@ -473,7 +473,7 @@ wrong guess is a `failure' event carrying the compiler's own message."
                    (write-char (code-char 0) stream)
                    (finish-output stream))
                  (sb-posix:lseek fd 0 sb-posix:seek-set)
-                 (let ((keymap (guarded "create_keymap"
+                 (let ((keymap (best-effort "create_keymap"
                                  (w:xkb-create-keymap config fd :text-v1))))
                    (when keymap
                      (on-events (keymap "river_xkb_keymap_v1")
@@ -539,7 +539,7 @@ says so, because a wrong table is worse than the fallback."
             (unless (equal wanted (c:input-device-setting device :xkb))
               (let ((keymap (keymap-for layout variant options model rules)))
                 (when keymap
-                  (guarded "set_keymap" (w:xkb-keyboard-set-keymap keyboard keymap))
+                  (best-effort "set_keymap" (w:xkb-keyboard-set-keymap keyboard keymap))
                   (setf (c:input-device-setting device :xkb) wanted)
                   (adopt-shift-map-for layout)
                   t)))))))))
@@ -549,7 +549,7 @@ says so, because a wrong table is worse than the fallback."
   (let ((keyboard (c:input-device-keyboard device)))
     (when (and keyboard p:*numlock*
                (not (eq t (c:input-device-setting device :numlock))))
-      (guarded "numlock_enable" (w:xkb-keyboard-numlock-enable keyboard))
+      (best-effort "numlock_enable" (w:xkb-keyboard-numlock-enable keyboard))
       (setf (c:input-device-setting device :numlock) t))))
 
 ;;; ==================================================================
@@ -594,7 +594,7 @@ of bug that only appears on the machine somebody docks twice a day."
              (mark-inputs-dirty))
       (:removed
        (forget-input-device device)
-       (guarded "input device destroy" (w:input-destroy proxy)))
+       (best-effort "input device destroy" (w:input-destroy proxy)))
       (t nil))
     (run-hooks :input-added device)
     (mark-inputs-dirty)
@@ -614,7 +614,7 @@ of bug that only appears on the machine somebody docks twice a day."
      (let ((device (device-of-proxy proxy)))
        (when device (setf (c:input-device-libinput device) nil))
        (remhash proxy (server-device-index *server*)))
-     (guarded "libinput destroy" (w:libinput-destroy proxy)))
+     (best-effort "libinput destroy" (w:libinput-destroy proxy)))
     (t nil))
   ;; What the device supports and what is currently in force, as a second
   ;; handler on the same proxy.  Two handlers rather than one CASE of forty
@@ -726,7 +726,7 @@ compare equal to anything."
        (when device
          (setf (c:input-device-keyboard device) proxy
                (gethash proxy (server-device-index *server*)) device)
-         (guarded "lock state" (apply-lock-state device))
+         (best-effort "lock state" (apply-lock-state device))
          (mark-inputs-dirty))))
     (:layout
      (let ((device (device-of-proxy proxy)))
@@ -745,7 +745,7 @@ compare equal to anything."
      (let ((device (device-of-proxy proxy)))
        (when device (setf (c:input-device-keyboard device) nil))
        (remhash proxy (server-device-index *server*)))
-     (guarded "xkb keyboard destroy" (w:xkb-keyboard-destroy proxy)))
+     (best-effort "xkb keyboard destroy" (w:xkb-keyboard-destroy proxy)))
     (t nil))
   proxy)
 
@@ -911,7 +911,7 @@ like rather than only on the chord xkb reserves."
       (let ((keyboard (c:input-device-keyboard device))
             (index (or (c:input-device-setting device :layout-index) 0)))
         (when keyboard
-          (guarded "set_layout_by_index"
+          (best-effort "set_layout_by_index"
             (w:xkb-keyboard-set-layout-by-index keyboard (1+ index)))
           (incf changed))))
     ;; River wraps an out-of-range index to zero itself, and answers with a

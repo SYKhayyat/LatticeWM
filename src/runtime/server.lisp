@@ -272,7 +272,7 @@ comment draws — policy and user code talk to the runtime, the runtime talks to
 the protocol — and the first worked example that crossed it did so because
 this function was missing rather than because the rule was wrong."
   (when seat
-    (guarded "pointer_warp" (w:seat-pointer-warp (seat-proxy seat) x y))))
+    (best-effort "pointer_warp" (w:seat-pointer-warp (seat-proxy seat) x y))))
 
 ;;; ------------------------------------------------------------ registries
 

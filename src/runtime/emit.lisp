@@ -238,7 +238,7 @@ that turns into.  Diffed, so the common case sends nothing."
         ;; Tiled edges: a floating window is adjacent to nothing, so clients
         ;; stop suppressing their rounded corners and shadows.
         (when-changed (window :tiled (not (c:window-floating-p window)))
-          (guarded "set_tiled"
+          (best-effort "set_tiled"
             (w:window-set-tiled proxy (if (c:window-floating-p window)
                                           w:+edges-none+
                                           w:+edges-all+))))
@@ -246,7 +246,7 @@ that turns into.  Diffed, so the common case sends nothing."
         ;; draws no borders while fullscreen, so there is no relayout either
         ;; way.
         (when-changed (window :fullscreen (c:window-fullscreen-p window))
-          (guarded "fullscreen"
+          (best-effort "fullscreen"
             (if (c:window-fullscreen-p window)
                 ;; THE WINDOW'S OUTPUT, NOT THE CURSOR'S.  This read
                 ;; CURRENT-OUTPUT, which is the output the *cursor* is on, so
@@ -289,7 +289,7 @@ screen to say why."
     (setf (server-pending-closes *server*) '())
     (dolist (window work)
       (when (c:window-proxy window)
-        (guarded "close" (w:window-close (c:window-proxy window)))))))
+        (best-effort "close" (w:window-close (c:window-proxy window)))))))
 
 (defun emit-dimension-work ()
   "Drain the pending propose_dimensions work.  Manage sequence only."
@@ -299,7 +299,7 @@ screen to say why."
       (destructuring-bind (window width height) entry
         (when (c:window-proxy window)
           (when-changed (window :dimensions (list width height))
-            (guarded "propose_dimensions"
+            (best-effort "propose_dimensions"
               (w:window-propose-dimensions (c:window-proxy window)
                                            width height))))))))
 
@@ -325,7 +325,7 @@ set changes, or overlapping windows flicker between frames."
                  (emit-window-visible policy window node path rect cursor))
                 (t
                  (when-changed (window :shown nil)
-                   (guarded "hide" (w:window-hide (c:window-proxy window)))))))))))
+                   (best-effort "hide" (w:window-hide (c:window-proxy window)))))))))))
     ;; The floats come back as placements rather than being appended by the
     ;; caller, so that RENDER-ORDER is handed the whole render list and its
     ;; answer is the whole answer.
@@ -381,7 +381,7 @@ is one walk of a list that is almost always short."
                    (not (gethash window placed))
                    (not (member window *unplaced*)))
           (when-changed (window :shown nil)
-            (guarded "hide" (w:window-hide proxy))))))))
+            (best-effort "hide" (w:window-hide proxy))))))))
 
 (defun leaf-focus-state (path cursor)
   "What kind of focus the pane at PATH has: T, :CURSOR, or NIL.
@@ -410,11 +410,11 @@ colour tests for the keyword."
          (placed (place-rect policy node rect window)))
     (setf (c:window-rect window) placed)
     (when-changed (window :shown t)
-      (guarded "show" (w:window-show proxy)))
+      (best-effort "show" (w:window-show proxy)))
     (let ((river-node (window-river-node window)))
       (when river-node
         (when-changed (window :position (list (c:rect-x placed) (c:rect-y placed)))
-          (guarded "set_position"
+          (best-effort "set_position"
             (w:node-set-position river-node (c:rect-x placed) (c:rect-y placed))))))
     ;; Borders.  Also the only decoration a focused *empty* pane could have —
     ;; but an empty pane has no window, so the cursor there is drawn by the
@@ -424,7 +424,7 @@ colour tests for the keyword."
     (let ((clip (guarded "clip-rect" (p:clip-rect policy node placed))))
       (when-changed (window :clip (and clip (list (c:rect-x clip) (c:rect-y clip)
                                                   (c:rect-w clip) (c:rect-h clip))))
-        (guarded "set_content_clip_box"
+        (best-effort "set_content_clip_box"
           (if clip
               (w:window-set-content-clip-box
                proxy (- (c:rect-x clip) (c:rect-x placed))
@@ -450,7 +450,7 @@ copies of a decision are two chances to get it wrong and one of them will."
             (when-changed (window :borders (list width r g b a))
               (multiple-value-bind (wire-r wire-g wire-b wire-a)
                   (w:premultiplied-rgba r g b (or a 1.0))
-                (guarded "set_borders"
+                (best-effort "set_borders"
                   (w:window-set-borders proxy w:+edges-all+ width
                                         wire-r wire-g wire-b wire-a))))))))))
 
@@ -506,7 +506,7 @@ a RENDER-ORDER method sees floats and tiles in one vocabulary."
         (when (and proxy (c:window-live-p window))
           (if (c:window-minimized-p window)
               (when-changed (window :shown nil)
-                (guarded "hide" (w:window-hide proxy)))
+                (best-effort "hide" (w:window-hide proxy)))
               (let* ((anchor (c:float-anchor float))
                      (base (and anchor (gethash anchor (c:prop *world* :rect-index))))
                      (rect (c:float-rect float))
@@ -517,7 +517,7 @@ a RENDER-ORDER method sees floats and tiles in one vocabulary."
                                  rect)))
                 (setf (c:window-rect window) placed)
                 (when-changed (window :shown t)
-                  (guarded "show" (w:window-show proxy)))
+                  (best-effort "show" (w:window-show proxy)))
                 ;; Diffed like everything around it.  This was the one emission
                 ;; in the file that was not, so every float re-proposed identical
                 ;; dimensions on every relayout — and river processes every
@@ -531,7 +531,7 @@ a RENDER-ORDER method sees floats and tiles in one vocabulary."
                   (when river-node
                     (when-changed (window :position (list (c:rect-x placed)
                                                           (c:rect-y placed)))
-                      (guarded "set_position"
+                      (best-effort "set_position"
                         (w:node-set-position river-node (c:rect-x placed)
                                              (c:rect-y placed))))))
                 ;; The float's own leaf, kept on the float record rather than
@@ -590,7 +590,7 @@ obeyed."
         (dolist (window order)
           (let ((node (window-river-node window)))
             (when node
-              (guarded "render order"
+              (best-effort "render order"
                 (if previous
                     (w:node-place-above node previous)
                     (w:node-place-bottom node)))

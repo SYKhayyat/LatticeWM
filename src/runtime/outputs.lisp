@@ -186,12 +186,12 @@ the compositor's side."
     (forget-overlays-for-output output)
     (let ((layer (c:prop output :layer-shell)))
       (when layer
-        (guarded "layer shell output destroy"
+        (best-effort "layer shell output destroy"
           (river:river-layer-shell-output-v1.destroy layer))
         (setf (c:prop output :layer-shell) nil)))
     (remhash proxy (server-outputs *server*))
     (setf (c:world-outputs *world*) (remove output (c:world-outputs *world*)))
-    (guarded "output destroy" (river:river-output-v1.destroy proxy))
+    (best-effort "output destroy" (river:river-output-v1.destroy proxy))
     (setf (c:output-proxy output) nil)
     (rehome-orphaned-workspace was-showing)
     (when announced (run-hooks :output-removed output))

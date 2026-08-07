@@ -68,7 +68,7 @@ and the layout gets the whole output."
   (let ((shell (and *server* (server-layer-shell *server*)))
         (proxy (c:output-proxy output)))
     (when (and shell proxy (null (c:prop output :layer-shell)))
-      (let ((layer (guarded "get layer shell output"
+      (let ((layer (best-effort "get layer shell output"
                      (river:river-layer-shell-v1.get-output shell proxy))))
         (when layer
           (setf (c:prop output :layer-shell) layer)
@@ -92,7 +92,7 @@ decided.  See APPLY-KEYBOARD-FOCUS."
   (let ((shell (and *server* (server-layer-shell *server*)))
         (proxy (seat-proxy seat)))
     (when (and shell proxy (null (c:prop seat :layer-shell)))
-      (let ((layer (guarded "get layer shell seat"
+      (let ((layer (best-effort "get layer shell seat"
                      (river:river-layer-shell-v1.get-seat shell proxy))))
         (when layer
           (setf (c:prop seat :layer-shell) layer)
@@ -148,7 +148,7 @@ decide — which on a two-monitor desktop means the bar moves when you plug
 something in."
   (let ((layer (and output (c:prop output :layer-shell))))
     (when layer
-      (guarded "layer shell set_default"
+      (best-effort "layer shell set_default"
         (river:river-layer-shell-output-v1.set-default layer))
       t)))
 

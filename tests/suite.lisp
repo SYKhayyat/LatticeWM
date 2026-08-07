@@ -26,7 +26,7 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:hooks #:minibuffer #:devices #:capture))
+           #:container #:hooks #:minibuffer #:devices #:capture #:boundaries))
 
 (in-package #:latticewm/tests)
 

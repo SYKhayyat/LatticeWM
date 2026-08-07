@@ -69,10 +69,10 @@ sequence it is in."
         (:fullscreen-requested (request-fullscreen window t))
         (:exit-fullscreen-requested (request-fullscreen window nil))
         (:minimize-requested (minimize-window window))
-        (:maximize-requested (guarded "inform_maximized"
+        (:maximize-requested (best-effort "inform_maximized"
                                (w:window-inform-maximized (c:window-proxy window))))
         (:unmaximize-requested
-         (guarded "inform_unmaximized"
+         (best-effort "inform_unmaximized"
            (w:window-inform-unmaximized (c:window-proxy window))))
         ;; Somebody grabbed the window's own titlebar or corner.  Clients that
         ;; draw their own decorations ask for this through xdg-shell and river
@@ -122,13 +122,13 @@ the event that brought us here.  The node goes first because it was made from
 the window."
   (setf (c:window-live-p window) nil)
   (let ((node (gethash window (server-nodes *server*))))
-    (when node (guarded "node destroy" (w:node-destroy node))))
+    (when node (best-effort "node destroy" (w:node-destroy node))))
   (let ((proxy (c:window-proxy window)))
     (when proxy
       (remhash proxy (server-windows *server*))
-      ;; Guarded because a proxy river has already torn down its side of is an
-      ;; ordinary outcome on this path, not a bug of ours.
-      (guarded "window destroy" (w:window-destroy proxy))))
+      ;; BEST-EFFORT and not GUARDED: a proxy river has already torn down its
+      ;; side of is an ordinary outcome on this path, not a bug of ours.
+      (best-effort "window destroy" (w:window-destroy proxy))))
   (remhash window (server-nodes *server*))
   (forget-window-state window)
   (setf *unplaced* (remove window *unplaced*))
@@ -178,7 +178,7 @@ so getting this wrong shows up as a titlebar with a maximize button that does
 nothing."
   (let ((proxy (c:window-proxy window)))
     (when proxy
-      (guarded "set_capabilities"
+      (best-effort "set_capabilities"
         (w:window-set-capabilities proxy (p:window-capabilities policy window)))
       (guarded "decoration"
         (if (eq (p:decoration-mode policy window) :ssd)

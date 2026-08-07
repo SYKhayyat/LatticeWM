@@ -69,7 +69,7 @@ queue and wake the loop instead."
   (cond
     ((not (and *server* (server-manager *server*))) nil)
     ((in-wm-thread-p)
-     (guarded "manage_dirty" (w:wm-manage-dirty (server-manager *server*))))
+     (best-effort "manage_dirty" (w:wm-manage-dirty (server-manager *server*))))
     (t (call-in-wm-thread #'request-manage))))
 
 (defun defer-to-manage (thunk)
@@ -101,6 +101,11 @@ Taken off the server before any of it runs, so a thunk that queues more work
 gets the *next* sequence rather than looping inside this one."
   (let ((work (nreverse (server-pending-manage-work *server*))))
     (setf (server-pending-manage-work *server*) '())
+    ;; A POLICY BOUNDARY IN DISGUISE, WHICH IS WHY THIS IS GUARDED.  These
+    ;; thunks are whatever DEFER-TO-MANAGE was handed, and DEFER-TO-MANAGE is
+    ;; on the extension surface -- so half of what runs here is user code, and
+    ;; the half that is ours is per-item work that must not take the other
+    ;; items with it.  Both halves want exactly what GUARDED gives.
     (dolist (thunk work)
       (guarded "deferred manage work" (funcall thunk)))))
 

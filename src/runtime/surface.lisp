@@ -345,7 +345,7 @@ laptop that is docked and undocked twice a day is a real leak with a slow fuse."
   "Destroy every overlay that belonged to OUTPUT.  For hotplug."
   (dolist (overlay (all-overlays))
     (when (eq output (overlay-output overlay))
-      (guarded "destroy overlay" (destroy-overlay overlay))))
+      (best-effort "destroy overlay" (destroy-overlay overlay))))
   nil)
 
 (defun hide-overlays (kind &key except)
@@ -356,7 +356,7 @@ screen and the drawn map belong where you are looking, not on every monitor at
 once, and the one they were on last has to be told to go away."
   (dolist (overlay (all-overlays kind))
     (unless (eq (overlay-output overlay) except)
-      (guarded "hide overlay" (overlay-hide overlay))))
+      (best-effort "hide overlay" (overlay-hide overlay))))
   nil)
 
 (defun overlay-scale (overlay)
@@ -408,7 +408,7 @@ right resolution rather than at the last one's."
       ;; carries, *before* attaching it.  Without this a 2x buffer is drawn at
       ;; twice the size rather than at twice the resolution.
       (when (> (canvas-scale canvas) 1)
-        (guarded "set_buffer_scale"
+        (best-effort "set_buffer_scale"
           (wl:wl-surface.set-buffer-scale surface (canvas-scale canvas))))
       (wl:wl-surface.attach surface (canvas-buffer canvas) 0 0)
       ;; Damage in *buffer* coordinates, which are device pixels.
@@ -416,7 +416,7 @@ right resolution rather than at the last one's."
                                    (canvas-width canvas) (canvas-height canvas))
       (wl:wl-surface.commit surface)
       (when (overlay-node overlay)
-        (guarded "overlay position"
+        (best-effort "overlay position"
           (w:node-set-position (overlay-node overlay)
                                (c:rect-x rect) (c:rect-y rect))
           ;; Overlays are always on top of everything else.  River leaves the
@@ -428,7 +428,7 @@ right resolution rather than at the last one's."
   "Stop showing OVERLAY, and release its buffer unless told otherwise."
   (when (and (overlay-surface overlay) (overlay-visible-p overlay))
     (setf (overlay-visible-p overlay) nil)
-    (guarded "overlay hide"
+    (best-effort "overlay hide"
       (wl:wl-surface.attach (overlay-surface overlay) nil 0 0)
       (wl:wl-surface.commit (overlay-surface overlay))))
   (when (and p:*overlay-buffer-idle* (overlay-canvas overlay))
