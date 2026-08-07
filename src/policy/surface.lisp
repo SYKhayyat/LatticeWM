@@ -56,6 +56,55 @@ contributors the release attracts, and a model would rather have a plist."
                                                    (remove-if #'third shadows))))))
                          (all-options)))))
 
+(defparameter *protocol-order*
+  '((layout-policy     . "where things go")
+    (appearance-policy . "what they look like")
+    (motion-policy     . "how you move between them")
+    (structure-policy  . "what changes the shape of the tree")
+    (lifecycle-policy  . "what happens when a window arrives or leaves")
+    (input-policy      . "keys, the pointer, and the devices"))
+  "The six protocols POLICY implements, in reading order, with a gloss each.
+
+READING ORDER AND NOT ALPHABETICAL.  This governs how the extension surface is
+printed, and the sequence is the one a person meets the system in: where a
+window goes, then what it looks like, then how you get to it.  A flat
+alphabetical list of sixty-nine generics is a reference and not a document, and
+the whole argument of this file is that a stranger reads the surface rather
+than the source.")
+
+(defun generic-protocol (name)
+  "Which of the six protocol classes answers NAME, or NIL.
+
+Asked of the method list rather than of a table, so a generic whose shipped
+answer moves between protocols is described where it now lives and nobody has
+to remember to move a row.  NIL means the shipped answer is on POLICY itself,
+which is a real and deliberate place for one -- see the group heading."
+  (let ((gf (and (fboundp name) (fdefinition name))))
+    (when (typep gf 'generic-function)
+      (loop for method in (closer-mop:generic-function-methods gf)
+            for specializer = (first (closer-mop:method-specializers method))
+            when (and (typep specializer 'class)
+                      (assoc (class-name specializer) *protocol-order*))
+              return (class-name specializer)))))
+
+(defun group-by-protocol (entries)
+  "ENTRIES partitioned into (PROTOCOL GLOSS . ENTRIES), in *PROTOCOL-ORDER*.
+
+Deterministic in both directions: the groups come out in the order of the
+parameter and the entries keep the order they arrived in, because this output
+is a committed file and gate 12 holds the committed file to what the image
+prints.  A generic answered on POLICY itself, or by nothing yet, lands in the
+last group rather than being dropped -- a surface that silently omits a member
+is the failure every check in this project is written against."
+  (let ((groups (mapcar (lambda (row) (list (car row) (cdr row))) *protocol-order*))
+        (rest (list nil "answered on POLICY itself, or not yet answered at all")))
+    (dolist (entry entries)
+      (let* ((protocol (generic-protocol (getf entry :name)))
+             (group (or (assoc protocol groups) rest)))
+        (setf (cddr group) (append (cddr group) (list entry)))))
+    (remove-if (lambda (group) (null (cddr group)))
+               (append groups (list rest)))))
+
 (defun print-hook-surface (&optional (stream *standard-output*))
   "Print the hooks for a human.
 
@@ -172,7 +221,18 @@ method on it.~2%~
 This is one of two surfaces.  The other is the *container* protocol -- what a~%~
 new container kind answers rather than what a new policy answers -- and it is~%~
 printed by `latticewm --container-surface'.~2%")
-    (c:print-generic-descriptions (getf surface :generics) stream)
+    ;; GROUPED BY PROTOCOL, and it used to be one flat run of sixty-nine.
+    ;; Every paragraph above tells the reader to specialize on
+    ;; CONVENTIONAL-POLICY *because* the defaults sit on six protocol classes,
+    ;; and then the list they scrolled through gave no sign of which generic
+    ;; belonged to which -- so the one structural fact the preamble spends a
+    ;; paragraph on was invisible in the part anybody actually reads.
+    (dolist (group (group-by-protocol (getf surface :generics)))
+      (destructuring-bind (protocol gloss . entries) group
+        (format stream "~&~76,,,'=<~>~%~:[POLICY~;~:*~a~] -- ~a~%~
+                        ~d generic~:p~%~76,,,'=<~>~2%"
+                (and protocol (string protocol)) gloss (length entries))
+        (c:print-generic-descriptions entries stream)))
     (format stream "~&~76,,,'=<~>~%OPTIONS~%~76,,,'=<~>~2%")
     (format stream "~
 `read by' is every function and method in this image that looks at the value,~%~

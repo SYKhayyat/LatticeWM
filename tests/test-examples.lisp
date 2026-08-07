@@ -226,9 +226,67 @@ why switching back puts every window exactly where it was"))))
                (funcall (read-from-string "latticewm/user::strip-offset") strip))
             "the strip scrolled to follow, which is the whole feature")))))
 
+;;; ------------------------------------------------------------------ 05
+
+(test the-status-line-composes-rather-than-being-replaced
+  "Tier 1, and the thing every window manager answers with a second program.
+
+The point of the example is the shape of the method rather than the segments:
+CALL-NEXT-METHOD and append, so the shipped line survives and a second
+extension doing the same thing survives too.  A method that returned only its
+own segments would silently delete whatever anybody else had added, and this
+asserts the difference."
+  (with-example ("05-status-line.lisp")
+    (open-windows 2)
+    ;; The example's own special, read by name: it does not exist until the
+    ;; file is loaded, so this file cannot mention it at read time.
+    (let* ((switch (read-from-string "latticewm/user::*status-line-extras*"))
+           (shipped-length
+             (progv (list switch) (list nil)
+               (length (p:echo-content p:*policy* r:*world* 200))))
+           (with-extras (p:echo-content p:*policy* r:*world* 200)))
+      (is (< shipped-length (length with-extras))
+          "the extra segments were added rather than replacing the line")
+      (is (every (lambda (segment)
+                   (and (consp segment) (stringp (car segment))
+                        (member (cdr segment) '(:accent :normal))))
+                 with-extras)
+          "and every segment still has the shape ECHO-CONTENT documents")
+      (is (notany (lambda (segment) (string= "" (car segment))) with-extras)
+          "a segment with nothing to say is dropped, not drawn empty"))
+    ;; The clock is the one segment that is always there, so it is the one
+    ;; that says the method ran at all.
+    (is (= 5 (length (funcall (read-from-string "latticewm/user::clock-segment"))))
+        "hh:mm")))
+
+(test the-count-a-general-purpose-status-bar-cannot-write
+  "The segment that is the argument for the whole approach: it is a fact about
+the layout, not about the machine, so nothing outside the window manager could
+produce it."
+  (with-example ("05-status-line.lisp")
+    (let ((elsewhere (read-from-string "latticewm/user::elsewhere-segment")))
+      (open-windows 2)
+      (is (equal "" (funcall elsewhere r:*world*))
+          "everything open is in the workspace you are looking at")
+      (r:run-command "new-workspace")
+      (open-windows 1)
+      (is (search "2 elsewhere" (funcall elsewhere r:*world*))
+          "and the two you left behind are counted, from the tree"))))
+
 (test every-example-file-is-loadable
   ;; The cheapest possible guard against the worst failure mode: an example
   ;; that no longer compiles, shipped as documentation.
-  (dolist (name '("01-focus-follows-mouse.lisp" "02-window-rules.lisp"
-                  "03-master-stack.lisp" "04-scrolling-columns.lisp"))
-    (finishes (with-example (name) t))))
+  ;;
+  ;; ENUMERATED, NOT LISTED.  This was four filenames typed into the test, so
+  ;; the fifth example was covered by whatever tests somebody remembered to
+  ;; write for it and by nothing otherwise -- the same shape as every gate in
+  ;; this project that checks a directory against a list rather than consulting
+  ;; one.
+  (let ((files (sort (mapcar #'file-namestring
+                             (directory (merge-pathnames
+                                         "examples/*.lisp"
+                                         (asdf:system-source-directory "latticewm"))))
+                     #'string<)))
+    (is (<= 5 (length files)) "the examples are there at all: ~s" files)
+    (dolist (name files)
+      (finishes (with-example (name) t)))))

@@ -1166,7 +1166,7 @@ finds it~%"))))
 ;; quietly, which is the whole difference between a rule and a gate.
 
 (defparameter *current-documents*
-  '("README.org" "INSTALL.org" "FINDINGS.org"
+  '("README.org" "INSTALL.org" "doc/FINDINGS.org"
     "doc/EXTENDING.org" "doc/latticewm.1" "doc/latticewm-config.5")
   "Documents that describe the program as it is.  A false sentence here is a bug.
 
@@ -1177,7 +1177,7 @@ three commits and said so afterwards.  DESIGN is a record of what was decided
 before the code existed, and half its value is showing where that was wrong.")
 
 (defparameter *historical-documents*
-  '("DESIGN.org" "PLAN.org" "ASSESSMENT.org" "SPIKE-WEEK0.org")
+  '("doc/DESIGN.org" "doc/PLAN.org" "doc/ASSESSMENT.org" "doc/SPIKE-WEEK0.org")
   "Dated records.  Correct when written, frozen on purpose, not to be edited
 into agreement with whatever shipped.
 
@@ -3156,6 +3156,74 @@ of them is what anybody runs"
       (fail 21 "~{~%    ~a~}" (reverse problems))
       (when phase
         (format t "  the packaged build delegates to the one that is checked~%"))))
+
+;;; --------------------------------------------------------------- gate 22
+
+(banner 22 "every request goes through the one door, and the door is checked")
+;; 462 LINES OF WRAPPER WHOSE ONLY READER WAS THE GATE THAT COUNTED THEM.
+;;
+;; src/wire/wrappers.lisp generates a wrapper for all 123 requests, and gate 5
+;; asserts the count so that a protocol update adding a request cannot arrive
+;; unwrapped.  Eighty of those wrappers are verbatim identity -- %REQUEST-CLASS
+;; answers :ANY for everything outside two lists, and an :ANY wrapper is
+;; `(defun w:foo (a0 a1) (river:foo a0 a1))'.  The defence of that is that the
+;; wire layer is the one place this program speaks to river, so a request that
+;; is reclassified later costs one line here and nothing anywhere else.
+;;
+;; IT WAS NOT TRUE.  Thirteen call sites in runtime/ named the generated
+;; request directly -- three in layer.lisp, two in outputs.lisp, five in
+;; seats.lisp, three in surface.lisp -- and they are all teardowns, which is
+;; the half of the protocol nobody watches.  So the discipline was applied to
+;; the requests somebody remembered to route and to no others, and the count
+;; gate went on passing because it counts wrappers rather than callers.
+;;
+;; AND THE CIRCLE CLOSED IN ONE FILE.  WRAPPERS.LISP defines WM-MANAGE-FINISH
+;; with the docstring "Prefer WITH-MANAGE-SEQUENCE", and WITH-MANAGE-SEQUENCE
+;; -- in wire/sequence.lisp, twenty lines away -- sent manage_finish raw.  The
+;; wrapper pointed at the macro and the macro went around the wrapper.
+;;
+;; WHAT IS ALLOWED, AND WHY IT IS NOT ZERO MENTIONS.  Binding a global names an
+;; *interface*: `(wl:wl-registry.bind registry name 'river:river-seat-v1 v)' is
+;; a class name and there is nothing to wrap.  So the check is not "does this
+;; file mention the protocol package" -- it is "does it name a *request*", and
+;; a request is a symbol with a dot in it, which is how the generated bindings
+;; spell `interface.request' and how nothing else in this tree spells anything.
+(let ((offenders '()) (interfaces 0) (files 0))
+  (dolist (path (sort (mapcar #'namestring
+                              (append (directory (merge-pathnames "src/**/*.lisp" *root*))
+                                      (directory (merge-pathnames "lattice/*.lisp" *root*))))
+                      #'string<))
+    (unless (under "src/wire/" path)
+      (incf files)
+      (let ((text (code-of path))
+            (marker "river:river-")
+            (start 0))
+        (loop for at = (search marker text :start2 start)
+              while at
+              do (setf start (+ at (length marker)))
+                 (let* ((end (or (position-if-not
+                                  (lambda (c)
+                                    (or (alphanumericp c) (find c "-.")))
+                                  text :start at)
+                                 (length text)))
+                        (token (subseq text at end)))
+                   (if (find #\. token)
+                       (push (format nil "~a  ~a" (relative path) token) offenders)
+                       (incf interfaces)))))))
+  (format t "  files outside src/wire/~46t~d~%~
+             ~4tinterfaces named, to bind a global~46t~d~%~
+             ~4trequests named directly~46t~d~%"
+          files interfaces (length offenders))
+  (if offenders
+      (fail 22 "~d request~:p called without going through src/wire/:~{~%    ~a~}~%~
+                ~4tThe wire layer exists so that the manage/render discipline~%~
+                ~4tis applied once rather than at every call site, and so that~%~
+                ~4treclassifying a request costs one line.  A call that names~%~
+                ~4tthe generated function directly has neither property, and~%~
+                ~4tthe wrappers it walks past are what gate 5 counts.  Add an~%~
+                ~4tALIAS in src/wire/wrappers.lisp and call that."
+            (length offenders) (reverse offenders))
+      (format t "  the wire layer is the only thing that speaks to river~%")))
 
 ;;; ---------------------------------------------------------------- verdict
 

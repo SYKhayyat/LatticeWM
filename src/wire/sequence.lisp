@@ -92,17 +92,30 @@ A manage sequence is *always* followed by at least one render sequence, and
 the compositor waits for it before processing further input — river has an
 `unresponsive' protocol error and will use it.  So the UNWIND-PROTECT is not
 tidiness: failing to send manage_finish because a policy method signalled is
-how you hang the whole desktop."
+how you hang the whole desktop.
+
+AND IT SENDS MANAGE_FINISH THROUGH THE WRAPPER, which it did not.  WRAPPERS.LISP
+defines WM-MANAGE-FINISH with a docstring reading `Prefer WITH-MANAGE-SEQUENCE',
+and
+WITH-MANAGE-SEQUENCE called the generated request raw -- the wrapper pointed at
+the macro and the macro went around the wrapper.  Nothing broke, because this
+is the one call site that is provably inside the sequence it is ending; what it
+cost was the claim that every request goes through one door.  The expansion
+names a function defined in wrappers.lisp, which loads after this file: legal,
+because a macro body is a template and the symbol is only called from code
+compiled later."
   (let ((manager (gensym "WM")))
     `(let ((,manager ,wm))
        (let ((*sequence* :manage))
          (unwind-protect (progn ,@body)
-           (river:river-window-manager-v1.manage-finish ,manager))))))
+           (wm-manage-finish ,manager))))))
 
 (defmacro with-render-sequence ((wm) &body body)
-  "Run BODY inside a render sequence on WM, finishing it even if BODY unwinds."
+  "Run BODY inside a render sequence on WM, finishing it even if BODY unwinds.
+
+Through WM-RENDER-FINISH, for the reason WITH-MANAGE-SEQUENCE gives above."
   (let ((manager (gensym "WM")))
     `(let ((,manager ,wm))
        (let ((*sequence* :render))
          (unwind-protect (progn ,@body)
-           (river:river-window-manager-v1.render-finish ,manager))))))
+           (wm-render-finish ,manager))))))

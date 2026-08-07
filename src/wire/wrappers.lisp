@@ -276,9 +276,31 @@ place holds no window there is nothing for Wayland focus to be.")
   (alias seat-get-pointer-binding river-seat-v1.get-pointer-binding)
   ;; outputs
   (alias output-set-presentation-mode river-output-v1.set-presentation-mode)
+  (alias output-destroy river-output-v1.destroy
+         "Let go of an output that has gone away.
+
+THE TEARDOWNS ARE THE HALF THAT WAS BEING CALLED RAW.  Every one of these
+aliases existed as a generated wrapper already -- there is one for all 123
+requests -- and eleven call sites in runtime/ reached past them for
+`river:river-output-v1.destroy' and its siblings, so the discipline the wire
+layer exists to impose was applied to the requests somebody remembered and to
+no others.  Gate 22 asks the question now: outside src/wire/, the protocol
+package may be named for an *interface*, which is how a global is bound, and
+never for a request.")
+  ;; layer shell
+  (alias layer-shell-get-output river-layer-shell-v1.get-output)
+  (alias layer-shell-get-seat river-layer-shell-v1.get-seat)
+  (alias layer-output-set-default river-layer-shell-output-v1.set-default)
+  (alias layer-output-destroy river-layer-shell-output-v1.destroy)
+  (alias layer-seat-destroy river-layer-shell-seat-v1.destroy)
+  (alias shell-surface-get-node river-shell-surface-v1.get-node)
+  (alias shell-surface-destroy river-shell-surface-v1.destroy)
   ;; keyboard bindings
   (alias binding-enable river-xkb-binding-v1.enable)
   (alias binding-disable river-xkb-binding-v1.disable)
+  (alias binding-destroy river-xkb-binding-v1.destroy)
+  (alias bindings-seat-destroy river-xkb-bindings-seat-v1.destroy)
+  (alias seat-destroy river-seat-v1.destroy)
   ;; pointer bindings.  A SEPARATE INTERFACE WITH A SEPARATE ENABLE, and the
   ;; reason this alias exists is that the first version of the pointer code
   ;; called BINDING-ENABLE on a river_pointer_binding_v1 -- which is a type

@@ -199,6 +199,14 @@ system, an infinite zoomable plane of cells, is a proof of."
        ;; keys before appearance: the status-line and which-key
        ;; composition reads *PENDING-KEYMAP* and the keymap tree.
        (:file "keys")
+       ;; The keymap is policy, and it lived in runtime/config.lisp beside the
+       ;; code that finds $XDG_CONFIG_HOME.  After keys, which is what it uses.
+       (:file "keymap")
+       ;; APPEARANCE.LISP WAS THREE LIBRARIES, because an early gate 6 measured
+       ;; a line-count ratio and the file was shaped to keep it honest.  That
+       ;; gate was replaced three commits later; the shape outlived it.
+       (:file "font")
+       (:file "text")
        (:file "appearance")))
      (:module "wire"
       :serial t
@@ -206,60 +214,53 @@ system, an infinite zoomable plane of cells, is a proof of."
       ((:file "sequence")
        (:file "wrappers")))
      (:module "runtime"
-      :serial t
+      ;; :DEPENDS-ON AND NOT :SERIAL T, AND THE DIFFERENCE IS TWENTY-NINE FILES
+      ;; IN A HARDCODED TOTAL ORDER OVER A DEMONSTRABLE PARTIAL ONE.  A serial
+      ;; module says every file depends on every file before it, which made
+      ;; editing one of them recompile most of what follows -- and two of the
+      ;; ordering comments that used to live here disclaimed being dependencies
+      ;; in as many words: "the wrapper is consulted at call time -- but reading
+      ;; them in this order is how the relationship is meant to be understood".
+      ;; That is a narrative encoded as a build constraint.
+      ;;
+      ;; The graph below is every edge for which one file *references a name*
+      ;; another defines, which is a superset of what ASDF needs and is what
+      ;; makes recompilation propagate correctly.  117 edges where a total
+      ;; order has 406.  The load order is unchanged, so a clean build is
+      ;; byte-identical; what changes is which files an edit reaches.
+      ;;
+      ;; Where an edge exists for a reason a reference cannot show, it is kept
+      ;; and the reason is the comment beside it.
       :components
       ((:file "server")
-       (:file "keys")
-       (:file "font")
+       (:file "keys" :depends-on ("server"))
+       (:file "font-table")
+       (:file "font" :depends-on ("font-table"))
        (:file "psf")
-       (:file "surface")
-       (:file "minibuffer")
-       (:file "echo")
-       (:file "help")
-       (:file "cursor")
-       ;; layer before pointer: APPLY-KEYBOARD-FOCUS asks whether a layer
-       ;; surface holds the keyboard, and a locker holding it must win over
-       ;; anything the pointer just did.
-       (:file "layer")
-       (:file "pointer")
-       ;; config comes before verbs because it declares the program defaults
-       ;; the launcher commands use, and after keys because it installs the
-       ;; default keymap.
-       (:file "config")
-       ;; welcome comes after config because it derives its key names from
-       ;; *MODIFIER*, and after help because it is a help page.
-       (:file "welcome")
-       (:file "emit")
-       ;; capture before windows and outputs: both event handlers call into
-       ;; it, and it needs NOTIFY from echo above.
-       (:file "capture")
-       (:file "windows")
-       ;; The session, split along its reasons to change.  Order is by
-       ;; dependency and each step is deliberate: the loop before the things
-       ;; that drive it, the connection last because it binds the globals every
-       ;; one of them then uses.
-       (:file "sequence")
-       (:file "swank")
-       (:file "outputs")
-       (:file "seats")
-       ;; input before session: BIND-ONE-GLOBAL hooks each of the three input
-       ;; globals where it binds it, because the registry listener stays
-       ;; attached for the life of the connection and a global can arrive at
-       ;; any time.
-       (:file "input")
-       (:file "session")
-       ;; ipc after session: the control socket runs forms in the window
-       ;; manager's thread, and the queue that makes that possible is there.
-       (:file "ipc")
-       ;; history before verbs: undo installs itself as a command wrapper, and
-       ;; a verb defined before the wrapper exists is still covered — the
-       ;; wrapper is consulted at call time — but reading them in this order is
-       ;; how the relationship is meant to be understood.
-       (:file "history")
-       (:file "verbs")
-       (:file "tags")
-       (:file "state")
-       (:file "main")))))))
+       (:file "surface" :depends-on ("server" "font"))
+       (:file "minibuffer" :depends-on ("server"))
+       (:file "echo" :depends-on ("server" "font" "surface" "minibuffer"))
+       (:file "help" :depends-on ("server" "font" "surface" "minibuffer" "echo"))
+       (:file "cursor" :depends-on ("server" "font" "surface"))
+       (:file "layer" :depends-on ("server" "surface"))
+       (:file "pointer" :depends-on ("server" "minibuffer" "layer"))
+       (:file "config" :depends-on ("minibuffer" "echo"))
+       (:file "welcome" :depends-on ("surface" "minibuffer" "help" "config"))
+       (:file "emit" :depends-on ("server" "surface" "echo"))
+       (:file "capture" :depends-on ("echo"))
+       (:file "windows" :depends-on ("server" "minibuffer" "echo" "layer" "pointer" "emit" "capture"))
+       (:file "sequence" :depends-on ("server" "layer" "pointer" "emit" "windows"))
+       (:file "swank" :depends-on ("server" "sequence"))
+       (:file "outputs" :depends-on ("server" "surface" "minibuffer" "layer" "capture" "sequence"))
+       (:file "seats" :depends-on ("server" "keys" "minibuffer" "layer" "pointer" "sequence"))
+       (:file "input" :depends-on ("server" "minibuffer" "echo" "outputs"))
+       (:file "session" :depends-on ("server" "minibuffer" "windows" "sequence" "outputs" "seats" "input"))
+       (:file "ipc" :depends-on ("server" "minibuffer" "sequence" "swank" "session"))
+       (:file "history" :depends-on ("server" "minibuffer" "echo" "help" "sequence"))
+       (:file "verbs" :depends-on ("server" "minibuffer" "echo" "help" "config" "emit" "capture" "windows" "sequence" "outputs" "seats" "history"))
+       (:file "tags" :depends-on ("server" "echo" "help" "windows" "sequence" "outputs" "verbs"))
+       (:file "state" :depends-on ("server" "minibuffer" "sequence" "history" "verbs" "tags"))
+       (:file "main" :depends-on ("server" "minibuffer" "help" "config" "welcome" "emit" "sequence" "swank" "input" "session" "ipc" "verbs" "state"))))))))
 
 (defsystem "latticewm/tests"
   :description "Unit tests for the parts of a window manager that are testable

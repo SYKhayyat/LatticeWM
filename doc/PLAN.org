@@ -210,7 +210,7 @@ of ceremony. If it drops below ten, it has gone wrong in the direction of a mono
 right to write down and wrong to leave unrevised: it was blown through by a factor
 of two while this paragraph went on saying thirty, which is what a number nobody is
 made to argue with does. The live version of it is
-[[file:tests/test-surface.lisp::24][=tests/test-surface.lisp:24=]], whose ~(<= 10 n 69)~
+[[file:../tests/test-surface.lisp::24][=tests/test-surface.lisp:24=]], whose ~(<= 10 n 69)~
 sits under a comment recording every occasion the ceiling was raised and why —
 that is where the reasoning now lives, and it is the file to argue with before
 adding number seventy. The count itself is printed by gate 2 on every build,
@@ -457,7 +457,7 @@ existed were individually reasonable and all pointed somewhere else.
     cannot be satisfied by prose. The same function answers the generated document's
     ~read by:~ line, so the check and the documentation cannot disagree about it.
 12. *Every claim the documents make about the program is still true of it.*
-    [[file:doc/EXTENDING.org][doc/EXTENDING.org]]'s development loop opened with
+    [[file:EXTENDING.org][doc/EXTENDING.org]]'s development loop opened with
     "Start the window manager. SWANK is listening on port 4005." ASSESSMENT U1 turned
     SWANK off by default, correctly, and the first instruction in the extension guide
     became false. Eleven gates, two test suites and a CI workflow passed on every build
@@ -681,7 +681,7 @@ existed were individually reasonable and all pointed somewhere else.
     options are named after one — ~*gaps*~/~gaps~, ~*border-width*~/~border-width~,
     ~*keys-hint*~/~keys-hint~, ~*move-into-occupied*~/~move-into-occupied~ and
     ~*new-child-side*~/~new-child-side~.
-    [[file:lamdan/the-ratio-and-the-untested-axis-2026-08-05.md][The
+    [[file:../lamdan/the-ratio-and-the-untested-axis-2026-08-05.md][The
     lamdan sweep]] read those as two mechanisms answering one question — "resolved by
     which one you found first" — and asked for the options to be deleted, on the ground
     that the generic was always the real extension point.
@@ -728,7 +728,7 @@ existed were individually reasonable and all pointed somewhere else.
 
 18. *A ~defaults-~ file names an algorithm that defines no methods.* The only gate that
     asks about the *file list* rather than about anything in the program, and the last
-    finding in [[file:lamdan/the-ratio-and-the-untested-axis-2026-08-05.md][the lamdan
+    finding in [[file:../lamdan/the-ratio-and-the-untested-axis-2026-08-05.md][the lamdan
     sweep]]: ~policy/defaults-lifecycle.lisp~ was "four methods on the same protocol as
     ~lifecycle.lisp~, sorted by topic rather than by the engine/answers split its header
     implies. Merge it. The *motion* split is real and earns its file; this one doesn't."
@@ -2213,7 +2213,7 @@ green ones on this work. (The commit that recorded this said CI "had been red
 for a month", which is wrong and is corrected here rather than rewritten
 there: the workflow is one day old.) That is the same shape as the flake: a runner whose
 =nixos-unstable= channel holds 0.4.6 running a tree vendored at 4. The claim
-in [[file:README.org][README]] that "=nix-shell=, =make=, =make check= and CI are unaffected and
+in [[file:../README.org][README]] that "=nix-shell=, =make=, =make check= and CI are unaffected and
 green" was true of every path with a 0.4.5 river on it and false of the one
 path that runs on a machine nobody owns. The same job passes on the
 re-vendored tree, and the version is the only difference between them that
@@ -2245,7 +2245,7 @@ was just vendored from — diagnosable only by running it, which is the one
 thing a gate exists to spare you. It now asserts that
 =+WINDOW-MANAGEMENT-VERSION+= and =+XKB-BINDINGS-VERSION+= equal the versions
 their XML declares, and it was proved to fail by setting the constant back to
-4. Four steps in [[file:INSTALL.org][INSTALL.org]], and the gate names each one you have not done.
+4. Four steps in [[file:../INSTALL.org][INSTALL.org]], and the gate names each one you have not done.
 
 What stays true is the part that is load-bearing. The nixpkgs input is still a
 channel, so a future =nix flake update= can still move the compositor under a
@@ -2450,7 +2450,7 @@ Across all four: two new policy generics, ~echo-content~ and ~font-for~, neither
 single specialising method outside ~src/~ — not in ~lattice/~, not in ~examples/~.
 
 The floor tells the same story from the other end. 0.80 was written in the same session
-the number was walked from 0.82 to 1.17 by relocation, so [[file:tools/gates.lisp][the
+the number was walked from 0.82 to 1.17 by relocation, so [[file:../tools/gates.lisp][the
 comment]] saying it was "deliberately well below where the project sits" described a
 floor placed under a position that had just been arranged.
 
@@ -2466,7 +2466,7 @@ And ~5c3db2e~'s central move is right independent of the number: ~modifier-mask~
 ~src/wire/~ and nothing in ~wire~ called it.
 
 *Most of those moves stay.* They were right for the reason
-[[file:src/policy/appearance.lisp][appearance.lisp's header]] now gives — a
+[[file:../src/policy/appearance.lisp][appearance.lisp's header]] now gives — a
 ~define-option~ under ~src/runtime/~ is still something a user has to read the runtime to
 find — and that reason does not depend on anything counting the lines. What does not
 survive is the counting.

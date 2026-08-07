@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, twenty-one gates, 1600+ checks
+make                  # build, twenty-two gates, 1600+ checks
 make image            # dump ./latticewm, one executable, 13 MB
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
@@ -102,7 +102,7 @@ zig build -Doptimize=ReleaseSafe --prefix ~/.local install
 =bootstrap.sh= warns if it finds a river that is not the vendored release —
 reading the release out of =src/protocol/PINNED=, so the warning cannot drift
 from what the program will accept — and does not stop: everything except
-actually running the window manager — the build, all twenty-one gates, all the tests
+actually running the window manager — the build, all twenty-two gates, all the tests
 — works with no compositor on the machine at all.
 
 If you use nix, you do not have to think about any of this: =shell.nix= reads
@@ -137,6 +137,25 @@ find out, and the compiler finds most of the rest.
 
 Nothing about this needs the original author.  It is a file copy, two numbers,
 a line of prose, and a test run.
+
+*And it is run rather than only written down, which it was not.* This recipe is
+the install path for most people — the pin is exact, and on most distributions
+at most times the packaged river will not match it — while gate 5 only ever
+checked the river we had already vendored from.
+
+#+begin_src sh
+make revendor-check                      # a river we do NOT accept is refused,
+                                         # by name, with both version numbers
+make revendor-check RIVER_SRC=~/src/river   # do the recipe for real, and build
+#+end_src
+
+The first needs nothing but this checkout: it bumps an interface version in a
+scratch copy of the XML, asserts the build refuses and says which interface and
+which two numbers, and puts the tree back.  A pin that fails silently is worse
+than no pin, and that is the property it holds.  The second is the recipe
+itself, executed: point it at a river source tree and it copies, rewrites
+=PINNED=, builds and runs the gates, and tells you either that the four steps
+worked or exactly which one did not.
 
 * Where the Lisp dependencies come from
 
@@ -299,7 +318,7 @@ file-chooser, no hardware acceleration.
 * Checking that it worked
 
 #+begin_src sh
-make            # the twenty-one gates, then the unit suite
+make            # the twenty-two gates, then the unit suite
 ./latticewm --version
 ./latticewm --list-commands | head
 river -c "$PWD/latticewm --log-level debug"

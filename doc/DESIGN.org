@@ -6,7 +6,7 @@
 
 * How to use this document
 
-*This is not the introduction to LatticeWM.* That is [[file:README.org][README.org]], which is
+*This is not the introduction to LatticeWM.* That is [[file:../README.org][README.org]], which is
 short and tells you how to install it and what to press. This file is the
 reasoning underneath, and it is long on purpose.
 
@@ -29,22 +29,22 @@ An extensible window manager for the river Wayland compositor, in Common Lisp,
 whose layout model is a replaceable policy layer rather than the program itself.
 #+end_quote
 
-[[file:doc/echo-area.png]]
+[[file:echo-area.png]]
 
-*Installing it, and what to press, are in [[file:README.org][README.org]].* This section only says
+*Installing it, and what to press, are in [[file:../README.org][README.org]].* This section only says
 where everything else lives.
 
 *Where to read next.*
 
-- [[file:README.org][README.org]] — what it is, how to install it, and the keymap. Start there.
-- [[file:INSTALL.org][INSTALL.org]] — installing it on a Linux that is not this one: what each
+- [[file:../README.org][README.org]] — what it is, how to install it, and the keymap. Start there.
+- [[file:../INSTALL.org][INSTALL.org]] — installing it on a Linux that is not this one: what each
   distribution calls the two packages it needs, where the dependencies come
   from without nix, and how it gets to the login screen.
 - [[file:FINDINGS.org][FINDINGS.org]] — *the result of [[#d21][D21]]'s experiment*: what building the lattice
   from outside the core actually cost, which is the most useful thing this
   project has to say about its own premise. Read it before the design if you
   are short of time.
-- [[file:doc/EXTENDING.org][doc/EXTENDING.org]] — how to change it. Four worked examples in =examples/=,
+- [[file:EXTENDING.org][doc/EXTENDING.org]] — how to change it. Four worked examples in =examples/=,
   including a whole new layout model in one method and a new *container kind* —
   niri's scrolling strip — in sixty lines.
 - [[file:PLAN.org::#log][PLAN.org §log]] — what the execution actually did, and the corrections it
@@ -143,7 +143,7 @@ Nothing in this file is checked by anything, and it should not be — a frozen
 record that a build gate could fail is not frozen. The documents that *are*
 checked, and what checks them:
 
-| [[file:README.org][README.org]], [[file:INSTALL.org][INSTALL.org]], [[file:doc/EXTENDING.org][doc/EXTENDING.org]], [[file:FINDINGS.org][FINDINGS.org]], the two man pages | *current* to gate 12 — every option they name has to exist, and every ~#+CLAIM:~ line in them is evaluated against the running image on every build |
+| [[file:../README.org][README.org]], [[file:../INSTALL.org][INSTALL.org]], [[file:EXTENDING.org][doc/EXTENDING.org]], [[file:FINDINGS.org][FINDINGS.org]], the two man pages | *current* to gate 12 — every option they name has to exist, and every ~#+CLAIM:~ line in them is evaluated against the running image on every build |
 | =doc/EXTENSION-SURFACE.txt=, =doc/CONTAINER-SURFACE.txt=, =doc/COMMANDS.txt=, =doc/OPTIONS.txt=, =doc/KEYS.txt= | generated from the running program by ~make surface~; they cannot drift |
 | [[file:FINDINGS.org][FINDINGS.org]] | additionally, the result of [[#d21][D21]]'s experiment — gate 3 prints its headline numbers on every build |
 | [[file:PLAN.org][PLAN.org]] | a live specification with a session log appended; the log is a record like this file, the front half is not |

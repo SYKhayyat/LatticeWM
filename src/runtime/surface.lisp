@@ -437,9 +437,9 @@ laptop that is docked and undocked twice a day is a real leak with a slow fuse."
   (when overlay
     (release-canvases overlay)
     (let ((node (overlay-node overlay)))
-      (when node (ignore-errors (river:river-node-v1.destroy node))))
+      (when node (ignore-errors (w:node-destroy node))))
     (let ((shell (overlay-shell overlay)))
-      (when shell (ignore-errors (river:river-shell-surface-v1.destroy shell))))
+      (when shell (ignore-errors (w:shell-surface-destroy shell))))
     (let ((surface (overlay-surface overlay)))
       (when surface (ignore-errors (wl:wl-surface.destroy surface))))
     (setf (overlay-node overlay) nil
@@ -572,7 +572,7 @@ there is more than one."
       (setf (overlay-surface overlay) (wl:wl-compositor.create-surface compositor)
             (overlay-shell overlay) (w:wm-get-shell-surface
                                      manager (overlay-surface overlay))
-            (overlay-node overlay) (river:river-shell-surface-v1.get-node
+            (overlay-node overlay) (w:shell-surface-get-node
                                     (overlay-shell overlay))))
     ;; A resize retires the whole pool rather than one buffer of it: buffers of
     ;; two different sizes on one surface is a class of bug worth not having.

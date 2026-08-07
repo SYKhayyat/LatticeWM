@@ -69,7 +69,7 @@ and the layout gets the whole output."
         (proxy (c:output-proxy output)))
     (when (and shell proxy (null (c:prop output :layer-shell)))
       (let ((layer (best-effort "get layer shell output"
-                     (river:river-layer-shell-v1.get-output shell proxy))))
+                     (w:layer-shell-get-output shell proxy))))
         (when layer
           (setf (c:prop output :layer-shell) layer)
           (on-events (layer "river_layer_shell_output_v1")
@@ -93,7 +93,7 @@ decided.  See APPLY-KEYBOARD-FOCUS."
         (proxy (seat-proxy seat)))
     (when (and shell proxy (null (c:prop seat :layer-shell)))
       (let ((layer (best-effort "get layer shell seat"
-                     (river:river-layer-shell-v1.get-seat shell proxy))))
+                     (w:layer-shell-get-seat shell proxy))))
         (when layer
           (setf (c:prop seat :layer-shell) layer)
           (on-events (layer "river_layer_shell_seat_v1")
@@ -149,7 +149,7 @@ something in."
   (let ((layer (and output (c:prop output :layer-shell))))
     (when layer
       (best-effort "layer shell set_default"
-        (river:river-layer-shell-output-v1.set-default layer))
+        (w:layer-output-set-default layer))
       t)))
 
 ;; The echo area is ours; a panel's strip is somebody else's.  Both are

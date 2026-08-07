@@ -212,7 +212,7 @@ for file in EXTENSION-SURFACE.txt CONTAINER-SURFACE.txt HOOKS.txt COMMANDS.txt \
             OPTIONS.txt KEYS.txt EXTENDING.org; do
     [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$dshare/doc/$file"
 done
-for file in README.org INSTALL.org FINDINGS.org DESIGN.org; do
+for file in README.org INSTALL.org doc/FINDINGS.org doc/DESIGN.org; do
     [ -f "$root/$file" ] && install -m644 "$root/$file" "$dshare/doc/$file"
 done
 

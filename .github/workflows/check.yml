@@ -9,7 +9,7 @@
 #
 # Four jobs now, and each answers a question the others cannot.
 #
-#   check  — the whole of `make check': build, twenty-one gates, the unit suite, and
+#   check  — the whole of `make check': build, twenty-two gates, the unit suite, and
 #            the integration suite against a headless river, with
 #            REQUIRE_INTEGRATION=1 so a missing compositor or terminal is a
 #            failure rather than a paragraph and an exit 0.  Run under
@@ -140,6 +140,16 @@ jobs:
         run: |
           ./bootstrap.sh
           make build gates test
+      # THE RECIPE MOST USERS WILL HAVE TO FOLLOW.  The pin is exact and the
+      # program refuses rather than misbehaves, so on most distributions at
+      # most times the packaged river will not match and INSTALL.org's
+      # four-step re-vendor is the install path -- and until this step nothing
+      # had ever asked whether it still worked.  This half needs no river: it
+      # pretends the vendored XML declares a version the program does not bind
+      # and asserts the build refuses by name.  It restores the tree after
+      # itself, so the steps below still see the real protocol.
+      - name: the re-vendor recipe refuses a river we cannot speak to
+        run: make revendor-check
       # THE HALF THAT WAS MISSING.  Everything above this line was already
       # here; everything below it is the path a non-nix user actually takes.
       - name: image, install, install-check

@@ -381,7 +381,7 @@ be able to do before anyone else can depend on it.
   earlier. The starter configuration told every new user to `M-x slime-connect`
   to a port nothing is listening on; it now names the three ways in that work
   and the one line that turns on the fourth.
-- 17 `[[file:X.org::#anchor]]` links in the current documents were Emacs
+- 17 org links carrying an Emacs `::#anchor` search target, in the current documents, were
   search-target syntax, which GitHub resolves as a path and 404s — the front
   door, broken for everybody who is not reading it in Emacs. The 67 in the
   frozen records are left alone.
@@ -390,8 +390,69 @@ be able to do before anyone else can depend on it.
   true when written; the record is frozen, so it now says at the top what it is
   and where the current status lives.
 
+- **Thirteen protocol requests were called without going through the wire
+  layer**, and every one of them was a teardown — three in `layer.lisp`, two in
+  `outputs.lisp`, five in `seats.lisp`, three in `surface.lisp`. `wrappers.lisp`
+  generates a checked wrapper for all 123 requests and gate 5 counts them, so
+  the discipline looked total and was applied to the requests somebody
+  remembered to route. The circle closed inside one file: `wm-manage-finish`'s
+  docstring reads "Prefer `WITH-MANAGE-SEQUENCE`", and `with-manage-sequence`
+  sent `manage_finish` raw. Eleven aliases added, every call site moved, and
+  gate 22 now refuses a request named outside `src/wire/` — while still
+  allowing the protocol package to name an *interface*, which is how a global
+  is bound.
+- **`policy/appearance.lisp` was three libraries in one file** because an early
+  gate 6 measured a line-count ratio and the file was shaped to keep it honest.
+  That gate was replaced three commits later and the shape outlived it. Split
+  into `policy/font.lisp` (fonts as data, and the metrics every widget is made
+  of), `policy/text.lisp` (pure functions of a string) and what is actually
+  appearance policy.
+- **The keymap was in `runtime/config.lisp`**, beside the code that finds
+  `$XDG_CONFIG_HOME` — ninety-seven lines of `define-key`, the most customised
+  object in any window manager, in the file about configuration *files*. The
+  five values a person changes first had been moved into `policy/` on exactly
+  that argument. It is `policy/keymap.lisp` now.
+- **The runtime module was `:serial t` over twenty-nine files**, so editing one
+  recompiled most of what followed, and two of the ordering comments disclaimed
+  being dependencies in as many words — a narrative encoded as a build
+  constraint. Replaced with the reference graph: 117 edges where a total order
+  has 406. The load order is unchanged, so a clean build is byte-identical.
+- **`src/runtime/font.lisp` held four of the program's functions inside a
+  Python string literal** in `tools/psf-to-lisp.py`, a script run by hand when
+  somebody changes fonts. The generated table is `runtime/font-table.lisp` now
+  and the functions are ordinary source.
+- **The re-vendor recipe was the install path for most users and nothing tested
+  it.** The pin is exact and the program refuses rather than misbehaves, so on
+  most distributions the packaged river will not match and `INSTALL.org`'s four
+  steps are what people actually do. `make revendor-check` asserts that a river
+  we cannot speak to is refused by name with both version numbers, needing no
+  second river; `make revendor-check RIVER_SRC=…` runs the recipe for real. CI
+  runs the first.
+- **The repository root was seven `.org` files and half a megabyte**, and
+  `ASSESSMENT.org` — reachable by no documented path — told a visitor the
+  program was not usable. Everything but `README` and `INSTALL` is under
+  `doc/` now; nothing is deleted, every one of the 140 org links still
+  resolves, and the frozen documents are still frozen.
+
 ### Added
 
+- Gate 20 — no methods in `src/policy/protocol.lisp`, which its own header had
+  claimed a gate enforced.
+- Gate 21 — `flake.nix`'s `buildPhase` delegates to the Makefile, on gate 9's
+  terms.
+- Gate 22 — every protocol request goes through `src/wire/`.
+- `examples/05-status-line.lisp`, the thing people ask for first: the time, the
+  load average, and how many windows are in a workspace you are not looking at.
+  Twenty lines, no new class, no second process, and `call-next-method` so that
+  the shipped line survives and a second extension doing the same thing appears
+  as well as yours. The third segment is the argument for the whole approach —
+  it is a fact about the layout, which nothing outside the window manager can
+  produce.
+- A vocabulary section in `doc/EXTENDING.org`. Nine words the whole corpus uses
+  as though you already had them, defined once.
+- `doc/EXTENSION-SURFACE.txt` is grouped by protocol. Every paragraph of its
+  preamble explains that the shipped defaults sit on six protocol classes, and
+  then the list gave no sign of which generic belonged to which.
 - `CONTRIBUTING.md`, an issue template, an extension-point issue template and a
   pull request template. Twenty-one gates are a superb instrument for one
   author and a wall to the second, and `.github/` held `workflows` and nothing

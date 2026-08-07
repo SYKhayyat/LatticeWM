@@ -106,11 +106,11 @@ hundred objects per cycle on the compositor's side as well as ours.
 The protocol asks us to destroy the object after `removed', which is what frees
 its half."
   (loop for binding being the hash-values of (seat-bound-keys seat)
-        do (best-effort "binding destroy" (river:river-xkb-binding-v1.destroy binding)))
+        do (best-effort "binding destroy" (w:binding-destroy binding)))
   (clrhash (seat-bound-keys seat))
   (loop for (nil . binding) in (c:prop seat :capture-bindings)
         do (best-effort "capture binding destroy"
-             (river:river-xkb-binding-v1.destroy binding)))
+             (w:binding-destroy binding)))
   (setf (c:prop seat :capture-bindings) nil
         (c:prop seat :capture-armed) nil
         ;; The remembered answer goes with the bindings it produced.  Leaving
@@ -121,15 +121,15 @@ its half."
   (let ((layer (c:prop seat :layer-shell)))
     (when layer
       (best-effort "layer shell seat destroy"
-        (river:river-layer-shell-seat-v1.destroy layer))
+        (w:layer-seat-destroy layer))
       (setf (c:prop seat :layer-shell) nil)))
   (let ((bindings-seat (seat-bindings-seat seat)))
     (when bindings-seat
       (best-effort "bindings seat destroy"
-        (river:river-xkb-bindings-seat-v1.destroy bindings-seat))
+        (w:bindings-seat-destroy bindings-seat))
       (setf (seat-bindings-seat seat) nil)))
   (setf (server-seats *server*) (remove seat (server-seats *server*)))
-  (best-effort "seat destroy" (river:river-seat-v1.destroy proxy))
+  (best-effort "seat destroy" (w:seat-destroy proxy))
   (setf (seat-proxy seat) nil)
   ;; Whatever is left needs its bindings re-established, because they were
   ;; per seat and this was not necessarily the only one.

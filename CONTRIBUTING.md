@@ -9,7 +9,7 @@ amount of machinery and every bit of it will run on your branch.
 git clone https://github.com/SYKhayyat/LatticeWM.git
 cd LatticeWM
 ./bootstrap.sh          # fetches the two dependencies; idempotent
-make check              # build, twenty-one gates, the unit suite, integration
+make check              # build, twenty-two gates, the unit suite, integration
 ```
 
 `make check` is what CI runs and what the nix build runs. If it is green on
@@ -20,7 +20,7 @@ worth reporting on its own.
 
 ## What will fail your branch, up front
 
-There are twenty-one build gates. They are not style checks; each one exists
+There are twenty-two build gates. They are not style checks; each one exists
 because something silently rotted and nobody noticed. That makes them
 excellent for a maintainer and a wall for a newcomer, so here is the wall,
 described before you hit it.
@@ -42,6 +42,7 @@ described before you hit it.
 | 16 | a published name nothing reaches — no exporting a helper before its caller, test or document exists |
 | 19 | the version, the licence or the gate count disagreeing between files |
 | 20 | a method in `src/policy/protocol.lisp` |
+| 22 | a protocol request called from outside `src/wire/` — add an alias and call that |
 
 Two of these bite first-time contributors in ways that feel arbitrary and are
 not:
@@ -82,7 +83,7 @@ latticewm --list-options        # every value you can set
 latticewm --list-commands
 ```
 
-`doc/EXTENDING.org` is the guide, and `examples/` has four worked extensions
+`doc/EXTENDING.org` is the guide, and `examples/` has five worked extensions
 that are loaded and exercised by the test suite. If the thing you want has no
 generic, that is a good issue: *"there is no generic for X"* is a more useful
 report than a patch that special-cases X, and it is how `capture-wanted-p`,

@@ -89,8 +89,13 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:seat-focus-window #:seat-clear-focus #:seat-focus-shell-surface
    #:seat-set-xcursor-theme #:seat-pointer-warp
    #:seat-op-start-pointer #:seat-op-end #:seat-get-pointer-binding
-   #:output-set-presentation-mode
-   #:binding-enable #:binding-disable #:binding-set-layout-override
+   #:output-set-presentation-mode #:output-destroy
+   #:layer-shell-get-output #:layer-shell-get-seat
+   #:layer-output-set-default #:layer-output-destroy #:layer-seat-destroy
+   #:shell-surface-get-node #:shell-surface-destroy
+   #:seat-destroy
+   #:binding-enable #:binding-disable #:binding-destroy
+   #:bindings-seat-destroy #:binding-set-layout-override
    #:pointer-binding-enable #:pointer-binding-disable
    #:bindings-get-seat #:bindings-get-xkb-binding
    #:bindings-seat-ensure-next-key-eaten
@@ -225,6 +230,12 @@ deliberately decomposed so that policy can redirect it.")
   (:use #:cl)
   (:local-nicknames (#:c #:latticewm/core)
                     (#:a #:alexandria))
+  ;; INTERNED AND NOT EXPORTED.  policy/keymap.lisp defines it and the lattice
+  ;; reads it to bind its own motion keys the same way the shipped keymap does;
+  ;; the runtime DEFPACKAGE imports it, and :IMPORT-FROM needs a symbol that
+  ;; already exists.  Publishing it would make it a promise, which it is not --
+  ;; gate 16 would then require a document to name it.
+  (:intern #:+direction-keys+)
   (:documentation
    "THE EXTENSION SURFACE.
 
@@ -317,6 +328,11 @@ You never edit this package.")
    #:lookup-key
    #:keymap-keys
    #:all-bound-keys
+   ;; The shipped keymap.  It lived in runtime/config.lisp beside the code
+   ;; that finds $XDG_CONFIG_HOME, which is not where a reader looks for
+   ;; "how are the keys decided" -- see policy/keymap.lisp.
+   #:install-default-keymap
+   #:modifier-string
    #:bindable-keys
    #:*shift-map* #:shifted-character #:*warn-on-rebinding*
    #:*keyboard-layout* #:*shift-maps* #:register-shift-map #:find-shift-map
@@ -487,6 +503,15 @@ You never edit this package.")
    #:lookup-key
    #:keymap-keys
    #:all-bound-keys
+   #:install-default-keymap
+   #:modifier-string
+   ;; Not exported from either package: the lattice reads it as
+   ;; r::+direction-keys+ to bind its own motion keys the same way, and
+   ;; importing it here is what keeps that spelling working now that the
+   ;; keymap lives in policy/.  It is INTERNed by the policy DEFPACKAGE
+   ;; rather than exported, because DEFPACKAGE's :IMPORT-FROM needs the
+   ;; symbol to exist before policy/keymap.lisp is compiled.
+   #:+direction-keys+
    #:*keymap*
    #:*pending-keymap*
    #:*help-visible*

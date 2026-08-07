@@ -18,6 +18,34 @@ Nothing above needs a restart, a rebuild, or a plugin manifest. Everything can
 be evaluated into the *running* window manager and takes effect on the next
 frame.
 
+* The words, once
+
+Every document in this project uses these nine words as though you already had
+them, and until now the only place they were defined together was the source.
+Read this section once and the rest stops needing footnotes.
+
+| Word | What it is |
+|------+------------|
+| *world* | everything: the tree, the outputs, the floating windows, where the cursor is. One object, ~*world*~. |
+| *node* | anything in the tree. A ~leaf~ holds one window or is deliberately empty; a ~container~ holds other nodes. |
+| *container* | a node with children and an opinion about arranging them — a ~split~, a ~stack~ of workspaces or tabs, a lattice ~grid~. New kinds are tier 3. |
+| *pane* | what a ~leaf~ looks like on screen. The word people say; the model says ~leaf~. |
+| *path* | how you name a node: a list of addresses from the root, one per container on the way down, e.g. ~'(0 1 0)~. Not a pointer — the tree is rebuilt constantly and a path survives that. |
+| *address* | one step of a path, and its type is the container's business: an integer inside a split, a ~(x . y)~ cons inside a lattice plane. Nothing outside a container may assume which. |
+| *cursor* | the path the keyboard is at. It rests on a pane, which may be empty — an empty pane is an ordinary state here and not an edge case. |
+| *policy* | the object every decision is asked of. ~*policy*~ is the one installed; you change behaviour by adding methods that specialize on it. |
+| *placement* | one line of the answer to "where does this go": a node, a rectangle, and whether it is visible. Laying out produces a list of them and the runtime sends them to river. |
+
+Two more that are easy to confuse:
+
+- A *workspace* is not a special kind of thing. It is the selected child of a
+  ~stack~ at the root, and a ~stack~ is also what a tab strip is. That is one
+  object with two names, on purpose — see ~world-role-name~ for how the status
+  line tells you which one you are looking at.
+- A *generic* is the extension point and an *option* is what its shipped method
+  returns. Where the two share a name — ~gaps~ and ~*gaps*~ — the relationship
+  is always that one. Overriding the generic stops the option being read.
+
 * Ask the running window manager
 
 Before reading anything, ask it. It knows more about itself than this file
@@ -202,7 +230,7 @@ merely observed: ~*gaps*~ and ~gaps~ are one relationship because gate 17 fails
 the build on the day they stop being, and not because this page says so. The
 lattice does replace ~make-workspace~ wholesale, and pays for it with
 ~*new-workspace-cells*~. See gates 11, 15 and 17 in
-[[file:../PLAN.org][PLAN.org §gates-added]] for the option that
+[[file:PLAN.org][PLAN.org §gates-added]] for the option that
 shipped wired to nothing, the one that shipped switched off, and the five whose
 names were a claim nothing checked.
 
@@ -229,6 +257,26 @@ Three rules, and the third is the one that bites:
    method in order to change three lines of it, the thing you want to change is
    probably its own generic. Look for it in ~latticewm --extension-surface~
    first.
+
+** The status line, because it is what people ask for first
+
+=examples/05-status-line.lisp= adds the time, the load average and a count of
+the windows in workspaces you are not looking at — twenty lines, no new class,
+no state, on and off without a restart.
+
+Every other window manager answers this with a *status bar*: a second program,
+a protocol between the two, a configuration language for the bar, and a list of
+modules somebody else decided you might want. Here ~echo-content~ returns a
+list of ~(TEXT . KIND)~ and adding to it is rule 2 above — ~call-next-method~
+and append. The shipped line goes on being the shipped line, and a second
+extension that does the same thing appears as well as yours rather than instead
+of it.
+
+The interesting segment is the third. The time and the load average are facts
+about the machine, which a general-purpose bar can read for itself; /how many
+of your windows are somewhere else/ is a fact about the layout, and only the
+thing that did the laying out knows it. That asymmetry is most of the argument
+for doing it this way.
 
 ** A worked one
 

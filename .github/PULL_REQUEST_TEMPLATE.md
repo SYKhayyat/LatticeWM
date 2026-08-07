@@ -1,4 +1,4 @@
-<!-- CONTRIBUTING.md lists what the twenty-one gates refuse, before you hit
+<!-- CONTRIBUTING.md lists what the twenty-two gates refuse, before you hit
      one.  It is worth the four minutes. -->
 
 **What this changes, and why**
@@ -8,7 +8,7 @@
 
 **Checklist**
 
-- [ ] `make check` is green (build, twenty-one gates, unit suite, integration)
+- [ ] `make check` is green (build, twenty-two gates, unit suite, integration)
 - [ ] New behaviour has a test
 - [ ] Anything on the extension surface has a docstring — gate 2 requires it
 - [ ] `CHANGELOG.md` has an entry under `## Unreleased`, if a user or a

@@ -69,6 +69,7 @@ RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-i
 
 .PHONY: all deps toolchain build gates test integration check image image-fast \
         release bench run run-bare surface config install install-check \
+        revendor-check \
         uninstall dist clean distclean help
 
 # NOTHING HERE IS SAFE UNDER -j, AND NOTHING SAID SO.
@@ -271,6 +272,21 @@ uninstall:
 # documents promise, and then asserts that uninstalling gives all of it back.
 install-check: image
 	@./tools/install-check.sh
+
+# THE RECIPE THE MAJORITY OF USERS WILL HAVE TO FOLLOW, RUN RATHER THAN READ.
+# This project pins river exactly and refuses rather than misbehaves, which is
+# right and which means that on most distributions at most times the packaged
+# river will not match -- so INSTALL.org's four-step re-vendor recipe is the
+# install path for most people, and nothing tested it.
+#
+#   make revendor-check                     assert a river we do not accept is
+#                                           refused, by name, with both numbers
+#   make revendor-check RIVER_SRC=/path     re-vendor from that river for real
+#                                           and run the build and the gates
+RIVER_SRC ?=
+
+revendor-check:
+	@./tools/revendor-check.sh $(RIVER_SRC)
 
 # A RELEASE TARBALL, WHICH THIS PROJECT HAD NO WAY TO PRODUCE.
 #
