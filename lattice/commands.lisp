@@ -21,13 +21,12 @@ test."
   (cursor-cell r:*world*))
 
 (defun grid-path ()
-  "The path of the enclosing grid, or NIL."
-  (let* ((root (c:world-root r:*world*))
-         (path (c:world-cursor r:*world*))
-         (chain (c:resolve-chain root path)))
-    (loop for node in chain
-          for i from 0
-          when (typep node 'grid) return (subseq path 0 i))))
+  "The path of the enclosing grid, or NIL.
+
+The grid CURRENT-GRID means, which it did not used to be: this walked forwards
+and answered about the outermost plane while CURRENT-GRID walked backwards and
+answered about the innermost.  See CURSOR-PLANE."
+  (cursor-grid-path r:*world*))
 
 (defun cell-path (address &optional (grid-path (grid-path)))
   "The world path of cell ADDRESS.
@@ -133,9 +132,14 @@ failure mode a zooming interface has to have an answer for."
 ;;; ==================================================================
 
 (defun goto-cell (address &key (create t))
-  "Put the cursor in the cell at ADDRESS."
-  (let* ((grid (current-grid))
-         (base (grid-path)))
+  "Put the cursor in the cell at ADDRESS.
+
+ONE CURSOR-PLANE CALL RATHER THAN TWO WALKS, because the grid and the path to
+it have to be the *same* grid: this created the cell in one plane and jumped
+the cursor into another for as long as anybody nested one plane inside
+another."
+  (multiple-value-bind (grid ignored base) (cursor-plane r:*world*)
+    (declare (ignore ignored))
     (when grid
       (when create (ensure-cell grid address))
       (when (c:child-at grid address)
@@ -206,22 +210,22 @@ muscle memory.  This is one modifier away for when you are crossing a gap."
 If that cell is empty the pane becomes its whole contents; if it is occupied
 the pane joins as a split, which is the shipped answer to move-onto-occupied
 and the only one that never destroys structure."
-  (let* ((grid (current-grid))
-         (base (grid-path))
-         (from (c:world-cursor r:*world*))
-         (target (cell x y)))
-    (when (and grid (> (length from) (length base)))
-      (ensure-cell grid target)
-      (let ((to (append base (list target))))
-        (multiple-value-bind (root landed)
-            (c:tree-move (c:world-root r:*world*) from to :join :split)
-          (setf (c:world-root r:*world*) root)
-          (if follow
-              (progn (ensure-visible grid target)
-                     (p:jump-cursor (p:current-policy) r:*world* landed))
-              (p:repair-cursor (p:current-policy) r:*world* from))
-          (r:mark-dirty)
-          landed)))))
+  (multiple-value-bind (grid ignored base) (cursor-plane r:*world*)
+    (declare (ignore ignored))
+    (let ((from (c:world-cursor r:*world*))
+          (target (cell x y)))
+      (when (and grid (> (length from) (length base)))
+        (ensure-cell grid target)
+        (let ((to (append base (list target))))
+          (multiple-value-bind (root landed)
+              (c:tree-move (c:world-root r:*world*) from to :join :split)
+            (setf (c:world-root r:*world*) root)
+            (if follow
+                (progn (ensure-visible grid target)
+                       (p:jump-cursor (p:current-policy) r:*world* landed))
+                (p:repair-cursor (p:current-policy) r:*world* from))
+            (r:mark-dirty)
+            landed))))))
 
 (r:defcommand move-cell (direction &key (follow t))
   "Move the focused pane one cell DIRECTION."

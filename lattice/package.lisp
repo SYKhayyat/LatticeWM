@@ -48,7 +48,8 @@ motion runs straight through the cell boundary as though it were not there.")
    ;; the Z axis: infinitely many planes, one behind another
    #:*default-viewport* #:*new-workspace-zoom* #:*new-workspace-origin*
    #:*new-workspace-cells* #:*workspace-entry*
-   #:cursor-grid #:cursor-cell #:workspace-entry-cell #:new-workspace-viewport
+   #:cursor-plane #:cursor-grid #:cursor-cell #:cursor-grid-path
+   #:workspace-entry-cell #:new-workspace-viewport
    ;; using it
    #:enable #:enable-in #:disable #:install-lattice-keys #:install-vocabulary
    #:*overlay-scale* #:*overlay-background* #:*overlay-foreground*

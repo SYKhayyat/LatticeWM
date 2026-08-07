@@ -208,6 +208,18 @@ be able to do before anyone else can depend on it.
   a sequence is a real ask for the next one, and a send that fails leaves the
   flag alone rather than leaving the window manager quietly deaf.
 
+- **A plane inside a plane was two places at once.** `cursor-grid` searched the
+  cursor's ancestor chain backwards and returned the *innermost* grid;
+  `cursor-cell` ten lines below it and `grid-path` in `commands.lisp` searched
+  forwards and answered about the *outermost*. Every caller pairs them, so
+  `goto-cell` called `ensure-cell` on the inner plane and jumped the cursor to
+  a path resolved against the outer one, and `cell-path` — whose whole
+  docstring is about not making exactly this mistake — named a top-level cell
+  of the root. `cursor-plane` is one walk returning the grid, the cell address
+  and the path to the grid together, and the other three are one line each on
+  top of it. `on-focus-change` was already right, by looping over every grid in
+  the chain rather than picking one.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

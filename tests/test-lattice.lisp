@@ -1148,3 +1148,75 @@ of it")
            (is (eq 'l:enable (find-symbol "ENABLE" package))
                "including the two names the documentation tells people to type"))
       (delete-package package))))
+
+;;; ================================================ A PLANE INSIDE A PLANE
+;;;
+;;; FINDINGS.org lists plane-inside-a-plane among the things that came for
+;;; free, and this suite tested a plane inside a *split*, which is a different
+;;; shape and the easy one.  What came for free was the container protocol;
+;;; what did not was the three hand-written ancestor walks on top of it, which
+;;; disagreed: CURSOR-GRID searched backwards and answered `innermost', while
+;;; CURSOR-CELL ten lines below it and GRID-PATH in commands.lisp searched
+;;; forwards and answered `outermost'.  Every caller pairs them.
+
+(defun nested-planes ()
+  "An outer plane whose (0,0) holds an inner plane whose (1,1) holds a window.
+
+Returns (values WORLD OUTER INNER), cursor already deep inside."
+  (let* ((outer (grid-of))
+         (inner (grid-of))
+         (world (c:make-world :root outer)))
+    (setf (c:child-at outer (l:cell 0 0)) inner)
+    (setf (c:child-at inner (l:cell 1 1)) (leaf "deep"))
+    (setf (c:world-cursor world) (list (l:cell 0 0) (l:cell 1 1)))
+    (values world outer inner)))
+
+(test the-three-questions-about-where-you-are-answer-about-one-plane
+  (multiple-value-bind (world outer inner) (nested-planes)
+    (declare (ignore outer))
+    (let ((r:*world* world))
+      (multiple-value-bind (grid address base) (l:cursor-plane world)
+        (is (eq inner grid) "the plane you are standing in is the inner one")
+        (is (equal (l:cell 1 1) address) "and the cell is that plane's cell")
+        (is (equal (list (l:cell 0 0)) base) "and the path leads to that plane"))
+      (is (eq inner (l:current-grid)))
+      (is (equal (l:cell 1 1) (l:current-cell))
+          "which used to be (0,0) -- the address of the *outer* grid's cell,
+read off the inner grid's question")
+      (is (equal (list (l:cell 0 0)) (l:grid-path))
+          "which used to be NIL, so CELL-PATH named a top-level cell of the
+root and the confusing message about a stack was the good outcome")
+      (is (eq (c:child-at inner (l:cell 1 1))
+              (c:resolve-path (c:world-root world) (l:cell-path (l:cell 1 1))))
+          "CELL-PATH names the cell it says it names, which is the whole
+contract the docstring makes"))))
+
+(test goto-cell-creates-the-cell-in-the-plane-it-jumps-into
+  "The two halves used to be different planes: ENSURE-CELL ran on the inner
+grid and JUMP-CURSOR was handed a path built from the outer grid's, so the cell
+appeared in one place and the cursor went to another."
+  (multiple-value-bind (world outer inner) (nested-planes)
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (is (equal (list (l:cell 0 0) (l:cell 3 -2)) (l:cell-path (l:cell 3 -2)))
+          "the path is inside the inner plane")
+      (l:goto-cell (l:cell 3 -2))
+      (is-true (c:child-at inner (l:cell 3 -2))
+               "the cell was created in the plane the cursor was in")
+      (is-false (c:child-at outer (l:cell 3 -2))
+                "and not in the one above it")
+      (is (equal (list (l:cell 0 0) (l:cell 3 -2)) (c:world-cursor world))
+          "and the cursor is standing in it"))))
+
+(test an-invalid-cursor-still-has-a-plane-under-it
+  "The state a world is in between a tree edit and the focus repair that
+follows it: RESOLVE-CHAIN answers NIL, and `which plane am I in' still has to
+answer the root when the root is one."
+  (let* ((grid (grid-of))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (setf (c:world-cursor world) (list (l:cell 9 9) 4 7))
+    (multiple-value-bind (found address base) (l:cursor-plane world)
+      (is (eq grid found))
+      (is (null address) "no cell, because the path names none")
+      (is (null base) "and the plane is the root"))))

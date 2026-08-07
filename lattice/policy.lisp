@@ -743,27 +743,64 @@ The first three create the cell they name if it is not there yet, which is
 STEP-ADDRESS's rule and not a new one: on an infinite plane every cell exists
 in principle, and arriving is what brings it into being.")
 
+(defun cursor-plane (world)
+  "Where the cursor is, as a plane: (values GRID ADDRESS PATH-TO-GRID).
+
+ONE WALK ANSWERING ALL THREE, AND THAT IS THE POINT.  These used to be three
+functions with three walks and they did not agree: CURSOR-GRID searched the
+ancestor chain backwards and returned the *innermost* plane, while CURSOR-CELL
+ten lines below it and GRID-PATH in commands.lisp searched forwards and
+answered about the *outermost* one.  Every caller pairs them — GOTO-CELL called
+ENSURE-CELL on the inner grid and then jumped the cursor to a path resolved
+against the outer one — so a plane inside a plane put a cell in one place and
+sent the cursor to another.  Nesting is listed in FINDINGS.org among the things
+that came for free; what came for free was the container protocol, and this was
+three hand-written walks on top of it.
+
+Innermost is the answer, because the plane you are standing in is the one whose
+cell you are in and the one a command means by `here'.  ON-FOCUS-CHANGE is the
+one place that already got nesting right, by looping over every grid in the
+chain rather than picking one, which is what a per-plane fact needs and what a
+`where am I' question does not.
+
+ADDRESS is NIL when the cursor is on the grid itself rather than inside a cell
+of it, which is a real state during focus repair.  PATH-TO-GRID is the path of
+the grid, so (APPEND PATH-TO-GRID (LIST ADDRESS)) is the cell — that is
+CELL-PATH, and it is why the two are returned together."
+  (when world
+    (let* ((root (c:world-root world))
+           (path (c:world-cursor world))
+           (chain (c:resolve-chain root path)))
+      ;; An invalid cursor still has a root, and a root that is a plane is an
+      ;; answer.  This is the shape a world takes between a tree edit and the
+      ;; focus repair that follows it.
+      (unless chain
+        (setf chain (list root) path '()))
+      (let ((grid nil) (depth nil))
+        (loop for node in chain
+              for i from 0
+              when (typep node 'grid) do (setf grid node depth i))
+        (when grid
+          (values grid (nth depth path) (subseq path 0 depth)))))))
+
 (defun cursor-grid (world)
   "The innermost plane the cursor is inside, or NIL.
 
 Ancestor search rather than a fixed depth, so a plane nested inside a split
 inside another plane answers correctly — see CURRENT-GRID, which is this with
 the world already supplied."
-  (when world
-    (let* ((root (c:world-root world))
-           (chain (c:resolve-chain root (c:world-cursor world))))
-      (loop for node in (reverse (or chain (list root)))
-            when (typep node 'grid) return node))))
+  (values (cursor-plane world)))
 
 (defun cursor-cell (world)
-  "The cell address the cursor is standing in, or NIL."
-  (when world
-    (let* ((root (c:world-root world))
-           (path (c:world-cursor world))
-           (chain (c:resolve-chain root path)))
-      (loop for node in chain
-            for address in path
-            when (typep node 'grid) return address))))
+  "The cell address the cursor is standing in, or NIL.
+
+Of the same plane CURSOR-GRID names, which is a sentence that had to be made
+true rather than one that was."
+  (nth-value 1 (cursor-plane world)))
+
+(defun cursor-grid-path (world)
+  "The world path of the plane CURSOR-GRID names, or NIL for the root."
+  (nth-value 2 (cursor-plane world)))
 
 (defun workspace-entry-cell (grid)
   "The cell a non-directional arrival at GRID lands on, or NIL for 'ask the
