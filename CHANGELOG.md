@@ -36,6 +36,33 @@ be able to do before anyone else can depend on it.
 - Line endings are pinned to LF by `.gitattributes`. A checkout that gave
   `install.sh` CRLF failed with `/bin/sh^M: bad interpreter`, which names
   neither the file that is wrong nor what is wrong with it.
+- `make install` shipped the 190 MB uncompressed image. `image` forced
+  `LATTICEWM_COMPRESS=0` and `release` — named by no document, no CI job and
+  no gate — produced the 13 MB one, so the nix path shipped 13 MB and every
+  other Linux shipped 190.
+- No `DESTDIR`, so no distribution could package this. `install.sh --destdir`
+  and `make DESTDIR=… install` now stage correctly, with `--no-config`
+  implied; `install-check` runs the staged path and asserts the launcher and
+  the session entry name the *prefix* rather than the staging root.
+- The SBCL floor is declared (2.2.6, for zstd core compression at level 22)
+  and checked in `latticewm.asd`, `tools/prelude.lisp` and `bootstrap.sh`.
+  `bootstrap.sh` used to print the version and check nothing.
+- **The Quicklisp dist is pinned.** `bootstrap.sh`'s header claimed the nix
+  and non-nix paths "compile the same source"; `quicklisp-quickstart:install`
+  was called with no dist pin and took whatever was newest on the day it ran,
+  so the claim described an intention rather than a mechanism and CI's `plain`
+  job compiled a different wayflan from the `check` job on a schedule nobody
+  controlled. `QUICKLISP_DIST=2026-01-01` is the same tree the nixpkgs wayflan
+  package pins, which is what makes the sentence true.
+- **The checksum moved onto the file that moves.** `QUICKLISP_SHA256` pinned
+  `quicklisp.lisp`, the bootstrapper, which the comment beside it correctly
+  described as byte-identical for years — a checksum on the one thing that
+  cannot move and none at all on the thing republished monthly.
+  `QUICKLISP_DIST_SHA256` verifies the installed `distinfo.txt`; the fetch
+  itself is `http` because Quicklisp's own client speaks nothing else, which
+  is exactly why the verification exists.
+- `install.sh --help` ended mid-clause: it was `sed -n '2,40p'` over a header
+  that runs to 41.
 
 ### Added
 
