@@ -24,11 +24,18 @@ compiler macro fails the build on a RUN-HOOKS that passes the wrong number --
 because a hook function of the wrong arity signals inside the guard that keeps
 one broken hook from stopping the others, so what reaches you is silence.
 
-`attached' counts what is on each hook *in this image*, which is how you check
-that your configuration file was loaded.  Every hook below is attached to and
-watched firing by the test suite or the integration run; gate 14 fails the
-build on one that is not, because a seam nobody has ever pulled is a seam
-whose arguments and timing are guesses.
+EVERY HOOK BELOW IS ATTACHED TO AND WATCHED FIRING by the test suite or the
+integration run; gate 14 fails the build on one that is not, because a seam
+nobody has ever pulled is a seam whose arguments and timing are guesses.
+
+That is a claim about the *suites*, and it used to sit above a body in which
+sixteen of eighteen entries printed `attached: 0' -- because `attached' counts
+what is on each hook *in this image*, and the image a build tool generates a
+document from loads no tests.  Both statements were true and a reader had no
+way to know it.  An `attached:' line now appears only when the number is not
+zero, so in a committed copy of this file there are none, and at a REPL there
+is one for every hook your configuration file touched -- which is what the
+number was ever good for.
 
 ----------------------------------------------------------------------------
 :CAPTURE-CHANGED (subject count)
@@ -45,7 +52,6 @@ Fires once per subject at startup as well, with whatever count river reports on
 creation, so a hook that draws something does not have to wait for the first
 change to learn the state.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :DRAW-OVERLAYS ()
@@ -77,7 +83,6 @@ lattice's ENABLE-IN, which repaths every cursor in the world.  Both wrote the
 slot directly.  Both go through REPAIR-CURSOR now, which is REPAIR-PATH plus
 this hook and existed the whole time.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :INPUT-ADDED (device)
@@ -88,7 +93,6 @@ else at this point -- its name and its kind arrive in the events that follow --
 so a hook that wants to know what it is should look at :KEYBOARD-LAYOUT-CHANGED
 or ask again from a later hook.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :INPUT-REMOVED (device)
@@ -96,7 +100,6 @@ or ask again from a later hook.
 Run after an input device is unplugged and
 forgotten.  The device object is still readable; every proxy on it is stale.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :KEYBOARD-FOCUS-CHANGED (old-window new-window)
@@ -116,7 +119,6 @@ stays where it was.  NEW-WINDOW is NIL for an empty pane — D18's honest answer
 not a missing value — and also while a screen locker holds the keyboard, since
 for as long as that lasts every focus request we make is ignored.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :KEYBOARD-LAYOUT-CHANGED (device name)
@@ -126,7 +128,6 @@ layout changes, whether we asked for it or the user pressed the xkb toggle.
 NAME is the layout's own name, e.g. "German".  For a status bar showing which
 layout is live, which is the one thing a two-layout user needs on screen.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :LAYOUT-CHANGED ()
@@ -134,7 +135,6 @@ layout is live, which is the one thing a two-layout user needs on screen.
 Run after every relayout, once the placements have
 been emitted.  Fires often; keep it cheap.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :LAYOUT-RESTORED ()
@@ -152,7 +152,6 @@ Without it, enabling the lattice in a configuration file wrapped an empty
 world in a plane and then the restored layout quietly threw the plane away —
 so the policy said `lattice' and every cell command answered NIL.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :OUTPUT-ADDED (output)
@@ -170,7 +169,6 @@ always keyed on the name.  It is drained in the manage sequence instead, beside
 the windows, which is the same answer PLACE-UNPLACED-WINDOWS gives to the same
 question: at the moment `window' arrives we know nothing about the window.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :OUTPUT-REMOVED (output)
@@ -179,7 +177,6 @@ Run after a monitor has gone away and its
 overlays have been released.  The output object is still readable; its proxy is
 already NIL.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :POINTER-OP (kind window)
@@ -187,7 +184,6 @@ already NIL.
 Run when an interactive pointer operation
 starts or ends.  KIND is :MOVE, :RESIZE or NIL for the end of one.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :RESERVE-SPACE (output)
@@ -219,7 +215,6 @@ Run once, on the way out, before the connection closes.
 State persistence already happens without your help; this is for anything of
 your own that needs flushing.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :STARTUP ()
@@ -241,7 +236,6 @@ means leaking it on the one path where that is least recoverable.  The call is
 inside the UNWIND-PROTECT now, so the pairing is structural rather than
 remembered.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :WINDOW-CLOSED (window)
@@ -249,7 +243,6 @@ remembered.
 Run after WINDOW is gone and the tree has
 been repaired.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :WINDOW-OPENED (window)
@@ -258,7 +251,6 @@ Run after WINDOW has been placed in the tree
 or floated.  Too late to change the placement — for that, specialize
 SPAWN-TARGET or ON-WINDOW-OPEN.
 
-  attached: 0
 
 ----------------------------------------------------------------------------
 :WORKSPACE-CHANGED (index)
@@ -266,5 +258,4 @@ SPAWN-TARGET or ON-WINDOW-OPEN.
 Run after switching to a different
 workspace.
 
-  attached: 0
 

@@ -97,11 +97,17 @@ complains when the function you attach cannot be called with them, and a~%~
 compiler macro fails the build on a RUN-HOOKS that passes the wrong number --~%~
 because a hook function of the wrong arity signals inside the guard that keeps~%~
 one broken hook from stopping the others, so what reaches you is silence.~2%~
-`attached' counts what is on each hook *in this image*, which is how you check~%~
-that your configuration file was loaded.  Every hook below is attached to and~%~
-watched firing by the test suite or the integration run; gate 14 fails the~%~
-build on one that is not, because a seam nobody has ever pulled is a seam~%~
-whose arguments and timing are guesses.~2%")
+EVERY HOOK BELOW IS ATTACHED TO AND WATCHED FIRING by the test suite or the~%~
+integration run; gate 14 fails the build on one that is not, because a seam~%~
+nobody has ever pulled is a seam whose arguments and timing are guesses.~2%~
+That is a claim about the *suites*, and it used to sit above a body in which~%~
+sixteen of eighteen entries printed `attached: 0' -- because `attached' counts~%~
+what is on each hook *in this image*, and the image a build tool generates a~%~
+document from loads no tests.  Both statements were true and a reader had no~%~
+way to know it.  An `attached:' line now appears only when the number is not~%~
+zero, so in a committed copy of this file there are none, and at a REPL there~%~
+is one for every hook your configuration file touched -- which is what the~%~
+number was ever good for.~2%")
     (dolist (row hooks)
       (destructuring-bind (name documentation attached arguments) row
         ;; The argument names alone, not ~S of the list: these are symbols
@@ -110,8 +116,14 @@ whose arguments and timing are guesses.~2%")
         ;; from it.  The two protocol surfaces print specializers, where the
         ;; package is the fact; here it is noise.
         (format stream "~&~76,,,'-<~>~%~s (~{~(~a~)~^ ~})~%~76,,,'-<~>~%~
-                        ~a~%~%  attached: ~d~2%"
-                name arguments documentation attached)))
+                        ~a~%~%"
+                name arguments documentation)
+        ;; Only when it is not zero.  See the preamble: this is a per-image
+        ;; measurement, and the one image where it is guaranteed meaningless
+        ;; is the one whose output gets committed.
+        (unless (zerop attached)
+          (format stream "  attached: ~d~%" attached))
+        (format stream "~%")))
     (values)))
 
 (defun undocumented-generics ()

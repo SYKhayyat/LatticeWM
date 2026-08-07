@@ -187,6 +187,28 @@ wins."
   "The user's init.lisp."
   (merge-pathnames "init.lisp" (config-directory)))
 
+(defun config-file-name ()
+  "The user's init.lisp, written the way a *document* should write it.
+
+/home/shaul/.config/latticewm/init.lisp WAS COMMITTED TO THIS REPOSITORY, on
+line 1 of doc/OPTIONS.txt, in the file the corpus calls the un-driftable
+reference.  Nothing was wrong with the code: CONFIG-FILE expands the path
+because a program that is about to open a file needs an absolute one.  The
+mistake was printing that answer into a document, which turns a per-machine
+measurement into a committed artifact and puts the author's home directory in
+front of every reader.
+
+So there are two functions.  CONFIG-FILE is for opening; this is for saying,
+and it says ~/ and $XDG_CONFIG_HOME rather than resolving them, because those
+are what the reader has to type.  `make surface && git diff --exit-code doc/'
+in CI is what keeps the distinction honest: a generated document that is not
+reproducible fails the build on the next machine that regenerates it.
+
+A constant and not a branch on $XDG_CONFIG_HOME, for the same reason: a
+document that says one thing on a machine where that variable is set and
+another where it is not is reproducible on neither."
+  "~/.config/latticewm/init.lisp")
+
 ;;; ------------------------------------------------- where extensions live
 ;;;
 ;;; A SHIPPED CONFIGURATION THAT ONLY LOADS ON THE AUTHOR'S MACHINE IS NOT A

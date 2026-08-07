@@ -7,7 +7,7 @@
 # test entirely — so the one check that receives state rather than constructing
 # it was the one check nothing ran unattended.
 #
-# Two jobs, deliberately, because they answer two different questions.
+# Four jobs now, and each answers a question the others cannot.
 #
 #   check  — the whole of `make check': build, nineteen gates, the unit suite, and
 #            the integration suite against a headless river, with
@@ -23,17 +23,54 @@
 #   plain  — the same build with *no nix at all*, from bootstrap.sh, because
 #            PLAN.org §packaging says "nothing in src/ may know that nix exists;
 #            if the flake is deleted the project still builds — that is the
-#            test", and a test nobody runs is a sentence.  It stops before the
-#            integration suite, because a bare runner has no river; that is the
-#            forgiving mode, and it says `skip' out loud.
+#            test", and a test nobody runs is a sentence.
 #
-# THE INSTALL IS PART OF `check' NOW, and it is the one thing here that asks
-# what a *user* gets rather than what the source says.  Nothing had ever run
-# either installer end to end unattended: `make check' stops before the image
-# exists, so nothing downstream of it was reachable, and the two install paths
-# had drifted apart with every gate green.
+#            IT USED TO STOP AT `make build gates test', AND THAT WAS THE HOLE.
+#            The only job that ran an installer ran under nix, while the
+#            `check' job carries a comment saying the install "is the one thing
+#            here that asks what a *user* gets" — and asks it under nix-shell.
+#            So the path every non-nix Linux user takes was never run end to
+#            end by anything: not the image, not install.sh, not install-check.
+#            It goes all the way now, and it is also this project's only
+#            empirical answer to whether the declared SBCL floor is real, since
+#            it builds against whatever the distribution packages rather than
+#            what nixpkgs pins.
+#
+#   flake  — `nix build' and `nix flake check', which ran never.  `nix build'
+#            is the only thing that has ever caught a river protocol break: it
+#            is the phase that connects to the pinned compositor, and it failed
+#            when river bumped river_window_manager_v1 from 4 to 5 in a *patch*
+#            release.  Leaving it to `nix build' on somebody's laptop is how
+#            that gets found at a login screen instead.
+#
+#   surface — `make surface && git diff --exit-code doc/'.  Two lines, and
+#            they convert the largest unbacked claim in the corpus into a fact.
+#            README.org says of the six generated documents: "All three are
+#            generated from the running image, so none of them can drift."
+#            That is a claim about the *generator*, not about the repository —
+#            `make surface' is not in `all:', not in `check:', and was in no CI
+#            job, so nothing regenerated and diffed, and 232 KB of committed
+#            .txt was a snapshot of whichever machine last ran the command.
+#            The Makefile's own comment says "a generated document cannot go
+#            stale, which is its whole argument", in the same block that
+#            records the target once truncating all six files to empty and
+#            exiting 0 — conceding that stale is possible without noticing.
+#
+#            This was not merely unenforced, it was unenforceable: OPTIONS.txt
+#            line 1 held the author's home directory, EXTENSION-SURFACE.txt
+#            held his build tree on four lines, and the `read by:' lists came
+#            out of an unordered cross-reference table, so two machines
+#            produced two files.  All three are fixed; this is the check that
+#            keeps them fixed.
 
 name: check
+
+# One run per ref.  Two pushes in a minute used to mean two full cold builds
+# racing each other, and the older one's result is worthless the moment the
+# newer one starts.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -50,6 +87,14 @@ jobs:
       - uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+      # ASDF's fasl cache, keyed on the sources that produce it.  A cold build
+      # recompiles every dependency on every push; this is the difference
+      # between a check somebody waits for and one they stop reading.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/common-lisp
+          key: fasl-nix-${{ hashFiles('**/*.lisp', '**/*.asd', 'flake.lock') }}
+          restore-keys: fasl-nix-
       # XDG_RUNTIME_DIR is where the Wayland socket and the shm files go, and a
       # GitHub runner has none — river would take /tmp and the test would take
       # river's word for it, which is exactly the assumption start-river exists
@@ -68,13 +113,87 @@ jobs:
         run: nix-shell --run 'make install-check'
 
   plain:
-    name: no nix, from bootstrap.sh
+    name: no nix, from bootstrap.sh, all the way to an install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # DELIBERATELY THE DISTRIBUTION'S SBCL, not a pinned one.  This job is
+      # the only place the declared floor in latticewm.asd meets an SBCL that
+      # somebody else chose, and "whether this builds on the older one" was an
+      # empirical question nobody had asked.
+      - name: install sbcl
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+      - name: sbcl version
+        run: sbcl --version
+      # .deps/ is the whole of what bootstrap.sh fetches, and the dist inside
+      # it is pinned, so the key can be the pin.
+      - uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-plain-${{ hashFiles('bootstrap.sh') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/common-lisp
+          key: fasl-plain-${{ hashFiles('**/*.lisp', '**/*.asd') }}
+          restore-keys: fasl-plain-
+      - name: bootstrap and build
+        run: |
+          ./bootstrap.sh
+          make build gates test
+      # THE HALF THAT WAS MISSING.  Everything above this line was already
+      # here; everything below it is the path a non-nix user actually takes.
+      - name: image, install, install-check
+        run: make install-check
+      - name: install to a scratch prefix, and take it back out
+        run: |
+          prefix="$RUNNER_TEMP/prefix"
+          make install PREFIX="$prefix"
+          test -x "$prefix/bin/latticewm"
+          "$prefix/bin/latticewm" --version
+          "$prefix/bin/latticewm" --list-options | head -3
+          make uninstall PREFIX="$prefix"
+      # And the packaging path, which is what a distribution runs and what no
+      # check in this project could express until DESTDIR existed.
+      - name: a staged packaging install
+        run: |
+          make install DESTDIR="$RUNNER_TEMP/pkg" PREFIX=/usr
+          test -x "$RUNNER_TEMP/pkg/usr/bin/latticewm"
+          grep -q '^exec river -c "/usr/bin/latticewm' \
+               "$RUNNER_TEMP/pkg/usr/bin/latticewm-session"
+      - name: make dist
+        run: make dist
+
+  flake:
+    name: nix build, nix flake check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v27
+      # `nix build' runs the flake's buildPhase, which connects to the pinned
+      # river.  It is the only thing that has ever caught a protocol break.
+      - name: nix build
+        run: nix build --print-build-logs
+      - name: nix flake check
+        run: nix flake check --print-build-logs
+
+  surface:
+    name: the generated documents are the ones in the tree
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: install sbcl
         run: sudo apt-get update && sudo apt-get install -y sbcl
-      - name: bootstrap and build
-        run: |
-          ./bootstrap.sh
-          make build gates test
+      - uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-plain-${{ hashFiles('bootstrap.sh') }}
+      - name: bootstrap
+        run: ./bootstrap.sh
+      # The two lines.  `git diff --exit-code' prints what drifted, which is
+      # the whole diagnostic: the failure is always "somebody changed the
+      # program and did not run `make surface'", and the diff says which
+      # document and which line.
+      - name: make surface
+        run: make surface
+      - name: nothing under doc/ changed
+        run: git diff --exit-code -- doc/

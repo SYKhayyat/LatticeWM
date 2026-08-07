@@ -1369,7 +1369,7 @@ say so rather than putting up a prompt that cannot be answered.
 
 *browser*
   now: "firefox"
-  read by: browser
+  read by: (lambda () in config.lisp), browser
   The web browser the `browser' command runs.
 
 *click-method*
@@ -1501,7 +1501,7 @@ punctuation that is too loud.
 
 *echo-position*
   now: :BOTTOM
-  read by: draw-echo-area-on, echo-reserved-edges
+  read by: echo-reserved-edges, draw-echo-area-on
   Which edge the echo area sits on: :BOTTOM or :TOP.
 
 Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
@@ -1521,7 +1521,7 @@ at any size.
 
 *editor*
   now: "emacs"
-  read by: editor
+  read by: (lambda () in config.lisp), editor
   The editor the `editor' command runs.
 
 *empty-hint-color*
@@ -1552,7 +1552,7 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
-  read by: hint-lines, echo-content (appearance-policy t), key-unbound (input-policy t t)
+  read by: echo-content (appearance-policy t), hint-lines, key-unbound (input-policy t t)
   DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up
@@ -1564,7 +1564,7 @@ default, typing `ls` at an empty pane opens a terminal showing `s`.
 
 *file-manager*
   now: "thunar"
-  read by: files
+  read by: (lambda () in config.lisp), files
   The file manager the `files' command runs.
 
 *float-dialogs*
@@ -1622,7 +1622,7 @@ something can teleport you across your desktop.
 
 *focus-follows-mouse*
   now: NIL
-  read by: on-pointer-enter, attach-seat
+  read by: attach-seat, on-pointer-enter
   Move the cursor to whatever pane the pointer is over.
 
 *focus-new-windows*
@@ -1682,7 +1682,7 @@ the wrong half.
 
 *honour-client-move-requests*
   now: T
-  read by: on-client-resize-request, on-client-move-request
+  read by: on-client-move-request, on-client-resize-request
   Let a window start its own drag when you grab its titlebar.
 
 Clients that draw their own decorations ask for this through xdg-shell and
@@ -2227,7 +2227,7 @@ your session to anybody who can route to it.
 
 *swank-port*
   now: NIL
-  read by: start-swank, start
+  read by: start, start-swank
   The TCP port SWANK listens on, or NIL for no SWANK server.
 
 *OFF BY DEFAULT, AND THAT IS A DELIBERATE CHANGE FROM 4005.*  SWANK offers
@@ -2270,7 +2270,7 @@ not to respond to taps reads as broken rather than as conservative.
 
 *terminal*
   now: "foot"
-  read by: terminal
+  read by: (lambda () in config.lisp), terminal
   The terminal emulator the `terminal' command runs.
 
 *ui-font*

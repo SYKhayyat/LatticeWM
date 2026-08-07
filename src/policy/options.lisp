@@ -84,6 +84,31 @@ document can list every knob without anyone maintaining a second list of them."
 ;;; the *program* rather than about its spelling: it sees a read inside a macro
 ;;; expansion and does not see the name in a comment.
 
+(defun shorten-source-paths (form)
+  "FORM with every filesystem path in it reduced to a bare file name.
+
+SBCL names an anonymous function after the file it was compiled in, so a
+DEFINE-KEY closure that reads *TERMINAL* comes back as
+
+  (LAMBDA () :IN \"/home/shaul/src/latticewm/src/runtime/config.lisp\")
+
+and doc/EXTENSION-SURFACE.txt -- generated, committed, and the document this
+corpus calls the un-driftable reference -- carried the author's home directory
+and build tree on four lines.  It is the same defect as OPTIONS.txt's
+\"/home/shaul/.config/latticewm/init.lisp\" and it is worse, because it is not
+merely embarrassing: two people regenerating the surface produce different
+files, so `make surface && git diff --exit-code doc/' -- the check that turns
+\"generated, so it cannot drift\" from a claim about the *generator* into a
+claim about the *repository* -- could never have been green.
+
+The bare name is enough.  A reader wants to know which file, and there is
+exactly one config.lisp."
+  (cond ((and (stringp form) (find #\/ form))
+         (let ((slash (position #\/ form :from-end t)))
+           (subseq form (1+ slash))))
+        ((consp form) (mapcar #'shorten-source-paths form))
+        (t form)))
+
 (defun option-readers (name)
   "Every function and method in the loaded image that reads option NAME.
 
@@ -91,14 +116,28 @@ Function names, so a method comes back as SBCL writes it —
 (SB-PCL::FAST-METHOD GAPS (LAYOUT-POLICY T)) — which OPTION-READER-NAME turns
 into something to say out loud.
 
+SORTED, AND THAT IS NOT TIDINESS.  SB-INTROSPECT:WHO-REFERENCES answers in
+whatever order the cross-reference database holds, which is a function of
+compilation order and is not stable across machines — so the same source
+produced `read by: draw-echo-area-on, echo-reserved-edges' here and the two
+names the other way round there.  A generated document that reorders itself
+per machine cannot be diffed, and `make surface && git diff --exit-code doc/'
+is the whole of what makes \"generated, so it cannot drift\" a fact about this
+repository rather than about its generator.  Sorted on the *shortened* name,
+because the unshortened one begins with an absolute path.
+
 Empty for an option nothing looks at.  Gate 11 fails on that, and it is worth
 being clear about why it is a gate and not a warning: an option that is read
 nowhere is indistinguishable, from outside, from one that is read everywhere.
 The user sets it, nothing happens, and the documentation agrees with them."
   (let ((variable (option-variable name)))
     (when variable
-      (remove-duplicates (mapcar #'first (sb-introspect:who-references variable))
-                         :test #'equal))))
+      (sort (remove-duplicates
+             (mapcar #'first (sb-introspect:who-references variable))
+             :test #'equal)
+            #'string<
+            :key (lambda (reader)
+                   (princ-to-string (shorten-source-paths reader)))))))
 
 (defun option-reader-name (reader)
   "READER as a string, with a method written the way you would specialize it.
@@ -113,7 +152,7 @@ image rather than a sentence somebody has to remember to keep true."
            (symbolp (first reader))
            (search "METHOD" (symbol-name (first reader))))
       (format nil "~(~a ~a~)" (second reader) (or (third reader) '()))
-      (format nil "~(~a~)" reader)))
+      (format nil "~(~a~)" (shorten-source-paths reader))))
 
 ;;; ------------------------------------------- and who takes the answer away
 ;;;
