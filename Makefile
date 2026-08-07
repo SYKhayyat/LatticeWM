@@ -234,6 +234,7 @@ install-check: image
 # four places, one artifact further out.
 dist:
 	@test -n "$(VERSION)" || { echo "make dist: VERSION is empty" >&2; exit 1; }
+	@git update-index -q --refresh
 	@git diff-index --quiet HEAD -- || \
 	  { echo "make dist: the tree is dirty; commit or stash first" >&2; exit 1; }
 	@if git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null; then \

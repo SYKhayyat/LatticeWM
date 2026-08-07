@@ -3,3 +3,8 @@
 /result
 /build/
 /.deps/
+# `make dist' writes here.  Tracked artefacts would defeat the point of
+# building the tarball from the git index.
+/dist/
+# Per-checkout tooling state.  Not the project's business either way.
+/.claude/
