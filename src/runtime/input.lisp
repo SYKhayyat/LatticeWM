@@ -350,6 +350,30 @@ countermanded a microsecond later by the second."
                (push value out))
     (nreverse out)))
 
+(defun settings-to-send (settings)
+  "SETTINGS minus the pair APPLY-REPEAT-INFO sends as one request.
+
+A KEY PRESENT WITH A VALUE OF NIL IS A SETTING OF NIL, and that sentence is
+the whole reason this is a function with a name.  It used to be an inline
+`UNLESS (OR (NULL VALUE) ...)', which dropped every setting whose value was
+false — so `(setf *tap-to-click* nil)' sent nothing and the touchpad kept
+tapping, and so did the rule `(\"Logitech\" :natural-scroll nil)', which is
+the shape of the example in *NATURAL-SCROLL*'s own docstring.
+
+NOTHING ABOVE THIS COULD SEE IT.  OPTION-SETTINGS goes out of its way to send
+the six meaningful booleans either way, and says so in a comment; the tests
+assert that the plist coming out of INPUT-SETTINGS carries `:NATURAL-SCROLL
+NIL' when a rule asks for it.  Both were right.  The plist was correct all the
+way down and then the last reader of it threw those pairs away.
+
+There is no ambiguity left to resolve here: OPTION-SETTINGS omits an unset
+option rather than writing NIL for it, and *INPUT-RULES* says in as many words
+that a rule which does not mention a key does not set it.  Absent is `leave it
+alone'; present is a value, whatever the value is."
+  (loop for (property value) on settings by #'cddr
+        unless (member property '(:repeat-rate :repeat-delay))
+          collect property and collect value))
+
 (defun apply-device-settings (device)
   "Ask the policy what DEVICE should be set to, and send whatever changed."
   (let ((settings (guarded "input-settings"
@@ -357,10 +381,8 @@ countermanded a microsecond later by the second."
     (if (listp settings)
         (let ((settings (first-of-each settings)))
           (+ (if (apply-repeat-info device settings) 1 0)
-             (loop for (property value) on settings by #'cddr
-                   unless (or (null value)
-                              (member property '(:repeat-rate :repeat-delay)))
-                     count (send-device-setting device property value))))
+             (loop for (property value) on (settings-to-send settings) by #'cddr
+                   count (send-device-setting device property value))))
         0)))
 
 (defun apply-input-configuration ()

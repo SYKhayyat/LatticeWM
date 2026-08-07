@@ -1913,6 +1913,12 @@ through now.
       layout, which made deep zoom look worse than it is. Under D22 the threshold is
       expressed as a cell pixel size, not a zoom level./
 
+      /Note: hold-to-peek was never built. It needs ~modifiers_watch~ on
+      ~river_xkb_bindings_seat_v1~, which nothing sends, and the handler waiting for
+      ~modifiers_update~ was deleted rather than wired up — see the comment in
+      =src/runtime/seats.lisp=. The =For:= above survives without it: the map costs no
+      reflow to enter or leave, which is true of any glance and is why it shipped./
+
 - [ ] *The ~compact~ family* (from D13) — which edge (up / down / left / right /
       diagonal) and what scope (row / column / region / plane)?
 - [ ] *Can a cell span two grid positions?* (from D16). Still open after the bond

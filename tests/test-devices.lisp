@@ -129,6 +129,33 @@ counts redefinitions."))
       (is (not (member :accel-profile settings)))
       (is (not (member :scroll-method settings))))))
 
+(test turning-a-setting-off-is-a-setting-and-not-an-absence
+  "The last reader of the plist threw away every pair whose value was false.
+
+Everything above it was right and said so out loud: OPTION-SETTINGS goes out
+of its way to send the six meaningful booleans either way and explains why in
+a comment, *INPUT-RULES* documents that a rule which does not mention a key
+does not set it, and the two tests above assert that the plist carries
+:NATURAL-SCROLL NIL when a rule asks for it.  Then APPLY-DEVICE-SETTINGS
+filtered on (NULL VALUE), so `(setf *tap-to-click* nil)' sent nothing at all
+and the touchpad went on tapping.  Every instrument in the file agreed the
+plist was correct, which it was.
+
+This is the decision half, which is testable; that the request then goes out
+is the compositor's half and is in tools/integration.lisp, as the header of
+this file explains."
+  (is (equal '(:natural-scroll nil)
+             (r::settings-to-send '(:natural-scroll nil)))
+      "a boolean set to NIL is a value to be sent")
+  (is (equal '(:tap-to-click t :natural-scroll nil :accel-speed 0.25d0)
+             (r::settings-to-send
+              '(:tap-to-click t :repeat-rate 50 :natural-scroll nil
+                :repeat-delay 300 :accel-speed 0.25d0)))
+      "and the only pairs held back are the two APPLY-REPEAT-INFO sends
+itself, as one request, because river takes them together")
+  (is (null (r::settings-to-send '(:repeat-rate nil :repeat-delay nil)))
+      "which is what a keyboard's whole answer is made of"))
+
 (test a-keyboard-is-not-asked-about-natural-scrolling
   ;; Sending a touchpad setting to a keyboard is a round trip whose answer is
   ;; `unsupported' and a log line that says nothing.

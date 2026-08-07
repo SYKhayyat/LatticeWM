@@ -306,7 +306,14 @@ is also what DESIGN D19's typing-in-an-empty-pane rests on.")
          river-xkb-bindings-seat-v1.cancel-ensure-next-key-eaten)
   (alias bindings-seat-modifiers-watch
          river-xkb-bindings-seat-v1.modifiers-watch
-         "Ask to be told when modifier state changes, for hold-to-peek.")
+         "Ask to be told when modifier state changes.  Nothing sends this.
+
+Wrapped because the wire layer wraps the protocol and not the subset in use --
+an unwrapped request is how the next feature ends up reaching round the
+package boundary.  The docstring used to say `for hold-to-peek', which named a
+feature the program does not have: without this request the modifiers_update
+event never fires, and runtime/seats.lisp records deleting the handler that
+was waiting for it rather than inventing the feature to justify it.")
   ;; INPUT CONFIGURATION.  Three protocols outside river_window_manager_v1
   ;; entirely, so none of these is sequence-bound: a touchpad setting can be
   ;; sent at any moment on the window manager's thread, which is why

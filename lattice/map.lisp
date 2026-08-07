@@ -17,7 +17,20 @@
 ;;;; configurable pixel threshold, then stop showing real windows and draw the
 ;;;; lattice ourselves — cell rectangles, coordinates, cell names, window
 ;;;; titles, app colours."  Its stated argument for is that the map is *free*:
-;;;; nothing resizes to enter or leave it, so hold-to-peek is instant.
+;;;; nothing resizes to enter or leave it.
+;;;;
+;;;; HALF OF THAT ARGUMENT IS ABOUT A FEATURE THAT DOES NOT EXIST, and it said
+;;;; so in the present tense until now: "so hold-to-peek is instant".  There is
+;;;; no hold-to-peek.  Zoom is bound to discrete presses; hold-Super-to-peek
+;;;; needs modifiers_watch on river_xkb_bindings_seat_v1, which nothing sends,
+;;;; and runtime/seats.lisp records removing the dead handler rather than
+;;;; wiring it up.  The half that survives is the half that matters and is
+;;;; enough on its own: *entering and leaving the map costs no reflow at all*,
+;;;; where peeking with live windows resizes every window on screen twice.
+;;;; That is true of any glance, held key or not, and it is why the threshold
+;;;; is worth having.  Should hold-to-peek ever be built, this file needs no
+;;;; change — which is the actual claim, and is a different sentence from
+;;;; saying the feature is here.
 ;;;;
 ;;;; THE ARGUMENT AGAINST, and why it does not survive contact.  DESIGN says:
 ;;;; "at deep zoom you are looking at a diagram of your desktop rather than your

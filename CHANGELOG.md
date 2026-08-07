@@ -220,6 +220,28 @@ be able to do before anyone else can depend on it.
   top of it. `on-focus-change` was already right, by looping over every grid in
   the chain rather than picking one.
 
+- **Turning an input setting off did nothing.** `apply-device-settings`
+  filtered the policy's answer on `(null value)`, so every pair whose value was
+  false was dropped on the floor: `(setf *tap-to-click* nil)` sent nothing and
+  the touchpad went on tapping, and so did the rule
+  `("Logitech" :natural-scroll nil)` — the shape of the example in
+  `*natural-scroll*`'s own docstring. Everything above that line was correct
+  and said so: `option-settings` sends the six meaningful booleans either way
+  and explains why in a comment, `*input-rules*` documents that a rule which
+  does not mention a key does not set it, and two tests assert that the plist
+  carries `:natural-scroll nil` when a rule asks for it. The plist was right
+  all the way down and its last reader threw those pairs away. `settings-to-send`
+  is that decision with a name and a test: absent means leave it alone, present
+  means a value, whatever the value is.
+- `map.lisp` argued for its own existence in the present tense from a feature
+  the program does not have — "nothing resizes to enter or leave it, so
+  hold-to-peek is instant". There is no hold-to-peek: it needs `modifiers_watch`
+  on `river_xkb_bindings_seat_v1`, nothing sends it, and `seats.lisp` records
+  deleting the handler that waited for `modifiers_update` rather than wiring it
+  up. The half of the argument that survives is the half that matters and is
+  enough on its own. The `modifiers_watch` wrapper's docstring and DESIGN's
+  open-question block say the same thing now.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

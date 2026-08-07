@@ -34,6 +34,30 @@
 ;;;;   tier 0  (setf *input-rules* '(("Logitech" :natural-scroll nil)))
 ;;;;   tier 2  (defmethod input-settings ((p my-policy) device)
 ;;;;             (if (mine-p device) '(:accel-speed 0.4d0) (call-next-method)))
+;;;;
+;;;; WHY THE FIFTEEN GLOBALS ARE NOT FOLDED INTO *INPUT-RULES*, which is the
+;;;; obvious next thought and has been had more than once: the two really are
+;;;; the same shape, and shipping *INPUT-RULES* with a leading (T :TAP-TO-CLICK
+;;;; T ...) entry really would make OPTION-SETTINGS unnecessary.  Three things
+;;;; are lost, and together they are more than the twenty lines gained.
+;;;;
+;;;;   * Fifteen docstrings.  `--list-options' prints them, the generated
+;;;;     extension surface carries them, and half of them are the only place
+;;;;     the program explains what :CLICKFINGER is or why tap-to-click ships on
+;;;;     against libinput's default.  A plist has nowhere to put any of that.
+;;;;   * The first line of the tier table above.  (SETF *TAP-TO-CLICK* T) is
+;;;;     what a person types; editing one entry of a list of lists in an
+;;;;     init.lisp is not the same act, and tier 0 exists for the people who
+;;;;     will never write a DEFMETHOD.
+;;;;   * Gate 11.  It certifies that every registered option is *read* by
+;;;;     something, using the cross-references SBCL recorded while compiling.
+;;;;     A table walked with SYMBOL-VALUE records no such reference, so the
+;;;;     one instrument that finds a dead knob would go blind on all fifteen.
+;;;;
+;;;; The duplication the fold would remove was never the expensive part.  What
+;;;; was expensive was that the plist those globals produce was then filtered
+;;;; by a reader that dropped every false value — see SETTINGS-TO-SEND in
+;;;; runtime/input.lisp.
 
 (in-package #:latticewm/policy)
 
