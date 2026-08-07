@@ -518,10 +518,29 @@ thunk)~ that runs around every command in the system, including ones you wrote.
 (add-command-wrapper 'time-commands)
 #+end_src
 
-Layout undo is built on this and nothing else — it snapshots the tree around
-every command and keeps the snapshot only when the tree actually changed. A
-session recorder, a modal layer that vetoes commands, and a per-command timer
+A session recorder, a modal layer that vetoes commands, and a per-command timer
 are all the same shape.
+
+*Layout undo used to be built on this and nothing else, and that was the wrong
+altitude.* A command wrapper reaches exactly ~run-command~, and none of the
+live-system doors go through it: ~eval-expression~ on =Super+;=, the control
+socket, and SLIME all evaluate directly. So =Super+; (setf (world-root *world*)
+(make-leaf))= destroyed a layout with no undo entry, while an arrow key
+recorded a snapshot for a cursor move that changed nothing.
+
+Undo is taken at the *settle points* now — the four places where a human or a
+script has just done something arbitrary — and the test is what happened to the
+tree rather than which function ran:
+
+#+begin_src lisp
+(note-layout-settled "opened a socket of my own")
+#+end_src
+
+If your extension opens a fifth door — a socket, a timer, a second REPL — call
+that after it, and the layout changes made through it become recoverable like
+everyone else's. It is cheap when nothing happened: one ~node-signature~ walk
+and no copy at all. The command wrapper is still there and still covers every
+command including yours; all it does now is *name* the step.
 
 ~(remove-command-wrapper 'time-commands)~ takes it off again, and you will want
 it: a wrapper runs around *every* command, so the one you are still writing is

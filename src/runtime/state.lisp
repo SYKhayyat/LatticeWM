@@ -357,6 +357,10 @@ be."
           ;; The restored tree replaced whatever the configuration file built,
           ;; so a policy that requires a shape gets its chance here.  See the
           ;; hook's own documentation for the failure this exists for.
+          ;; The restored tree is where undo starts from, not something to
+          ;; walk back past: the alternative is that the first Super+z after
+          ;; login throws away the layout you just got back.
+          (reset-undo-baseline "restored layout")
           (run-hooks :layout-restored)
           (logmsg :info "restored layout from ~a" path)
           (mark-dirty)

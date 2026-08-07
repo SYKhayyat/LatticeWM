@@ -579,8 +579,13 @@ keybindings, the command registry, and the session loop.")
    #:*unfloat-returns-home* #:*save-interval-seconds*
    #:*undo-depth* #:*undo-coalesce-seconds* #:*ipc-socket* #:*ipc-timeout-seconds*
    #:*swank-interface* #:*honour-exclusive-zones* #:*announce-capture*
-   ;; undo
-   #:undo #:redo #:undo-history #:with-undo #:record-undo #:snapshot-layout
+   ;; undo.  NOTE-LAYOUT-SETTLED is the published name now: an extension that
+   ;; opens a *fourth* door -- a socket of its own, a timer, a second REPL --
+   ;; calls it, and its layout changes become recoverable like everyone
+   ;; else's.  WITH-UNDO and RECORD-UNDO are gone; they were the shape that
+   ;; put the copy before the test that decided whether to keep it.
+   #:undo #:redo #:undo-history #:note-layout-settled #:snapshot-layout
+   #:undo-baseline #:reset-undo-baseline #:*undo-label*
    #:layout-snapshot #:undo-ring #:redo-ring #:restore-snapshot
    ;; tags and named scratchpads
    #:tag-window #:untag-window #:jump-to-tag #:gather-tag

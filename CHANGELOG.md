@@ -89,6 +89,15 @@ be able to do before anyone else can depend on it.
 - **Fullscreen used the cursor's output, not the window's**, so fullscreening a
   window on the second monitor from the first put it on the first.
   `output-of-window` existed, was exported, and was called by nothing.
+- **Undo was bolted to `run-command`**, which is one of four doors into the
+  layout. `Super+;`, the control socket and a SLIME connection — the three the
+  program exists for — changed the tree with no undo recorded at all, while
+  every inert arrow key deep-copied every workspace to record nothing and a
+  nineteen-name `*undo-exempt-commands*` deny-list papered over the arithmetic.
+  Undo is now taken at settle points: `note-layout-settled` compares the tree's
+  signature against a baseline and copies only on a real change, and it is
+  called after commands, after the control socket, and after the REPL queue
+  drains. `load-state` re-baselines against the layout it restored.
 
 ### Added
 

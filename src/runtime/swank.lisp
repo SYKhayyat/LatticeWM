@@ -112,4 +112,11 @@ the reason a REPL cannot simply call protocol functions directly."
                    (setf *wm-thread-queue* '())))))
     (dolist (thunk queue)
       (guarded "queued from another thread" (funcall thunk)))
-    (when queue (mark-dirty))))
+    ;; THE FOURTH DOOR, AND IT IS THE ONE THIS PROGRAM IS ADVERTISED ON.  Undo
+    ;; used to be a wrapper on RUN-COMMAND, so anything a SLIME REPL did to the
+    ;; tree was unrecoverable -- the mechanism that exists to make the tree
+    ;; recoverable was blind on precisely the surface the project is about.
+    ;; NOTE-LAYOUT-SETTLED costs one signature walk when nothing changed.
+    (when queue
+      (note-layout-settled "from a REPL")
+      (mark-dirty))))

@@ -112,9 +112,17 @@ gets the *next* sequence rather than looping inside this one."
 (defun after-command ()
   "Called after a key binding runs.  Push the consequences out.
 
-MARK-DIRTY does the asking now, so this is a single call; it is kept as a
-named step because it is the obvious place to hang anything that should happen
-once per user action rather than once per relayout."
+Kept as a named step because it is the obvious place to hang anything that
+should happen once per user action rather than once per relayout — and undo is
+now the second such thing, which is what that sentence was waiting for.
+
+THIS IS WHERE UNDO IS TAKEN, AND THAT IS THE POINT.  It used to be taken
+inside a wrapper on RUN-COMMAND, whose reach is exactly RUN-COMMAND — so
+`Super+;', the control socket and SWANK, the three doors this project exists
+for, had no undo at all.  EVAL-EXPRESSION and EVALUATE-FOR-IPC both end here,
+so hooking this covers all three, and runtime/swank.lisp does the same after
+draining its queue.  See runtime/history.lisp for the rest of the argument."
+  (note-layout-settled)
   (mark-dirty))
 
 (p:define-option *manage-warn-seconds* 0.25

@@ -113,6 +113,25 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   default: NIL
   The xcursor theme name, or NIL to leave the compositor's default alone.
 
+*DEBUG-ON-ERROR*
+  default: NIL
+  Let errors reach the debugger instead of being logged and swallowed.
+  
+  For a REPL that is attached to a running window manager, which is what this
+  program is for.  With it set, GUARDED, BEST-EFFORT and WITH-ABANDON decline to
+  handle: the condition keeps going, and if SLIME is connected you get the
+  debugger, the real stack, and the restarts -- including ABANDON, which is what
+  you almost always want to pick.
+  
+  *WITH NOTHING ATTACHED, SETTING THIS WILL EXIT THE WINDOW MANAGER* on the first
+  error, because the debugger hook installed at startup has nowhere to put a
+  prompt and says so rather than blocking forever on a stream nobody is reading.
+  That is the honest behaviour and it is why this is off by default.
+  
+  There was no such option.  The whole reported surface of an error in user code
+  was one line of text, in a program whose entire thesis is that you edit it
+  while it runs.
+
 *DISABLE-WHILE-TYPING*
   default: T
   Ignore the touchpad briefly after a keystroke, so a palm does not move the

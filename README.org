@@ -144,6 +144,11 @@ at something and putting it back is symmetric.
 application — a window that has closed since is simply absent from the tree
 that comes back. =Super+? u= lists what it would walk through.
 
+It covers =Super+;=, the control socket and SLIME as well as the keys, which
+took a rewrite to become true: it used to hang off ~run-command~, so the three
+doors this program exists for had no undo at all while an arrow key was
+deep-copying every workspace to record nothing.
+
 ** The pointer
 
 | =Super=+drag        | move a window (a tiled one floats first) |

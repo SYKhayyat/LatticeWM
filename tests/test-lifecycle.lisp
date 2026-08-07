@@ -748,17 +748,35 @@ still the shipped rule, and something else is now writable."
 ;;; version returned an empty container for any kind it did not know.  An undo
 ;;; ring built on that would have destroyed a lattice on every press.
 
+;;; UNDO IS TAKEN WHERE THE WORLD SETTLES, NOT WHERE A COMMAND RUNS, and these
+;;; three checks are written against that rather than against RUN-COMMAND --
+;;; which is the point of the change.  None of them runs a command.  Under the
+;;; old mechanism, a change made without going through P:RUN-COMMAND produced
+;;; no undo entry at all, and `Super+;', the control socket and SWANK are all
+;;; exactly that.
+(defun settle (label)
+  "The settle point, called the way AFTER-COMMAND calls it."
+  (funcall (find-symbol "NOTE-LAYOUT-SETTLED" (find-package "LATTICEWM/RUNTIME"))
+           label))
+
+(defun fresh-undo-state (world)
+  "A world with no history and no baseline, as at the first settle."
+  (setf (c:prop world :undo-ring) '()
+        (c:prop world :redo-ring) '()
+        (c:prop world :undo-baseline) nil))
+
 (test undo-and-redo-walk-the-layout-back-and-forward
   (let* ((world (fresh-world))
          (pol (policy))
          (r (find-package "LATTICEWM/RUNTIME")))
     (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
     (dolist (app '("a" "b")) (p:on-window-open pol world (win app)))
-    (let ((before (shape (c:world-root world)))
-          (snapshot (funcall (find-symbol "SNAPSHOT-LAYOUT" r) "split")))
-      ;; Change the tree, then record what it was.
+    (settle "start")
+    (let ((before (shape (c:world-root world))))
+      ;; Change the tree with no command anywhere in sight, then settle.
       (p:on-window-open pol world (win "c"))
-      (funcall (find-symbol "RECORD-UNDO" r) snapshot)
+      (settle "split")
       (is (= 1 (length (funcall (find-symbol "UNDO-RING" r))))
           "a change that changed something is on the ring")
       (funcall (find-symbol "UNDO" r))
@@ -777,14 +795,71 @@ still the shipped rule, and something else is now writable."
          (pol (policy))
          (r (find-package "LATTICEWM/RUNTIME")))
     (setf (symbol-value (find-symbol "*WORLD*" r)) world)
-    (setf (c:prop world :undo-ring) '())
+    (fresh-undo-state world)
     (p:on-window-open pol world (win "a"))
-    (let ((snapshot (funcall (find-symbol "SNAPSHOT-LAYOUT" r) "nothing")))
-      ;; A pure focus move: the cursor is not part of the signature.
-      (p:move-cursor pol world :right)
-      (funcall (find-symbol "RECORD-UNDO" r) snapshot)
-      (is (null (funcall (find-symbol "UNDO-RING" r)))
-          "moving the cursor is not a layout change"))))
+    (settle "start")
+    ;; A pure focus move: the cursor is not part of the signature.
+    (p:move-cursor pol world :right)
+    (settle "move")
+    (is (null (funcall (find-symbol "UNDO-RING" r)))
+        "moving the cursor is not a layout change")))
+
+(test a-settle-that-changed-nothing-copies-nothing
+  ;; THE COST, ASSERTED RATHER THAN CLAIMED.  Undo used to deep-copy every
+  ;; workspace -- all forty, if you had ever pressed `workspace 40' -- and
+  ;; hash the result twice, on every arrow key, to record nothing.  Meanwhile
+  ;; tools/image.lisp shrinks BYTES-CONSED-BETWEEN-GCS to 8 MB specifically
+  ;; because "a GC pause during a keystroke is input latency, directly and
+  ;; visibly": the one file that argues GC pressure matters was undermined by
+  ;; the one that generated it per keystroke.
+  ;;
+  ;; EQ on the baseline is the observable form of "no copy was made".  A
+  ;; settle that recorded something replaces the baseline object; one that did
+  ;; not leaves it alone, and there is no other way for it to have copied.
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world (win "a"))
+    (settle "start")
+    (let ((baseline (funcall (find-symbol "UNDO-BASELINE" r))))
+      (is (not (null baseline)) "the first settle establishes a baseline")
+      (dotimes (i 10)
+        (p:move-cursor pol world :right)
+        (p:move-cursor pol world :left)
+        (settle "move"))
+      (is (eq baseline (funcall (find-symbol "UNDO-BASELINE" r)))
+          "twenty inert keystrokes copy the tree zero times")
+      (p:on-window-open pol world (win "b"))
+      (settle "open")
+      (is (not (eq baseline (funcall (find-symbol "UNDO-BASELINE" r))))
+          "and a real change does take a fresh one"))))
+
+(test undo-covers-the-doors-run-command-never-reached
+  ;; THE FINDING, STATED AS A TEST.  Undo was a wrapper on P:*COMMAND-WRAPPERS*
+  ;; whose reach is exactly P:RUN-COMMAND, and none of EVAL-EXPRESSION,
+  ;; EVALUATE-FOR-IPC or SWANK go through it -- so `Super+; (setf (c:world-root
+  ;; *world*) (c:make-leaf))' destroyed a layout with no undo entry while
+  ;; Super+h recorded a snapshot for a cursor move that changed nothing.
+  ;;
+  ;; This is what an eval through any of those three does: replace the root
+  ;; outright, then settle.
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (dolist (app '("a" "b")) (p:on-window-open pol world (win app)))
+    (settle "start")
+    (let ((before (shape (c:world-root world))))
+      (setf (c:world-root world) (c:make-leaf))
+      (settle "eval")
+      (is (= 1 (length (funcall (find-symbol "UNDO-RING" r))))
+          "an eval that flattened the world is recoverable")
+      (funcall (find-symbol "UNDO" r))
+      (is (equal before (shape (c:world-root world)))
+          "and undo gets the whole layout back"))))
 
 (test undo-drops-windows-that-closed-while-it-was-waiting
   ;; An undone tree points at the same live windows -- there is only ever one

@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-66 generics, 111 options.  Generated from the running image.
+66 generics, 112 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -357,7 +357,7 @@ echo area truncates what does not fit and marks it, so the worst a
 budget-blind policy gets is an ellipsis.  Honouring it is how a policy chooses
 *what* to drop rather than having its last segment cut.
 
-  answered from: *empty-pane-keys*
+  answered from: *debug-on-error*, *empty-pane-keys*
   methods:
     (appearance-policy t)               ; appearance.lisp
 
@@ -747,7 +747,7 @@ place with nothing in it, where typing a key spawns something.  *NEW-WORKSPACE*
 changes that without a method.  The lattice answers with a fresh plane, and
 that single method is the whole of the Z axis.
 
-  answered from: *new-workspace*
+  answered from: *debug-on-error*, *new-workspace*
   methods:
     (structure-policy t t)              ; structure.lisp
 
@@ -869,7 +869,7 @@ Returns the path it was placed at, or NIL if the policy declined to tile it
 (having floated it, or parked it).  This is the top of the placement path;
 SPAWN-TARGET is the part you usually want to specialize instead.
 
-  answered from: *focus-new-windows*
+  answered from: *debug-on-error*, *focus-new-windows*
   methods:
     (lifecycle-policy t window)         ; lifecycle.lisp
 
@@ -1434,6 +1434,26 @@ completely quiet while a float is up.
   read by: apply-cursor-theme
   The xcursor theme name, or NIL to leave the compositor's default alone.
 
+*debug-on-error*
+  now: NIL
+  read by: echo-content (appearance-policy t), make-workspace (structure-policy t t), on-window-open (lifecycle-policy t window), (lambda (condition0) in libinput-result-hook), (lambda (condition1) in ipc-accept-loop), (lambda (condition11) in attach-xkb-keyboard), (lambda (condition11) in keymap-from-text), (lambda (condition13) in attach-libinput-device), (lambda (condition15) in attach-input-device), (lambda (condition15) in bind-one-global), (lambda (condition18) in attach-pointer-bindings), (lambda (condition19) in attach-xkb-keyboard), (lambda (condition2) in end-pointer-op), (lambda (condition2) in evlambda-for-window), (lambda (condition2) in start-pointer-op-1), (lambda (condition21) in attach-libinput-device), (lambda (condition23) in attach-seat), (lambda (condition3) in end-pointer-op), (lambda (condition3) in start-pointer-op-1), (lambda (condition33) in bind-globals), (lambda (condition33) in evlambda-for-window), (lambda (condition34) in evlambda-for-window), (lambda (condition4) in attach-input-manager), (lambda (condition4) in attach-libinput-config), (lambda (condition4) in attach-libinput-device), (lambda (condition4) in attach-manager-hooks), (lambda (condition4) in attach-xkb-config), (lambda (condition4) in attach-xkb-keyboard), (lambda (condition42) in bind-globals), (lambda (condition5) in register-bindings), (lambda (condition6) in attach-layer-shell-output), (lambda (condition6) in attach-layer-shell-seat), (lambda (condition6) in attach-seat), (lambda (condition7) in attach-input-device), (lambda (condition7) in attach-output), (lambda (condition7) in ensure-capture-bindings), apply-cursor-theme, apply-device-settings, apply-input-if-needed, apply-keyboard-focus, apply-keyboard-layout, apply-lock-state, apply-pointer-delta, apply-repeat-info, arm-capture, attach-input-device, attach-input-manager, attach-layer-shell-output, attach-layer-shell-seat, attach-libinput-config, attach-libinput-device, attach-manager-hooks, attach-output, attach-pointer-bindings, attach-seat, attach-xkb-config, attach-xkb-keyboard, bind-globals, bind-one-global, candidates-for, capture-key-list, collect-dimension-work, compute-layout, declare-window-capabilities, detach-output, detach-seat, detach-window, drain-manage-work, drain-wm-queue, draw-empty-panes, draw-overlays, echo-segments, emit-borders, emit-dimension-work, emit-floats, emit-pending-closes, emit-render-order, emit-rendering-state, emit-window-management-state, emit-window-visible, end-pointer-op, end-prompt, ensure-capture-bindings, ensure-workspaces-for-outputs, evlambda-for-window, float-window-now, forget-overlays-for-output, fresh-workspace, handle-key, handle-unbound-key, hide-overlays, hide-unplaced-windows, ipc-accept-loop, keymap-from-text, libinput-result-hook, load-state, maybe-show-welcome, minimize-window, name-of-window, next-keyboard-layout, on-pointer-enter, on-window-interaction, overlay-commit, overlay-hide, place-rect, place-unplaced-windows, pointer-binding-pressed, pointer-moved, quit, read-node, register-bindings, relayout, request-manage, restore-snapshot, restore-window, restore-window-facts, run-command, run-event-loop, run-hooks, run-key-target, save-state, send-device-setting, send-libinput-setting, send-to-workspace, set-default-layer-output, solo-windows, spawn, spawn-for-empty-pane, start, start-pointer-op-1, warp-pointer, world-role-name
+  Let errors reach the debugger instead of being logged and swallowed.
+
+For a REPL that is attached to a running window manager, which is what this
+program is for.  With it set, GUARDED, BEST-EFFORT and WITH-ABANDON decline to
+handle: the condition keeps going, and if SLIME is connected you get the
+debugger, the real stack, and the restarts -- including ABANDON, which is what
+you almost always want to pick.
+
+*WITH NOTHING ATTACHED, SETTING THIS WILL EXIT THE WINDOW MANAGER* on the first
+error, because the debugger hook installed at startup has nowhere to put a
+prompt and says so rather than blocking forever on a stream nobody is reading.
+That is the honest behaviour and it is why this is off by default.
+
+There was no such option.  The whole reported surface of an error in user code
+was one line of text, in a program whose entire thesis is that you edit it
+while it runs.
+
 *disable-while-typing*
   now: T
   read by: option-settings
@@ -1501,7 +1521,7 @@ punctuation that is too loud.
 
 *echo-position*
   now: :BOTTOM
-  read by: echo-reserved-edges, draw-echo-area-on
+  read by: draw-echo-area-on, echo-reserved-edges
   Which edge the echo area sits on: :BOTTOM or :TOP.
 
 Bottom is Emacs's minibuffer and is the default.  Top is worth knowing about
@@ -1552,7 +1572,7 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-keys*
   now: ((#\e . "editor") (#\t . "terminal") (#\b . "browser") (#\f . "files"))
-  read by: echo-content (appearance-policy t), hint-lines, key-unbound (input-policy t t)
+  read by: echo-content (appearance-policy t), key-unbound (input-policy t t), hint-lines
   DESIGN D19's keysym-to-command table for typing in an empty pane.
 
 While the cursor rests on an empty pane, an unbound printable key is looked up
@@ -1742,7 +1762,7 @@ Wayland socket beside it draws.  It is what SWANK should have been and is not.
 
 *ipc-timeout-seconds*
   now: 10
-  read by: evaluate-for-ipc, call-in-wm-thread-sync
+  read by: call-in-wm-thread-sync, evaluate-for-ipc
   How long a single form may run before the socket gives up waiting.
 
 The client gets an answer either way, which is the point: a form that wedges
@@ -1895,7 +1915,7 @@ device's default, which is off.
 
 *modifier*
   now: :SUPER
-  read by: modifier-string, welcome-rows (appearance-policy), keys-hint (appearance-policy t)
+  read by: keys-hint (appearance-policy t), welcome-rows (appearance-policy), modifier-string
   The modifier every default binding uses.
 
 :SUPER is the only one that does not collide with something an application
@@ -2291,7 +2311,7 @@ Per-role control is one method rather than one option -- see FONT-FOR.
 
 *undo-coalesce-seconds*
   now: 0.6
-  read by: record-undo
+  read by: push-undo
   Merge repeated changes made within this long into one undo step.
 
 Holding the resize key produces forty tree changes a second, and forty undo
@@ -2300,7 +2320,7 @@ records every change separately.
 
 *undo-depth*
   now: 32
-  read by: undo-command-wrapper, record-undo
+  read by: note-layout-settled, push-undo, reset-undo-baseline
   How many previous layouts to keep.  0 turns undo off entirely.
 
 Thirty-two is far more than anybody walks back through and costs a few hundred
