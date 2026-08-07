@@ -133,6 +133,55 @@ if [ -n "$leftover" ]; then
     printf '  %s\n' $leftover >&2
 fi
 
+# AND THE PACKAGING PATH, WHICH IS THE ONE NOBODY HERE HAS EVER RUN.
+#
+# Every distribution builds with `make DESTDIR=$pkgdir PREFIX=/usr install',
+# and until now the string DESTDIR appeared nowhere in this project -- so the
+# path that every packaged copy of this program would be built through was not
+# merely untested, it did not exist.  The two things that can only be checked
+# here are that the bytes land under the staging root, and that the paths
+# *inside* the launcher and the session entry are the prefix and not the
+# staging root.  Getting the second wrong produces a package that installs
+# cleanly and fails at a login screen with a path that was correct on the build
+# machine, which is the worst shape a packaging bug has.
+staged=$(mktemp -d "${TMPDIR:-/tmp}/latticewm-destdir-check.XXXXXX")
+trap 'rm -rf "$prefix" "$staged"' EXIT
+
+fake_prefix=/usr
+DESTDIR="$staged" ./install.sh --prefix "$fake_prefix" --river "$river" >/dev/null
+
+[ -x "$staged$fake_prefix/bin/latticewm" ] ||
+    fail "DESTDIR install put no binary at \$DESTDIR$fake_prefix/bin"
+[ -e "$staged$fake_prefix/share/wayland-sessions/latticewm.desktop" ] ||
+    fail "DESTDIR install wrote no session entry under the staging root"
+
+if [ -f "$staged$fake_prefix/bin/latticewm-session" ]; then
+    grep -q "^exec $river -c \"$fake_prefix/bin/latticewm" \
+         "$staged$fake_prefix/bin/latticewm-session" ||
+        fail "the staged launcher does not run \$PREFIX/bin/latticewm;
+  it has baked the staging root into a path that will not exist on the
+  machine the package is installed on"
+fi
+
+if [ -f "$staged$fake_prefix/share/wayland-sessions/latticewm.desktop" ]; then
+    grep -q "^Exec=$fake_prefix/bin/latticewm-session\$" \
+         "$staged$fake_prefix/share/wayland-sessions/latticewm.desktop" ||
+        fail "the staged session entry does not Exec= the prefix path"
+fi
+
+# --no-config is implied, and this is the assertion that says so.  Under `sudo
+# ./install.sh --prefix /usr/local' the starter init.lisp used to land in
+# root's .config; under a packaging build it must land nowhere at all.
+[ -z "$(find "$staged" -name init.lisp 2>/dev/null)" ] ||
+    fail "the DESTDIR install wrote an init.lisp; --no-config is not implied"
+
+DESTDIR="$staged" ./install.sh --prefix "$fake_prefix" --uninstall >/dev/null
+staged_leftover=$(find "$staged" -type f 2>/dev/null || true)
+if [ -n "$staged_leftover" ]; then
+    fail "DESTDIR uninstall left files behind:"
+    printf '  %s\n' $staged_leftover >&2
+fi
+
 if [ "$failures" -gt 0 ]; then
     printf '\ninstall-check: %d problem(s).  A packaged install is not what the\n' "$failures" >&2
     printf 'documents say it is, and gate 9 cannot see this from text alone.\n' >&2

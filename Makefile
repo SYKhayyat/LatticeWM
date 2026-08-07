@@ -226,11 +226,24 @@ config: image
 #
 # IT IS ALSO THE ONLY INSTALLER.  flake.nix runs this same script rather than
 # keeping a second list of what ships; gate 9 checks that it still does.
+#
+# DESTDIR IS WHY NO DISTRIBUTION COULD PACKAGE THIS.  Arch, Debian, RPM,
+# Gentoo, Alpine and Void all build with `make DESTDIR=$(pkgdir) PREFIX=/usr
+# install', and the string DESTDIR appeared in neither this file nor
+# install.sh.  --prefix alone cannot express it: a package needs /usr baked
+# into every path the installed program will use, and every byte written
+# somewhere else.  Setting it also implies --no-config, because no postinstall
+# may write into a user's home directory — which the old code did, into
+# *root's* .config, under the system install this file's own documentation
+# recommends.
+DESTDIR ?=
+
 install: image
-	@./install.sh --prefix "$(PREFIX)"
+	@./install.sh --prefix "$(PREFIX)" $(if $(DESTDIR),--destdir "$(DESTDIR)")
 
 uninstall:
-	@./install.sh --uninstall --prefix "$(PREFIX)"
+	@./install.sh --uninstall --prefix "$(PREFIX)" \
+	  $(if $(DESTDIR),--destdir "$(DESTDIR)")
 
 # THE CHECK THE GATES CANNOT MAKE.  Gate 9 reads install.sh and flake.nix as
 # text, because the gates run before there is an image to install.  This runs

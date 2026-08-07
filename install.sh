@@ -38,28 +38,54 @@
 #                     default is whatever is on PATH at login, which is right
 #                     for a system install and wrong for a store path, where
 #                     the whole point is that the compositor is pinned.
+#   --destdir PATH    write everything under PATH while baking --prefix into
+#                     the paths inside the files.  $DESTDIR is read too.  This
+#                     is what every distribution's packaging does and this
+#                     script could not express it: --prefix alone cannot say
+#                     "the program will live at /usr, put the bytes over
+#                     here".  Implies --no-config, because no postinstall may
+#                     touch a user's home directory -- and under `sudo
+#                     ./install.sh --prefix /usr/local' the starter config
+#                     landed in *root's* .config, which nobody wanted either.
+#
+# There is no DESTDIR for the *session entry* to argue about: it goes under
+# --prefix like everything else once a prefix is not a home directory.
 
 set -eu
 
 root=$(cd "$(dirname "$0")" && pwd)
 home=${HOME:-}
 prefix=${PREFIX:-$home/.local}
+destdir=${DESTDIR:-}
 action=install
 write_config=yes
-river=${RIVER:-river}
+river=${RIVER_BIN:-${RIVER:-river}}
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --prefix) prefix=$2; shift 2 ;;
         --prefix=*) prefix=${1#--prefix=}; shift ;;
+        --destdir) destdir=$2; shift 2 ;;
+        --destdir=*) destdir=${1#--destdir=}; shift ;;
         --river) river=$2; shift 2 ;;
         --river=*) river=${1#--river=}; shift ;;
         --no-config) write_config=no; shift ;;
         --uninstall) action=uninstall; shift ;;
-        -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        # THE HELP TEXT USED TO BE `sed -n "2,40p"' AND THE HEADER RAN TO 41,
+        # so --help ended mid-clause.  A line number is a reference to a
+        # position rather than to a thing, and it goes stale the first time
+        # anyone writes a sentence above it.  The header is every leading
+        # comment line, and it ends where the comments do.
+        -h|--help)
+            sed -n '2,/^[^#]/p' "$0" | sed -n 's/^# \{0,1\}//p'; exit 0 ;;
         *) printf 'install.sh: unknown argument %s\n' "$1" >&2; exit 2 ;;
     esac
 done
+
+# A staging root is a packaging build, and a packaging build has no business in
+# anybody's home directory.  Implied rather than merely allowed, because the
+# alternative is every packager remembering a second flag.
+[ -n "$destdir" ] && write_config=no
 
 say() { printf '%s\n' "$*"; }
 
@@ -71,16 +97,35 @@ say() { printf '%s\n' "$*"; }
 # Written as a prefix test rather than a `case' pattern because a build sandbox
 # has no HOME, and "$HOME"* with HOME unset is `*', which matches every prefix
 # there is and would put a store path's session entry in a home directory.
-if [ -n "$home" ] && [ "${prefix#"$home"}" != "$prefix" ]; then
+if [ -z "$destdir" ] && [ -n "$home" ] && [ "${prefix#"$home"}" != "$prefix" ]; then
     sessions="$home/.local/share/wayland-sessions"; systemwide=no
 else
     sessions="$prefix/share/wayland-sessions";      systemwide=yes
 fi
 
+# TWO SETS OF PATHS, AND THE DIFFERENCE IS THE WHOLE OF DESTDIR.
+#
+# The undecorated names are where the program *will live*, and they are what
+# gets written *into* files: the launcher's path to the binary, the session
+# entry's path to the launcher.  The d-prefixed names are where the bytes go
+# now.  With no --destdir the two are identical and nothing changes.
+#
+# This is why --prefix alone could not express packaging.  A distribution
+# builds with `make DESTDIR=$pkgdir PREFIX=/usr install' and needs /usr baked
+# into every path the installed program will use while every file lands in
+# $pkgdir.  Arch, Debian, RPM, Gentoo, Alpine and Void all do it this way, and
+# the string DESTDIR appeared in neither this file nor the Makefile -- which is
+# four of the reasons no distribution could have packaged this.
 bin="$prefix/bin"
 man="$prefix/share/man/man1"
 man5="$prefix/share/man/man5"
 share="$prefix/share/latticewm"
+
+dbin="$destdir$bin"
+dman="$destdir$man"
+dman5="$destdir$man5"
+dshare="$destdir$share"
+dsessions="$destdir$sessions"
 
 if [ "$action" = uninstall ]; then
     # EVERY FILE THE INSTALL WRITES APPEARS HERE, and tools/install-check.sh is
@@ -88,11 +133,11 @@ if [ "$action" = uninstall ]; then
     # then fails if anything is left behind.  A `rm -f' list maintained by hand
     # beside a growing install is a list that silently stops being complete --
     # latticewm-config.5 was already missing from it.
-    rm -f "$bin/latticewm" "$bin/latticewm-session" \
-          "$sessions/latticewm.desktop" \
-          "$man/latticewm.1" "$man5/latticewm-config.5"
-    rm -rf "$share"
-    say "removed LatticeWM from $prefix."
+    rm -f "$dbin/latticewm" "$dbin/latticewm-session" \
+          "$dsessions/latticewm.desktop" \
+          "$dman/latticewm.1" "$dman5/latticewm-config.5"
+    rm -rf "$dshare"
+    say "removed LatticeWM from ${destdir:+$destdir (staged) }$prefix."
     say "your configuration in ~/.config/latticewm/ was left alone."
     exit 0
 fi
@@ -105,9 +150,9 @@ fi
     exit 1
 }
 
-mkdir -p "$bin" "$man" "$man5" "$share" "$sessions"
+mkdir -p "$dbin" "$dman" "$dman5" "$dshare" "$dsessions"
 
-install -m755 "$root/latticewm" "$bin/latticewm"
+install -m755 "$root/latticewm" "$dbin/latticewm"
 
 # The launcher.  river runs one command as its init; ours is the window
 # manager.  Written here rather than shipped as a file so that the path to the
@@ -115,14 +160,14 @@ install -m755 "$root/latticewm" "$bin/latticewm"
 # to the *compositor* is too.  A store path that named the bare word `river'
 # would find whatever the user's PATH held at login, which is precisely the
 # floating half of the pair flake.nix exists to pin.
-cat > "$bin/latticewm-session" <<EOF
+cat > "$dbin/latticewm-session" <<EOF
 #!/bin/sh
 # Start river with LatticeWM as its window manager.
 exec $river -c "$bin/latticewm \$*"
 EOF
-chmod 755 "$bin/latticewm-session"
+chmod 755 "$dbin/latticewm-session"
 
-cat > "$sessions/latticewm.desktop" <<EOF
+cat > "$dsessions/latticewm.desktop" <<EOF
 [Desktop Entry]
 Name=LatticeWM
 Comment=An extensible window manager for river
@@ -131,20 +176,20 @@ Type=Application
 DesktopNames=river
 EOF
 
-[ -f "$root/doc/latticewm.1" ] && install -m644 "$root/doc/latticewm.1" "$man/latticewm.1"
+[ -f "$root/doc/latticewm.1" ] && install -m644 "$root/doc/latticewm.1" "$dman/latticewm.1"
 [ -f "$root/doc/latticewm-config.5" ] &&
-    install -m644 "$root/doc/latticewm-config.5" "$man5/latticewm-config.5"
+    install -m644 "$root/doc/latticewm-config.5" "$dman5/latticewm-config.5"
 
 # The generated references, and the extension guide.  EXTENDING.org was the one
 # document users needed and the one document this loop did not copy, because it
 # matched *.txt and the guide is an .org file.
-mkdir -p "$share/doc"
+mkdir -p "$dshare/doc"
 for file in EXTENSION-SURFACE.txt CONTAINER-SURFACE.txt HOOKS.txt COMMANDS.txt \
             OPTIONS.txt KEYS.txt EXTENDING.org; do
-    [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$share/doc/$file"
+    [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$dshare/doc/$file"
 done
 for file in README.org INSTALL.org FINDINGS.org DESIGN.org; do
-    [ -f "$root/$file" ] && install -m644 "$root/$file" "$share/doc/$file"
+    [ -f "$root/$file" ] && install -m644 "$root/$file" "$dshare/doc/$file"
 done
 
 # THE LICENCES, AND THE FONT'S IS NOT OPTIONAL.  src/runtime/font.lisp is a
@@ -154,9 +199,9 @@ done
 # nix one caught doc/OFL-TERMINUS.txt by accident, through a doc/*.txt glob;
 # this one had a hand-written list that did not name it.  Our own LICENCE was
 # shipped by neither, because it has no extension and both paths matched on one.
-[ -f "$root/LICENSE" ] && install -m644 "$root/LICENSE" "$share/doc/LICENSE"
+[ -f "$root/LICENSE" ] && install -m644 "$root/LICENSE" "$dshare/doc/LICENSE"
 [ -f "$root/doc/OFL-TERMINUS.txt" ] &&
-    install -m644 "$root/doc/OFL-TERMINUS.txt" "$share/doc/OFL-TERMINUS.txt"
+    install -m644 "$root/doc/OFL-TERMINUS.txt" "$dshare/doc/OFL-TERMINUS.txt"
 
 # The pinned protocol, so a version mismatch can be diagnosed from an installed
 # copy without the source tree.  LatticeWM refuses to start against a river
@@ -164,9 +209,9 @@ done
 # the place it refuses is a login screen; the interface version is in here, and
 # src/protocol/PINNED carries the argument for which river it came from.
 if [ -d "$root/src/protocol" ]; then
-    mkdir -p "$share/protocol"
+    mkdir -p "$dshare/protocol"
     for file in "$root"/src/protocol/*.xml "$root/src/protocol/PINNED"; do
-        [ -f "$file" ] && install -m644 "$file" "$share/protocol/$(basename "$file")"
+        [ -f "$file" ] && install -m644 "$file" "$dshare/protocol/$(basename "$file")"
     done
 fi
 
@@ -179,18 +224,18 @@ fi
 # LATTICEWM/RUNTIME:DATA-DIRECTORIES is the other half: it puts this directory
 # on ASDF's registry at startup.
 if [ -f "$root/lattice.asd" ]; then
-    install -m644 "$root/lattice.asd" "$share/lattice.asd"
-    mkdir -p "$share/lattice"
+    install -m644 "$root/lattice.asd" "$dshare/lattice.asd"
+    mkdir -p "$dshare/lattice"
     for file in "$root"/lattice/*.lisp; do
-        [ -f "$file" ] && install -m644 "$file" "$share/lattice/$(basename "$file")"
+        [ -f "$file" ] && install -m644 "$file" "$dshare/lattice/$(basename "$file")"
     done
 fi
 
 # The examples, for the same reason: they are documentation that runs.
 if [ -d "$root/examples" ]; then
-    mkdir -p "$share/examples"
+    mkdir -p "$dshare/examples"
     for file in "$root"/examples/*.lisp; do
-        [ -f "$file" ] && install -m644 "$file" "$share/examples/$(basename "$file")"
+        [ -f "$file" ] && install -m644 "$file" "$dshare/examples/$(basename "$file")"
     done
 fi
 
@@ -208,19 +253,29 @@ else
     if [ -f "$config" ]; then
         say "kept your existing $config"
     else
-        "$bin/latticewm" --write-config >/dev/null 2>&1 && say "wrote a starter $config"
+        "$dbin/latticewm" --write-config >/dev/null 2>&1 && say "wrote a starter $config"
     fi
 fi
 
 say ""
 say "installed:"
-say "  $bin/latticewm"
-say "  $bin/latticewm-session"
-say "  $sessions/latticewm.desktop"
-say "  $man/latticewm.1, $man5/latticewm-config.5"
-say "  $share/            (the lattice, the examples, the documentation,"
+say "  $dbin/latticewm"
+say "  $dbin/latticewm-session"
+say "  $dsessions/latticewm.desktop"
+say "  $dman/latticewm.1, $dman5/latticewm-config.5"
+say "  $dshare/           (the lattice, the examples, the documentation,"
 say "                      the licences and the pinned protocol)"
 say ""
+
+# A staging root ends here.  There is no login screen to talk about, no PATH to
+# check, and no session to try it in -- the package manager does all three
+# later, on a different machine.
+if [ -n "$destdir" ]; then
+    say "staged under $destdir for a prefix of $prefix."
+    say "The paths written into the launcher and the session entry are the"
+    say "prefix, not the staging root, which is the point of --destdir."
+    exit 0
+fi
 
 if [ "$systemwide" = no ]; then
     case ":$PATH:" in

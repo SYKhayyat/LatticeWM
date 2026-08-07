@@ -170,10 +170,26 @@ sudo ./install.sh --prefix /usr/local   # system-wide
 ./install.sh --uninstall                # takes it all back out
 #+end_src
 
-Two more flags exist for packagers, and they are the whole of what a build
-sandbox needs said differently: =--no-config= skips writing a starter
-=init.lisp=, and =--river PATH= names the compositor the launcher and the
-session entry run, instead of whatever =river= resolves to at login.
+Three more flags exist for packagers. =--no-config= skips writing a starter
+=init.lisp=; =--river PATH= names the compositor the launcher and the session
+entry run, instead of whatever =river= resolves to at login; and =--destdir
+PATH= writes everything under a staging root while baking =--prefix= into the
+paths inside the files.
+
+#+begin_src sh
+make DESTDIR="$pkgdir" PREFIX=/usr install
+#+end_src
+
+is what Arch, Debian, RPM, Gentoo, Alpine and Void all build with, and it is
+the thing =--prefix= alone cannot express: a package needs =/usr= inside every
+path the installed program will use and every byte written somewhere else.
+=DESTDIR= implies =--no-config=, because no postinstall may write into a
+user's home directory — which is also what a system install used to do, into
+*root's* =.config=, under the =sudo ./install.sh --prefix /usr/local= this
+document recommends. =make install-check= now runs the staged path too, and
+asserts the thing only that path can get wrong: that the launcher and the
+session entry name the prefix rather than the staging root, which is the
+packaging bug that installs cleanly and fails at a login screen.
 
 *This is the only installer.* =nix build= runs this same script rather than
 keeping its own list of what ships — there used to be two lists and they had
