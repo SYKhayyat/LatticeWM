@@ -276,6 +276,37 @@ problem, which is what makes it worth a paragraph."
     (logmsg :debug "saved layout to ~a" path)
     path))
 
+(defun keep-unreadable-state (path version)
+  "Rename PATH out of the way before the running program overwrites it.
+Returns where it went, or NIL if it could not be moved.
+
+THE VERSION GATE DESTROYED THE FILE IT REFUSED.  LOAD-STATE saw a version it
+did not recognise, logged, and returned NIL — correctly, because a
+half-understood layout is worse than none.  Then MAIN called MARK-DIRTY,
+*LAST-SAVE* was still 0, and the first pass of the event loop wrote over it
+with :IF-EXISTS :SUPERSEDE.
+
+Rolling *forward* you lose the layout once and the docstring on +STATE-VERSION+
+anticipates it.  Rolling *back* — test a build, hit a bug, reinstall the
+packaged version — the newer file is gone before you can go back to the build
+that wrote it.  And this is a format the documentation invites people to hand
+edit, so silently truncating it on version skew punishes its own affordance.
+
+The name carries the version the file claimed rather than a timestamp, because
+what you want back is \"the one from the newer build\" and not \"the one from
+Tuesday\".  An existing backup of the same version is left alone: the second
+downgrade would otherwise overwrite what the first one saved, which is this
+bug again one layer out."
+  (let* ((claimed (if (integerp version) version 0))
+         (backup (make-pathname :type (format nil "lisp.v~d" claimed)
+                                :defaults path)))
+    (handler-case
+        (cond ((probe-file backup) backup)
+              (t (rename-file path backup) backup))
+      (error (condition)
+        (logmsg :warn "could not keep a copy of ~a: ~a" path condition)
+        nil))))
+
 (defun load-state (&optional (path (state-file)))
   "Restore a layout, matching windows by identifier.
 
@@ -289,8 +320,11 @@ be."
                   (let ((*package* (find-package :keyword)))
                     (read in nil nil)))))
       (unless (and (consp form) (eql +state-version+ (getf form :version)))
-        (logmsg :warn "ignoring ~a: version ~s, expected ~d"
-                path (and (consp form) (getf form :version)) +state-version+)
+        (let ((kept (keep-unreadable-state path (and (consp form)
+                                                     (getf form :version)))))
+          (logmsg :warn "ignoring ~a: version ~s, expected ~d~@[ (kept a copy at ~a)~]"
+                  path (and (consp form) (getf form :version)) +state-version+
+                  kept))
         (return-from load-state nil))
       (let ((index (make-hash-table :test #'equal)))
         (dolist (window (all-windows))

@@ -588,7 +588,8 @@ REPL.  Same treatment as `attached:' in the hook surface, for the same reason."
   --check-config        load the configuration, report problems, and exit
 
   --eval FORM           evaluate FORM in an already-running LatticeWM
-                        (repeatable; talks to the control socket)
+                        (repeatable; talks to the control socket).  Exits
+                        non-zero if any form signalled or was unreachable
 
   --no-config           ignore the configuration file
   --no-restore          ignore the saved layout
@@ -826,9 +827,49 @@ useful if a non-zero exit means what it says."
                                 :ipc (if (flag "--no-ipc") nil :default)
                                 :config (not (flag "--no-config"))
                                 :restore (not (flag "--no-restore")))))
+           ;; RESTART-WM's other half, and it is here rather than in the
+           ;; command because river hands window management to one client at a
+           ;; time.  START has returned, so wl_display_disconnect has run and
+           ;; river has seen us go; a successor started any earlier would race
+           ;; the process starting it for the manager object and lose.
+           (when *restart-on-exit* (relaunch arguments))
            ;; A failure to start is a non-zero exit, so a session manager that
            ;; watches the status has something true to look at.
            (sb-ext:exit :code (if started 0 1))))))))
+
+(defun relaunch (arguments)
+  "Start this binary again, detached, with ARGUMENTS.  Called only by MAIN.
+
+SB-EXT:*RUNTIME-PATHNAME* rather than argv[0]: SBCL resolves it to the absolute
+path of the executable that is running, so this works from a session launcher
+that ran us by a bare name, from a store path, and from a build tree, none of
+which argv[0] can be relied on to say.
+
+Detached, with no standard streams, for SPAWN's reason -- we are about to exit,
+and a child holding a pipe nobody will read is a child that blocks on its own
+output.  It becomes init's when we go, which is what a session wants.
+
+A failure here is reported and then swallowed, because the alternative is
+worse: we have already saved and disconnected, so the choice is between a
+session with no window manager and a session with no window manager plus an
+unhandled condition.  The log line is the only thing anybody can act on."
+  (let ((binary (and sb-ext:*runtime-pathname*
+                     (probe-file sb-ext:*runtime-pathname*))))
+    (cond
+      ((null binary)
+       (logmsg :error "restart-wm: cannot find my own executable (~s); ~
+the session now has no window manager.  Start one from a TTY."
+               sb-ext:*runtime-pathname*))
+      (t
+       (logmsg :info "restart-wm: exec ~a~{ ~a~}" binary arguments)
+       (handler-case
+           (sb-ext:run-program (namestring binary) arguments
+                               :wait nil :search nil
+                               :output nil :error nil :input nil)
+         (error (condition)
+           (logmsg :error "restart-wm: could not start ~a: ~a~%~
+the session now has no window manager.  Start one from a TTY."
+                   binary condition)))))))
 
 (defun argument-value (arguments name)
   "The value following NAME in ARGUMENTS, or NIL."

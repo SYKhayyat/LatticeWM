@@ -290,29 +290,63 @@ functions, four lines each, and the protocol stays a protocol."
                      (t (write-char (char text i) out)
                         (incf i)))))))
 
+(defun answer-ok-p (answer)
+  "True when ANSWER is an (:OK …) reply from the control socket.
+
+Matched on the prefix rather than READ, and that is deliberate.  The value in
+an (:OK …) reply is whatever the form returned, printed — it can be a
+structure with no readable representation, it can carry #<…>, and READing it
+would fail on exactly the successful cases.  The status is the first token and
+the first token is all this needs.
+
+NIL for a NIL answer, which is the connection closing mid-exchange: EVALUATE-
+FOR-IPC always writes a line, so silence is a failure whatever caused it."
+  (and (stringp answer)
+       (let ((text (string-left-trim '(#\Space #\Tab) answer)))
+         (or (string= text "(:ok)")
+             (and (> (length text) 4) (string= "(:ok " (subseq text 0 5)))))))
+
 (defun ipc-evaluate (forms &key (path (ipc-socket-path)) (stream *standard-output*))
   "Send FORMS to a running LatticeWM and print what comes back.
 
 This is the other half of `latticewm --eval', and it runs in a *second*
 process: the binary is both the window manager and the thing that talks to it,
 which means scripting it needs nothing installed that running it did not
-already need."
+already need.
+
+Returns T only when every form was evaluated *successfully*.
+
+IT USED TO RETURN T WHENEVER THE SOCKET WAS REACHABLE.  The wire protocol is
+(:OK …) or (:ERROR …), this printed the distinction and then discarded it, and
+MAIN turns the return value into the exit status — so `latticewm --eval
+'(car 5)'` printed an error and exited 0.  That is against main.lisp's own
+contract, which says every branch that is not `run the window manager' exits
+with a status because these are things a script may check, and --eval is the
+flag most likely to be in a script.
+
+A form after a failing one is still sent.  The forms are independent lines on
+one connection, `--eval A --eval B' is documented as one command rather than
+two invocations racing each other, and stopping halfway would leave the
+desktop in a state neither A nor A-then-B describes.  The status is about the
+run, not about the first casualty."
   (unless path
     (format stream "~&no control socket: *ipc-socket* is nil~%")
     (return-from ipc-evaluate nil))
   (handler-case
-      (let ((socket (make-instance 'sb-bsd-sockets:local-socket :type :stream)))
+      (let ((socket (make-instance 'sb-bsd-sockets:local-socket :type :stream))
+            (ok t))
         (sb-bsd-sockets:socket-connect socket (namestring path))
         (let ((connection (sb-bsd-sockets:socket-make-stream
                            socket :input t :output t
                                   :element-type 'character
                                   :external-format :utf-8)))
           (unwind-protect
-               (dolist (form forms t)
+               (dolist (form forms ok)
                  (write-line (if (stringp form) form (prin1-to-string form))
                              connection)
                  (force-output connection)
                  (let ((answer (read-line connection nil nil)))
+                   (unless (answer-ok-p answer) (setf ok nil))
                    (format stream "~&~a~%"
                            (if answer
                                (restore-newlines answer)

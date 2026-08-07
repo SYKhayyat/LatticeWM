@@ -17,6 +17,15 @@ At a REPL this is the thing to look at:
 (defvar *server* nil
   "The live SERVER, or NIL when not connected.")
 
+(defvar *restart-on-exit* nil
+  "Set by RESTART-WM, read by MAIN once the compositor connection is closed.
+
+A flag rather than a call, because the successor must not exist while we still
+hold river's window-manager object: river hands window management to one client
+at a time, so a process started from inside the event loop would race the one
+starting it and lose.  MAIN spawns it after START has returned, by which point
+wl_display_disconnect has run and river has seen us go.")
+
 (defvar *wm-thread* nil
   "The thread that owns the compositor socket, so other threads can wake it.
 

@@ -62,7 +62,33 @@ be able to do before anyone else can depend on it.
   itself is `http` because Quicklisp's own client speaks nothing else, which
   is exactly why the verification exists.
 - `install.sh --help` ended mid-clause: it was `sed -n '2,40p'` over a header
-  that runs to 41.
+  that runs to 41. `make help` had the same bug in the other direction and
+  printed `LISP ?= sbcl` as though it were help.
+- `make -j check` raced three SBCLs onto one fasl cache with no locking.
+  `.NOTPARALLEL:`.
+- **The generated documents were not reproducible**, so "generated, so it
+  cannot drift" could never have been checked: `doc/OPTIONS.txt` line 1 held
+  the author's home directory, `doc/EXTENSION-SURFACE.txt` held his build tree
+  on four lines, and `read by:` came out of an unordered cross-reference table.
+  `make surface && git diff --exit-code doc/` runs in CI now.
+- `doc/HOOKS.txt` said every hook below is attached and watched firing, above a
+  body in which sixteen of eighteen printed `attached: 0`. Both were true —
+  `attached` counts the generating image, which loads no tests.
+- **`restart-wm` did not restart.** Bound to `Shift+Super+r`, it cleared the
+  running flag and exited; `install.sh` writes `exec river -c latticewm`, which
+  runs the client once and does not respawn it, so the user was left with their
+  windows, no keymap, and recovery by way of a TTY.
+- **The state file's version gate destroyed the file it refused.** Roll back
+  after testing a build and the newer layout was gone before you could return
+  to the build that wrote it. It is renamed to `state.lisp.v<n>` first.
+- **`--eval` exited 0 on evaluation failure.** The wire protocol is
+  `(:ok …)`/`(:error …)`; the client printed the distinction and discarded it.
+- **Every closed window leaked a compositor object and a proxy** for the life
+  of the session. `window-destroy` and `node-destroy` were wrapped, exported,
+  documented and called by nothing.
+- **Fullscreen used the cursor's output, not the window's**, so fullscreening a
+  window on the second monitor from the first put it on the first.
+  `output-of-window` existed, was exported, and was called by nothing.
 
 ### Added
 

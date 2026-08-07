@@ -106,10 +106,29 @@ sequence it is in."
         (t (logmsg :debug "window event ~s ~s" event arguments))))))
 
 (defun detach-window (window)
-  "River says the window is gone.  Take it out of everything."
+  "River says the window is gone.  Take it out of everything.
+
+AND GIVE THE COMPOSITOR ITS OBJECTS BACK, WHICH THIS DID NOT DO.  Both
+`river_window_v1.destroy' and `river_node_v1.destroy' existed in wire/wrappers,
+exported, wrapped and documented, and were called by nothing at all — so every
+window that ever closed leaked a compositor object and a wayflan proxy for the
+life of the session, on the teardown path that runs more often than any other.
+DETACH-OUTPUT, DETACH-SEAT and FORGET-INPUT-DEVICE all destroy theirs; the one
+that forgot is the one that runs every time you close a window.
+
+The protocol is explicit: `The client should destroy this object with the
+river_window_v1.destroy request to free up resources', after `closed', which is
+the event that brought us here.  The node goes first because it was made from
+the window."
   (setf (c:window-live-p window) nil)
+  (let ((node (gethash window (server-nodes *server*))))
+    (when node (guarded "node destroy" (w:node-destroy node))))
   (let ((proxy (c:window-proxy window)))
-    (when proxy (remhash proxy (server-windows *server*))))
+    (when proxy
+      (remhash proxy (server-windows *server*))
+      ;; Guarded because a proxy river has already torn down its side of is an
+      ;; ordinary outcome on this path, not a bug of ours.
+      (guarded "window destroy" (w:window-destroy proxy))))
   (remhash window (server-nodes *server*))
   (forget-window-state window)
   (setf *unplaced* (remove window *unplaced*))

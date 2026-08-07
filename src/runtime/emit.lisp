@@ -248,7 +248,18 @@ that turns into.  Diffed, so the common case sends nothing."
         (when-changed (window :fullscreen (c:window-fullscreen-p window))
           (guarded "fullscreen"
             (if (c:window-fullscreen-p window)
-                (let ((output (current-output)))
+                ;; THE WINDOW'S OUTPUT, NOT THE CURSOR'S.  This read
+                ;; CURRENT-OUTPUT, which is the output the *cursor* is on, so
+                ;; fullscreening a window on the second monitor while the
+                ;; cursor was on the first put it fullscreen on the first.
+                ;; OUTPUT-OF-WINDOW exists, is exported, and was called by
+                ;; nothing -- which is how a bug this visible survived: the
+                ;; right answer was written, published, and never reached.
+                ;;
+                ;; CURRENT-OUTPUT remains the fallback for a window whose rect
+                ;; overlaps no output at all, which is what a window that has
+                ;; never been placed looks like.
+                (let ((output (or (output-of-window window) (current-output))))
                   (when (and output (c:output-proxy output))
                     (w:window-fullscreen proxy (c:output-proxy output))
                     (w:window-inform-fullscreen proxy)))

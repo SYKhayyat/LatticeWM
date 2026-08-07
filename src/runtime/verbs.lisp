@@ -603,11 +603,27 @@ would be worse than saying so."
   (setf (server-running *server*) nil))
 
 (defcommand restart-wm ()
-  "Stop the window manager without ending the session.
+  "Restart the window manager without ending the session.
 
 River keeps running, and so does every application; the window manager is an
-ordinary Wayland client.  Relaunch it and the layout comes back, because
-persistence is keyed on river's stable window identifiers."
+ordinary Wayland client.  This saves the layout, disconnects, and starts the
+same binary again with the same arguments — the layout comes back, because
+persistence is keyed on river's stable window identifiers.
+
+IT DID NOT RESTART, AND THAT IS THE WHOLE OF THIS DOCSTRING'S HISTORY.  It
+cleared the running flag and exited, under a docstring that said \"Relaunch it
+and the layout comes back\" — addressed to somebody who no longer had a keymap,
+because the keymap belongs to the window manager that just left.  install.sh
+writes `exec river -c latticewm', which runs the client once and does not
+respawn it, so the user was left with their windows, no bindings, and recovery
+by way of a TTY.  It is bound to Shift+Super+r by default.
+
+The relaunch happens in MAIN, after START has returned and the Wayland
+connection is closed, and that ordering is the point rather than tidiness:
+river hands window management to one client at a time, so a successor spawned
+from here — inside the event loop, with our manager object still bound — would
+race us for it and lose."
+  (setf *restart-on-exit* t)
   (run-shutdown-once)
   (setf (server-running *server*) nil))
 
