@@ -105,8 +105,17 @@ pkgs.mkShell {
 
   # Consumed by tools/ scripts and the Makefile.
   WAYFLAN_SRC = wayflanSrc;
+  # TWO NAMES BECAUSE THERE ARE TWO TYPES, AND THERE USED TO BE ONE OF EACH.
+  #
+  # RIVER is the store *directory*, and that is what session.lisp's re-vendor
+  # recipe wants: `cp $RIVER/share/river-protocols/stable/*.xml src/protocol/'.
+  # install.sh wanted the *binary* and read the same variable, so `nix-shell &&
+  # make install' wrote `exec /nix/store/...-river-0.4.6 -c ...' into the
+  # session launcher, which fails at a login screen with "Is a directory".
+  # Nothing noticed because every check passed --river explicitly and routed
+  # around the variable entirely.
   RIVER = "${pkgs.river}";
-  RIVER_VERSION = pkgs.river.version;
+  RIVER_BIN = "${pkgs.river}/bin/river";
 
   shellHook = ''
     export LATTICEWM_ROOT=$PWD

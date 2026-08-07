@@ -133,6 +133,35 @@ if [ -n "$leftover" ]; then
     printf '  %s\n' $leftover >&2
 fi
 
+# THE ENV-VAR PATH, WHICH EVERY CHECK IN THIS PROJECT ROUTED AROUND.
+#
+# install.sh takes the compositor from --river or from $RIVER_BIN, and until
+# now it took it from $RIVER -- which shell.nix and flake.nix both export as
+# the store *directory*, because session.lisp's re-vendor recipe wants a
+# directory.  One name, two types, and the mismatch landed in the launcher
+# that runs at a login screen, where it fails with "Is a directory" and there
+# is no terminal to read that in.
+#
+# It survived because this file and flake.nix's installPhase both pass --river
+# explicitly, so nothing had ever taken the fallback.  These four lines are
+# the check that was missing, not the fix.
+envcheck=$(mktemp -d "${TMPDIR:-/tmp}/latticewm-envriver-check.XXXXXX")
+env_river=/nowhere/bin/river-from-the-environment
+RIVER=/nowhere/a-directory-shaped-value RIVER_BIN="$env_river" \
+    ./install.sh --prefix "$envcheck" --no-config >/dev/null
+grep -q "^exec $env_river " "$envcheck/bin/latticewm-session" ||
+    fail "install.sh ignored \$RIVER_BIN, so the nix-shell install path
+  writes a launcher naming something other than the pinned compositor"
+rm -rf "$envcheck"
+
+# And the type confusion itself, refused rather than written into a file that
+# runs at a login screen.
+if ./install.sh --prefix "$envcheck" --no-config --river /tmp >/dev/null 2>&1; then
+    fail "install.sh accepted a directory as --river; that is the value the
+  nix files' \$RIVER holds, and it becomes \`exec <directory> -c ...'"
+    rm -rf "$envcheck"
+fi
+
 # AND THE PACKAGING PATH, WHICH IS THE ONE NOBODY HERE HAS EVER RUN.
 #
 # Every distribution builds with `make DESTDIR=$pkgdir PREFIX=/usr install',

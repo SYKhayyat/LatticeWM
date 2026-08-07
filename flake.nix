@@ -243,8 +243,16 @@
               env.pkgs.wayland-utils env.pkgs.git
             ];
             WAYFLAN_SRC = env.wayflanSrc;
+            # RIVER is the store directory, which is what session.lisp's
+            # re-vendor recipe reads; RIVER_BIN is the executable, which is
+            # what install.sh reads.  One name did both and the launcher
+            # written at install time execed a directory.  See shell.nix.
+            #
+            # RIVER_VERSION used to be exported here and in shell.nix and was
+            # read by nothing at all; the version anyone needs is in
+            # src/protocol/PINNED, which both nix files already parse.
             RIVER = "${env.pkgs.river}";
-            RIVER_VERSION = env.pkgs.river.version;
+            RIVER_BIN = "${env.pkgs.river}/bin/river";
             shellHook = ''
               export LATTICEWM_ROOT=$PWD
               export CL_SOURCE_REGISTRY="$WAYFLAN_SRC//:$PWD//"

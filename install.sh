@@ -59,7 +59,19 @@ prefix=${PREFIX:-$home/.local}
 destdir=${DESTDIR:-}
 action=install
 write_config=yes
-river=${RIVER_BIN:-${RIVER:-river}}
+# RIVER_BIN, AND DELIBERATELY NOT $RIVER.  This read `${RIVER:-river}', and
+# shell.nix and flake.nix both export RIVER as the store *directory* --
+# session.lisp's re-vendor recipe uses it that way, correctly, in
+# `cp $RIVER/share/river-protocols/...'.  One name, two types, and the
+# mismatch landed in the file that runs at a login screen: the launcher below
+# became `exec /nix/store/...-river-0.4.6 -c ...' and failed with "Is a
+# directory", where there is no terminal to read it from.
+#
+# Nothing could see it, because every check routed around it:
+# tools/install-check.sh and flake.nix's installPhase both pass --river
+# explicitly, so the env-var path was exercised by nothing at all.  It is
+# exercised now, in install-check.sh, along with the guard below.
+river=${RIVER_BIN:-river}
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -88,6 +100,18 @@ done
 [ -n "$destdir" ] && write_config=no
 
 say() { printf '%s\n' "$*"; }
+
+# The compositor has to be an executable, and this is where saying so is cheap.
+# The failure it replaces happens at a login screen, in a launcher script,
+# where the message is "Is a directory" and there is no terminal to read it in.
+if [ -d "$river" ]; then
+    printf 'install.sh: --river is %s, which is a directory.\n' "$river" >&2
+    printf 'It has to be the river *binary* -- %s/bin/river, probably.\n' \
+           "$river" >&2
+    printf 'The nix files export RIVER as the store directory and RIVER_BIN\n' >&2
+    printf 'as the executable; this reads RIVER_BIN.\n' >&2
+    exit 2
+fi
 
 # Where a wayland session entry goes depends on who is installing.  A system
 # prefix means every display manager will see it; a home prefix means only the
