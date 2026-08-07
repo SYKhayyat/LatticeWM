@@ -189,12 +189,15 @@ device pixels into a buffer of its own.
 
 Without this, the echo area on a 2x display was half the size it should have
 been, in the one place where a window manager writes text for a human to read.")
-   (emitted :initform (make-hash-table :test #'equal) :accessor server-emitted
+   (emitted :initform (make-hash-table :test #'eq) :accessor server-emitted
             :documentation
-            "The last value we sent for each (WINDOW . PROPERTY), so that a
-relayout only sends what actually changed.  River processes every request we
-send before it can answer input, so re-sending a hundred identical positions on
-every keystroke is not free.")
+            "WINDOW to a table of the last value we sent for each property, so
+that a relayout only sends what actually changed.  River processes every
+request we send before it can answer input, so re-sending a hundred identical
+positions on every keystroke is not free.
+
+Two levels rather than one table keyed on the pair, because the pair had to be
+consed to *ask* — see EMITTED.")
    (running :initform nil :accessor server-running)
    (dirty :initform t :accessor server-dirty
           :documentation "Whether the layout needs recomputing.")
@@ -295,10 +298,34 @@ ask twice, so this must be the only place that asks."
                 (w:window-get-node (c:window-proxy window)))))))
 
 (defun all-windows ()
-  "Every window we are managing, in no particular order."
+  "Every window we are managing, in no particular order.
+
+A FRESH LIST EVERY TIME, which is right for the callers that hold onto it or
+sort it and wrong for the three that walk it and drop it — the two per relayout
+and the one per pointer motion.  Those use DO-WINDOWS."
   (when *server*
     (loop for window being the hash-values of (server-windows *server*)
           collect window)))
+
+(defmacro do-windows ((window &optional result) &body body)
+  "Run BODY with WINDOW bound to each managed window, then return RESULT.
+
+DOLIST over ALL-WINDOWS with the list left out.  RETURN exits it, as it does a
+DOLIST, which is what the pointer hit test wants.
+
+Walking every window is a per-relayout and per-pointer-event act, and the list
+ALL-WINDOWS conses to allow it is dropped on the floor by every caller here —
+in the file whose neighbour argues that a GC pause during a keystroke is input
+latency, directly and visibly."
+  (let ((key (gensym "KEY")) (table (gensym "TABLE")))
+    `(block nil
+       (let ((,table (and *server* (server-windows *server*))))
+         (when ,table
+           (maphash (lambda (,key ,window)
+                      (declare (ignore ,key))
+                      (tagbody ,@body))
+                    ,table)))
+       ,result)))
 
 (defun all-outputs ()
   "Every output, in the order river reported them."

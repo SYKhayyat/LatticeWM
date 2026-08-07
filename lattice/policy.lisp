@@ -131,6 +131,25 @@ distance-predictable preserves muscle memory.
 Turning this on gives the window model's entire *feel* without unwinding
 anything, which is DESIGN D18's stated escape hatch.")
 
+(p:define-option *tidy-on-leave* t
+  "Drop a cell you leave behind when nothing was ever put in it.
+
+Moving into empty space creates a cell, because focus has to rest on something
+— that is ENSURE-CELL and it is what makes the plane infinite in practice.
+Nothing took them away again: TIDY-GRID is the broom and it is deliberately
+manual, so a session's cell count only ever rose, and every one of them was
+sorted on every relayout, walked on every relayout by the layout driver looking
+for windows to hide, and written to the state file for good.  The core assumes
+a container is finite and small; a plane that grows with how far you have
+walked is the one place this extension genuinely fights that assumption.
+
+WHAT IT COSTS, so that turning it off is a decision rather than a discovery:
+the drawn map stops showing cells you merely passed through.  With this on, the
+map shows the cells that hold something, the ones you named, and where you are;
+with it off, it also shows your footprints, which is a real thing to want and
+was the accidental behaviour until now.  A cell holding anything, a named cell
+and the last cell of a plane are never dropped either way.")
+
 (p:define-option *coordinate-overlay* :zoomed-out
   "When cells show their coordinate.
 
@@ -534,13 +553,31 @@ change.
 
 CALL-NEXT-METHOD is not optional: the motion layer's method is what maintains
 the focus history that :MRU close-focus consults, and shadowing it would break
-a feature two layers away with no visible connection to the lattice."
+a feature two layers away with no visible connection to the lattice.
+
+AND IT IS WHERE THE PLANE STOPS GROWING.  See *TIDY-ON-LEAVE*."
   (let ((chain (c:resolve-chain (c:world-root world) new)))
     (loop for node in chain
           for address in new
           when (typep node 'grid)
             do (setf (c:prop node :lattice/last-cell) address)))
+  (when *tidy-on-leave*
+    (let ((chain (c:resolve-chain (c:world-root world) old)))
+      (loop for node in chain
+            for address in old
+            for depth from 0
+            when (and (typep node 'grid)
+                      (not (cell-equal-safe address (nth depth new))))
+              do (forget-empty-cell node address))))
   (call-next-method))
+
+(defun cell-equal-safe (a b)
+  "CELL-EQUAL where either side may be something that is not a cell at all.
+
+Both paths are walked in step and a path is a list of *addresses*, which are
+whatever each container along it uses — an integer inside a split, a cons
+inside a plane — so the comparison has to survive being handed one of each."
+  (and (consp a) (consp b) (cell-equal a b)))
 
 (defmethod p:motion-escapes-p ((policy lattice-mixin) (grid grid) direction)
   "Motion never leaves the plane, because the plane has no edge.

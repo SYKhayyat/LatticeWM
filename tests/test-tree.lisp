@@ -448,3 +448,34 @@ single method beyond the six below."))
       (declare (ignore removed))
       (is (equal '(:stack 0 (:leaf "a")) (shape new-root))
           "and dissolved when the predicate allows it"))))
+
+;;; ------------------------------------------------- what a walk has to cost
+
+(test the-first-address-of-a-sequence-is-known-without-building-the-list
+  "DEFAULT-ADDRESS is REPAIR-PATH's and FIRST-LEAF-PATH's descent step, which
+makes it the hottest thing in the model, and the inherited method was (FIRST
+(CONTAINER-ADDRESSES C)) — the whole index list consed to take the head off it.
+The answer for a sequence is 0 and the shape of the question does not change."
+  (let ((split (c:make-split :horizontal (leaves 3)))
+        (empty (c:make-split :horizontal '())))
+    (is (eql 0 (c:default-address split)))
+    (is (eql (first (c:container-addresses split)) (c:default-address split))
+        "the same answer the inherited method gave, which is the point")
+    (is (null (c:default-address empty))
+        "and nothing to descend into is still NIL rather than 0")))
+
+(test counting-windows-does-not-build-three-lists-to-do-it
+  "The status line asks how many windows there are on every draw, and
+(LENGTH (NODE-WINDOWS ROOT)) is the leaves, then a MAPCAR, then a REMOVE — three
+lists over every leaf in the world to produce an integer."
+  (let ((root (c:make-split :horizontal
+                            (list (leaf-with "a")
+                                  (c:make-leaf)
+                                  (c:make-stack (list (leaf-with "b")
+                                                      (leaf-with "c")))))))
+    (is (= 3 (c:node-window-count root)))
+    (is (= (length (c:node-windows root)) (c:node-window-count root))
+        "the same number the list form gives, which is the only thing that
+matters about it")
+    (is (= 0 (c:node-window-count (c:make-leaf)))
+        "an empty pane holds none, and a leaf is not a container")))

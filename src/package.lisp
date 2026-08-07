@@ -155,7 +155,8 @@ deliberately decomposed so that policy can redirect it.")
    ;; now; see model/surface.lisp.  (SETF CHILD-AT) is what it would have been.
    #:container-addresses #:child-at #:remove-child #:insert-child
    #:address-equal #:container-count
-   #:map-nodes #:find-node-if #:node-leaves #:node-windows #:leaf-holding
+   #:map-nodes #:find-node-if #:node-leaves #:node-windows #:node-window-count
+   #:leaf-holding
    #:copy-node #:copy-node-slots #:node-signature #:node-empty-p #:simplify-node
    #:default-address #:empty-pane-p
    #:container-alternatives-p #:container-selection #:container-splits-along-p
@@ -557,7 +558,8 @@ keybindings, the command registry, and the session loop.")
    #:keymap-name #:keymap-keys #:all-bound-keys #:keysym-name #:keysym-named
    #:parse-key #:kbd #:define-key #:lookup-key #:key-to-string
    ;; the loop
-   #:start #:quit #:relayout #:mark-dirty #:compute-layout
+   #:start #:quit #:relayout #:mark-dirty #:compute-layout #:output-contents
+   #:do-windows
    #:spawn #:notify #:*log-level* #:logmsg #:*server*
    #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect

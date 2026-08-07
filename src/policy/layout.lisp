@@ -200,14 +200,23 @@ this is how offscreen windows end up drawn on top of your desktop."
                                  (and visible (visible-p policy child)))))))
                    ;; Everything the layout did not place is hidden, but must
                    ;; still be walked so its windows get hidden too.
-                   (dolist (address (c:container-addresses node))
-                     (unless (member address seen
-                                     :test (lambda (a b)
-                                             (c:address-equal node a b)))
-                       (let ((child (c:child-at node address)))
-                         (when child
-                           (walk child (c:path-append path address)
-                                 (c:make-rect 0 0 0 0) nil)))))))))
+                   ;;
+                   ;; SEEN-P RATHER THAN MEMBER WITH A :TEST LAMBDA.  The lambda
+                   ;; closed over NODE, which is invariant across the loop, so it
+                   ;; was a fresh closure per address — on the walk that runs for
+                   ;; every container in the world on every relayout, and over a
+                   ;; list that for a lattice grid is every cell ever navigated
+                   ;; through.
+                   (flet ((seen-p (address)
+                            (dolist (other seen nil)
+                              (when (c:address-equal node address other)
+                                (return t)))))
+                     (dolist (address (c:container-addresses node))
+                       (unless (seen-p address)
+                         (let ((child (c:child-at node address)))
+                           (when child
+                             (walk child (c:path-append path address)
+                                   (c:make-rect 0 0 0 0) nil))))))))))
       (walk node '() rect t))
     (nreverse out)))
 
@@ -464,11 +473,17 @@ up, because the tier a policy actually wants is this method: RENDER-ORDER is
 the documented extension point, an override of it is obeyed for the whole list
 (see RENDER-ORDER-DECIDES-THE-WHOLE-LIST-AND-NOT-HALF-OF-IT), and a property
 key standing in for a generic is the mistake *SMART-GAPS* made with an option."
-  (stable-sort (copy-list placements) #'<
-               :key (lambda (placement)
-                      (let ((node (first placement)))
-                        (if (and (typep node 'c:leaf)
-                                 (c:leaf-window node)
-                                 (c:window-floating-p (c:leaf-window node)))
-                            1
-                            0)))))
+  ;; TWO BUCKETS, WALKED ONCE.  This was a STABLE-SORT over a COPY-LIST with a
+  ;; key that answers 0 or 1 — a comparison sort, per relayout, to do a
+  ;; partition, and the copy exists only because STABLE-SORT is destructive.
+  ;; One pass and two NREVERSEs is the same answer with the same stability and
+  ;; without the O(n log n) or the second list.
+  (let ((tiled '()) (floating '()))
+    (dolist (placement placements)
+      (let ((node (first placement)))
+        (if (and (typep node 'c:leaf)
+                 (c:leaf-window node)
+                 (c:window-floating-p (c:leaf-window node)))
+            (push placement floating)
+            (push placement tiled))))
+    (nconc (nreverse tiled) (nreverse floating))))

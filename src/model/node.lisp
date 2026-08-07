@@ -441,6 +441,15 @@ subclass; the addressing, insertion and removal are here and written once."))
 (defmethod container-addresses ((c sequential-container))
   (loop for i from 0 below (length (children c)) collect i))
 
+(defmethod default-address ((c sequential-container))
+  "Zero, without consing the index list to find out.
+
+The inherited method is (FIRST (CONTAINER-ADDRESSES C)), which builds the whole
+list of indices to take the head off it — on REPAIR-PATH and FIRST-LEAF-PATH,
+which is the hottest path in the model and runs for every leaf of every
+descent."
+  (when (children c) 0))
+
 (defmethod child-at ((c sequential-container) address)
   (when (and (integerp address) (<= 0 address) (< address (length (children c))))
     (nth address (children c))))
@@ -726,6 +735,17 @@ this is structural traversal, not rendering."
 (defun node-windows (root)
   "Every window held under ROOT, in traversal order, skipping empty panes."
   (remove nil (mapcar #'leaf-window (node-leaves root))))
+
+(defun node-window-count (root)
+  "How many windows are held under ROOT.
+
+(LENGTH (NODE-WINDOWS ROOT)) is three list allocations over every leaf in the
+world to produce an integer — the leaves, the MAPCAR and the REMOVE — and the
+status line asks for that integer on every draw.  This walks and counts."
+  (let ((count 0))
+    (map-nodes (lambda (n) (when (and (typep n 'leaf) (leaf-window n)) (incf count)))
+               root)
+    count))
 
 (defun leaf-holding (root window)
   "The leaf under ROOT whose window is WINDOW, or NIL."

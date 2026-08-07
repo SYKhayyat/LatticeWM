@@ -215,12 +215,12 @@ first event after a connect."
               for window = (c:float-window float)
               for rect = (and window (c:window-rect window))
               when (and rect (c:rect-contains-p rect x y)) return window)
-        (loop for window in (all-windows)
-              for rect = (c:window-rect window)
-              when (and rect (c:window-live-p window)
-                        (not (c:window-minimized-p window))
-                        (c:rect-contains-p rect x y))
-                return window))))
+        (do-windows (window)
+          (let ((rect (c:window-rect window)))
+            (when (and rect (c:window-live-p window)
+                       (not (c:window-minimized-p window))
+                       (c:rect-contains-p rect x y))
+              (return window)))))))
 
 (defun focus-window-from-pointer (window)
   "Give WINDOW the keyboard because the pointer asked.

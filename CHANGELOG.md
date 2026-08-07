@@ -169,6 +169,33 @@ be able to do before anyone else can depend on it.
   a row disabled and re-enabled two hundred bindings to arrive back where they
   started.
 
+- **The lattice grew for as long as the session ran.** Arriving at a cell
+  creates it, because focus has to rest on something, and nothing ever took
+  one away — `tidy-grid` is deliberately manual. So crossing the plane left a
+  cell behind per step, `container-addresses` sorted the accumulated pile on
+  every relayout, `layout-node` walked it, and `serialize-node` wrote it to the
+  state file forever. `*tidy-on-leave*` (default T) drops the cell you leave
+  when arriving there is all that ever happened to it; it refuses a cell with
+  anything in it, a cell somebody named, and the last cell standing. Turning
+  it off restores the old behaviour, for anyone who wants the drawn map to
+  show where they have been.
+
+- **The per-frame paths allocated in seven places that had no need to.**
+  `emitted` keyed one hash table on a freshly consed `(window . property)`,
+  so every property of every window cost a cons and an `equal` hash on every
+  frame, and forgetting a window meant walking the whole table; it is two
+  levels of `eq` table now. `compute-layout` and `solo-windows` each asked
+  `output-content` for every output, so a relayout asked the policy twice —
+  `output-contents` asks once and both take the answer. `render-order`
+  `copy-list`ed and `stable-sort`ed to do what a two-bucket partition does,
+  `layout-node` built a list of what it had already placed and `member`ed it
+  with a function test, `default-address` on a sequential container built the
+  whole address list to take its first element, and the empty-pane hint
+  `length`ed three consed lists to count windows (`node-window-count`). The
+  three remaining `(dolist (window (all-windows)))` loops — two in `relayout`,
+  one in the pointer hit test, which runs per motion event — consed a list of
+  every window to walk it; `do-windows` walks the table.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

@@ -769,6 +769,89 @@ is exactly when to switch *ZOOM-MODE* to :FIXED"))))
     (is-true (c:child-at grid (l:cell 2 0)) "the one you are standing in stays")
     (is-true (c:child-at grid (l:cell 0 0)))))
 
+(test the-broom-refuses-three-cells-and-each-of-them-is-somebodys
+  "FORGET-EMPTY-CELL runs behind the user's back, on every focus change, which
+is the whole difference between it and TIDY-GRID — so the interesting part of
+it is not what it drops but what it declines to."
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (c:make-leaf)
+          (c:child-at grid (l:cell 2 0)) (c:make-leaf))
+    (setf (gethash "code" (l:grid-names grid)) (l:cell 2 0))
+    (is-false (l:forget-empty-cell grid (l:cell 0 0))
+              "a cell with a window in it is not litter")
+    (is-false (l:forget-empty-cell grid (l:cell 2 0))
+              "and neither is one somebody named — naming it is the act that
+says 'I mean to come back here', and dropping it would delete the destination
+out from under GOTO-CELL while leaving the name pointing at it")
+    (is-true (l:forget-empty-cell grid (l:cell 1 0))
+             "the one nobody did anything to goes")
+    (is (null (c:child-at grid (l:cell 1 0))))
+    (is-false (l:forget-empty-cell grid (l:cell 9 9))
+              "and a cell that was never there is not an error"))
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (c:make-leaf))
+    (is-false (l:forget-empty-cell grid (l:cell 0 0))
+              "the last cell standing stays: a plane with no cells at all is a
+shape CONTAINER-ADDRESSES, DEFAULT-ADDRESS and LAYOUT-NODE are none of them
+written for")
+    (is (= 1 (hash-table-count (l:grid-cells grid))))))
+
+(test crossing-the-plane-does-not-make-it-bigger
+  "D6 says the plane is infinite, and ENSURE-CELL took that literally: every
+step left a cell behind, nothing ever took one away, and CONTAINER-ADDRESSES
+sorted the accumulated pile on every relayout.  The cost was proportional to
+how long the session had been running, which is the kind of bug that is
+invisible for a week."
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "home"))
+    (flet ((walk-right (steps)
+             (let ((path (list (l:cell 0 0))))
+               (dotimes (i steps)
+                 (let ((next (list (l:cell (1+ i) 0))))
+                   (l:ensure-cell grid (first next))
+                   (p:on-focus-change policy world path next)
+                   (setf path next))))))
+      (walk-right 6)
+      (is (= 2 (hash-table-count (l:grid-cells grid)))
+          "six steps right leaves the cell you started in and the cell you are
+standing in, and not the four you merely passed through")
+      (is-true (c:child-at grid (l:cell 0 0))
+               "the occupied cell you left is still there")
+      (is-true (c:child-at grid (l:cell 6 0))
+               "and so is the empty one you are in, because you are in it"))
+    (let* ((l:*tidy-on-leave* nil)
+           (grid (grid-of))
+           (world (c:make-world :root grid)))
+      (setf (c:child-at grid (l:cell 0 0)) (leaf "home"))
+      (dotimes (i 4)
+        (let ((from (list (l:cell i 0))) (to (list (l:cell (1+ i) 0))))
+          (l:ensure-cell grid (first to))
+          (p:on-focus-change policy world from to)))
+      (is (= 5 (hash-table-count (l:grid-cells grid)))
+          "and the old behaviour is still available to anyone who wants the
+map to show where they have been, which is the reason it is an option and not
+a fix"))))
+
+(test moving-inside-a-cell-does-not-sweep-the-cell-you-are-in
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0))
+          (c:make-split :horizontal (list (leaf "a") (leaf "b")))
+          (c:child-at grid (l:cell 1 0)) (c:make-leaf))
+    (p:on-focus-change policy world (list (l:cell 0 0) 0) (list (l:cell 0 0) 1))
+    (is (= 2 (hash-table-count (l:grid-cells grid)))
+        "the cell is the same cell at both ends of that focus change, and a
+comparison that got it wrong would drop the plane out from under a Right that
+never left one leaf")
+    (p:on-focus-change policy world (list (l:cell 1 0)) (list (l:cell 0 0) 1))
+    (is (= 1 (hash-table-count (l:grid-cells grid)))
+        "whereas leaving the empty one for a leaf inside another cell does
+drop it, addresses of two different types along the same walk and all")))
+
 (test names-are-the-layer-humans-remember
   (let ((grid (grid-of)))
     (setf (c:child-at grid (l:cell 3 -1)) (leaf "emacs"))

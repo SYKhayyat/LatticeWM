@@ -26,11 +26,23 @@
 (in-package #:latticewm/runtime)
 
 (defun emitted (window property)
-  "The last value sent for PROPERTY of WINDOW."
-  (gethash (cons window property) (server-emitted *server*) :none))
+  "The last value sent for PROPERTY of WINDOW.
+
+A TABLE PER WINDOW RATHER THAN ONE TABLE KEYED ON (WINDOW . PROPERTY).  The
+pair had to be consed to ask a question — about ten allocations per window per
+relayout in the steady state where the answer is `nothing changed' and nothing
+is sent — which is the shape of pressure image.lisp shrinks
+BYTES-CONSED-BETWEEN-GCS to 8 MB to defend against, on the grounds that a GC
+pause during a keystroke is input latency, directly and visibly.  It also made
+FORGET-WINDOW-STATE walk every key of a table it wanted one window's worth of."
+  (let ((properties (gethash window (server-emitted *server*))))
+    (if properties (gethash property properties :none) :none)))
 
 (defun (setf emitted) (value window property)
-  (setf (gethash (cons window property) (server-emitted *server*)) value))
+  (let ((properties (or (gethash window (server-emitted *server*))
+                        (setf (gethash window (server-emitted *server*))
+                              (make-hash-table :test #'eq :size 8)))))
+    (setf (gethash property properties) value)))
 
 (defmacro when-changed ((window property value) &body body)
   "Run BODY only if VALUE differs from what was last sent for PROPERTY."
@@ -45,32 +57,51 @@
 
 Called when a window goes away, and when we deliberately want the next
 relayout to re-send everything — after a hot reconnect, say."
-  (let ((table (server-emitted *server*)))
-    (loop for key being the hash-keys of table
-          when (eq (car key) window) do (remhash key table))))
+  (remhash window (server-emitted *server*)))
 
 ;;; ------------------------------------------------------------ the layout
 
-(defun compute-layout ()
+(defun output-contents (policy)
+  "(OUTPUT NODE PREFIX) for every output, asking OUTPUT-CONTENT once each.
+
+ONCE PER OUTPUT PER RELAYOUT, which it was not: SOLO-WINDOWS asked every output
+what it was showing and then COMPUTE-LAYOUT asked all of them again, same
+policy, same world, same outputs, five lines apart.  A method that walks a
+workspace stack to answer paid for it twice, and a method with a side effect —
+which is a mistake, but a findable one — had it twice per frame instead of
+once.
+
+Asking before either of them also makes the answer *consistent*: the second
+call happened after P:*SOLO-WINDOWS* was set, so a policy whose OUTPUT-CONTENT
+read it would have seen two different worlds within one relayout."
+  (let ((out '()))
+    (dolist (output (all-outputs) (nreverse out))
+      (multiple-value-bind (node prefix)
+          (guarded "output-content" (p:output-content policy *world* output))
+        (push (list output node prefix) out)))))
+
+(defun compute-layout (&optional (policy (p:current-policy))
+                                 (contents (output-contents policy)))
   "Lay the world out over the outputs and return the placements.
 
 Multi-monitor is one model with one viewport per output (PLAN §fiat), so this
 lays the same tree out on each output and lets the policy decide what each one
-shows.  With a single output — which is every laptop — it is one call."
-  (let* ((policy (p:current-policy))
-         (outputs (all-outputs))
-         (root (c:world-root *world*)))
+shows.  With a single output — which is every laptop — it is one call.
+
+CONTENTS is what OUTPUT-CONTENTS answered, passed in by RELAYOUT so that the
+question is asked once for the whole frame.  Defaulted so that a REPL can still
+call this with no arguments, which is what it is exported for."
+  (let ((root (c:world-root *world*)))
     (cond
       ;; No outputs yet: lay out over a nominal rectangle so the tree is in a
       ;; consistent state.  Nothing is drawn, because nothing is connected.
-      ((null outputs)
+      ((null contents)
        (guarded "layout" (p:layout-node policy root (c:make-rect 0 0 1920 1080))))
       (t
        (let ((placed '())
              (shown '()))
-         (dolist (output outputs (nreverse placed))
-           (multiple-value-bind (node prefix)
-               (guarded "output-content" (p:output-content policy *world* output))
+         (dolist (entry contents (nreverse placed))
+           (destructuring-bind (output node prefix) entry
              ;; SAID ONCE, AND ONLY WHEN IT HAPPENS.  Two outputs answering with
              ;; the same node is the mistake OUTPUT-CONTENT's docstring names:
              ;; every window is placed twice, the second placement wins, and the
@@ -99,7 +130,7 @@ shows.  With a single output — which is every laptop — it is one call."
                    (push (list child (append prefix path) rect visible)
                          placed)))))))))))
 
-(defun solo-windows (policy)
+(defun solo-windows (policy &optional (contents (output-contents policy)))
   "(OUTPUT . WINDOW) for every output whose workspace shows one window alone.
 
 Computed once, before the layout, because the answer is needed *by* the layout
@@ -114,8 +145,9 @@ come out of it.  It is a rectangle only so that LAYOUT-CHILDREN can be asked
 which children it would place; a few pixels either way cannot change a count
 that has to be exactly one."
   (let ((out '()))
-    (dolist (output (all-outputs) (nreverse out))
-      (let ((node (guarded "output-content" (p:output-content policy *world* output))))
+    (dolist (entry contents (nreverse out))
+      (destructuring-bind (output node prefix) entry
+        (declare (ignore prefix))
         (when node
           (let ((window (guarded "solo-window"
                           (p:solo-window policy node (c:output-rect output)))))
@@ -178,9 +210,12 @@ should err towards calling it rather than reasoning about whether they must."
   ;; that asks afterwards, which is why this is not a binding that unwinds.
   ;; It has to precede COMPUTE-LAYOUT because the layout is one of its readers.
   ;; See P:*SOLO-WINDOWS*.
-  (setf p:*solo-windows* (solo-windows (p:current-policy)))
   (let* ((policy (p:current-policy))
-         (placements (compute-layout)))
+         ;; What each output is showing, asked once for the whole frame rather
+         ;; than once here and once again inside COMPUTE-LAYOUT.
+         (contents (output-contents policy))
+         (placements (progn (setf p:*solo-windows* (solo-windows policy contents))
+                            (compute-layout policy contents))))
     (setf (c:prop *world* :last-placements) placements
           (c:prop *world* :rect-index) (index-placements placements))
     ;; Split the work.  The manage pile waits for the next manage sequence.
@@ -232,7 +267,7 @@ Instead the commands change the model and this reconciles it, from the one
 place that is always in the right sequence.  It is the same rule the file
 header states: policy says where things go, the runtime decides which sequence
 that turns into.  Diffed, so the common case sends nothing."
-  (dolist (window (all-windows))
+  (do-windows (window)
     (let ((proxy (c:window-proxy window)))
       (when (and proxy (c:window-live-p window))
         ;; Tiled edges: a floating window is adjacent to nothing, so clients
@@ -374,7 +409,7 @@ is one walk of a list that is almost always short."
         (when (typep node 'c:leaf)
           (let ((window (c:leaf-window node)))
             (when window (setf (gethash window placed) t))))))
-    (dolist (window (all-windows))
+    (do-windows (window)
       (let ((proxy (c:window-proxy window)))
         (when (and proxy
                    (c:window-live-p window)

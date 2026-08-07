@@ -606,7 +606,7 @@ always true, so the hint is the one that can wait for a quieter line."
                       (t ""))
                 :normal)
           segments)
-    (let ((count (length (c:node-windows root)))
+    (let ((count (c:node-window-count root))
           (scratch (length (c:world-scratchpad world)))
           (floats (length (c:world-floats world))))
       (push (cons (format nil "~d window~:p~@[ ~d float~:p~]~@[ ~d hidden~]"

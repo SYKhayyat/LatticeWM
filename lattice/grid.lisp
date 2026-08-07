@@ -402,6 +402,39 @@ reason nothing else here is automatic."
     (c:simplify-node grid)
     (length doomed)))
 
+(defun cell-named-p (grid address)
+  "True when some name in GRID points at ADDRESS."
+  (let ((found nil))
+    (maphash (lambda (name at)
+               (declare (ignore name))
+               (when (cell-equal at address) (setf found t)))
+             (grid-names grid))
+    found))
+
+(defun forget-empty-cell (grid address)
+  "Drop ADDRESS from GRID when arriving there is all that ever happened to it.
+
+ENSURE-CELL creates a cell because focus has to rest on something, so crossing
+the plane leaves one behind per step — and nothing ever took them away, because
+TIDY-GRID is deliberately manual.  The count only rises: CONTAINER-ADDRESSES
+sorts it on every relayout, LAYOUT-NODE walks it on every relayout, and
+SERIALIZE-NODE writes it to the state file forever.  The core assumes a
+container is finite *and small*; this is the one place the lattice fights that,
+and it used to pay at a cost proportional to how long the session had been
+running.
+
+Refuses three things, and each of them is somebody's cell rather than litter: a
+cell with anything in it, a cell somebody named, and the last cell standing —
+a plane with no cells at all is a shape nothing downstream is written for."
+  (let ((node (gethash address (grid-cells grid))))
+    (when (and node
+               (typep node 'c:leaf)
+               (c:leaf-empty-p node)
+               (> (hash-table-count (grid-cells grid)) 1)
+               (not (cell-named-p grid address)))
+      (remhash address (grid-cells grid))
+      t)))
+
 ;;; ------------------------------------------------------------- track sizes
 
 (defun col-width (grid x)

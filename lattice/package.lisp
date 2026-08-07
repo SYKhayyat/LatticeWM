@@ -35,7 +35,7 @@ motion runs straight through the cell boundary as though it were not there.")
    #:grid #:make-grid #:grid-cells #:grid-viewport #:grid-names
    #:grid-col-widths #:grid-row-heights
    #:col-width #:row-height #:uniform-p
-   #:ensure-cell #:occupied-cells #:tidy-grid
+   #:ensure-cell #:occupied-cells #:tidy-grid #:forget-empty-cell #:cell-named-p
    ;; the viewport
    #:viewport #:viewport-origin #:viewport-cols #:viewport-rows
    #:viewport-cells #:viewport-contains-p #:ensure-visible
@@ -43,7 +43,7 @@ motion runs straight through the cell boundary as though it were not there.")
    ;; the policy
    #:lattice-mixin #:lattice-policy #:lattice-policy-class
    #:*zoom-mode* #:*zoom-ladder* #:*cell-width* #:*cell-height* #:*cell-gap*
-   #:*skip-empty-cells* #:*coordinate-overlay*
+   #:*skip-empty-cells* #:*coordinate-overlay* #:*tidy-on-leave*
    #:*coordinate-tint* #:coordinate-hue #:tag-cell
    ;; the Z axis: infinitely many planes, one behind another
    #:*default-viewport* #:*new-workspace-zoom* #:*new-workspace-origin*
