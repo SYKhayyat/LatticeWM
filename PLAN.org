@@ -206,18 +206,18 @@ hold in their head is not a surface.
 Thirteen. If this list reaches thirty, the decomposition has gone wrong in the direction
 of ceremony. If it drops below ten, it has gone wrong in the direction of a monolith.
 
-*That was written on day one and the list is at sixty-six.* The threshold was
+*That was written on day one and the list is at sixty-nine.* The threshold was
 right to write down and wrong to leave unrevised: it was blown through by a factor
 of two while this paragraph went on saying thirty, which is what a number nobody is
 made to argue with does. The live version of it is
-[[file:tests/test-surface.lisp::24][=tests/test-surface.lisp:24=]], whose ~(<= 10 n 65)~
+[[file:tests/test-surface.lisp::24][=tests/test-surface.lisp:24=]], whose ~(<= 10 n 69)~
 sits under a comment recording every occasion the ceiling was raised and why —
 that is where the reasoning now lives, and it is the file to argue with before
-adding number sixty-seven. The count itself is printed by gate 2 on every build,
+adding number seventy. The count itself is printed by gate 2 on every build,
 and gate 6 prints the number that matters more: how many of them anything outside
 =src/= has ever answered.
 
-#+CLAIM: (= 66 (length (policy-generics)))
+#+CLAIM: (= 69 (length (policy-generics)))
 
 * What extensibility is actually worth here
 :PROPERTIES:

@@ -283,6 +283,23 @@ be able to do before anyone else can depend on it.
   - Gate 18 is the same shape: its population is files literally named
     `defaults-*.lisp`, there is one left, and deleting the prefix from it would
     make the gate govern the empty set forever. Also floored.
+- `examples/01-focus-follows-mouse.lisp` read `:rect-index` as though it were
+  part of the world. It is an artifact `emit` writes after a layout, so before
+  the first frame there is no table and `(gethash node nil)` is a type error,
+  not a miss — and the method is installed on `conventional-policy`, so every
+  focus change before the first frame died, in extensions that had never heard
+  of the example. `motion.lisp` and `server.lisp` both already asked for the
+  index as a thing that might not be there; this was the one place that
+  assumed.
+- `PLAN.org` §generics disagreed with itself in three numbers and with the
+  program in a fourth: the prose said sixty-six, the quoted ceiling said 65,
+  the next-one-to-argue-about said sixty-seven, and the `#+CLAIM:` said 66
+  while the surface was at 69. Gate 12 caught the claim, which is what it is
+  for; the other three were sitting in the same paragraph.
+- The mixin recipe in `doc/EXTENDING.org` set a `*previous*` that the program
+  does not have and the example never defined, and its `disable` half — the
+  whole reason for saving the class — was described but not shown. The saved
+  class now rides on the mixin, which is the argument for writing a mixin.
 
 ### Added
 

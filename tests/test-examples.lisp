@@ -75,6 +75,22 @@ runs afterwards."
       (is (null (p:pointer-focus p:*policy* r:*world* 500 500))
           "the pointer is over a float, so the pane underneath is not focused"))))
 
+(test focus-can-change-before-anything-has-been-laid-out
+  "The example's ON-FOCUS-CHANGE reads :RECT-INDEX, which EMIT writes after a
+layout and which therefore does not exist yet on a world that has never been
+placed.  `(gethash node nil)' is a type error, not a miss, so the method used
+to take down every focus change that happened before the first frame — session
+restore, a config that opens a window, and every policy test that never
+renders.  It is installed on CONVENTIONAL-POLICY, so it took them down for
+extensions that had never heard of it."
+  (with-example ("01-focus-follows-mouse.lisp")
+    (open-windows 2)
+    (is (null (c:prop r:*world* :rect-index))
+        "nothing has been laid out, so there is no index")
+    (finishes (p:on-focus-change p:*policy* r:*world*
+                                 (c:world-cursor r:*world*)
+                                 (c:world-cursor r:*world*)))))
+
 ;;; ------------------------------------------------------------------ 02
 
 (test window-rules-float-and-place

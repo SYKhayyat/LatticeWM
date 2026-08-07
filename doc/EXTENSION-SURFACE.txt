@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-66 generics, 112 options.  Generated from the running image.
+69 generics, 112 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -101,7 +101,59 @@ rather than as a place — DESIGN D18 lists that as an accepted cost with the
 cursor being unmissable as the mitigation.  Do not make the focused colour
 subtle.
 
+TO ADD A BORDER STATE — urgent, tagged, recording — DO NOT OVERRIDE THIS.
+Answer BORDER-STATE with a keyword of your own and BORDER-COLOR-FOR for that
+keyword.  This method is the composition of the two and there is nothing in it
+to copy.
+
+  methods:
+    (appearance-policy t t)             ; layout.lisp
+
+----------------------------------------------------------------------------
+border-color-for (latticewm/policy:policy latticewm/policy::state)
+----------------------------------------------------------------------------
+The colour of a border in STATE, as (values R G B A), straight alpha.
+
+The second half of BORDER-COLOR, with STATE in dispatch position, so a state
+somebody invented gets a colour without touching anything shipped:
+
+    (defmethod border-color-for ((policy conventional-policy) (state (eql :urgent)))
+      (values 1.0 0.35 0.2 1.0))
+
+Each of the four shipped states is answered by its own method returning its own
+option, which is what makes them exactly as replaceable as an invented one.  A
+state with no method at all gets the unfocused colour rather than an error, on
+the same generosity as FONT-FOR's default: an extension that invents a state
+and forgets the colour should draw a plain border, not stop the frame.
+
   answered from: *cursor-border-color*, *empty-pane-color*, *focused-border-color*, *unfocused-border-color*
+  methods:
+    (appearance-policy (eql :EMPTY))    ; layout.lisp
+    (appearance-policy (eql :CURSOR))   ; layout.lisp
+    (appearance-policy (eql :FOCUSED))  ; layout.lisp
+    (appearance-policy t)               ; layout.lisp
+
+----------------------------------------------------------------------------
+border-state (latticewm/policy:policy latticewm/policy::node
+              latticewm/policy::focusedp)
+----------------------------------------------------------------------------
+Which border state NODE is in, as a keyword.
+
+The shipped answers are :FOCUSED, :CURSOR, :EMPTY and :UNFOCUSED, and FOCUSEDP
+is the three-valued thing described under BORDER-COLOR.  A state a border can
+be in is not the same question as the colour it is drawn in, and this is the
+first half.
+
+    (defmethod border-state ((policy conventional-policy) node focusedp)
+      (if (node-window-prop node :urgent) :urgent (call-next-method)))
+
+A KEYWORD RATHER THAN A BOOLEAN, AND FOR THE SAME REASON FONT-FOR TAKES ONE.
+This decision used to live inside BORDER-COLOR as a five-branch COND closed at
+three states by construction, forty lines from FONT-FOR — whose docstring
+celebrates that a role is a keyword so *an extension can invent one*.  The same
+file held both patterns and the decision that runs per window per frame had the
+one you cannot extend without copying it.
+
   methods:
     (appearance-policy t t)             ; layout.lisp
 
@@ -156,6 +208,40 @@ has already been told about is cheaper to leave disabled than to churn.
   answered from: *readline-chords*
   methods:
     (input-policy)                      ; input.lisp
+
+----------------------------------------------------------------------------
+capture-wanted-p (latticewm/policy:policy latticewm/policy::world)
+----------------------------------------------------------------------------
+Should the next keypress belong to the window manager rather than to a
+window?
+
+CAPTURE-KEYS says which keys are *readable*; this says whether they are being
+read *now*.  Both halves are needed and only one of them was a decision: the
+bindings are created once and enabled exactly while this answers true, so a key
+on the list that arrives while this answers false goes to the application, as
+it should.
+
+THIS WAS AN OR IN src/runtime/seats.lisp, and it is the second half of the same
+finding CAPTURE-KEYS was the first half of.  A modal editing layer — the single
+most obvious thing an Emacs-shaped window manager's users ask for — could
+declare its keys readable and still never be given one, because *when* the
+window manager reads was three terms of a boolean nothing could reach.
+
+    (defmethod capture-wanted-p ((policy my-policy) world)
+      (or (eq *my-mode* :normal) (call-next-method)))
+
+The shipped answer is the submap and DESIGN D19's empty pane.  A prompt in the
+echo area is *not* here and is not a policy decision: the minibuffer cannot
+read a line if the keys are not enabled, so the runtime ORs it in and a method
+that answers NIL cannot break the thing it would have to use to say so.
+
+Answer with T or NIL.  Consulted on every manage sequence, diffed against the
+last answer, and a truthy non-T value is normalised before that comparison —
+it used to be the pending submap itself, so two chords in a row disabled and
+re-enabled two hundred bindings for no reason.
+
+  methods:
+    (input-policy t)                    ; keys.lisp
 
 ----------------------------------------------------------------------------
 clip-rect (latticewm/policy:policy latticewm/policy::node
@@ -1412,7 +1498,7 @@ emptied container persists and can be filled again.
 
 *cursor-border-color*
   now: (0.28 0.42 0.62 1.0)
-  read by: border-color (appearance-policy t t)
+  read by: border-color-for (appearance-policy (eql cursor))
   Border colour of the pane holding the cursor while a *float* has the keyboard.
 
 Between the focused and the unfocused colour, deliberately, because that is
@@ -1436,7 +1522,7 @@ completely quiet while a float is up.
 
 *debug-on-error*
   now: NIL
-  read by: echo-content (appearance-policy t), make-workspace (structure-policy t t), on-window-open (lifecycle-policy t window), (lambda (condition0) in libinput-result-hook), (lambda (condition1) in ipc-accept-loop), (lambda (condition11) in attach-xkb-keyboard), (lambda (condition11) in keymap-from-text), (lambda (condition13) in attach-libinput-device), (lambda (condition15) in attach-input-device), (lambda (condition15) in bind-one-global), (lambda (condition18) in attach-pointer-bindings), (lambda (condition19) in attach-xkb-keyboard), (lambda (condition2) in end-pointer-op), (lambda (condition2) in evlambda-for-window), (lambda (condition2) in start-pointer-op-1), (lambda (condition21) in attach-libinput-device), (lambda (condition23) in attach-seat), (lambda (condition3) in end-pointer-op), (lambda (condition3) in start-pointer-op-1), (lambda (condition33) in bind-globals), (lambda (condition33) in evlambda-for-window), (lambda (condition34) in evlambda-for-window), (lambda (condition4) in attach-input-manager), (lambda (condition4) in attach-libinput-config), (lambda (condition4) in attach-libinput-device), (lambda (condition4) in attach-manager-hooks), (lambda (condition4) in attach-xkb-config), (lambda (condition4) in attach-xkb-keyboard), (lambda (condition4) in make-canvas), (lambda (condition42) in bind-globals), (lambda (condition5) in register-bindings), (lambda (condition6) in attach-layer-shell-output), (lambda (condition6) in attach-layer-shell-seat), (lambda (condition6) in attach-seat), (lambda (condition7) in attach-input-device), (lambda (condition7) in attach-output), (lambda (condition7) in ensure-capture-bindings), apply-cursor-theme, apply-device-settings, apply-input-if-needed, apply-keyboard-focus, apply-keyboard-layout, apply-lock-state, apply-pointer-delta, apply-repeat-info, arm-capture, attach-input-device, attach-input-manager, attach-layer-shell-output, attach-layer-shell-seat, attach-libinput-config, attach-libinput-device, attach-manager-hooks, attach-output, attach-pointer-bindings, attach-seat, attach-xkb-config, attach-xkb-keyboard, bind-globals, bind-one-global, candidates-for, capture-key-list, collect-dimension-work, compute-layout, declare-window-capabilities, detach-output, detach-seat, detach-window, drain-manage-work, drain-wm-queue, draw-empty-panes, draw-overlays, echo-segments, emit-borders, emit-dimension-work, emit-floats, emit-pending-closes, emit-render-order, emit-rendering-state, emit-window-management-state, emit-window-visible, end-pointer-op, end-prompt, ensure-capture-bindings, ensure-workspaces-for-outputs, evlambda-for-window, float-window-now, forget-overlays-for-output, fresh-workspace, handle-key, handle-unbound-key, hide-overlays, hide-unplaced-windows, ipc-accept-loop, keymap-from-text, libinput-result-hook, load-state, make-canvas, maybe-show-welcome, minimize-window, name-of-window, next-keyboard-layout, on-pointer-enter, on-window-interaction, overlay-commit, overlay-hide, place-rect, place-unplaced-windows, pointer-binding-pressed, pointer-moved, quit, read-node, register-bindings, relayout, request-manage, restore-snapshot, restore-window, restore-window-facts, run-command, run-event-loop, run-hooks, run-key-target, save-state, send-device-setting, send-libinput-setting, send-to-workspace, set-default-layer-output, solo-windows, spawn, spawn-for-empty-pane, start, start-pointer-op-1, warp-pointer, world-role-name
+  read by: echo-content (appearance-policy t), make-workspace (structure-policy t t), on-window-open (lifecycle-policy t window), (lambda (condition0) in libinput-result-hook), (lambda (condition1) in ipc-accept-loop), (lambda (condition11) in attach-xkb-keyboard), (lambda (condition11) in keymap-from-text), (lambda (condition13) in attach-libinput-device), (lambda (condition15) in attach-input-device), (lambda (condition15) in bind-one-global), (lambda (condition17) in emit-window-management-state), (lambda (condition18) in attach-pointer-bindings), (lambda (condition19) in attach-xkb-keyboard), (lambda (condition2) in end-pointer-op), (lambda (condition2) in evlambda-for-window), (lambda (condition2) in start-pointer-op-1), (lambda (condition20) in hide-unplaced-windows), (lambda (condition21) in attach-libinput-device), (lambda (condition23) in attach-seat), (lambda (condition24) in emit-window-management-state), (lambda (condition3) in end-pointer-op), (lambda (condition3) in start-pointer-op-1), (lambda (condition33) in bind-globals), (lambda (condition33) in evlambda-for-window), (lambda (condition34) in evlambda-for-window), (lambda (condition4) in attach-input-manager), (lambda (condition4) in attach-libinput-config), (lambda (condition4) in attach-libinput-device), (lambda (condition4) in attach-manager-hooks), (lambda (condition4) in attach-xkb-config), (lambda (condition4) in attach-xkb-keyboard), (lambda (condition4) in make-canvas), (lambda (condition42) in bind-globals), (lambda (condition5) in register-bindings), (lambda (condition6) in attach-layer-shell-output), (lambda (condition6) in attach-layer-shell-seat), (lambda (condition6) in attach-seat), (lambda (condition7) in attach-input-device), (lambda (condition7) in attach-output), (lambda (condition7) in ensure-capture-bindings), apply-cursor-theme, apply-device-settings, apply-input-if-needed, apply-keyboard-focus, apply-keyboard-layout, apply-lock-state, apply-pointer-delta, apply-repeat-info, arm-capture, attach-input-device, attach-input-manager, attach-layer-shell-output, attach-layer-shell-seat, attach-libinput-config, attach-libinput-device, attach-manager-hooks, attach-output, attach-pointer-bindings, attach-seat, attach-xkb-config, attach-xkb-keyboard, bind-globals, bind-one-global, candidates-for, capture-armed-now-p, capture-key-list, collect-dimension-work, compute-layout, declare-window-capabilities, detach-output, detach-seat, detach-window, drain-manage-work, drain-wm-queue, draw-empty-panes, draw-overlays, echo-segments, emit-borders, emit-dimension-work, emit-floats, emit-pending-closes, emit-render-order, emit-rendering-state, emit-window-management-state, emit-window-visible, end-pointer-op, end-prompt, ensure-capture-bindings, ensure-workspaces-for-outputs, evlambda-for-window, float-window-now, forget-overlays-for-output, fresh-workspace, handle-key, handle-unbound-key, hide-overlays, hide-unplaced-windows, ipc-accept-loop, keymap-from-text, libinput-result-hook, load-state, make-canvas, maybe-show-welcome, minimize-window, name-of-window, next-keyboard-layout, on-pointer-enter, on-window-interaction, output-contents, overlay-commit, overlay-hide, place-rect, place-unplaced-windows, pointer-binding-pressed, pointer-moved, quit, read-node, register-bindings, relayout, request-manage, restore-snapshot, restore-window, restore-window-facts, run-command, run-event-loop, run-hooks, run-key-target, save-state, send-device-setting, send-libinput-setting, send-to-workspace, set-default-layer-output, solo-windows, spawn, spawn-for-empty-pane, start, start-pointer-op-1, warp-pointer, world-role-name
   Let errors reach the debugger instead of being logged and swallowed.
 
 For a REPL that is attached to a running window manager, which is what this
@@ -1556,7 +1642,7 @@ at any size.
 
 *empty-pane-color*
   now: (0.42 0.56 0.78 1.0)
-  read by: border-color (appearance-policy t t)
+  read by: border-color-for (appearance-policy (eql empty))
   Border colour drawn around a focused empty pane.
 
 Deliberately bright.  DESIGN D18 accepts, as a cost of focus being a place,
@@ -1652,7 +1738,7 @@ something can teleport you across your desktop.
 
 *focused-border-color*
   now: (0.4 0.65 1.0 1.0)
-  read by: border-color (appearance-policy t t)
+  read by: border-color-for (appearance-policy (eql focused))
   Border colour of the focused pane, as (R G B A) from 0.0 to 1.0.
 
 Do not make this subtle.  Focus may rest on an *empty* pane, which has no
@@ -2362,7 +2448,8 @@ is what you want if you use floating as a way of *moving* windows around.
 
 *unfocused-border-color*
   now: (0.22 0.22 0.26 1.0)
-  read by: border-color (appearance-policy t t)
+  read by: border-color-for (appearance-policy t)
+  overridden for: border-color-for (appearance-policy (eql :empty)), border-color-for (appearance-policy (eql :cursor)), border-color-for (appearance-policy (eql :focused))
   Border colour of every pane that is not focused.
 
 *warn-on-rebinding*

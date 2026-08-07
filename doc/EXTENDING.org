@@ -437,17 +437,25 @@ whatever is already installed instead of replacing it:
 
 #+begin_src lisp
 (defclass my-mixin (policy)
-  ((my-state :initform nil :accessor my-state)))
+  ((my-state :initform nil :accessor my-state)
+   (previous :initform nil :accessor my-previous)))
 
 (defun enable-mine ()
   (let* ((policy (current-policy))
          (base (class-of policy)))
     (unless (typep policy 'my-mixin)
-      (setf *previous* base)
       (change-class policy
                     (closer-mop:ensure-class
                      (intern (format nil "MINE-OVER-~a" (class-name base)))
-                     :direct-superclasses (list (find-class 'my-mixin) base))))
+                     :direct-superclasses (list (find-class 'my-mixin) base)))
+      (setf (my-previous policy) base))
+    (setf *policy* policy)))
+
+(defun disable-mine ()
+  (let ((policy (current-policy)))
+    (when (typep policy 'my-mixin)
+      (change-class policy (or (my-previous policy)
+                               (find-class 'conventional-policy))))
     (setf *policy* policy)))
 #+end_src
 
@@ -455,12 +463,19 @@ whatever is already installed instead of replacing it:
 through the switch still carrying it; the mixin *first* in the superclass list,
 so your methods win and ~call-next-method~ reaches theirs; the composed class
 interned under a derived name, so enabling twice finds the same class rather
-than minting one and emptying every generic function's dispatch cache. Your
-~disable~ then ~change-class~-es back to the class you saved rather than
+than minting one and emptying every generic function's dispatch cache. The
+disable path ~change-class~-es back to the class you saved rather than
 constructing a fresh ~conventional-policy~ — which is a different object, with
 none of anybody's state on it.
 
-~lattice/commands.lisp~ is exactly this, in about thirty lines, and
+The saved class rides on the mixin itself rather than in a global, which is the
+whole argument for writing a mixin: a slot is the state you were promised, and
+it goes away with the class it belongs to. (~lattice/commands.lisp~ keeps a
+special instead, because it has a second thing to restore — the policy's
+~policy-name~, which is a slot on ~policy~ and would therefore survive the
+change-class it needs to undo.)
+
+~lattice/commands.lisp~ is otherwise exactly this, in about thirty lines, and
 ~lattice:lattice-policy~ is what the composition collapses to when there was
 nothing but the default underneath. Guard against enabling twice: the same
 mixin twice in one precedence list is not a class, and CLOS says so with an

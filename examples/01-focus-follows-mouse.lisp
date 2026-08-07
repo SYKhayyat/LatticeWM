@@ -53,8 +53,16 @@ terminal across the screen repeatedly steals focus from itself."
 
 (defmethod on-focus-change ((policy conventional-policy) world old new)
   (call-next-method)
-  (let* ((node (resolve-path (world-root world) new))
-         (rect (and node (gethash node (prop world :rect-index)))))
+  ;; :RECT-INDEX IS AN ARTIFACT OF THE LAST FRAME AND NOT A PART OF THE WORLD.
+  ;; EMIT writes it after a layout; before the first one there is no table at
+  ;; all, and `(gethash node nil)' is a type error rather than a miss.  Focus
+  ;; changes before the first frame -- restoring a session, a config that opens
+  ;; something, any policy driven from a test -- so the index has to be asked
+  ;; for as a thing that may not be there yet.  MOTION.LISP and SERVER.LISP
+  ;; both already do; this method was the one place that assumed.
+  (let* ((index (prop world :rect-index))
+         (node (and index (resolve-path (world-root world) new)))
+         (rect (and node (gethash node index))))
     (when (and rect *focus-follows-mouse* (primary-seat))
       (multiple-value-bind (x y) (rect-center rect)
         ;; WARP-POINTER is window-management state, so it may only be sent in a

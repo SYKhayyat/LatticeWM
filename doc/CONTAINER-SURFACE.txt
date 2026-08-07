@@ -206,6 +206,7 @@ arrived from — and it is what ordinary navigation uses.
 
   methods:
     (stack)                             ; node.lisp
+    (sequential-container)              ; node.lisp
     (container)                         ; node.lisp
 
 ----------------------------------------------------------------------------
