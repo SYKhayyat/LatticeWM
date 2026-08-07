@@ -71,6 +71,22 @@ RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-i
         release bench run run-bare surface config install install-check \
         uninstall dist clean distclean help
 
+# NOTHING HERE IS SAFE UNDER -j, AND NOTHING SAID SO.
+#
+# `test' and `integration' depend on `toolchain' rather than on `build', so
+# `make -j check' races three SBCLs into one ~/.cache/common-lisp with no
+# locking: two of them compile the same fasl to the same path at the same
+# time, and what the third loads is whichever write finished last.  It fails
+# rarely and inexplicably, which is the worst failure rate there is.
+# `make -j install install-check' is the same shape one level up -- both write
+# ./latticewm.
+#
+# The honest fix is not a dependency graph.  These targets genuinely can run in
+# any order and genuinely cannot run at once, which is exactly what
+# .NOTPARALLEL says; making `test' depend on `build' would serialise them by
+# lying about why.
+.NOTPARALLEL:
+
 all: build gates test
 
 # Every target that runs Lisp depends on this, so the diagnostic above is what
@@ -293,5 +309,11 @@ clean:
 distclean: clean
 	@rm -rf .deps
 
+# THIS WAS `sed -n "1,20p" Makefile' AND THE TARGET LIST ENDS AT 18, so
+# `make help' spilled `LISP ?= sbcl' and a blank line into its own output.
+# install.sh's --help had the same bug in the other direction and ended
+# mid-clause.  A line number is a reference to a position rather than to a
+# thing, and it goes stale the first time anybody writes a sentence above it;
+# the header is the leading comment block, and it ends where the comments do.
 help:
-	@sed -n '1,20p' Makefile
+	@sed -n '1,/^[^#]/p' Makefile | sed -n 's/^# \{0,1\}//p'
