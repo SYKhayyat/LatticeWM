@@ -201,6 +201,15 @@ consed to *ask* — see EMITTED.")
    (running :initform nil :accessor server-running)
    (dirty :initform t :accessor server-dirty
           :documentation "Whether the layout needs recomputing.")
+   (manage-requested :initform nil :accessor server-manage-requested
+                     :documentation
+                     "Whether a manage_dirty we sent has not yet been answered.
+
+Set by REQUEST-MANAGE and cleared by RUN-MANAGE-SEQUENCE, which is the
+:MANAGE-START handler — so it is true exactly over the window between asking
+for a sequence and being given one, and a second ask inside that window is a
+round trip that buys nothing.  There is no third state: the flag is written
+only on the compositor thread.")
    (bindings-dirty :initform nil :accessor server-bindings-dirty
                    :documentation
                    "Whether keybindings need (re)registering at the next manage

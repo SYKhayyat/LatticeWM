@@ -51,6 +51,17 @@ because the model was right."
   "True when we are running on the thread that owns the compositor socket."
   (or (null *wm-thread*) (eq sb-thread:*current-thread* *wm-thread*)))
 
+(defun manage-request-wanted-p ()
+  "Whether asking river for a manage sequence would buy anything.
+
+Named, rather than left as two terms of REQUEST-MANAGE's COND, because it is
+the debounce rule and a rule with a name is a rule that can be stated in one
+place and read in another.  See SERVER-MANAGE-REQUESTED."
+  (and *server*
+       (server-manager *server*)
+       (not (server-manage-requested *server*))
+       t))
+
 (defun request-manage ()
   "Ask river to start a manage sequence, because we want to change something
 only a manage sequence may change.
@@ -65,11 +76,28 @@ from a SWANK REPL raced with whatever the window manager thread was
 marshalling — which does not error, it *hangs*, holding the desktop.  Every
 command that changes window-management state calls this, so without the guard
 below almost the entire command set was a REPL hazard.  Off-thread callers
-queue and wake the loop instead."
+queue and wake the loop instead.
+
+*ASKED AT MOST ONCE PER SEQUENCE*, which is the whole of the debounce and the
+reason the docstring above can say `full round trip' without it being a
+warning nobody can act on.  Every caller sends unconditionally and is right to
+— none of them can know what the others did — but river answers N asks with
+one manage sequence, so the surplus is pure latency.  It is not hypothetical:
+river sends one `dimensions' event per resized window and windows.lisp calls
+MARK-DIRTY for each, so one real layout change asked for N+1 sequences.  The
+flag is cleared at :MANAGE-START, so an ask made *inside* a sequence is a
+genuine ask for the next one and still gets through.
+
+FAILING TOWARDS ASKING AGAIN.  The SETF is inside the BEST-EFFORT and after
+the request, so a send that signals leaves the flag alone and the next caller
+tries again.  The other direction — a flag stuck true — is a window manager
+that has gone deaf, and no log line would say so."
   (cond
-    ((not (and *server* (server-manager *server*))) nil)
+    ((not (manage-request-wanted-p)) nil)
     ((in-wm-thread-p)
-     (best-effort "manage_dirty" (w:wm-manage-dirty (server-manager *server*))))
+     (best-effort "manage_dirty"
+       (w:wm-manage-dirty (server-manager *server*))
+       (setf (server-manage-requested *server*) t)))
     (t (call-in-wm-thread #'request-manage))))
 
 (defun defer-to-manage (thunk)
@@ -204,7 +232,14 @@ Found by a session recorder writing its ending block twice."
 Placement happens here rather than when a window appears, because at the
 moment `window' arrives we know nothing about the window — its app_id, title
 and parent are all still in flight — and SHOULD-FLOAT-P would be answering a
-question about a blank."
+question about a blank.
+
+THE FIRST THING IT DOES IS FORGET THAT IT ASKED.  This is the :MANAGE-START
+handler, so arriving here is the answer to whatever manage_dirty was
+outstanding; everything below may ask for another one and mean it.  Cleared
+before the body rather than after, because the body is exactly where the next
+ask comes from."
+  (setf (server-manage-requested *server*) nil)
   (w:with-manage-sequence ((server-manager *server*))
    (with-watchdog ("manage sequence")
     (when (server-bindings-dirty *server*)

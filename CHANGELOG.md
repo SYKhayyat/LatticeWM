@@ -196,6 +196,18 @@ be able to do before anyone else can depend on it.
   one in the pointer hit test, which runs per motion event — consed a list of
   every window to walk it; `do-windows` walks the table.
 
+- **One layout change asked river for N+1 manage sequences.** `request-manage`
+  sent `manage_dirty` every time it was called, and every caller calls it
+  unconditionally — correctly, since none of them can know what the others just
+  did. River answers all of them with one sequence. It sends one `dimensions`
+  event per resized window and `windows.lisp` calls `mark-dirty` for each, so
+  resizing a workspace of six windows asked for seven round trips of a protocol
+  whose own docstring says it is not a frame clock. A `manage-requested` flag,
+  set inside the `best-effort` and after the request, cleared at
+  `:manage-start` before the body of the sequence runs — so an ask made inside
+  a sequence is a real ask for the next one, and a send that fails leaves the
+  flag alone rather than leaving the window manager quietly deaf.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

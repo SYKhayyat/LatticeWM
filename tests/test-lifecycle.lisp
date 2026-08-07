@@ -1020,3 +1020,44 @@ passes instead of asking twice."
         (is (= 50 h))
         (is (= 0 (p:border-width pol leaf nil))
             "and that is the same number the emitter will send")))))
+
+;;; ------------------------------------------------------ the manage sequence
+
+(test one-layout-change-asks-river-for-one-manage-sequence
+  "REQUEST-MANAGE sent manage_dirty every time it was called.
+
+Every caller sends unconditionally and every caller is right to: none of them
+can know what the others just did.  River answers N of them with one manage
+sequence, so the surplus is latency and nothing else — and it is not
+hypothetical, because river sends one `dimensions' event per resized window
+and windows.lisp calls MARK-DIRTY for each, so one real layout change asked
+for N+1 round trips of a protocol whose own docstring says `it is not a frame
+clock'.
+
+What is asserted here is the rule, not the wire: the send itself needs a
+compositor, and this suite is the half that does not have one.  The failing
+send *is* real — :NOT-A-PROXY is not a wl_proxy — and it is the case worth
+having, because a flag left set by a request that never went out is a window
+manager that has gone quietly deaf, which no log line would report."
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil))
+    (is-false (r::manage-request-wanted-p)
+              "with no manager bound there is nobody to ask")
+    (setf (r::server-manager r:*server*) :not-a-proxy)
+    (is-true (r::manage-request-wanted-p) "and with one, nothing is outstanding")
+    (r:request-manage)
+    (is-true (r::manage-request-wanted-p)
+             "the send failed, so it is not a request outstanding — the flag is
+set after the request and inside the BEST-EFFORT, so this fails towards asking
+again rather than towards silence")
+    ;; What a send that reaches river leaves behind.
+    (setf (r::server-manage-requested r:*server*) t)
+    (is-false (r::manage-request-wanted-p)
+              "the second, third and Nth caller ask for a sequence that is
+already coming")
+    ;; :MANAGE-START, which is the top of RUN-MANAGE-SEQUENCE.
+    (setf (r::server-manage-requested r:*server*) nil)
+    (is-true (r::manage-request-wanted-p)
+             "and it is cleared before the body of the sequence runs, so the
+work done inside one can still ask for the next")))
