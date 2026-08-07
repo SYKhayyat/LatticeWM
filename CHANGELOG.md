@@ -432,7 +432,10 @@ be able to do before anyone else can depend on it.
   `ASSESSMENT.org` — reachable by no documented path — told a visitor the
   program was not usable. Everything but `README` and `INSTALL` is under
   `doc/` now; nothing is deleted, every one of the 140 org links still
-  resolves, and the frozen documents are still frozen.
+  resolves, and the frozen documents are still frozen. `install.sh` flattens
+  them into one `doc/` at the destination — an installed copy has no reason to
+  reproduce the repository's layout, and `make install-check` is what caught
+  the first attempt putting `FINDINGS.org` in `doc/doc/`.
 
 ### Added
 

@@ -212,8 +212,12 @@ for file in EXTENSION-SURFACE.txt CONTAINER-SURFACE.txt HOOKS.txt COMMANDS.txt \
             OPTIONS.txt KEYS.txt EXTENDING.org; do
     [ -f "$root/doc/$file" ] && install -m644 "$root/doc/$file" "$dshare/doc/$file"
 done
+# The two at the root and the two that moved under doc/, flattened into one
+# doc/ directory at the destination -- an installed copy has no reason to
+# reproduce the repository's layout, and $(basename) is what keeps the source
+# path free to move again.
 for file in README.org INSTALL.org doc/FINDINGS.org doc/DESIGN.org; do
-    [ -f "$root/$file" ] && install -m644 "$root/$file" "$dshare/doc/$file"
+    [ -f "$root/$file" ] &&         install -m644 "$root/$file" "$dshare/doc/$(basename "$file")"
 done
 
 # THE LICENCES, AND THE FONT'S IS NOT OPTIONAL.  src/runtime/font.lisp is a
