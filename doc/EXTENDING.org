@@ -793,6 +793,11 @@ and the build fails with the line number. This also means you cannot use an
 earmuffed placeholder — write "an option" rather than a fake one — which is a
 small cost and the reason the check has no false positives to argue with.
 
+*The same is true of the docstrings you write*, with case doing the job the
+markup does here: an earmuffed name in capitals is a name and has to exist, and
+lowercase asterisks are read as the emphasis they are. So =*SMART-GAPS*= in a
+docstring is checked and the *accumulating* hooks are left alone.
+
 *Any sentence can be pinned to the running program with one line.* A =#+CLAIM:=
 keyword holds a form, which is read in ~latticewm/user~ — the same package your
 configuration file is read in, so it says what you would say — and evaluated

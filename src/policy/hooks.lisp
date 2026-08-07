@@ -217,7 +217,7 @@ Each is guarded separately: one broken hook function must not stop the others
 from running, and must certainly not abort whatever the window manager was
 doing when it fired.  A function that signalled contributes NIL.
 
-THE RETURN VALUE IS FOR THE *ACCUMULATING* HOOKS AND NOTHING ELSE.  A hook
+THE RETURN VALUE IS FOR THE ACCUMULATING HOOKS AND NOTHING ELSE.  A hook
 notices that something happened and its answer is normally meaningless — if you
 find yourself wanting one function's return value, you wanted a method.  But a
 handful of hooks are genuinely additive: two status bars should each get their

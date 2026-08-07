@@ -411,7 +411,7 @@ say if you asked them."
 Multi-monitor is one model with one viewport per output (PLAN §fiat), so this
 is a question about where the cursor is rather than about which tree is active.
 
-FROM THE CURSOR'S *RECTANGLE*, NOT ITS WINDOW, and that distinction was a real
+FROM THE CURSOR'S RECTANGLE, NOT ITS WINDOW, and that distinction was a real
 two-monitor bug.  The old version intersected each output with the *cursor's
 window's* rect — so when the cursor rested on a deliberately empty pane, which
 is an ordinary first-class state in this model and not an edge case, there was

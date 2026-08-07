@@ -296,6 +296,35 @@ be able to do before anyone else can depend on it.
   the next-one-to-argue-about said sixty-seven, and the `#+CLAIM:` said 66
   while the surface was at 69. Gate 12 caught the claim, which is what it is
   for; the other three were sitting in the same paragraph.
+- Gate 12 read one kind of prose out of the three it claimed jurisdiction over,
+  and evaluated claims into an image seven later gates go on to question.
+  - **The man pages were on the current list and were being read by nothing.**
+    `marked-tokens` wants a *pair* of `~` or `=` on a line, which roff never
+    writes, and `earmuffed-p` refused the `\-` roff spells every hyphen as. So
+    `doc/latticewm-config.5` named forty earmuffed options — `*smart-gaps*`
+    twice — and the check that exists because of `*smart-gaps*` validated none
+    of them. Roff has no asterisk markup, so those lines are now read whole,
+    escapes undone, as a source block is. 42 names checked.
+  - **Docstrings are read now**, which is where most of this project's
+    load-bearing prose actually is: gate 2 asks whether a docstring exists and
+    nothing asked what it said. The discriminator is case — code is written in
+    capitals here and emphasis in lowercase — which is org's `~...~`
+    distinction spelled in a convention docstrings already follow. 86 names
+    across 1420 docstrings; it found three shouted emphases, which were
+    rewritten rather than exempted.
+  - **A claim can change the image, and gates 14, 15 and 17 all read the image
+    afterwards.** The paragraph in gate 12 asserting that it ran after every
+    gate that asks the image a question was describing an intention. The image
+    is now fingerprinted before and after each claim — every option and its
+    value, every hook and its attachments, the command count, the method count
+    of every generic on both surfaces — and a claim that moved it fails naming
+    itself.
+  - `*generated-documents*` was a `defparameter` with a five-line docstring and
+    exactly one reader in the tree: its own definition. It also named five
+    files where `make surface` writes six, so `doc/HOOKS.txt` was generated,
+    installed, advertised in README and listed nowhere. `doc/*.txt` is
+    enumerated against it now, with a second list for the one file in there
+    that is somebody else's licence text.
 - The mixin recipe in `doc/EXTENDING.org` set a `*previous*` that the program
   does not have and the example never defined, and its `disable` half — the
   whole reason for saving the class — was described but not shown. The saved

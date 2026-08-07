@@ -1024,7 +1024,7 @@ finds it~%"))))
 ;; stranger reading the source, which is the situation the document exists to
 ;; prevent.
 ;;
-;; THREE CHECKS, AND THEY ARE DELIBERATELY OF DIFFERENT KINDS.
+;; FOUR CHECKS, AND THEY ARE DELIBERATELY OF DIFFERENT KINDS.
 ;;
 ;; (a) EVERY PROSE FILE IS CLASSIFIED.  A document is either *current* -- it
 ;;     describes the program as it is, and a false sentence in it is a bug --
@@ -1042,6 +1042,16 @@ finds it~%"))))
 ;;     classification means a new document cannot arrive unchecked, which is
 ;;     the failure mode a list of filenames has.
 ;;
+;;     THE GENERATED DOCUMENTS ARE ENUMERATED THE SAME WAY, and they were not.
+;;     *GENERATED-DOCUMENTS* was a DEFPARAMETER with a five-line docstring and
+;;     one reader in the whole tree -- its own definition -- which is the very
+;;     defect gate 11 abolished for options, grown inside the gate file.  It
+;;     was also wrong: it named five files and `make surface' writes six, so
+;;     doc/HOOKS.txt was generated, installed, advertised in README, and listed
+;;     nowhere.  doc/*.txt is now enumerated against it, with a second list for
+;;     the one .txt in that directory that is somebody else's licence text and
+;;     not ours to check.
+;;
 ;; (b) EVERY OPTION THE CURRENT DOCUMENTS NAME IS REGISTERED.  Automatic, and
 ;;     it needs no cooperation from whoever wrote the sentence.  An earmuffed
 ;;     name in code markup or a source block is a claim that the program has
@@ -1051,9 +1061,36 @@ finds it~%"))))
 ;;     *not* -- a check with a false-positive rate is a check that gets
 ;;     weakened, and this one has none.
 ;;
-;; (c) #+CLAIM: MAKES A SENTENCE EXECUTABLE.  The general mechanism, because
-;;     (b) can only cover the claims that happen to be spelled as names.  A
-;;     line of the form
+;;     THE MAN PAGES ARE PROSE TOO AND THIS COULD NOT READ THEM.  Both of them
+;;     are on *CURRENT-DOCUMENTS*, and MARKED-TOKENS wants a *pair* of ~ or =
+;;     on a line, which roff never writes -- so doc/latticewm-config.5 named
+;;     forty earmuffed options, including *SMART-GAPS* twice, and the check
+;;     that exists because of *SMART-GAPS* validated none of them.  EARMUFFED-P
+;;     then refused hyphens escaped as \- , which is how roff writes every
+;;     hyphen, so *swank\-port* would have failed even with a delimiter.  The
+;;     four hand-written `.\" CLAIM:' lines in that file are the author
+;;     plugging by hand a hole he had no way to see was structural.  Roff has
+;;     no asterisk markup, so a .1 or .5 line is read whole, as a source block
+;;     is, after the escapes are undone.
+;;
+;; (c) EVERY OPTION A DOCSTRING NAMES IS REGISTERED.  The load-bearing prose in
+;;     this project is not all in .org files.  A docstring is the thing a
+;;     stranger reads at the REPL and the thing `--extension-surface' prints,
+;;     and until now no instrument could see one: gate 2 asks whether a
+;;     docstring exists, never what it says.
+;;
+;;     THE DISCRIMINATOR IS CASE, and it is the same trick as (b) rather than a
+;;     new one.  Prose in this tree emphasises with lowercase asterisks -- *not*
+;;     have, the *accumulating* hooks -- and names code in capitals.  Requiring
+;;     capitals is exactly org's ~...~ distinction spelled in the convention
+;;     docstrings already use, and it takes the false-positive rate to nothing:
+;;     of 131 earmuffed mentions in 2078 docstrings, three were shouted
+;;     emphasis and were rewritten rather than exempted, because a name in
+;;     capitals inside an already-shouting sentence was unreadable anyway.
+;;
+;; (d) #+CLAIM: MAKES A SENTENCE EXECUTABLE.  The general mechanism, because
+;;     (b) and (c) can only cover the claims that happen to be spelled as
+;;     names.  A line of the form
 ;;
 ;;         #+CLAIM: (= 65 (length (policy-generics)))
 ;;
@@ -1082,15 +1119,26 @@ finds it~%"))))
 ;; sentence pinnable at the cost of one line, catch the naming rot
 ;; automatically, and refuse to let a new document arrive unclassified.  The
 ;; claim count is printed and has no floor, because prose is deleted along with
-;; the thing it described and a floor would make that a fight; the two
+;; the thing it described and a floor would make that a fight; the three
 ;; automatic checks are what stop this becoming a no-op if the claims went
 ;; away.
 ;;
-;; IT RUNS AFTER EVERY GATE THAT ASKS THE IMAGE A QUESTION, because it evaluates
-;; arbitrary claim forms against that image and installs the shipped keymap to do
-;; it, and none of them should have to reason about what a claim left behind.
-;; Gate 13 follows it and is the one gate that does not care: it reads source
-;; text and the package table, and no claim can change either.
+;; A CLAIM CAN CHANGE THE IMAGE, AND SEVEN GATES READ THE IMAGE AFTER THIS ONE.
+;; The paragraph that used to stand here said this gate "runs after every gate
+;; that asks the image a question", which was a sentence about the intended
+;; ordering rather than about the ordering -- gates 14, 15 and 17 all come
+;; afterwards and all ask.  Gate 14 counts the functions attached to each hook
+;; *in this image*; gate 17 counts the methods on a generic; a claim is an
+;; arbitrary form EVALed in LATTICEWM/USER, and `#+CLAIM: (progn (defmethod
+;; ...) t)' is a legal claim that would move both.  Nothing would have said so.
+;;
+;; So the image is fingerprinted before each claim and again after it, and a
+;; claim that moved it fails naming itself.  The fingerprint is of the shape
+;; the later gates read -- every option and its value, every hook and how many
+;; functions are on it, the command count, and the method count of every
+;; generic on both surfaces.  This does not *prevent* a claim from mutating,
+;; which nothing in this language can; it means a claim that does cannot do it
+;; quietly, which is the whole difference between a rule and a gate.
 
 (defparameter *current-documents*
   '("README.org" "INSTALL.org" "FINDINGS.org"
@@ -1114,9 +1162,24 @@ historical here so that the automatic checks do not run over the log, and its
 live sentences carry #+CLAIM: lines instead -- which work in any file.")
 
 (defparameter *generated-documents* '("doc/EXTENSION-SURFACE.txt" "doc/CONTAINER-SURFACE.txt"
+                                      "doc/HOOKS.txt"
                                       "doc/COMMANDS.txt" "doc/OPTIONS.txt" "doc/KEYS.txt")
   "Written by `make surface' from the running image.  Not prose, cannot drift,
-and doc/latticewm-config.5 says why that is the reference and it is the map.")
+and doc/latticewm-config.5 says why that is the reference and it is the map.
+
+DOC/HOOKS.TXT WAS MISSING FROM THIS LIST for as long as the list existed, and
+the list had no reader, so nothing could tell.  Six files are generated and
+five were named.  Gate 12(a) now enumerates doc/*.txt against this, which is
+what makes the omission cost something.")
+
+(defparameter *verbatim-documents* '("doc/OFL-TERMINUS.txt")
+  "Text in doc/ that is somebody else's and is shipped unaltered.
+
+The Terminus font's licence.  It is not prose about this program, it is not
+generated from it, and editing it would be the one thing its licence forbids --
+so it is classified rather than checked, on the same principle as the
+historical documents: say what a file is, and then the enumeration in (a) can
+be total.")
 
 (defun document-lines (path)
   (with-open-file (in path :external-format :utf-8)
@@ -1137,16 +1200,11 @@ Org's code markup, and the reason this gate reads it rather than the raw text:
               do (push (subseq line (1+ open) close) out)
                  (setf start (1+ close)))))))
 
-(defun source-tokens (line)
-  "Words on LINE with any trailing comment removed.
-
-Inside a Lisp source block the asterisk is unambiguous, so the whole line is
-read -- but a `;' comment in an example is prose again and org bold reappears
-in it, which is exactly where *our* came from."
-  (let* ((code (subseq line 0 (or (position #\; line) (length line))))
-         (out '())
-         (word (make-string-output-stream)))
-    (loop for c across code
+(defun word-tokens (text)
+  "TEXT split into words, where a word is anything a Lisp name may be made of."
+  (let ((out '())
+        (word (make-string-output-stream)))
+    (loop for c across text
           do (if (or (alphanumericp c) (find c "*-/+<>?!"))
                  (write-char c word)
                  (let ((w (get-output-stream-string word)))
@@ -1154,6 +1212,48 @@ in it, which is exactly where *our* came from."
           finally (let ((w (get-output-stream-string word)))
                     (when (plusp (length w)) (push w out))))
     out))
+
+(defun source-tokens (line)
+  "Words on LINE with any trailing comment removed.
+
+Inside a Lisp source block the asterisk is unambiguous, so the whole line is
+read -- but a `;' comment in an example is prose again and org bold reappears
+in it, which is exactly where *our* came from."
+  (word-tokens (subseq line 0 (or (position #\; line) (length line)))))
+
+(defparameter *roff-escapes*
+  '(("\\-" . "-") ("\\&" . "") ("\\fB" . "") ("\\fI" . "") ("\\fR" . "")
+    ("\\fP" . "") ("\\(lq" . "") ("\\(rq" . "") ("\\(em" . "") ("\\(en" . ""))
+  "Roff escapes that appear inside a name or hard against one.
+
+\\- IS THE ONE THAT MATTERS.  Roff writes every hyphen that way, so the man
+pages spell *swank-port* as *swank\\-port* -- and EARMUFFED-P accepts letters,
+digits and hyphens, which that is not.  The rest are here because a font change
+or a quote can sit flush against a name with no space between.")
+
+(defun roff-tokens (line)
+  "Words on a roff LINE, escapes undone.  NIL for a roff comment.
+
+READ WHOLE, AS A SOURCE BLOCK IS, and for the same reason: roff has no
+asterisk markup, so an asterisk on one of these lines is never emphasis.  The
+comment lines are skipped because that is where the `.\\\" CLAIM:' lines live
+and (d) reads those; a name in a comment is a note to the author, not a
+sentence to a user."
+  (let ((trimmed (string-left-trim " " line)))
+    (unless (eql 0 (search ".\\\"" trimmed))
+      (let ((text trimmed))
+        (dolist (escape *roff-escapes*)
+          (let ((from 0))
+            (loop for at = (search (car escape) text :start2 from)
+                  while at
+                  do (setf text (concatenate 'string (subseq text 0 at)
+                                             (cdr escape)
+                                             (subseq text (+ at (length (car escape)))))
+                           from (+ at (length (cdr escape)))))))
+        (word-tokens text)))))
+
+(defun roff-p (path)
+  (member (pathname-type path) '("1" "5") :test #'equal))
 
 (defun earmuffed-p (token)
   (and (> (length token) 2)
@@ -1164,21 +1264,102 @@ in it, which is exactly where *our* came from."
 
 (defun named-options (path)
   "Every *earmuffed* name PATH claims the program has, as (NAME . LINE)."
-  (let ((out '()) (in-source nil))
+  (let ((out '()) (in-source nil) (roff (roff-p path)))
     (loop for line in (document-lines path)
           for number from 1
           for lowered = (string-downcase line)
-          do (cond ((eql 0 (search "#+begin_src" (string-left-trim " " lowered)))
+          do (cond ((and (not roff)
+                         (eql 0 (search "#+begin_src" (string-left-trim " " lowered))))
                     (setf in-source t))
-                   ((eql 0 (search "#+end_src" (string-left-trim " " lowered)))
+                   ((and (not roff)
+                         (eql 0 (search "#+end_src" (string-left-trim " " lowered))))
                     (setf in-source nil))
-                   (t (dolist (token (if in-source
-                                         (source-tokens line)
-                                         (marked-tokens line)))
+                   (t (dolist (token (cond (roff (roff-tokens line))
+                                           (in-source (source-tokens line))
+                                           (t (marked-tokens line))))
                         (when (earmuffed-p token)
                           (pushnew (cons (string-downcase token) number) out
                                    :test #'string= :key #'car))))))
     (nreverse out)))
+
+(defparameter *lattice-option-names*
+  (let ((out '()))
+    (dolist (path (sort (mapcar #'namestring
+                                (directory (merge-pathnames "lattice/*.lisp" *root*)))
+                        #'string<)
+                  (nreverse out))
+      (let ((text (code-of path))
+            (marker "define-option")
+            (start 0))
+        (loop for at = (search marker text :start2 start :test #'char-equal)
+              while at
+              do (setf start (+ at (length marker)))
+                 (let* ((from (position #\* text :start start))
+                        (to (and from (position-if-not
+                                       (lambda (c)
+                                         (or (alphanumericp c) (find c "*-")))
+                                       text :start from))))
+                   (when (and from to (< from (+ start 4)))
+                     (pushnew (string-downcase (subseq text from to)) out
+                              :test #'string=)))))))
+  "Every option the lattice registers, read out of lattice/*.lisp as text.
+
+THE GATE IMAGE DOES NOT LOAD THE LATTICE and must not: gate 4 exists to prove
+the core runs without it, in this image, and it would stop proving anything the
+moment this file loaded it for convenience.  So OPTION-BOUNDP cannot answer for
+*NEW-WORKSPACE-CELLS* -- which doc/latticewm-config.5 names, correctly, in the
+paragraph explaining that enabling the lattice takes *NEW-WORKSPACE* away and
+offers that in its place.  Exactly the trade gate 15 is about.
+
+Text and not READ, because reading the file needs the LATTICE package and the
+package-local nicknames in it, and neither exists here.  CODE-OF has already
+blanked the comments and the strings, so a name in a docstring cannot get in.")
+
+(defun option-named-p (token)
+  "True when TOKEN, an earmuffed name from a document, is a name the program has.
+
+Three ways to be one, and the second two are why this is a function rather than
+a line: a registered tier-0 option; a special that is exported and bound but is
+not a knob, which is what *KEYMAP* and *POLICY* are and they are named all over
+the extension guide; or an option the lattice registers, which this image
+cannot ask about and reads out of the source instead."
+  (let ((symbol (find-symbol (string-upcase token) '#:latticewm/user))
+        (key (intern (string-upcase (string-trim "*" token)) :keyword)))
+    (or (call "latticewm/policy:option-boundp" key)
+        (and symbol (boundp symbol)
+             (member (symbol-package symbol)
+                     (remove nil (mapcar #'find-package
+                                         '("LATTICEWM/CORE" "LATTICEWM/POLICY"
+                                           "LATTICEWM/RUNTIME"))))
+             t)
+        (and (member (string-downcase token) *lattice-option-names* :test #'string=)
+             t))))
+
+(defun variable-named-p (token)
+  "True when TOKEN names a special that exists, exported or not.
+
+THE WIDER TEST, AND IT IS FOR DOCSTRINGS ONLY.  A manual page naming an
+internal special would be promising the reader a knob the program does not
+offer, which is why OPTION-NAMED-P insists on the published surface.  A
+docstring is addressed to whoever is reading the file it is in:
+*RENDER-LEGAL-IN-MANAGE* is not exported and never will be, and WIRE's own
+prose naming it is correct rather than a broken promise.  What is still caught
+is the only thing that was ever wrong with *SMART-GAPS* -- a name for something
+that is not there."
+  (let ((packages (remove nil (mapcar #'find-package
+                                      '("LATTICEWM/CORE" "LATTICEWM/POLICY"
+                                        "LATTICEWM/RUNTIME" "LATTICEWM/WIRE"
+                                        ;; The four worked examples are loaded
+                                        ;; into this image by gate 6 and are
+                                        ;; read in LATTICEWM/USER, so example
+                                        ;; 02's *RULES* -- which its own method
+                                        ;; docstring names, correctly -- lives
+                                        ;; there and nowhere else.
+                                        "LATTICEWM/USER"
+                                        "COMMON-LISP" "SB-EXT")))))
+    (loop for package in packages
+          for symbol = (find-symbol (string-upcase token) package)
+          thereis (and symbol (boundp symbol) t))))
 
 (defun claim-prefix (line)
   "The claim text on LINE, or NIL.  `#+CLAIM:' in org, `.\\\" CLAIM:' in roff."
@@ -1245,6 +1426,85 @@ stand."
                      (incf index)))))
     (nreverse out)))
 
+(defparameter *program-packages*
+  (remove nil (mapcar #'find-package
+                      '("LATTICEWM/CORE" "LATTICEWM/POLICY" "LATTICEWM/RUNTIME"
+                        "LATTICEWM/WIRE")))
+  "The packages whose docstrings are this program's prose.
+
+LATTICEWM/USER is not one of them.  It uses the four and defines almost
+nothing, so walking it walks CL and SBCL as well -- and SBCL's own docstrings
+name SBCL's own specials, which are neither our sentences to check nor our
+options to register.")
+
+(defun program-docstrings ()
+  "Every docstring the program ships, as (WHERE . TEXT).
+
+Symbols, and then the methods, because a method's docstring is not reachable
+from its symbol: a generic with eleven methods has eleven more paragraphs of
+prose than DOCUMENTATION on the name returns, and gate 6 shows that most of the
+interesting ones are methods."
+  (let ((seen (make-hash-table :test #'eq)) (out '()))
+    (dolist (package *program-packages* out)
+      (do-symbols (symbol package)
+        (when (and (eq (symbol-package symbol) package)
+                   (not (gethash symbol seen)))
+          (setf (gethash symbol seen) t)
+          (let ((where (format nil "~(~a~):~(~a~)"
+                               (package-name package) (symbol-name symbol))))
+            (dolist (kind '(variable function type structure setf))
+              (let ((text (ignore-errors (documentation symbol kind))))
+                (when text
+                  (push (cons (format nil "~a (~(~a~))" where kind) text) out))))
+            (let ((function (and (fboundp symbol) (ignore-errors (fdefinition symbol)))))
+              (when (typep function 'generic-function)
+                (dolist (method (sb-mop:generic-function-methods function))
+                  (let ((text (documentation method t)))
+                    (when text
+                      (push (cons (format nil "~a (a method)" where) text) out))))))))))))
+
+(defun code-name-p (token)
+  "True when TOKEN is an earmuffed name written as a name rather than as stress.
+
+CASE IS THE MARKUP A DOCSTRING HAS.  Org draws this distinction with ~...~ and
+gate 12(b) leans on it; a docstring has no delimiters, and inventing a
+convention for one would be a check nobody could satisfy without being told.
+But the convention is already there and universal in this tree: code is written
+in capitals and emphasis is written in lowercase.  *SMART-GAPS* is a name and
+the *accumulating* hooks are a phrase, and no reader has ever had trouble
+telling them apart."
+  (and (earmuffed-p token)
+       (string= token (string-upcase token))
+       (some #'alpha-char-p token)))
+
+(defun image-fingerprint ()
+  "What the gates after this one will find when they ask the image.
+
+Every option and its value, every hook and how many functions are attached,
+how many commands there are, and how many methods are on each generic of both
+surfaces.  Compared with EQUAL, so an option whose value is a structure is
+compared by identity -- which is the right test, because the thing being
+detected is a claim that reached in and put something else there."
+  (flet ((methods-of (name)
+           (let ((function (and (fboundp name) (fdefinition name))))
+             (cons name (if (typep function 'generic-function)
+                            (length (sb-mop:generic-function-methods function))
+                            0)))))
+    (list (mapcar (lambda (row) (list (first row) (third row)))
+                  (call "latticewm/policy:all-options"))
+          (mapcar (lambda (row) (list (first row) (third row)))
+                  (call "latticewm/policy:all-hooks"))
+          (length (call "latticewm/runtime:all-commands"))
+          (mapcar #'methods-of (call "latticewm/policy:policy-generics"))
+          (mapcar #'methods-of (call "latticewm/core:container-protocol-generics")))))
+
+(defun fingerprint-difference (before after)
+  "Which part of the image a claim moved, in words, or NIL when it moved none."
+  (let ((names '("an option's value" "a hook's attachments" "the command count"
+                 "a policy generic's methods" "a container generic's methods")))
+    (loop for was in before for is in after for name in names
+          unless (equal was is) collect name)))
+
 (defun claim-vocabulary-complaint (form)
   "NIL when FORM is written in the program's vocabulary, or why it is not.
 
@@ -1303,25 +1563,40 @@ with."
     (fail 12 "~d classified document~:p that is not there:~{~%    ~a~}"
           (length missing) missing)))
 
+;; (a) again, for the generated half.
+(let* ((tracked (sort (mapcar #'relative (directory (merge-pathnames "doc/*.txt" *root*)))
+                      #'string<))
+       (known (append *generated-documents* *verbatim-documents*))
+       (unclassified (remove-if (lambda (name) (member name known :test #'string=)) tracked))
+       (missing (remove-if (lambda (name) (member name tracked :test #'string=)) known)))
+  (format t "  generated~46t~d~%  verbatim~46t~d~%"
+          (length *generated-documents*) (length *verbatim-documents*))
+  (when unclassified
+    (fail 12 "~d file~:p in doc/ that nothing says the origin of:~{~%    ~a~}~%~
+              ~4tA .txt in doc/ is either written by `make surface' from the~%~
+              ~4trunning image, in which case it goes in *GENERATED-DOCUMENTS*~%~
+              ~4tand `make surface' has to write it, or it is somebody else's~%~
+              ~4ttext shipped unaltered, in which case it goes in~%~
+              ~4t*VERBATIM-DOCUMENTS*.  Anything else is a hand-written~%~
+              ~4tdocument in the directory reserved for ones that cannot drift."
+          (length unclassified) unclassified))
+  (when missing
+    (fail 12 "~d generated document~:p that is not there:~{~%    ~a~}~%~
+              ~4tThe list said `make surface' writes it and the directory says~%~
+              ~4tit does not.  One of the two is wrong, and the one that is~%~
+              ~4twrong is whichever one nobody reads."
+          (length missing) missing)))
+
 ;; (b) every option the current documents name is registered.
-(let ((wrong '()) (named 0))
+(let ((wrong '()) (named 0) (roff 0))
   (dolist (name *current-documents*)
     (dolist (row (named-options (merge-pathnames name *root*)))
       (incf named)
-      (let* ((token (car row))
-             (key (intern (string-upcase (string-trim "*" token)) :keyword))
-             (symbol (find-symbol (string-upcase token) '#:latticewm/user)))
-        (unless (or (call "latticewm/policy:option-boundp" key)
-                    ;; A special that is not a tier-0 option -- *KEYMAP* and
-                    ;; *POLICY* are named all over the extension guide and are
-                    ;; not knobs.  Exported and bound is the test.
-                    (and symbol (boundp symbol)
-                         (member (symbol-package symbol)
-                                 (remove nil (mapcar #'find-package
-                                                     '("LATTICEWM/CORE" "LATTICEWM/POLICY"
-                                                       "LATTICEWM/RUNTIME"))))))
-          (push (format nil "~a:~d  ~a" name (cdr row) token) wrong)))))
-  (format t "  options named by the current documents~46t~d~%" named)
+      (when (roff-p name) (incf roff))
+      (unless (option-named-p (car row))
+        (push (format nil "~a:~d  ~a" name (cdr row) (car row)) wrong))))
+  (format t "  options named by the current documents~46t~d~%~
+             ~4tof those, in the two man pages~46t~d~%" named roff)
   (when wrong
     (fail 12 "~d name~:p the documents say the program has and it does not:~
               ~{~%    ~a~}~%~
@@ -1330,13 +1605,36 @@ with."
               ~4ta reader who types it into a config file and gets nothing."
           (length wrong) (reverse wrong))))
 
-;; (c) every #+CLAIM: is true.
+;; (c) every option a docstring names is registered.
+(let ((wrong '()) (named 0) (strings (program-docstrings)))
+  (dolist (row strings)
+    (dolist (token (remove-if-not #'code-name-p (word-tokens (cdr row))))
+      (incf named)
+      (unless (or (option-named-p token) (variable-named-p token))
+        (pushnew (format nil "~a~%        in ~a" (string-downcase token) (car row))
+                 wrong :test #'string=))))
+  (format t "  docstrings read~46t~d~%  options named by a docstring~46t~d~%"
+          (length strings) named)
+  (when wrong
+    (fail 12 "~d name~:p a docstring says the program has and it does not:~
+              ~{~%    ~a~}~%~
+              ~4tA docstring is what a stranger reads at the REPL and what~%~
+              ~4t`--extension-surface' prints, so a knob named in one is the~%~
+              ~4tsame promise a manual page makes.  If the asterisks were~%~
+              ~4temphasis rather than a name, write the word without them:~%~
+              ~4tshouting a name inside an already-shouting sentence reads as~%~
+              ~4ta name to everybody including this gate."
+          (length wrong) (reverse wrong))))
+
+;; (d) every #+CLAIM: is true, and none of them moved the image.
 ;;
 ;; The shipped keymap is installed first, because the key tables are the most
 ;; read prose in the project and a claim about a binding needs the bindings to
-;; exist.  START never runs in this image, so nothing else has done it.
+;; exist.  START never runs in this image, so nothing else has done it.  It is
+;; done before the first fingerprint is taken, since it is this gate's own
+;; deliberate mutation and not a claim's.
 (call "latticewm/runtime::install-default-keymap")
-(let ((checked 0) (broken '()))
+(let ((checked 0) (broken '()) (moved 0) (fingerprint (image-fingerprint)))
   (dolist (name (append *current-documents* *historical-documents*))
     (dolist (claim (claims-in (merge-pathnames name *root*)))
       (destructuring-bind (line form text prose) claim
@@ -1357,8 +1655,24 @@ with."
                      (handler-case (values (eval form) nil)
                        (error (c) (values nil c)))
                    (cond (condition (broke (format nil "signalled: ~a" condition)))
-                         ((null value) (broke "is false"))))))))))
-  (format t "  #+CLAIM: sentences checked~46t~d~%" checked)
+                         ((null value) (broke "is false")))
+                   ;; Whether it passed or failed.  A claim that answers the
+                   ;; question correctly and changes the image on its way past
+                   ;; is the worse of the two, because nothing downstream would
+                   ;; report anything at all.
+                   (let* ((now (image-fingerprint))
+                          (differences (fingerprint-difference fingerprint now)))
+                     (when differences
+                       (incf moved)
+                       (setf fingerprint now)
+                       (broke (format nil "moved the image: ~{~a~^, ~}~%      ~
+                                           ~4tA claim is read to be asked, not to be run.  ~
+                                           Gates 14, 15~%      ~4tand 17 ask this image ~
+                                           afterwards and would have~%      ~4tanswered ~
+                                           from what this left behind."
+                                      differences)))))))))))
+  (format t "  #+CLAIM: sentences checked~46t~d~%~
+             ~4tof those, that changed the image~46t~d~%" checked moved)
   (if broken
       (fail 12 "~d claim~:p the program contradicts:~{~%    ~a~}~%~
                 ~4tThe sentence and the program disagree.  Fix whichever is~%~

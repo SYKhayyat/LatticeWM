@@ -1293,6 +1293,17 @@ still true about the program, which is the gate this project does not have."
 historical, checks that every option a current one names exists, and evaluates
 any sentence pinned with a =#+CLAIM:= line against the loaded image.
 
+It reads three kinds of prose and it started with one. The two man pages were
+on the current list from the first day and were being read by nothing, because
+the check wanted org's =~...~= markup and roff writes none — forty names in
+=doc/latticewm-config.5=, including =*smart-gaps*= twice, in the check that
+exists because of =*smart-gaps*=. Docstrings were not read at all, which is
+where most of the load-bearing prose in this tree actually is; they are read
+now, on the convention that a name is written in capitals and emphasis is not.
+And a claim is fingerprinted: it is evaluated into the image seven later gates
+go on to question, so the image is measured before and after each one and a
+claim that moved it fails.
+
 It does not pin the two numbers in this table, and the reason is worth saying:
 they are facts about *files*, and a claim may only ask the running program,
 because a claim that can read the source could be satisfied by the source. Gate

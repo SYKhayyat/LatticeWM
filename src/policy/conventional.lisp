@@ -46,7 +46,7 @@ The shipped default, and the base class the lattice extends rather than
 replaces — so that everything below stays true unless the lattice explicitly
 says otherwise.
 
-NOTE WHAT THIS CLASS DOES *NOT* HAVE: methods.  Every default below is
+NOTE WHAT THIS CLASS DOES NOT HAVE: methods.  Every default below is
 specialised on one of the six protocol classes POLICY inherits —
 LAYOUT-POLICY, APPEARANCE-POLICY, MOTION-POLICY, STRUCTURE-POLICY,
 LIFECYCLE-POLICY, INPUT-POLICY — and this subclass deliberately adds nothing.
