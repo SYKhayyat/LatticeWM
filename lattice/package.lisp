@@ -41,7 +41,7 @@ motion runs straight through the cell boundary as though it were not there.")
    #:viewport-cells #:viewport-contains-p #:ensure-visible
    #:zoom-index #:set-zoom #:zoom-origin #:cell-rects #:cell-tracks
    ;; the policy
-   #:lattice-policy
+   #:lattice-mixin #:lattice-policy #:lattice-policy-class
    #:*zoom-mode* #:*zoom-ladder* #:*cell-width* #:*cell-height* #:*cell-gap*
    #:*skip-empty-cells* #:*coordinate-overlay* #:*lattice-border-parity*
    #:*coordinate-tint* #:coordinate-hue #:tag-cell

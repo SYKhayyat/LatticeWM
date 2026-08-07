@@ -323,6 +323,41 @@ made by walking across it is litter rather than intent.  This is the broom."
 ;;; TURNING IT ON
 ;;; ==================================================================
 
+(defvar *policy-before-enable* nil
+  "What the policy was before ENABLE composed the lattice over it, as
+(CLASS . NAME), or NIL when the lattice is not enabled.
+
+DISABLE puts that back.  It used to construct a fresh CONVENTIONAL-POLICY,
+which is only the right answer for a session that never had anything else —
+and the sessions that had something else are exactly the ones the extension
+story is about.")
+
+(defun lattice-policy-class (base)
+  "The class of BASE with LATTICE-MIXIN in front of it.
+
+Three cases, and only the third is interesting.  A policy that is already a
+LATTICE-MIXIN is returned unchanged, because composing the mixin over itself is
+not a class — the two occurrences of LATTICE-MIXIN in the precedence list
+cannot both be more specific than the other, and CLOS says so with an error
+that names neither this function nor the second call to ENABLE that caused it.
+A plain CONVENTIONAL-POLICY gets LATTICE-POLICY, which is that combination
+written down.  Anything else is composed here, and the class is interned under
+a derived name so that enabling twice in one session finds the same class
+rather than minting a new one and invalidating every generic function's cache.
+
+This is the composable half of the class idiom, which CLOS has always given
+away and this extension spent its whole life not taking: the mixin goes in
+front, CALL-NEXT-METHOD reaches the policy that was already installed, and
+whatever slots it was carrying survive because DISABLE changes the class of the
+object rather than replacing it."
+  (cond ((subtypep base 'lattice-mixin) base)
+        ((eq base (find-class 'p:conventional-policy)) (find-class 'lattice-policy))
+        (t (closer-mop:ensure-class
+            (intern (format nil "LATTICE-OVER-~a"
+                            (or (class-name base) "ANONYMOUS-POLICY"))
+                    '#:lattice)
+            :direct-superclasses (list (find-class 'lattice-mixin) base)))))
+
 (defun enable (&key (cols 1) (rows 1) (keys t))
   "Switch the running window manager over to the lattice.  Live.
 
@@ -333,6 +368,16 @@ Wraps each existing workspace in a grid, installs the lattice policy, binds
 the lattice keys, and relays out.  Every window you have open stays open and
 stays where it was, because nothing about them changed — a workspace that was
 a split tree becomes cell (0,0) of a plane whose other cells are empty.
+
+AND WHATEVER POLICY WAS ALREADY INSTALLED STAYS INSTALLED, underneath.  This
+used to be `(setf p:*policy* (make-instance 'lattice-policy))', so loading
+examples/03-master-stack.lisp, running (master-stack) and then calling this
+discarded the master-stack policy without a word — the second party's first
+act, answered with silence and load order.  LATTICE-MIXIN is now composed over
+the class of the policy in force and the object is CHANGE-CLASSed rather than
+replaced, so any slots that policy was carrying survive and CALL-NEXT-METHOD in
+every lattice method reaches its answers.  Calling this twice is a no-op on the
+policy rather than an error.
 
 AND EVERY WORKSPACE MADE AFTERWARDS IS A PLANE TOO, which is not the same
 statement and used not to be true.  This wraps what exists; P:MAKE-WORKSPACE,
@@ -353,7 +398,26 @@ their configuration file by hand before starting anything.  The policy and the
 keys are installed either way; the tree surgery waits for a tree.  Without this
 the shipped starter configuration -- which offers exactly these two lines --
 reported an error under the very tool written to check configurations."
-  (setf p:*policy* (make-instance 'lattice-policy))
+  (let* ((policy (p:current-policy))
+         (base (class-of policy)))
+    (if (typep policy 'lattice-mixin)
+        (r:logmsg :debug "lattice: already composed over ~a; policy left alone"
+                  (p:policy-name policy))
+        (let ((was (p:policy-name policy)))
+          (setf *policy-before-enable* (cons base was))
+          (change-class policy (lattice-policy-class base))
+          ;; CHANGE-CLASS keeps the value of every slot both classes have, and
+          ;; %NAME is one of them — so the initform on LATTICE-MIXIN never runs
+          ;; and the composed policy would have gone on calling itself
+          ;; "conventional".  Naming it here also lets it say what it is
+          ;; composed over, which is the one thing `latticewm --status' could
+          ;; not have told you before.
+          (setf (p:policy-name policy)
+                (if (eq base (find-class 'p:conventional-policy))
+                    "lattice"
+                    (format nil "lattice over ~a" was)))
+          (r:logmsg :info "lattice: policy is now ~a" (p:policy-name policy))))
+    (setf p:*policy* policy))
   ;; Remembered before anything else, so that a workspace created hours later
   ;; is born the same shape as the ones created here.  Without it, ENABLE's
   ;; COLS and ROWS described a moment rather than a session, and workspace 7
@@ -379,7 +443,7 @@ state file written by a version that *does* save the grid — every version sinc
 SERIALIZE-NODE became a protocol — comes back already correct and this does
 nothing at all."
   (let ((world r:*world*))
-    (when (and world (typep p:*policy* 'lattice-policy))
+    (when (and world (typep p:*policy* 'lattice-mixin))
       (enable-in world))))
 
 (defun enable-in (world &key (cols 1) (rows 1))
@@ -459,15 +523,36 @@ panes, because motion never knew the difference."
       keymap)))
 
 (defun disable ()
-  "Go back to the conventional policy without unwrapping the grids.
+  "Take the lattice back off, restoring whatever it was composed over.
+
+Not `go back to the conventional policy'.  That is what this did — a fresh
+CONVENTIONAL-POLICY, so a session that had loaded somebody else's policy first
+lost it here as surely as it lost it in ENABLE, and any slots it was carrying
+went with it.  The class the policy had is remembered in
+*POLICY-BEFORE-ENABLE* and put back, on the same object, so a policy carrying
+state comes back carrying it.
 
 The plane stays in the tree; it simply lays out as a single cell again because
-the conventional policy has no idea what to do with a grid — which is worth
+the policy underneath has no idea what to do with a grid — which is worth
 seeing once, because it is what the container protocol guarantees: an unknown
 container is inert, not broken."
-  (setf p:*policy* (make-instance 'p:conventional-policy))
-  (r:relayout :force t)
-  t)
+  (let ((policy p:*policy*))
+    (cond ((not (typep policy 'lattice-mixin))
+           (r:logmsg :info "lattice: not enabled, so nothing to take off")
+           nil)
+          (t (destructuring-bind (class . name)
+                 (or *policy-before-enable*
+                     (cons (find-class 'p:conventional-policy) "conventional"))
+               (change-class policy class)
+               (setf (p:policy-name policy) name))
+             (setf *policy-before-enable* nil)
+             ;; The hook goes too.  It is inert once the policy is no longer a
+             ;; LATTICE-MIXIN, but a hook that survives the feature it belongs
+             ;; to is a thing to have to reason about later, and REMOVE-HOOK
+             ;; exists precisely so nobody has to.
+             (r:remove-hook :layout-restored 'rewrap-after-restore)
+             (r:relayout :force t)
+             t))))
 
 ;;; ==================================================================
 ;;; MAKING THE VOCABULARY REACHABLE
@@ -485,18 +570,43 @@ an undefined function, and the whole extension appears to be broken while
 working perfectly.
 
 USE-PACKAGE at load time rather than a hand-maintained re-export list, so that
-a command added tomorrow is reachable tomorrow.  Conflicts are reported and
-skipped rather than signalling, because a configuration file that has already
-defined its own ZOOM-OUT should keep it — it is theirs, and refusing to load
-over it would be the wrong way round."
-  (handler-bind ((package-error
-                   (lambda (condition)
-                     (r:logmsg :warn "lattice: ~a (skipping that name)" condition)
-                     (let ((restart (or (find-restart 'cl:continue condition)
-                                        (find-restart 'sb-impl::take-new condition))))
-                       (when restart (invoke-restart restart))))))
-    (ignore-errors (use-package '#:lattice package)))
-  package)
+a command added tomorrow is reachable tomorrow.  Conflicts are resolved in
+favour of the name that was already there, because a configuration file that
+has already defined its own ZOOM-OUT should keep it — it is theirs, and
+refusing to load over it would be the wrong way round.
+
+THE CONFLICTS ARE RESOLVED BEFORE THE USE-PACKAGE RATHER THAN DURING IT.  This
+used to be `(ignore-errors (use-package ...))' under a HANDLER-BIND hunting for
+CL:CONTINUE or SB-IMPL::TAKE-NEW, and if neither restart was found — which is
+not a hypothetical, it is what a symbol conflict between two *used* packages
+gives you — the error escaped to the IGNORE-ERRORS, the whole USE-PACKAGE was
+abandoned partway, and how many names got imported first was unspecified.  The
+extension was then half installed behind one :WARN line, which is precisely the
+failure the paragraph above exists to prevent.  Every name that is already
+spoken for is SHADOWING-IMPORTed first — which pins the user's meaning whether
+theirs is present or inherited — so the USE-PACKAGE that follows has nothing
+left to signal about, and a collision costs one name and one log line."
+  (let ((target (find-package package))
+        (source (find-package '#:lattice)))
+    (unless (and target source)
+      (r:logmsg :warn "lattice: no package ~a; vocabulary not installed" package)
+      (return-from install-vocabulary nil))
+    (let ((taken '()))
+      (do-external-symbols (symbol source)
+        (multiple-value-bind (theirs status)
+            (find-symbol (symbol-name symbol) target)
+          (when (and status (not (eq theirs symbol)))
+            (push theirs taken))))
+      (when taken
+        ;; Theirs, kept: SHADOWING-IMPORT of a symbol already present is how
+        ;; you say "this name is decided" without changing what it means.
+        (shadowing-import taken target)
+        (r:logmsg :warn "lattice: ~d name~:p in ~a already meant something else ~
+and still do: ~{~a~^ ~}"
+                  (length taken) (package-name target)
+                  (sort (mapcar #'symbol-name taken) #'string<)))
+      (use-package source target))
+    target))
 
 ;; Do it on load, so that `(load-extension "lattice")' is the whole of the
 ;; installation and `lattice:enable' is genuinely optional.

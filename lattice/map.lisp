@@ -94,7 +94,7 @@ except at a threshold set within a few pixels of a boundary."
               (< (floor (reduce #'+ (mapcar #'c:rect-w columns)) (length columns))
                  *map-threshold*)))))
 
-(defmethod p:layout-children :around ((policy lattice-policy) (grid grid) rect)
+(defmethod p:layout-children :around ((policy lattice-mixin) (grid grid) rect)
   "Place nothing at all once the cells are too small to be worth rendering.
 
 Returning no placements is what puts the windows away: the layout driver walks
@@ -153,7 +153,7 @@ should."
   (let* ((grid (current-grid))
          (policy (p:current-policy))
          (overlay (r:overlay-for :lattice/map output)))
-    (unless (and grid output (typep policy 'lattice-policy))
+    (unless (and grid output (typep policy 'lattice-mixin))
       (r:overlay-hide overlay)
       (return-from draw-map-on nil))
     (let ((area (p:outer-rect policy output)))

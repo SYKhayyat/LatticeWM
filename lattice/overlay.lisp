@@ -79,7 +79,7 @@ coordinates onto the first, at positions that meant nothing there."
   (let* ((grid (current-grid))
          (policy (p:current-policy))
          (overlay (r:overlay-for :lattice/coordinates output)))
-    (unless (and output (typep policy 'lattice-policy))
+    (unless (and output (typep policy 'lattice-mixin))
       (return-from draw-coordinate-overlay-on nil))
     (unless (overlay-wanted-p grid (p:outer-rect policy output))
       (r:overlay-hide overlay)

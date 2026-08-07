@@ -953,3 +953,115 @@ ever stated that there are nineteen."
                (subseq (c:node-signature b) 0 8))
         "two grids with the same tracks entered in a different order must
 compare equal")))
+
+;;; ================================================ composing with a peer
+
+;;; The claim under test is the one the whole project rests on: that a second
+;;; party can extend this.  Their first act is to load their extension next to
+;;; the one that ships, and until now the answer was "one of you wins, silently,
+;;; by load order" — ENABLE was (setf p:*policy* (make-instance 'lattice-policy))
+;;; and DISABLE was a fresh CONVENTIONAL-POLICY, so a policy loaded first was
+;;; discarded by the first and could not be got back by the second.
+;;;
+;;; PEER-POLICY stands in for examples/03-master-stack.lisp: a policy class with
+;;; a slot and a method, which is the shape the class idiom exists to support and
+;;; exactly what a replacement throws away.
+
+(defclass peer-policy (p:conventional-policy)
+  ((flavour :initarg :flavour :initform :peer :accessor peer-flavour)
+   (p::%name :initform "peer")))
+
+(defmethod p:gaps ((policy peer-policy) (container c:split))
+  "A number no shipped default returns, so 'whose method ran' has one answer."
+  37)
+
+(test enable-composes-the-lattice-over-a-policy-that-is-already-there
+  (let ((p:*policy* (make-instance 'peer-policy :flavour :mine))
+        (r:*world* nil))
+    (l:enable :keys nil)
+    (is-true (typep p:*policy* 'l:lattice-mixin) "the lattice is on")
+    (is-true (typep p:*policy* 'peer-policy)
+             "and the peer is still underneath it rather than discarded")
+    (is (eq :mine (peer-flavour p:*policy*))
+        "carrying the slot it was carrying, because the object was
+CHANGE-CLASSed rather than replaced — a policy that keeps per-session state is
+the only reason to write a policy class at all")
+    (is (= 37 (p:gaps p:*policy* (c:make-split :horizontal (list (c:make-leaf)))))
+        "and still answering for everything the lattice does not override")
+    (is (equal "lattice over peer" (p:policy-name p:*policy*))
+        "which the policy says out loud, because CHANGE-CLASS keeps %NAME and
+a composed policy calling itself \"peer\" would be the same silence in reverse")))
+
+(test disable-restores-what-was-there-rather-than-a-fresh-conventional-policy
+  (let ((p:*policy* (make-instance 'peer-policy :flavour :mine))
+        (r:*world* nil))
+    (l:enable :keys nil)
+    (is-true (l:disable))
+    (is-false (typep p:*policy* 'l:lattice-mixin) "the lattice is off")
+    (is-true (typep p:*policy* 'peer-policy) "and what is left is the peer")
+    (is (eq :mine (peer-flavour p:*policy*)) "with its state intact")
+    (is (equal "peer" (p:policy-name p:*policy*)) "and its name back")
+    (is-false (l:disable) "and disabling twice is a no-op, not a fresh policy")))
+
+(test the-shipped-composition-is-the-one-with-a-name
+  (let ((p:*policy* (make-instance 'p:conventional-policy))
+        (r:*world* nil))
+    (l:enable :keys nil)
+    (is-true (typep p:*policy* 'l:lattice-policy)
+             "over nothing in particular, LATTICE-MIXIN + CONVENTIONAL-POLICY is
+LATTICE-POLICY — the combination written down, which is what every document and
+worked example already names")
+    (is (equal "lattice" (p:policy-name p:*policy*)))
+    (l:disable)
+    (is (eq (find-class 'p:conventional-policy) (class-of p:*policy*))
+        "and taking it off leaves exactly the class that was there")))
+
+(test enabling-twice-composes-once
+  (let ((p:*policy* (make-instance 'peer-policy))
+        (r:*world* nil))
+    (l:enable :keys nil)
+    (let ((class (class-of p:*policy*)))
+      (finishes (l:enable :keys nil))
+      (is (eq class (class-of p:*policy*))
+          "LATTICE-MIXIN twice in one precedence list is not a class, and the
+error CLOS gives for it names neither this extension nor the second call")
+      (l:disable)
+      (is-true (typep p:*policy* 'peer-policy)
+               "and one DISABLE is still enough to undo one ENABLE"))))
+
+(test the-composed-class-is-interned-and-not-minted-per-call
+  (let ((base (find-class 'peer-policy)))
+    (is (eq (l:lattice-policy-class base) (l:lattice-policy-class base))
+        "a fresh class per call would invalidate every generic function's
+dispatch cache for the lifetime of the session")
+    (is-true (subtypep (l:lattice-policy-class base) 'l:lattice-mixin))
+    (is-true (subtypep (l:lattice-policy-class base) 'peer-policy))
+    (is (eq (find-class 'l:lattice-policy)
+            (l:lattice-policy-class (find-class 'p:conventional-policy))))
+    (is (eq (find-class 'l:lattice-policy)
+            (l:lattice-policy-class (find-class 'l:lattice-policy)))
+        "and a policy that already has the mixin is returned unchanged")))
+
+;;; ------------------------------------------------------- the vocabulary
+
+(test a-name-already-spoken-for-costs-that-name-and-not-the-vocabulary
+  "INSTALL-VOCABULARY used to be (ignore-errors (use-package ...)) under a
+HANDLER-BIND hunting for restarts that a symbol conflict does not always offer.
+When it did not find one the error escaped, the USE-PACKAGE was abandoned
+partway through, and how many names had been imported first was unspecified —
+the extension half installed behind one :WARN line, which is the exact failure
+the function's own docstring exists to prevent."
+  (let ((package (make-package "LATTICE-VOCABULARY-TEST" :use '(#:cl))))
+    (unwind-protect
+         (let ((theirs (intern "ZOOM-OUT" package)))
+           (setf (symbol-value theirs) :theirs)
+           (l:install-vocabulary package)
+           (is (eq theirs (find-symbol "ZOOM-OUT" package))
+               "the name they had already defined is still theirs")
+           (is (eq 'l:pan-to-cursor (find-symbol "PAN-TO-CURSOR" package))
+               "and one collision costs one name: the rest of the vocabulary
+arrived, which is the whole difference between this and an unspecified prefix
+of it")
+           (is (eq 'l:enable (find-symbol "ENABLE" package))
+               "including the two names the documentation tells people to type"))
+      (delete-package package))))

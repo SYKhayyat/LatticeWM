@@ -119,6 +119,26 @@ be able to do before anyone else can depend on it.
   called after commands, after the control socket, and after the REPL queue
   drains. `load-state` re-baselines against the layout it restored.
 
+- **The flagship extension discarded whatever policy was already installed.**
+  `lattice:enable` was `(setf p:*policy* (make-instance 'lattice-policy))` and
+  `lattice:disable` was a fresh `conventional-policy`, so loading
+  `examples/03-master-stack.lisp`, running `(master-stack)` and then enabling
+  the lattice threw the master-stack policy away without a word — and disabling
+  did not give it back. The teaching material and the flagship demonstrated two
+  idioms that could not be used together, in a project whose central open
+  question is whether a *second* party can extend it. The lattice's methods now
+  specialise on `lattice-mixin`, which `enable` composes over the class of the
+  policy in force with `change-class`, so slots survive and `call-next-method`
+  reaches the policy underneath; `disable` restores the class it saved.
+  `doc/EXTENDING.org` says which idiom to write and why.
+- **`install-vocabulary` could leave the extension half installed.** It was
+  `(ignore-errors (use-package '#:lattice package))` under a `handler-bind`
+  hunting for `cl:continue` or `sb-impl::take-new`; with neither restart
+  present the error escaped, the `use-package` was abandoned partway, and how
+  many names had been imported first was unspecified — behind one `:warn` line.
+  Names already spoken for are `shadowing-import`ed first, so a collision costs
+  one name rather than an unknown prefix of the vocabulary.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

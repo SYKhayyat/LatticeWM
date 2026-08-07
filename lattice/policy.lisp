@@ -6,7 +6,7 @@
 
 (in-package #:lattice)
 
-(defclass lattice-policy (p:conventional-policy)
+(defclass lattice-mixin (p:policy)
   ;; %NAME, not NAME.  A slot is identified by its *symbol*, so writing
   ;; (name :initform "lattice") in this package would declare a brand new
   ;; LATTICE::NAME slot alongside the inherited one rather than overriding it,
@@ -16,7 +16,36 @@
   ;; mistake impossible to make by accident.
   ((p::%name :initform "lattice"))
   (:documentation
+   "The plane, as something you put *in front of* a policy rather than instead
+of one.
+
+EVERY METHOD IN THIS DIRECTORY SPECIALISES ON THIS CLASS, NOT ON
+LATTICE-POLICY, and that is the whole of the difference.  A mixin can be put in
+front of a policy somebody else wrote; a subclass of CONVENTIONAL-POLICY can
+only replace it.  The extension surface ships two idioms — methods on the
+protocol classes, which compose and cannot carry slots, and a policy class,
+which carries slots and used not to compose — and the flagship extension used
+the one that quietly discarded whatever was already installed.  Load
+examples/03-master-stack.lisp, run (master-stack), then (lattice:enable), and
+the master-stack policy vanished without a word.
+
+So this class inherits from POLICY rather than from CONVENTIONAL-POLICY: it
+supplies no defaults of its own and expects to sit above whatever does.
+ENABLE composes it over the class of the policy in force — see
+LATTICE-POLICY-CLASS — and CALL-NEXT-METHOD in any method below reaches that
+policy's answer rather than the shipped one.  The lattice is the arrangement of
+*cells*; what is inside a cell stays whatever the policy underneath says it
+is."))
+
+(defclass lattice-policy (lattice-mixin p:conventional-policy)
+  ()
+  (:documentation
    "The conventional policy, plus a plane.
+
+The composition ENABLE reaches for when nothing else is installed, which is
+everybody's first run — named, rather than generated, because it is the one
+combination worth being able to write down, and because MAKE-INSTANCE of it is
+what every document, test and worked example already says.
 
 Subclassing rather than replacing is the point.  Splits still split, tabs are
 still tabs, floats still float, minimize still leaves the tree — every
@@ -272,7 +301,7 @@ failure that does not announce itself."
         (tag-cell (c:child-at node child-address) address bounds))))
   node)
 
-(defmethod p:layout-children ((policy lattice-policy) (grid grid) rect)
+(defmethod p:layout-children ((policy lattice-mixin) (grid grid) rect)
   "Place the visible cells; everything else is not laid out and is hidden.
 
 Cells outside the viewport are deliberately omitted rather than positioned
@@ -284,7 +313,7 @@ optional, since newly created windows are shown unless explicitly hidden."
     (dolist (entry placed placed)
       (tag-cell (c:child-at grid (car entry)) (car entry) rect))))
 
-(defmethod p:keys-hint ((policy lattice-policy) world)
+(defmethod p:keys-hint ((policy lattice-mixin) world)
   "Add the two facts about cells that nothing else can teach.
 
 The core hint says how to open, split, move and close.  Loading the lattice
@@ -309,7 +338,7 @@ lines, with no edit to anything under src/."
         (format nil "~a  |  past a cell edge = next cell  ~a+- zoom out"
                 core mod)))))
 
-(defmethod p:cursor-place-name ((policy lattice-policy) world)
+(defmethod p:cursor-place-name ((policy lattice-mixin) world)
   "The cell coordinate: 3,-2 rather than 0.1.0.
 
 THIS METHOD IS THE ONE THE CORE USED TO WRITE FOR US.  The shipped ECHO-CONTENT
@@ -326,7 +355,7 @@ lattice puts in the status line already worked this way; see KEYS-HINT."
          (address (and node (c:prop node :lattice/address))))
     (if address (cell-string address) (call-next-method))))
 
-(defmethod p:clip-rect ((policy lattice-policy) node rect)
+(defmethod p:clip-rect ((policy lattice-mixin) node rect)
   "Crop a cell that hangs over the viewport edge.
 
 This is the payoff of the best find in the protocol.  Under :FIXED zoom the
@@ -352,7 +381,7 @@ program registers and nothing reads, one mechanism over."
                    visible
                    (call-next-method)))))))
 
-(defmethod p:gaps ((policy lattice-policy) (grid grid))
+(defmethod p:gaps ((policy lattice-mixin) (grid grid))
   "Pixels between cells, which is *CELL-GAP* and not *GAPS*.
 
 The two are separate knobs on purpose: the gap between panes inside a cell is
@@ -392,7 +421,7 @@ y by about a fifth of that again."
       (0 (values v t* p)) (1 (values q v p)) (2 (values p v t*))
       (3 (values p q v)) (4 (values t* p v)) (5 (values v p q)))))
 
-(defmethod p:border-color ((policy lattice-policy) node focusedp)
+(defmethod p:border-color ((policy lattice-mixin) node focusedp)
   "Neutral, tinted toward the cell's own colour.
 
 The tint is applied to *both* the focused and unfocused colour, and that is
@@ -432,7 +461,7 @@ coloured thing."
                        (+ (* b (- 1 mix)) (* hb mix))
                        a)))))))))
 
-(defmethod p:border-width ((policy lattice-policy) node focusedp)
+(defmethod p:border-width ((policy lattice-mixin) node focusedp)
   "A thicker border on the cell that has the keyboard.
 
 Colour alone is not enough at a glance across a 3x2 view, and a border that is
@@ -448,7 +477,7 @@ going there."
 ;;; MOTION — the one that makes the whole thing feel like a place
 ;;; ==================================================================
 
-(defmethod p:step-address ((policy lattice-policy) (grid grid) address direction)
+(defmethod p:step-address ((policy lattice-mixin) (grid grid) address direction)
   "Move one cell, creating it if it does not exist yet.
 
 The plane is infinite, so 'the cell to the left' always exists in principle;
@@ -477,7 +506,7 @@ instead: the spreadsheet Ctrl+Arrow idiom, and DESIGN D3's modified motion."
     (ensure-visible grid next)
     next))
 
-(defmethod p:entry-address ((policy lattice-policy) (grid grid)
+(defmethod p:entry-address ((policy lattice-mixin) (grid grid)
                             direction reference rects)
   "Arriving at the plane from outside — from another workspace, say.
 
@@ -506,7 +535,7 @@ queries free of side effects."
                  (ensure-visible grid address)
                  address)))))
 
-(defmethod p:on-focus-change ((policy lattice-policy) world old new)
+(defmethod p:on-focus-change ((policy lattice-mixin) world old new)
   "Remember which cell each plane was left standing in.
 
 Per *plane*, on the plane's own PROPS, rather than one global 'last cell' —
@@ -525,7 +554,7 @@ a feature two layers away with no visible connection to the lattice."
             do (setf (c:prop node :lattice/last-cell) address)))
   (call-next-method))
 
-(defmethod p:motion-escapes-p ((policy lattice-policy) (grid grid) direction)
+(defmethod p:motion-escapes-p ((policy lattice-mixin) (grid grid) direction)
   "Motion never leaves the plane, because the plane has no edge.
 
 D6: the lattice is genuinely infinite.  No hard bound, no growable-but-bounded
@@ -757,7 +786,7 @@ Returns (values COLS ROWS ORIGIN)."
                        (t (cell 0 0)))))
     (values (max 1 (car zoom)) (max 1 (cdr zoom)) origin)))
 
-(defmethod p:make-workspace ((policy lattice-policy) world index)
+(defmethod p:make-workspace ((policy lattice-mixin) world index)
   "A workspace is a plane.  Always, and not only the ones ENABLE happened to see.
 
 This one method is the entire Z axis.  Everything else that 'infinite
