@@ -456,7 +456,7 @@ make test     # the unit suite alone
 make integration  # a real river, headless, driven for a few seconds
 make check    # all of the above -- what CI should run
 make run      # river nested inside your current session
-make image    # dump ./latticewm
+make image    # dump ./latticewm -- 13 MB; make image-fast for the dev loop
 make surface  # regenerate the docs under doc/
 #+end_src
 

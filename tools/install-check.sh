@@ -86,6 +86,30 @@ present share/latticewm/protocol/PINNED
 # asked for -- not the build tree, and not whatever `river' resolves to at
 # login.  This is the half of the install that a file-existence check cannot
 # see: a launcher pointing at the wrong river fails at a login screen.
+# AND HOW BIG IT IS, WHICH IS THE ONE PROPERTY EVERY CHECK HERE WAS BLIND TO.
+#
+# `image' used to force LATTICEWM_COMPRESS=0 and produce 190 MB while `release'
+# took the default and produced 13, `install' depended on `image', and
+# `release' was named by zero documents, zero CI jobs and zero gates.  So the
+# nix path -- which runs tools/image.lisp with no variable at all -- shipped
+# 13 MB and every source install on every other distribution shipped 190.
+# Nothing could see it: every assertion above asks whether a file *exists*.
+#
+# The ceiling is generous on purpose.  It is not a size budget and it must not
+# become one; it is the difference between a compressed image and an
+# uncompressed one, which is fourteen times, and anything that trips it is a
+# packaging accident rather than a few kilobytes of growth.
+size_ceiling_mb=60
+if [ -f "$prefix/bin/latticewm" ]; then
+    size_mb=$(( $(wc -c < "$prefix/bin/latticewm") / 1048576 ))
+    if [ "$size_mb" -gt "$size_ceiling_mb" ]; then
+        fail "the installed binary is ${size_mb} MB, over the ${size_ceiling_mb} MB ceiling;
+  that is the uncompressed image.  \`make image' compresses by default --
+  something installed the output of \`make image-fast', or set
+  LATTICEWM_COMPRESS=0 on the way to a prefix."
+    fi
+fi
+
 if [ -f "$prefix/bin/latticewm-session" ]; then
     grep -q "$prefix/bin/latticewm" "$prefix/bin/latticewm-session" ||
         fail "the launcher does not run the installed binary"

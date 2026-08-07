@@ -11,7 +11,8 @@
 #   make check       all of the above -- what CI runs, and what to run before
 #                    pushing.  Fails rather than skips when river or a terminal
 #                    emulator is missing; REQUIRE_INTEGRATION=0 to forgive that
-#   make image       dump ./latticewm, one executable
+#   make image       dump ./latticewm, one executable -- compressed, 13 MB
+#   make image-fast  the same, uncompressed: 190 MB, ~350 ms faster to start
 #   make run         run nested inside the current Wayland session
 #   make surface     regenerate the generated documents under doc/
 #   make install     ./latticewm, a session entry and a man page into $(PREFIX)
@@ -66,9 +67,9 @@ endif
 RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-interactive \
                  --load tools/prelude.lisp
 
-.PHONY: all deps toolchain build gates test integration check image release bench \
-        run run-bare surface config install install-check uninstall dist clean \
-        distclean help
+.PHONY: all deps toolchain build gates test integration check image image-fast \
+        release bench run run-bare surface config install install-check \
+        uninstall dist clean distclean help
 
 all: build gates test
 
@@ -136,15 +137,36 @@ check: build gates test integration
 # save-lisp-and-die does not cost live redefinition: the dumped core retains
 # the compiler, so SWANK connects and DEFMETHOD still works at runtime.  This
 # is StumpWM's shipping model and it is proven.
+#
+# THE SHIPPING IMAGE IS THE DEFAULT NOW, AND IT WAS THE EXCEPTION.  There were
+# two targets for one artifact: `image' forced LATTICEWM_COMPRESS=0 and
+# produced 190 MB, `release' took the default and produced 13.  `install'
+# depended on `image', INSTALL.org's canonical five-line install is `make
+# image', and `release' was referenced by zero documents, zero CI jobs and zero
+# gates -- so the nix path, which runs tools/image.lisp with no variable at
+# all, shipped 13 MB and every source install on every other distribution
+# shipped 190.  A 14x difference decided by which of two targets a document
+# happened to name.
+#
+# One target, one variable, and the ship value is the default.  The fast image
+# is `make image-fast', which is what the development loop below uses; it is
+# the same 350 ms of one-time startup, paid once per session by a program that
+# then runs for weeks, against a rebuild you do fifty times an hour.
+LATTICEWM_COMPRESS ?= 22
+
 image: toolchain
-	@LATTICEWM_COMPRESS=0 $(RUN) --load tools/image.lisp
+	@LATTICEWM_COMPRESS=$(LATTICEWM_COMPRESS) $(RUN) --load tools/image.lisp
 	@ls -lh latticewm
 
-# The shipping image: zstd-compressed, 13 MB against 190, for ~350 ms of
-# one-time startup.
-release: toolchain
-	@$(RUN) --load tools/image.lisp
-	@ls -lh latticewm
+# Uncompressed, for the loop where the image is rebuilt constantly.  Not for
+# installing: nothing here or in any document sends it to a prefix.
+image-fast: LATTICEWM_COMPRESS = 0
+image-fast: image
+
+# `make release' was the name of the target that shipped the good binary, and
+# nothing named it.  Kept as an alias so the name still works, and deliberately
+# not as a second recipe, because a second recipe is how this started.
+release: image
 
 bench: toolchain
 	@$(RUN) --load tools/bench.lisp
@@ -153,12 +175,12 @@ bench: toolchain
 # runs *inside* the session you are already in, in a window.  That is the whole
 # development loop: your editor on one side, river-in-a-window on the other,
 # SLIME between them, and no second machine.
-run: image
+run: image-fast
 	@echo "starting river with LatticeWM inside the current session..."
 	@river -log-level info -c "$(CURDIR)/latticewm --log-level debug"
 
 # The same thing, but from a TTY, with river taking the whole screen.
-run-bare: image
+run-bare: image-fast
 	@river -c "$(CURDIR)/latticewm"
 
 # THIS TARGET USED TO TRUNCATE THE SHIPPED DOCUMENTATION AND EXIT 0.
