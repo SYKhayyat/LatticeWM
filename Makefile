@@ -16,9 +16,18 @@
 #   make surface     regenerate the generated documents under doc/
 #   make install     ./latticewm, a session entry and a man page into $(PREFIX)
 #   make install-check  install to a scratch prefix, check it, take it out again
+#   make dist        dist/latticewm-$(VERSION).tar.gz, from the git index
 
 LISP        ?= sbcl
 PREFIX      ?= $(HOME)/.local
+
+# ONE VERSION, READ, NOT REPEATED.  It used to be written out in latticewm.asd,
+# lattice.asd, flake.nix and the .TH line of both man pages, and the sole git
+# tag was `v0.1' and matched none of them.  Both .asd files read this file with
+# ASDF's :read-file-line, flake.nix reads it with builtins.match, and gate 19
+# holds the man pages to it.  `sed 1q' rather than `cat' so a second line in
+# the file is a comment rather than part of the version.
+VERSION     := $(shell sed -n '1s/[[:space:]]*//gp' VERSION)
 
 # A CONTRIBUTOR'S FIRST COMMAND SHOULD NOT BE THE ONE THAT FAILS.  `make test'
 # used to end in `sbcl: command not found' with no further comment, including
@@ -58,7 +67,7 @@ RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-i
                  --load tools/prelude.lisp
 
 .PHONY: all deps toolchain build gates test integration check image release bench \
-        run run-bare surface config install install-check uninstall clean \
+        run run-bare surface config install install-check uninstall dist clean \
         distclean help
 
 all: build gates test
@@ -208,8 +217,39 @@ uninstall:
 install-check: image
 	@./tools/install-check.sh
 
+# A RELEASE TARBALL, WHICH THIS PROJECT HAD NO WAY TO PRODUCE.
+#
+# Every distribution's packaging starts by fetching one, and the stated
+# requirement is that this survive without its author -- so the one act it had
+# no machinery for was handing a version to somebody else.  There was no `make
+# dist', no CHANGELOG, no VERSION, and the sole tag matched none of the four
+# places the version was written out.
+#
+# `git archive' rather than `tar', so what ships is exactly what is tracked:
+# no .deps/, no fasl cache, no 190 MB image someone left in the tree, and no
+# question about whether a file was included by accident.
+#
+# It refuses on a dirty tree and on a tag that disagrees, because a tarball
+# whose contents are not the tag is the same defect as a version written in
+# four places, one artifact further out.
+dist:
+	@test -n "$(VERSION)" || { echo "make dist: VERSION is empty" >&2; exit 1; }
+	@git diff-index --quiet HEAD -- || \
+	  { echo "make dist: the tree is dirty; commit or stash first" >&2; exit 1; }
+	@if git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null; then \
+	   test "$$(git rev-parse "v$(VERSION)^{commit}")" = "$$(git rev-parse HEAD)" || \
+	     { echo "make dist: tag v$(VERSION) exists and is not HEAD" >&2; exit 1; }; \
+	 else \
+	   echo "make dist: note -- no tag v$(VERSION) yet; see CHANGELOG.md" >&2; \
+	 fi
+	@mkdir -p dist
+	@git archive --format=tar.gz --prefix="latticewm-$(VERSION)/" \
+	  -o "dist/latticewm-$(VERSION).tar.gz" HEAD
+	@ls -lh "dist/latticewm-$(VERSION).tar.gz"
+
 clean:
 	@rm -f latticewm
+	@rm -rf dist
 	@rm -rf $(HOME)/.cache/common-lisp/*/$(CURDIR)
 
 # Everything bootstrap.sh downloaded.  Separate from `clean' because it costs

@@ -27,6 +27,22 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forEach = f: nixpkgs.lib.genAttrs systems f;
 
+      # The project's version, read out of the one file that holds it.  Both
+      # .asd files read the same file with ASDF's :read-file-line, and gate 19
+      # holds the man pages to it too.  Same shape as pinnedRiver in shell.nix,
+      # which reads river's version out of src/protocol/PINNED and carries the
+      # argument for doing it: a copy that can disagree with the thing it
+      # describes is worse than no copy at all.
+      latticewmVersion =
+        let
+          line = builtins.head
+            (builtins.split "\n" (builtins.readFile ./VERSION));
+          matched = builtins.match "[[:space:]]*([0-9][0-9.]*).*" line;
+        in
+        if matched == null
+        then throw "flake.nix: VERSION does not begin with a version number"
+        else builtins.head matched;
+
       # Everything that varies by system, computed once per system and then
       # projected into the three output attrsets a flake wants.
       envFor = system:
@@ -50,7 +66,13 @@
 
           latticewm = pkgs.stdenv.mkDerivation {
             pname = "latticewm";
-            version = "0.1.0";
+            # READ, NOT REPEATED.  This said "0.1.0" and so did latticewm.asd,
+            # lattice.asd and the .TH line of both man pages, and the sole git
+            # tag said v0.1 and matched none of them.  Twenty lines below, this
+            # file reads *river's* version out of src/protocol/PINNED rather
+            # than duplicating it, for exactly this reason; the pattern was
+            # used twice and never turned inward on the line above.
+            version = latticewmVersion;
             src = ./.;
             # river and foot are build inputs because the integration test needs
             # a compositor to receive state from and a client to open a window.

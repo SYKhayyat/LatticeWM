@@ -195,6 +195,19 @@ if LatticeWM does not appear at the login screen, install it system-wide.
 
 Your configuration is never overwritten — not on install, not on upgrade.
 
+** For packagers: the version, and a tarball
+
+The version lives in one file, =VERSION=. Both =.asd= files read it with
+ASDF's =:read-file-line=, =flake.nix= reads it with =builtins.match= the same
+way it already reads river's version out of =src/protocol/PINNED=, and gate 19
+holds both man pages to it. It used to be written out in four places, and the
+sole git tag matched none of them.
+
+=make dist= writes =dist/latticewm-<version>.tar.gz= from the git index, so
+what ships is exactly what is tracked — no =.deps/=, no fasl cache, no image
+somebody left in the tree. It refuses on a dirty tree and on a tag that
+disagrees with =VERSION=. The release procedure is in =CHANGELOG.md=.
+
 * NixOS
 
 #+begin_src sh

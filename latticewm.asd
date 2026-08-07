@@ -13,7 +13,20 @@
   :description "An extensible window manager for the river Wayland compositor."
   :author "Shaul Khayyat"
   :license "GPL-3.0-or-later"
-  :version "0.1.0"
+  ;; ONE VERSION, IN A FILE, READ BY EVERYTHING THAT NEEDS ONE.
+  ;;
+  ;; It used to be written out in four places -- here, lattice.asd, flake.nix
+  ;; and the .TH line of each man page -- and the sole git tag was `v0.1',
+  ;; which matched none of them.  main.lisp's --version was the only reader
+  ;; that got it right, because it asked ASDF instead of holding a copy.
+  ;;
+  ;; The pattern is not new here.  flake.nix and shell.nix both read *river's*
+  ;; version out of src/protocol/PINNED with builtins.match rather than
+  ;; duplicating it, and say in a comment that a warning which can disagree
+  ;; with the check the program performs is worse than no warning.  It was
+  ;; invented, used twice, and never turned inward on the file's own version
+  ;; string two hundred lines above.  Gate 19 now holds all of them to VERSION.
+  :version (:read-file-line "VERSION")
   :defsystem-depends-on ("wayflan-client")
   :depends-on ("wayflan-client" "alexandria" "closer-mop" "bordeaux-threads"
                (:require "sb-introspect") (:require "sb-posix")

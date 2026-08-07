@@ -19,7 +19,12 @@
   :description "An infinite zoomable plane of cells, as an extension to LatticeWM."
   :author "Shaul Khayyat"
   :license "GPL-3.0-or-later"
-  :version "0.1.0"
+  ;; The same VERSION file the core reads, and deliberately not a version of
+  ;; its own.  The lattice is a separate *system* so that the core can be built
+  ;; without it; it is not a separately *released* thing, and giving it a
+  ;; number that can drift from the core's would invent a compatibility
+  ;; question nobody has asked.  See latticewm.asd for why the file exists.
+  :version (:read-file-line "VERSION")
   :depends-on ("latticewm")
   :serial t
   :components

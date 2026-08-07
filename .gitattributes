@@ -1,0 +1,25 @@
+# LF in the working tree, on every platform, without asking.
+#
+# THIS IS NOT TIDINESS.  install.sh, bootstrap.sh and tools/install-check.sh
+# are `#!/bin/sh' scripts; a checkout that gives them CRLF gives the kernel a
+# shebang line ending in a carriage return, and the failure is
+#
+#     ./bootstrap.sh: /bin/sh^M: bad interpreter: No such file or directory
+#
+# which names neither the file that is wrong nor what is wrong with it.  The
+# same checkout breaks Lisp format strings, because `~' followed by CR is not
+# a directive and SBCL signals during macroexpansion, five frames from the
+# string.  Both are what a contributor on Windows, on WSL, or with a global
+# `core.autocrlf=true' gets on their first command, and neither is debuggable
+# from the message.
+#
+# It also makes VERSION a single source of truth rather than nearly one: a
+# file whose last byte depends on who checked it out is not a value, and
+# ASDF's :read-file-line hands the carriage return straight to PARSE-VERSION.
+#
+# `text=auto' still lets git detect binary; the PNGs under doc/ are named
+# below anyway, because guessing is a thing that can be wrong.
+* text=auto eol=lf
+
+*.png binary
+flake.lock text eol=lf

@@ -2313,6 +2313,60 @@ say ~s, which is licenses.~a"
              (push (format nil "the .asd files say ~s and LICENSE does not ~
 look like the GNU General Public License" core)
                    problems))))
+    ;; THE VERSION, WHICH WAS WRITTEN OUT IN FOUR PLACES AND TAGGED AS A FIFTH.
+    ;;
+    ;; latticewm.asd, lattice.asd, flake.nix and the .TH line of each man page
+    ;; all said 0.1.0, and the sole git tag said v0.1 and matched none of them.
+    ;; main.lisp's --version was the only reader that got it right, because it
+    ;; asked ASDF rather than holding a copy.
+    ;;
+    ;; All of them read VERSION now, so most of this gate is checking that they
+    ;; still do rather than that they agree -- except the man pages, which are
+    ;; roff and have no way to read a file, so for those two it is the whole
+    ;; check.  A roff page whose .TH says one version while --version says
+    ;; another is the same defect as the flake's licence: the copy a stranger
+    ;; reads disagreeing with the copy the program knows.
+    (let* ((declared (with-open-file (in (merge-pathnames "VERSION" *root*)
+                                         :if-does-not-exist nil)
+                       (and in (string-trim '(#\Space #\Tab #\Return)
+                                            (or (read-line in nil) "")))))
+           (core-version (asdf:component-version (asdf:find-system "latticewm")))
+           (extension-version (asdf:component-version (asdf:find-system "lattice"))))
+      (format t "  VERSION~46t~a~%" (or declared "(missing)"))
+      (cond
+        ((null declared)
+         (push "there is no VERSION file for anything to read" problems))
+        ((string/= declared core-version)
+         (push (format nil "VERSION says ~s and latticewm.asd resolves to ~s, ~
+so something is holding a copy again" declared core-version)
+               problems))
+        ((string/= declared extension-version)
+         (push (format nil "VERSION says ~s and lattice.asd resolves to ~s"
+                       declared extension-version)
+               problems)))
+      ;; flake.nix must *read* it rather than agree with it: a literal that
+      ;; happens to match today is the state this was in yesterday.
+      (when (probe-file "flake.nix")
+        (let ((literal (line-containing "flake.nix" "version = \"")))
+          (when (and literal (not (search "pname" literal)))
+            (push (format nil "flake.nix writes a version literal (~a); it ~
+should read VERSION, the way it already reads river's version out of PINNED"
+                          (string-trim " " literal))
+                  problems)))
+        (unless (line-containing "flake.nix" "./VERSION")
+          (push "flake.nix never reads VERSION" problems)))
+      ;; And the two roff pages, which cannot read anything.
+      (when declared
+        (dolist (page '("doc/latticewm.1" "doc/latticewm-config.5"))
+          (let ((header (line-containing page ".TH ")))
+            (cond
+              ((null header)
+               (push (format nil "~a has no .TH line" page) problems))
+              ((not (search (format nil "LatticeWM ~a" declared) header))
+               (push (format nil "~a's .TH line is not \"LatticeWM ~a\": ~a"
+                             page declared (string-trim " " header))
+                     problems)))))))
+
     ;; AND THE OTHER NUMBER THIS PROJECT REPEATS IN PROSE: HOW MANY GATES.
     ;;
     ;; "Eighteen gates run on every build" is asserted in README.org, in
