@@ -9,6 +9,73 @@
 ;;;; DESIGN D21's experiment, and keeping it a separate system is what makes
 ;;;; the experiment run on every build instead of once in week three.
 
+;;; THE SBCL FLOOR, DECLARED ONCE AND CHECKED IN THREE PLACES.
+;;;
+;;; This project reaches into SBCL far enough that "needs SBCL" was not the
+;;; whole requirement, and nothing said the rest of it.  bootstrap.sh printed
+;;; `sbcl --version' and checked nothing; the build reached for a named symbol
+;;; in SBCL's *C runtime* and would have failed on an older one with a foreign
+;;; linkage error naming neither this project nor a version.  Debian and Ubuntu
+;;; LTS ship 2.2.9 and Arch ships current, so the spread is real and the
+;;; question was empirical and unasked.
+;;;
+;;; What the floor rests on, named rather than guessed:
+;;;
+;;;   2.2.6  core compression became zstd, and its levels became 0..22.
+;;;          tools/image.lisp dumps at level 22; on a zlib SBCL the valid
+;;;          range was -1..9 and 22 is an error, so the *shipping image* --
+;;;          not the build, the thing a user installs -- cannot be made at all
+;;;          below this.  This is the binding constraint and it is why the
+;;;          number is 2.2.6 rather than something older.
+;;;
+;;; Everything else this program uses is older than that and is listed so the
+;;; floor can be lowered honestly if the compression ever moves: sb-introspect
+;;; xref (gate 11), sb-int:broken-pipe (main.lisp), sb-bsd-sockets (ipc.lisp),
+;;; sb-posix, and the extern-alien "gc_coalesce_string_literals" byte that
+;;; tools/image.lisp sets.
+;;;
+;;; It is checked here because this is the file a stranger loads --
+;;; (ql:quickload :latticewm) reaches this form and nothing else -- and again
+;;; in tools/prelude.lisp, which every make target loads, and again in
+;;; bootstrap.sh, which reads the number back out of this file with sed rather
+;;; than keeping a copy.  Same shape as reading river's version out of
+;;; src/protocol/PINNED.
+(defparameter cl-user::*latticewm-minimum-sbcl* "2.2.6"
+  "The oldest SBCL this project is known to work on.  See the comment above.")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (flet ((numeric (string)
+           ;; "2.2.9.debian" and "2.6.0" both become a list of integers, and a
+           ;; component that is not a number ends the list rather than being
+           ;; guessed at -- git snapshots are versioned like 2.4.1.42-abcdef.
+           (loop with start = 0
+                 for dot = (position #\. string :start start)
+                 for piece = (subseq string start (or dot (length string)))
+                 for value = (ignore-errors (parse-integer piece))
+                 while value collect value
+                 while dot do (setf start (1+ dot)))))
+    (let ((have (numeric (lisp-implementation-version)))
+          (want (numeric cl-user::*latticewm-minimum-sbcl*)))
+      #-sbcl
+      (error "LatticeWM is SBCL-only: it uses sb-introspect for gate 11, ~
+sb-bsd-sockets for the control socket, and save-lisp-and-die for the image. ~
+This is ~a." (lisp-implementation-type))
+      #+sbcl
+      (when (loop for h = (or (pop have) 0)
+                  for w = (or (pop want) 0)
+                  when (/= h w) return (< h w)
+                  while (or have want))
+        (error "LatticeWM needs SBCL ~a or newer; this is ~a.~2%~
+The binding constraint is core compression: tools/image.lisp dumps the ~
+shipping image at zstd level 22, and SBCL used zlib with a maximum level of ~
+9 before ~a.  The build and the tests may well work here -- try ~
+`make build gates test' -- but `make image' cannot, so there is no way to ~
+install what you have built.~2%~
+Debian and Ubuntu LTS ship 2.2.9; Arch, Fedora and nixpkgs ship current."
+               cl-user::*latticewm-minimum-sbcl*
+               (lisp-implementation-version)
+               cl-user::*latticewm-minimum-sbcl*)))))
+
 (defsystem "latticewm"
   :description "An extensible window manager for the river Wayland compositor."
   :author "Shaul Khayyat"

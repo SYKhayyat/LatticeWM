@@ -21,12 +21,21 @@ river -c latticewm    # nested, in a window, inside the session you have
 
 * What it needs
 
-|-------------+---------------------------------------------------------------|
-| =sbcl=      | The Lisp compiler.  Every distro packages it.                  |
-| =river= 0.4+ | The compositor.  LatticeWM is its window manager, not a       |
-|             | replacement for it.                                            |
-| =git=, =curl= | Once, to fetch the rest.                                     |
-|-------------+---------------------------------------------------------------|
+|----------------+------------------------------------------------------------|
+| =sbcl= 2.2.6+  | The Lisp compiler.  Every distro packages it, and every    |
+|                | current one is newer than this; Debian and Ubuntu LTS ship |
+|                | 2.2.9.  The floor is core compression — the shipping image |
+|                | is dumped at zstd level 22 and SBCL used zlib, maximum 9,  |
+|                | before 2.2.6.  =bootstrap.sh= checks it and reads the      |
+|                | number out of =latticewm.asd=, which checks it again.      |
+| =river= 0.4.6  | The compositor.  LatticeWM is its window manager, not a    |
+|                | replacement for it.  *Exactly* 0.4.6, not "0.4 or newer":  |
+|                | river changes =river-window-management-v1= within a patch  |
+|                | release, LatticeWM checks the interface version at startup |
+|                | and refuses rather than misbehave, and §"Moving to a newer |
+|                | river" below is four steps and needs nobody.               |
+| =git=, =curl=  | Once, to fetch the rest.                                   |
+|----------------+------------------------------------------------------------|
 
 Nothing else.  =bootstrap.sh= puts the Lisp libraries under =./.deps/= and
 writes nowhere else; =rm -rf .deps= undoes it completely.
@@ -43,8 +52,17 @@ sudo xbps-install -S sbcl         # Void
 sudo emerge dev-lisp/sbcl         # Gentoo
 #+end_src
 
-Any SBCL from the last few years will do.  =bootstrap.sh= prints the right
-line for your distro if it is missing.
+*2.2.6 or newer*, and that is a real floor rather than a shrug at "recent".
+=tools/image.lisp= dumps the shipping image at zstd level 22; SBCL's core
+compression was zlib with a maximum level of 9 until 2.2.6, so on an older one
+=make build gates test= may pass and =make image= cannot, which leaves nothing
+to install. The number lives in =latticewm.asd=, which checks it whenever the
+system is loaded — including from a bare =(ql:quickload :latticewm)= — and
+=bootstrap.sh= reads it back out of that file rather than keeping a copy.
+
+Every current distribution is newer: Debian and Ubuntu LTS ship 2.2.9, Arch
+and Fedora ship current. =bootstrap.sh= prints the right install line for your
+distro if SBCL is missing.
 
 ** river, and the version that matters
 

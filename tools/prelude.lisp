@@ -37,6 +37,17 @@ either.")
        (when (probe-file deps) `((:tree ,deps))))
    :inherit-configuration))
 
+;; THE SBCL FLOOR, BEFORE ANYTHING ELSE CAN FAIL MORE CONFUSINGLY.
+;;
+;; latticewm.asd holds the number and the whole argument for it; loading the
+;; system definition runs the check, and doing it here means the answer arrives
+;; before a wall of compiler output rather than after it.  Nothing is loaded by
+;; this beyond the .asd itself.
+;;
+;; NIL rather than T, so a tree where the .asd is genuinely absent still
+;; reaches MISSING-SYSTEMS below and says the useful thing.
+(asdf:find-system "latticewm" nil)
+
 (defun quicklisp-setup ()
   "The setup file of a quicklisp under .deps/, if bootstrap.sh made one."
   (probe-file (merge-pathnames ".deps/quicklisp/setup.lisp" *root*)))

@@ -2397,7 +2397,8 @@ should read VERSION, the way it already reads river's version out of PINNED"
            ;; is a record of what was true when it was written; both are
            ;; append-only by discipline and correcting them would be laundering
            ;; the record, which DESIGN.org:101 exists to demonstrate not doing.
-           (documents '("README.org" "INSTALL.org" ".github/workflows/check.yml")))
+           (documents '("README.org" "INSTALL.org" "bootstrap.sh"
+                        ".github/workflows/check.yml")))
       (format t "  gates that run~46t~d~%" total)
       (if (null word)
           (push (format nil "~d gates and no spelling for it in this gate's ~
