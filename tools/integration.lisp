@@ -782,6 +782,38 @@ are what a person means by the arrangement, and both are copy-stable."
            (when echo
              (check (r::overlay-canvas echo) "with pixels behind it")
              (check (overlay-visible-p echo) "and river is showing it")
+             ;; THE BUFFER THE COMPOSITOR IS READING.  For the life of the
+             ;; project there was one canvas per overlay, no wl_buffer.release
+             ;; listener anywhere in src/, and a docstring stating the
+             ;; consequence as a design property: "the compositor is looking at
+             ;; the same bytes we are".  The vendored wayland.xml says the
+             ;; opposite in as many words, and gate 8 could not see it because
+             ;; it checks the events we handle rather than the ones we owe.
+             ;;
+             ;; The unit suite cannot see it either -- tests/test-overlay.lisp
+             ;; asserts the bookkeeping and says so.  This is the only place in
+             ;; the project where a real compositor can be asked whether the
+             ;; other half happens.
+             (check (<= 2 (length (r::overlay-canvases echo)))
+                    "the echo area owns ~d buffers, so a redraw has somewhere ~
+                     to go that river is not reading"
+                    (length (r::overlay-canvases echo)))
+             (let ((shown (r::overlay-committed echo)))
+               (check shown "and river is showing one of them")
+               (wm (lambda () (notify "integration: ~d" 43)))
+               (check (settle) "a second message settles a round trip")
+               (check (not (eq shown (r::overlay-committed echo)))
+                      "which drew into a different buffer and committed that, ~
+                       rather than overwriting the one on screen")
+               (check (poll-until
+                       (lambda ()
+                         (let ((idle (remove (r::overlay-committed echo)
+                                             (r::overlay-canvases echo))))
+                           (and idle (notany #'r::canvas-busy idle))))
+                       10)
+                      "and river released the buffer it had finished with -- ~
+                       the event this program owed the protocol and did not ~
+                       answer"))
              (check (eq (current-output) (overlay-output echo))
                     "belonging to an output rather than to the program")
              (let ((rect (overlay-rect echo))

@@ -26,7 +26,8 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:hooks #:minibuffer #:devices #:capture #:boundaries))
+           #:container #:hooks #:minibuffer #:devices #:capture #:boundaries
+           #:pixels))
 
 (in-package #:latticewm/tests)
 
@@ -59,6 +60,13 @@ have, which is pure, and how a value reaches the wire, which is not.")
   :description "What the window manager knows about being recorded: the count
 river reports per window and per output, who is told about a change, and what
 the status line says for as long as it lasts.")
+
+(def-suite pixels :in model
+  :description "The buffers the window manager draws its own decorations into.
+The compositor's half of this cannot be constructed, which is how one canvas
+per overlay and no wl_buffer.release listener survived every gate and 1783
+checks; what is here is the bookkeeping that decides which buffer is safe to
+draw into and what changed since the last one.")
 
 (def-suite minibuffer :in model
   :description "Reading a line, which needs no compositor either — the prompt

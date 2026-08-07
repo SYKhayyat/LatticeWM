@@ -28,8 +28,36 @@
   "A block of shared memory the compositor can read as pixels.
 
 Pixels are ARGB8888, premultiplied, one 32-bit word each, row-major.  DATA is
-a foreign pointer; the compositor is looking at the same bytes we are, so a
-write is visible as soon as the surface is committed.
+a foreign pointer into an mmap the compositor has its own mapping of.
+
+*A CANVAS IS NOT OURS TO WRITE WHILE BUSY IS SET.*  The docstring here used to
+say the opposite — \"the compositor is looking at the same bytes we are, so a
+write is visible as soon as the surface is committed\" — which is a statement
+of the race rather than of a feature.  This tree vendors the sentence that
+settles it, in src/protocol/wayland.xml under wl_buffer:
+
+  The compositor may access the pixels at any time after the
+  wl_surface.commit request.  When the compositor will not access the pixels
+  anymore, it will send the wl_buffer.release event.  Only after receiving
+  wl_buffer.release, the client may reuse the wl_buffer.
+
+Nothing in the program listened for that event, and there was one canvas per
+overlay, so every redraw wrote into the buffer the compositor was reading.
+The failure mode is a torn or half-drawn status line under load, which a
+project with no way to observe its own rendering will never reproduce — and
+\"it worked on the compositor I tested\" is the one claim this project refuses
+to accept anywhere else.  BUSY is set at commit and cleared by the release
+event; OVERLAY keeps a small pool and draws into one that is not busy.
+
+DRAWN is what the frame currently in this buffer painted: a list of *logical*
+rectangles, or T for the whole canvas.  Two things read it.  The next frame to
+be drawn into this buffer erases exactly those rectangles, which is what makes
+the incremental drawers correct with more than one buffer in play — the
+content underneath is two frames old, not one.  And OVERLAY-COMMIT reports
+them as the surface damage, which is the other half: the coordinate overlay
+and the empty-pane outlines went to real trouble to record what they touched
+and then told the compositor the entire surface had changed, forcing the full
+texture upload the bookkeeping existed to avoid.
 
 WIDTH and HEIGHT are *device* pixels.  SCALE is how many of those there are per
 logical pixel, and every drawing function below takes logical coordinates and
@@ -49,7 +77,12 @@ a human to read."
   (fd -1 :type fixnum)
   (data (sb-sys:int-sap 0))
   (pool nil)
-  (buffer nil))
+  (buffer nil)
+  (busy nil)
+  ;; T rather than NIL for a fresh buffer, which is not a lie about the zeroes
+  ;; in it: T means "cannot say which part of this changed", the first commit of
+  ;; a new buffer has to damage all of it, and the erase skips T anyway.
+  (drawn t))
 
 (defun canvas-logical-width (canvas)
   "The canvas's width in logical pixels."
@@ -89,10 +122,19 @@ pixels for the same area rather than the same pixels stretched."
                               sb-posix:map-shared fd 0))
          (pool (wl:wl-shm.create-pool shm fd size))
          (buffer (wl:wl-shm-pool.create-buffer pool 0 width height stride
-                                               :argb8888)))
-    (%make-canvas :width width :height height :scale scale
-                  :stride stride :size size
-                  :fd fd :data data :pool pool :buffer buffer)))
+                                               :argb8888))
+         (canvas (%make-canvas :width width :height height :scale scale
+                               :stride stride :size size
+                               :fd fd :data data :pool pool :buffer buffer)))
+    ;; THE ONE EVENT THE PROTOCOL REQUIRES OF US, AND THE ONLY INBOUND
+    ;; OBLIGATION IN THE PROGRAM THAT NOTHING ANSWERED.  Gate 8 checks that
+    ;; every event we handle exists on the interface we handle it for — it
+    ;; faces outward, from our code toward the protocol, and the defect was on
+    ;; the other side.  There was no wl_buffer listener anywhere in src/; the
+    ;; only wl_buffer reference at all was .destroy.
+    (on-events (buffer "wl_buffer")
+      (:release (setf (canvas-busy canvas) nil)))
+    canvas))
 
 (defun destroy-canvas (canvas)
   "Release everything a canvas holds."
@@ -262,7 +304,18 @@ is different on every row, which is what makes it a glyph."
    (shell :initform nil :accessor overlay-shell
           :documentation "river_shell_surface_v1.")
    (node :initform nil :accessor overlay-node)
-   (canvas :initform nil :accessor overlay-canvas)
+   (canvases :initform '() :accessor overlay-canvases
+             :documentation
+             "Every buffer this overlay owns.  Two, normally; see FREE-CANVAS.")
+   (canvas :initform nil :accessor overlay-canvas
+           :documentation
+           "The one ENSURE-OVERLAY chose for this frame — the back buffer.")
+   (committed :initform nil :accessor overlay-committed
+              :documentation
+              "The buffer the compositor is showing, which is the one the
+damage of the next frame is measured against.  NIL after a resize or a hide,
+and then the next commit damages everything because there is nothing to
+compare with.")
    (rect :initform (c:make-rect 0 0 0 0) :accessor overlay-rect)
    (visible :initform nil :accessor overlay-visible-p)
    (name :initarg :name :initform "overlay" :reader overlay-name)
@@ -274,8 +327,12 @@ keyword.  Half of the registry key.")
            :documentation
            "The output this overlay belongs to.  The other half of the key.")
    (props :initform '() :accessor c:props
-          :documentation "Extension state, as on a node.  Used by the
-incremental redraw to remember what it cleared last time."))
+          :documentation "Extension state, as on a node.
+
+What the incremental redraw cleared last time used to live here, under
+:DIRTY.  It moved onto the canvas, where it belongs: with more than one buffer
+the question is not what the last frame drew but what *this* buffer holds, and
+those stopped being the same thing."))
   (:documentation
    "A surface of our own that river will position like a window.
 
@@ -318,6 +375,59 @@ unplugged.  An extension asks for its own KIND and inherits both behaviours."
              *overlays*)
     out))
 
+;;; ---------------------------------------------------------- the buffer pool
+;;;
+;;; An overlay owns more than one buffer because the protocol says the pixels
+;;; are the compositor's between commit and release, and one buffer means
+;;; drawing into them anyway.  Two is enough for every compositor that releases
+;;; on the following commit, which is all of them in practice; the third exists
+;;; because "in practice" is the reasoning this whole change is here to undo.
+
+(defparameter +overlay-buffers+ 2
+  "How many buffers an overlay is given up front.
+
+Two: one on screen, one to draw the next frame into.  A third is allocated on
+demand — see FREE-CANVAS — and only a compositor holding two buffers at once
+will ever ask for it.")
+
+(defparameter +overlay-buffer-limit+ 3
+  "The most buffers one overlay may own.
+
+Growth without a ceiling is how a client that mistakes a compositor's flow
+control for a leak turns a slow frame into an out-of-memory.  At the ceiling
+LATTICEWM draws into a busy buffer and says so in the log, which is what it did
+unconditionally before any of this existed.")
+
+(defun free-canvas (pool committed)
+  "A canvas in POOL the compositor is not reading, or NIL if there is none.
+
+COMMITTED — the buffer on screen — is excluded even when it has been released,
+because the surface still references it: attaching the same buffer again after
+drawing into it is the single-buffered bug wearing a pool."
+  (find-if (lambda (canvas)
+             (and (not (canvas-busy canvas)) (not (eq canvas committed))))
+           pool))
+
+(defun canvas-fits-p (canvas width height scale)
+  "Whether CANVAS is already the size and resolution being asked for."
+  (and (= (canvas-logical-width canvas) (max 1 width))
+       (= (canvas-logical-height canvas) (max 1 height))
+       (= (canvas-scale canvas) scale)))
+
+(defun release-canvases (overlay)
+  "Destroy every buffer OVERLAY owns and forget which one was on screen.
+
+Destroying a buffer the compositor is still reading is legal — wl_buffer.destroy
+may be sent at any time, and the compositor holds its own mapping of the file
+descriptor, so our munmap does not pull the pixels out from under it.  What
+becomes undefined is the surface's contents, which is why every caller of this
+either hides the surface or redraws it immediately afterwards."
+  (mapc #'destroy-canvas (overlay-canvases overlay))
+  (setf (overlay-canvases overlay) '()
+        (overlay-canvas overlay) nil
+        (overlay-committed overlay) nil)
+  nil)
+
 (defun destroy-overlay (overlay)
   "Release everything OVERLAY holds and forget it.
 
@@ -325,9 +435,7 @@ Called when a monitor is unplugged.  Not doing this leaked a shell surface, a
 river node, an mmap and a file descriptor per overlay per hotplug — which on a
 laptop that is docked and undocked twice a day is a real leak with a slow fuse."
   (when overlay
-    (let ((canvas (overlay-canvas overlay)))
-      (when canvas (ignore-errors (destroy-canvas canvas))))
-    (setf (overlay-canvas overlay) nil)
+    (release-canvases overlay)
     (let ((node (overlay-node overlay)))
       (when node (ignore-errors (river:river-node-v1.destroy node))))
     (let ((shell (overlay-shell overlay)))
@@ -368,16 +476,93 @@ correct on every display and merely soft on a scaled one."
   (let ((output (overlay-output overlay)))
     (max 1 (if output (or (c:output-scale output) 1) 1))))
 
+(defun canvas-erase (canvas)
+  "Erase what CANVAS still holds, and return what that was.
+
+The buffer a drawer is handed is not the one it drew into last time — it is the
+one before that, or older. Erasing what *this* buffer holds rather than what the
+last frame drew is the whole of what more than one buffer costs the incremental
+drawers, and getting it wrong leaves a two-frame-old label on the screen under a
+fresh one.
+
+A canvas holding T was painted whole — by a drawer that is about to paint it
+whole again — so there is nothing to erase and the memset is skipped.  A fresh
+buffer says T as well, and skipping is right there too: an mmap arrives zeroed.
+
+T IS ALSO WHAT THIS LEAVES BEHIND, which is the frame's default and the reason
+OVERLAY-DREW can be a single SETF.  A drawer that says nothing about what it
+touched has said the truthful thing for the three that fill their canvas, and
+the whole surface is what they need damaged.
+
+The one shape this does not serve is a drawer that alternates — whole canvas one
+frame, part of it the next — which would leave the whole-canvas frame showing
+through the gaps.  Nothing shipped does that and the rule is stated in
+OVERLAY-DREW; the alternative is a full clear on every frame of the drawn map,
+which is 33 megabytes on a 2x monitor to guard against a thing no drawer does."
+  (let ((drawn (canvas-drawn canvas)))
+    (unless (eq drawn t)
+      (dolist (rect drawn) (canvas-fill canvas 0 rect)))
+    (setf (canvas-drawn canvas) t)
+    drawn))
+
+(defun surface-damage (drawn shown)
+  "The logical rectangles that changed on screen, or T for the whole surface.
+
+DRAWN is what the buffer about to be attached holds; SHOWN is what the buffer
+the compositor is displaying holds.  Each list is the whole of what its buffer
+painted — everything else in both is transparent — so whatever differs between
+them lies inside the union, and the union is the damage.
+
+T for either means a buffer was painted whole and cannot say where, so the
+answer is the whole surface.  That is the honest answer for the echo area, the
+help screen and the drawn map, all three of which fill their canvas.  It was
+also, unconditionally, the answer for the two that do not: the coordinate
+overlay and the empty-pane outlines record every rectangle they touch so the
+next frame can clear exactly those — and then told the compositor the entire
+surface had changed, forcing the full texture upload that bookkeeping was
+written to avoid."
+  (if (or (eq drawn t) (eq shown t))
+      t
+      (append drawn shown)))
+
+(defun overlay-drew (overlay rects)
+  "Record RECTS as everything this frame painted into OVERLAY's buffer.
+
+The rectangles are logical and canvas-relative — the same coordinates the
+drawing functions take.  A drawer that paints only part of its canvas calls this
+once per frame, before OVERLAY-COMMIT, and gets two things for it: the next
+frame into this buffer erases exactly these rectangles, and the compositor is
+told exactly these changed instead of being handed the whole surface.
+
+A drawer that fills its whole canvas never calls this, which is not an omission
+— what ENSURE-OVERLAY leaves behind says \"all of it\", which is true for such a
+drawer and is what it needs damaged.
+
+*AN OVERLAY'S DRAWER PICKS ONE AND STAYS WITH IT.*  Calling this on some frames
+and not others means the buffer is holding a whole-canvas frame that nothing
+will erase, and it shows through the gaps of every incremental frame after.  The
+five shipped drawers each pick one and none of them has a reason to change; the
+alternative to the rule is clearing the whole canvas on every frame, which is 33
+megabytes on a 2x monitor spent guarding against a thing nobody does."
+  (let ((canvas (overlay-canvas overlay)))
+    (when canvas (setf (canvas-drawn canvas) rects)))
+  rects)
+
 (defun ensure-overlay (overlay width height)
-  "Make OVERLAY exist and be WIDTH by HEIGHT *logical* pixels.
+  "Make OVERLAY exist, be WIDTH by HEIGHT *logical* pixels, and be safe to draw
+into.  Returns the canvas to draw into, or NIL.
 
-Returns its canvas, or NIL when the compositor has not given us the globals we
-need — which is not an error: the overlays are decoration, and a window manager
-that refused to start because it could not draw a label would be a bad trade.
+NIL when the compositor has not given us the globals we need, which is not an
+error: the overlays are decoration, and a window manager that refused to start
+because it could not draw a label would be a bad trade.
 
-The canvas is reallocated when the logical size changes *or* when the output's
+The buffers are reallocated when the logical size changes *or* when the output's
 scale does, so moving a window between a 1x and a 2x monitor redraws at the
-right resolution rather than at the last one's."
+right resolution rather than at the last one's.
+
+THE CANVAS COMES BACK ERASED OF WHATEVER FRAME IT WAS STILL HOLDING, and it is
+not the one this overlay drew into last time — see the CANVAS docstring for why
+there is more than one."
   (let ((compositor (server-compositor *server*))
         (shm (server-shm *server*))
         (manager (server-manager *server*))
@@ -389,17 +574,41 @@ right resolution rather than at the last one's."
                                      manager (overlay-surface overlay))
             (overlay-node overlay) (river:river-shell-surface-v1.get-node
                                     (overlay-shell overlay))))
-    (let ((canvas (overlay-canvas overlay)))
-      (when (and canvas (or (/= (canvas-logical-width canvas) (max 1 width))
-                            (/= (canvas-logical-height canvas) (max 1 height))
-                            (/= (canvas-scale canvas) scale)))
-        (destroy-canvas canvas)
-        (setf canvas nil))
-      (or canvas
-          (setf (overlay-canvas overlay) (make-canvas shm width height scale))))))
+    ;; A resize retires the whole pool rather than one buffer of it: buffers of
+    ;; two different sizes on one surface is a class of bug worth not having.
+    (let ((pool (overlay-canvases overlay)))
+      (when (and pool (notevery (lambda (canvas)
+                                  (canvas-fits-p canvas width height scale))
+                                pool))
+        (release-canvases overlay)
+        (setf pool '()))
+      (loop while (< (length pool) +overlay-buffers+)
+            do (push (make-canvas shm width height scale) pool))
+      (setf (overlay-canvases overlay) pool)
+      (let ((canvas (or (free-canvas pool (overlay-committed overlay))
+                        ;; Every buffer is still with the compositor.  Grow
+                        ;; once — a third is enough for anything that releases
+                        ;; on the following commit — and past that draw into a
+                        ;; busy one and say so, which is what this did on every
+                        ;; frame before there was a pool at all.
+                        (when (< (length pool) +overlay-buffer-limit+)
+                          (let ((new (make-canvas shm width height scale)))
+                            (push new (overlay-canvases overlay))
+                            new))
+                        (progn
+                          (logmsg :debug
+                                  "overlay ~a: ~d buffers, all still held by ~
+                                   the compositor; drawing into one anyway"
+                                  (overlay-name overlay) (length pool))
+                          (or (find-if-not (lambda (canvas)
+                                             (eq canvas (overlay-committed overlay)))
+                                           pool)
+                              (first pool))))))
+        (canvas-erase canvas)
+        (setf (overlay-canvas overlay) canvas)))))
 
 (defun overlay-commit (overlay &key (rect (overlay-rect overlay)))
-  "Attach the canvas, damage everything, commit, and position the surface."
+  "Attach the canvas, damage what changed, commit, and position the surface."
   (let ((surface (overlay-surface overlay))
         (canvas (overlay-canvas overlay)))
     (when (and surface canvas)
@@ -411,10 +620,32 @@ right resolution rather than at the last one's."
         (best-effort "set_buffer_scale"
           (wl:wl-surface.set-buffer-scale surface (canvas-scale canvas))))
       (wl:wl-surface.attach surface (canvas-buffer canvas) 0 0)
-      ;; Damage in *buffer* coordinates, which are device pixels.
-      (wl:wl-surface.damage-buffer surface 0 0
-                                   (canvas-width canvas) (canvas-height canvas))
+      ;; Damage in *buffer* coordinates, which are device pixels — so the
+      ;; logical rectangles the drawers work in are scaled here, in the one
+      ;; place that knows both units, and clipped because a rectangle may sit
+      ;; partly off the canvas and a negative width is a protocol error.
+      (let ((damage (surface-damage (canvas-drawn canvas)
+                                    (let ((shown (overlay-committed overlay)))
+                                      (if shown (canvas-drawn shown) t))))
+            (scale (canvas-scale canvas)))
+        (if (eq damage t)
+            (wl:wl-surface.damage-buffer surface 0 0
+                                         (canvas-width canvas)
+                                         (canvas-height canvas))
+            (dolist (r damage)
+              (let ((x (max 0 (* scale (c:rect-x r))))
+                    (y (max 0 (* scale (c:rect-y r))))
+                    (right (min (canvas-width canvas)
+                                (* scale (c:rect-right r))))
+                    (bottom (min (canvas-height canvas)
+                                 (* scale (c:rect-bottom r)))))
+                (when (and (< x right) (< y bottom))
+                  (wl:wl-surface.damage-buffer surface x y
+                                               (- right x) (- bottom y)))))))
       (wl:wl-surface.commit surface)
+      ;; From here until the release event the pixels are the compositor's.
+      (setf (canvas-busy canvas) t
+            (overlay-committed overlay) canvas)
       (when (overlay-node overlay)
         (best-effort "overlay position"
           (w:node-set-position (overlay-node overlay)
@@ -425,13 +656,18 @@ right resolution rather than at the last one's."
       (setf (overlay-visible-p overlay) t))))
 
 (defun overlay-hide (overlay)
-  "Stop showing OVERLAY, and release its buffer unless told otherwise."
+  "Stop showing OVERLAY, and release its buffers unless told otherwise."
   (when (and (overlay-surface overlay) (overlay-visible-p overlay))
     (setf (overlay-visible-p overlay) nil)
     (best-effort "overlay hide"
       (wl:wl-surface.attach (overlay-surface overlay) nil 0 0)
       (wl:wl-surface.commit (overlay-surface overlay))))
-  (when (and p:*overlay-buffer-idle* (overlay-canvas overlay))
-    (destroy-canvas (overlay-canvas overlay))
-    (setf (overlay-canvas overlay) nil))
+  ;; Nothing is on screen now, so nothing is being compared against.  Without
+  ;; this the next commit would measure its damage against a buffer the surface
+  ;; no longer references and report only the difference between two frames
+  ;; separated by a blank one.
+  (setf (overlay-committed overlay) nil)
+  (when (and (overlay-canvases overlay)
+             (p:overlay-buffer-idle-p (overlay-kind overlay)))
+    (release-canvases overlay))
   nil)

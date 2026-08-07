@@ -62,19 +62,18 @@ this whole file exists to prevent."
          (panes (empty-pane-placements output)))
     (cond
       ((null panes)
-       (overlay-hide overlay)
-       (setf (c:prop overlay :dirty) '()))
+       (overlay-hide overlay))
       (t
        (let* ((area (c:output-rect output))
               (canvas (ensure-overlay overlay (c:rect-w area) (c:rect-h area))))
          (when canvas
-           ;; Clear only what was drawn last time; a full-screen clear is two
-           ;; million writes for a few outlines.  The record lives on the
-           ;; overlay's own PROPS rather than in a global, so two outputs
-           ;; cannot clear each other's rectangles — which is what a single
-           ;; shared list did the moment there were two of them.
-           (dolist (rect (c:prop overlay :dirty)) (canvas-fill canvas 0 rect))
-           (setf (c:prop overlay :dirty) '())
+           ;; ENSURE-OVERLAY hands back a canvas already cleared of whatever
+           ;; frame it was holding — only those rectangles, because a
+           ;; full-screen clear is two million writes for a few outlines.  The
+           ;; record lives on the canvas, which is the correction: it used to
+           ;; live on the overlay, and with more than one buffer in play "what
+           ;; the last frame drew" and "what this buffer holds" are two
+           ;; different lists.
            (let ((cursor (c:world-cursor *world*))
                  (dim (apply #'argb p:*empty-outline-color*))
                  (hint (apply #'argb p:*empty-hint-color*))
@@ -110,7 +109,9 @@ this whole file exists to prevent."
                                         text
                                         (if (zerop index) hint bright)
                                         :scale 1)))))))
-             (setf (c:prop overlay :dirty) drawn))
+             ;; What was drawn, so the next frame into this buffer clears
+             ;; exactly it and the compositor is told exactly it.
+             (overlay-drew overlay drawn))
            (overlay-commit overlay :rect area)))))))
 
 (add-hook :draw-overlays 'draw-empty-panes)

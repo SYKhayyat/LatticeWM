@@ -275,5 +275,10 @@ without a compositor — which is the whole model."
      ;; class of error a live-editable window manager exists to let you fix
      ;; was reported as a single line with no frames.
      (:file "test-boundaries")
+     ;; The buffers we draw our own pixels into.  There was one per overlay and
+     ;; no wl_buffer.release listener, so every redraw wrote into the buffer the
+     ;; compositor was reading -- and the canvas docstring said so as though it
+     ;; were a design property.
+     (:file "test-overlay")
      (:file "test-examples"))))
   :perform (test-op (o c) (symbol-call :latticewm/tests :run-all)))

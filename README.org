@@ -731,7 +731,9 @@ Verified against a *headless river* on every run of =make check= — a hundred
 and fifty-odd assertions in twenty-one sections, none of which can pass without
 a compositor having agreed: connecting and version negotiation; an output with
 the name and size river gave it; the manage and render sequences; the
-shared-memory overlay path and its HiDPI arithmetic; the echo area's own
+shared-memory overlay path, its HiDPI arithmetic, and river releasing a buffer
+it has finished reading — which is the one event this program owed the
+protocol and, for its whole life, did not answer; the echo area's own
 surface and the space it reserves; every key in the keymap becoming a real
 binding object, and a key bound at runtime becoming one more; the pointer
 bindings; a client window announced, placed, sized and focused; the emitter's

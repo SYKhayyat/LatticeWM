@@ -380,7 +380,7 @@ You never edit this package.")
    #:*help-columns* #:*help-background* #:*help-key-color* #:*help-text-color*
    #:*help-scale*
    #:*show-empty-panes* #:*empty-pane-hint* #:*empty-outline-color*
-   #:*empty-hint-color* #:*overlay-buffer-idle*
+   #:*empty-hint-color* #:*overlay-buffer-idle* #:overlay-buffer-idle-p
    ;; --- window lifecycle -----------------------------------------------
    #:on-window-open #:on-window-close #:should-float-p #:on-minimize
    #:on-restore #:window-capabilities #:decoration-mode
@@ -559,6 +559,7 @@ keybindings, the command registry, and the session loop.")
    #:spawn #:notify #:*log-level* #:logmsg #:*server*
    #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
+   #:overlay-drew #:canvas-drawn #:surface-damage
    #:text-width #:text-height
    #:server-compositor #:server-shm
    #:*help-visible* #:help-entries #:binding-description #:truncate-text

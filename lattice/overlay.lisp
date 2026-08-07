@@ -83,7 +83,6 @@ coordinates onto the first, at positions that meant nothing there."
       (return-from draw-coordinate-overlay-on nil))
     (unless (overlay-wanted-p grid (p:outer-rect policy output))
       (r:overlay-hide overlay)
-      (setf (c:prop overlay :dirty) '())
       (return-from draw-coordinate-overlay-on nil))
     ;; THE AREA THE CELLS ARE IN, for the surface as well as for the cells.
     ;; This drew into an output-sized canvas committed at the output's own
@@ -95,12 +94,11 @@ coordinates onto the first, at positions that meant nothing there."
     (let* ((area (p:outer-rect policy output))
            (canvas (r:ensure-overlay overlay (c:rect-w area) (c:rect-h area))))
       (when canvas
-        ;; Clear only what we drew last time.  A full-screen clear is two
-        ;; million writes for a few dozen small labels.  The record lives on
-        ;; this overlay rather than in a global, so two outputs cannot clear
-        ;; each other's rectangles.
-        (dolist (rect (c:prop overlay :dirty)) (r:canvas-fill canvas 0 rect))
-        (setf (c:prop overlay :dirty) '())
+        ;; ENSURE-OVERLAY hands the canvas back already cleared of the frame it
+        ;; was holding, and of nothing else: a full-screen clear is two million
+        ;; writes for a few dozen small labels.  The record is kept per buffer
+        ;; rather than per overlay, which is what makes that correct now there
+        ;; is more than one buffer to hold a frame.
         (let ((background (apply #'r:argb *overlay-background*))
               (foreground (apply #'r:argb *overlay-foreground*))
               (origin-x (c:rect-x area))
@@ -128,7 +126,9 @@ coordinates onto the first, at positions that meant nothing there."
                                       (+ (c:rect-y box) 3) text foreground
                                       :scale *overlay-scale*)
                        (push box drawn)))
-          (setf (c:prop overlay :dirty) drawn))
+          ;; What was drawn: the next frame into this buffer clears exactly
+          ;; these, and the compositor is told exactly these changed.
+          (r:overlay-drew overlay drawn))
         (r:overlay-commit overlay :rect area)))))
 
 (r:add-hook :draw-overlays 'draw-coordinate-overlay)

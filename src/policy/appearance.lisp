@@ -301,15 +301,41 @@ because it is a good idea.")
 (define-option *empty-hint-color* '(0.70 0.75 0.86 1.0)
   "Text colour of the hint inside the focused empty pane.")
 
-(define-option *overlay-buffer-idle* t
-  "Release an overlay's pixel buffer while it is hidden.
+(define-option *overlay-buffer-idle* '(:help)
+  "Which overlays release their pixel buffers while hidden.
 
-A full-screen ARGB buffer is about four megabytes, and the help screen and the
-drawn map are each hidden almost all of the time.  Keeping their buffers costs
-eight megabytes of resident memory to save one allocation on a keypress, which
-is the wrong way round.
+A list of overlay kinds, or T for all of them, or NIL for none.
 
-Set to NIL if you would rather have the allocation happen once.")
+THE ARITHMETIC THIS OPTION WAS ARGUED FROM WAS WRONG BY 8x IN THE AUTHOR'S OWN
+FAVOUR.  It read: \"A full-screen ARGB buffer is about four megabytes ... keeping
+their buffers costs eight megabytes of resident memory to save one allocation on
+a keypress, which is the wrong way round.\"  Four megabytes is 1920x1080x4 at
+scale 1.  MAKE-CANVAS multiplies by the output's scale *before* computing the
+stride, because that is what HiDPI means, so on the 1920x1080 panel at scale 2
+the machine was sitting in front of, a full-screen canvas is 3840x2160x4 = 33
+megabytes.  Two buffers of it — and there are two now, because one was a race
+against the compositor — is 66.
+
+Which makes both halves of the sentence bigger, in opposite directions, and
+that is why this is a list rather than a boolean.  Releasing is worth much more
+than it said for the help screen: 66 MB resident for a page shown for four
+seconds a week is not a trade anybody would take.  It is worth much less than
+it said for anything toggled continuously — the drawn map appears when a zoom
+crosses a threshold, and a threshold crossed by a continuous gesture is crossed
+repeatedly, so releasing there means mkstemp, ftruncate(33MB), mmap and
+create_pool twice per wobble.
+
+So the shipped answer is the one overlay that is large and rare, by name, and
+everything else keeps what it has.  T restores the old behaviour for every
+overlay including an extension's; NIL keeps every buffer forever.")
+
+(defun overlay-buffer-idle-p (kind)
+  "Whether an overlay of KIND should give up its buffers while hidden."
+  (let ((setting *overlay-buffer-idle*))
+    (cond ((eq setting t) t)
+          ((null setting) nil)
+          ((listp setting) (and (member kind setting) t))
+          (t t))))
 
 ;;; ==================================================================
 ;;; TEXT, AS IT READS

@@ -89,6 +89,26 @@ be able to do before anyone else can depend on it.
 - **Fullscreen used the cursor's output, not the window's**, so fullscreening a
   window on the second monitor from the first put it on the first.
   `output-of-window` existed, was exported, and was called by nothing.
+- **Every overlay was drawn into the buffer the compositor was reading.** One
+  canvas per overlay, no `wl_buffer.release` listener anywhere in `src/`, no
+  `wl_surface.frame` callback, and the `canvas` docstring stated the
+  consequence as though it were a feature: "the compositor is looking at the
+  same bytes we are, so a write is visible as soon as the surface is
+  committed." The vendored `src/protocol/wayland.xml` says the opposite in as
+  many words. Overlays now own a small pool, the release event is handled, and
+  a frame is drawn into a buffer river is not reading.
+- **The damage tracking computed the damage and threw it away.** Two drawers
+  record every rectangle they touch so the next frame clears exactly those —
+  "a full-screen clear is two million writes for a few outlines" — and then
+  `overlay-commit` told the compositor the whole surface had changed, forcing
+  the full texture upload the bookkeeping existed to avoid. The record moved
+  onto the canvas, where it is also what the damage is computed from.
+- **`*overlay-buffer-idle*`'s arithmetic was wrong by 8×** in its own favour:
+  `make-canvas` multiplies by the output scale before computing the stride, so
+  the "about four megabytes" full-screen canvas is 33 MB on the 2× panel the
+  sentence was written on. It is a list of overlay kinds now, defaulting to
+  `(:help)` — large and rare — rather than `t`, which had the drawn map doing
+  `mkstemp` + `ftruncate(33MB)` + `mmap` twice per wobble of a continuous zoom.
 - **Undo was bolted to `run-command`**, which is one of four doors into the
   layout. `Super+;`, the control socket and a SLIME connection — the three the
   program exists for — changed the tree with no undo recorded at all, while
