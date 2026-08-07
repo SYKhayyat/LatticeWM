@@ -202,7 +202,7 @@ merely observed: ~*gaps*~ and ~gaps~ are one relationship because gate 17 fails
 the build on the day they stop being, and not because this page says so. The
 lattice does replace ~make-workspace~ wholesale, and pays for it with
 ~*new-workspace-cells*~. See gates 11, 15 and 17 in
-[[file:../PLAN.org::#gates-added][PLAN.org §gates-added]] for the option that
+[[file:../PLAN.org][PLAN.org §gates-added]] for the option that
 shipped wired to nothing, the one that shipped switched off, and the five whose
 names were a claim nothing checked.
 

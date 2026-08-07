@@ -54,7 +54,19 @@ Two rules, and they answer different questions:
 
   * *Across* the axis — travelling right into a vertical split — entry is
     geometric: you arrive at the child that lines up with the pane you left.
-    This is what makes Right-then-Left return you exactly where you started."
+    Where the two sides are divided alike, that makes Right-then-Left return
+    you exactly where you started.
+
+    IT DOES NOT DO SO IN GENERAL, and the sentence here used to say it did.
+    Alignment is computed from the centre of the rect you are leaving, so the
+    centre you carry over is not the centre you carry back: with the left
+    column split 1:3 and the right column 3:1, rightwards from the top-left
+    pane arrives in the tall top-right one, whose centre is below the whole of
+    where you came from, and leftwards from there arrives in the bottom-left.
+    Returning in every arrangement would mean carrying the coordinate you
+    crossed at, which is exactly the kind of remembered state D20 declined —
+    and declining it is what keeps every pane reachable.  A real property at
+    the cost of an approximate one; TESTS/TEST-MOTION.LISP asserts both halves."
   (let ((n (c:container-count split)))
     (cond ((zerop n) nil)
           ((and direction (eq (c:direction-axis direction) (c:split-axis split)))

@@ -4,7 +4,7 @@
 
 * Why this file exists
 
-DESIGN.org [[file:DESIGN.org::#d21][D21]] makes the project's central claim falsifiable, and
+DESIGN.org [[file:DESIGN.org][D21]] makes the project's central claim falsifiable, and
 names the deliverable:
 
 #+begin_quote
@@ -12,11 +12,11 @@ names the deliverable:
 down what was missing and why. /That list is the actual result of this
 project's central experiment/, whichever way it comes out — a short, mechanical
 list means the thesis held; a lattice that cannot be expressed without surgery
-means [[file:DESIGN.org::#extensibility][the honest claim]] was still too optimistic, and this document has to say
+means [[file:DESIGN.org][the honest claim]] was still too optimistic, and this document has to say
 so.
 #+end_quote
 
-And [[file:DESIGN.org::#d21][D21]] again, on the obligation:
+And [[file:DESIGN.org][D21]] again, on the obligation:
 
 #+begin_quote
 *Recorded consequence:* if step 4 turns out to require core surgery, /that is
@@ -146,7 +146,7 @@ the whole life of the extension.* It is a /total/ override — it wins wherever
 the shipped method applied and never calls ~call-next-method~ — so the option
 that method reads, ~*new-workspace*~, decides nothing at all while the lattice
 is enabled. Nothing could see that: the reader still exists, so
-[[file:PLAN.org::#gates-added][gate 11]] certified the option as read, and
+[[file:PLAN.org][gate 11]] certified the option as read, and
 ~--list-options~ went on printing it. Two of the rows above are the same shape
 narrowed to one container kind — ~gaps~ takes ~*gaps*~ away for cells, ~gaps~ on
 a stack takes it away for tabs — and those are fine, because the option still
@@ -164,7 +164,7 @@ the surface named the options an override *removed* and never the ones it
 *added*. It does now: the generic's own entry reads =answered from: *cell-gap*,
 *gaps*=, so a reader of a lattice image meets the extension's knob at the
 generic it answers rather than having to know the extension has one. See gate
-17 in [[file:PLAN.org::#gates-added][PLAN §gates-added]].
+17 in [[file:PLAN.org][PLAN §gates-added]].
 
 Plus twelve methods on the *container protocol* — ~container-addresses~,
 ~child-at~, ~(setf child-at)~, ~insert-child~, ~remove-child~,
@@ -410,7 +410,7 @@ drawn correctly.
 Not a core edit — a *design* finding, and the most useful thing measured
 against the real compositor.
 
-[[file:DESIGN.org::#d19][DESIGN D19]] makes typing in an empty pane conditional on one unverified fact,
+[[file:DESIGN.org][DESIGN D19]] makes typing in an empty pane conditional on one unverified fact,
 and states the consequence of it going the wrong way:
 
 #+begin_quote
@@ -972,7 +972,7 @@ the machine that runs them*, and =(load-extension "lattice")= working in an
 image built without it. A reader who wanted to see the 28 methods this document
 counts had the package and not the code.
 
-There is one installer now. See [[file:PLAN.org::#gates][PLAN §gates]], gate 9.
+There is one installer now. See [[file:PLAN.org][PLAN §gates]], gate 9.
 
 * Core edit 5 — one of the two protocols could not describe itself
 :PROPERTIES:
@@ -1131,7 +1131,7 @@ yes, and it is the point. *Found by:* reading the table at the top of this file
 against what the program actually does.
 
 *~clip-rect~ is a row in [[#twelve][the twelve]] and it did nothing at all.* It is
-river's ~set_content_clip_box~, which [[file:DESIGN.org::#feasibility][DESIGN §feasibility]] calls
+river's ~set_content_clip_box~, which [[file:DESIGN.org][DESIGN §feasibility]] calls
 the best find in the whole protocol: a cell half over the viewport edge is
 cropped /and its border is redrawn at the crop edge/, free, by the compositor,
 where the alternative was "a week of bad approximation". The lattice's method for
@@ -1152,7 +1152,7 @@ and never asked ~clip-rect~ anything. Every instrument agreed, and each of them
 was answering a question about the /shape/ of the code.
 
 *And underneath it, the mode itself was half-built.* ~:fixed~ is the zoom mode
-[[file:PLAN.org::#delta-3][Delta 3]] exists to provide and the one
+[[file:PLAN.org][Delta 3]] exists to provide and the one
 ~resize-column~'s own first-use warning tells you to switch to when ~:fit~'s
 panning cost becomes intolerable. Three things were wrong with it:
 
@@ -1210,7 +1210,7 @@ table rather than special-cased.
 argument.* A key that is read and never written is provably dead: the read is
 ~nil~, the branch never runs, nothing signals, and there is no arrangement of the
 program in which that was the intent. A key that is *written* and never read is a
-different animal, because [[file:DESIGN.org::#d20][D20]] is that props exists for
+different animal, because [[file:DESIGN.org][D20]] is that props exists for
 exactly this — state hung on an object for a reader the core does not know about.
 Four are in that position today and the build prints all four:
 

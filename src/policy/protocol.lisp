@@ -1,8 +1,17 @@
 ;;;; policy/protocol.lisp --- THE EXTENSION SURFACE.
 ;;;;
-;;;; This file contains generic functions and their docstrings.  It contains no
-;;;; methods, and that rule is enforced by a build gate.  The shipped behaviour
-;;;; is in conventional.lisp, as methods on CONVENTIONAL-POLICY.
+;;;; This file is generic functions and their docstrings, the six protocol
+;;;; classes they dispatch on, the specials the shipped answers read, and the
+;;;; introspection that lets the program enumerate its own surface.  What it
+;;;; contains none of is methods, and that rule is gate 20 -- which reads this
+;;;; file and prints the census of everything else in it.  The shipped
+;;;; behaviour is in conventional.lisp, as methods on CONVENTIONAL-POLICY.
+;;;;
+;;;; The sentence above claimed that gate for as long as it stood before there
+;;;; was one.  Nothing in tools/, tests/, the Makefile or CI named this file;
+;;;; the rule held because nobody happened to break it, which is the difference
+;;;; between a rule and a gate and is the thing this project keeps finding in
+;;;; itself.
 ;;;;
 ;;;; WHY THE FILE IS SHAPED THIS WAY
 ;;;;

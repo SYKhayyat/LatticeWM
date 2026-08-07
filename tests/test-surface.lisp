@@ -233,9 +233,18 @@ POLICY-GENERIC-P had been written, documented, and never called.
 
 This asserts the two halves separately, because a test that only counted
 would have passed throughout the bug."
-  (dolist (symbol (p:policy-generics))
-    (is (p:policy-generic-p symbol)
-        "~a is in the surface but is not specialized on a policy" symbol))
+  ;; ONE CHECK OVER THE COLLECTED FAILURES, and it used to be one per generic.
+  ;; POLICY-GENERICS is *defined* as the fixed point of POLICY-GENERIC-P, so
+  ;; this half can never fail -- and written as a loop it was sixty-nine checks
+  ;; on the headline that no change to the program could ever move.  Adding a
+  ;; seventieth generic bought one more check and no more coverage.  The shape
+  ;; below is the one EVERY-SYMBOL-THE-CORE-EXPORTS-NAMES-SOMETHING already
+  ;; used: collect what is wrong, assert once, and name all of it in the
+  ;; message.
+  (let ((strangers (remove-if #'p:policy-generic-p (p:policy-generics))))
+    (is (null strangers)
+        "~d generic~:p in the surface not specialized on a policy: ~{~a~^ ~}"
+        (length strangers) strangers))
   ;; The accessors that exposed it: exported, generic, and correctly excluded.
   (dolist (symbol '(p:command-name p:command-function p:command-lambda-list
                     p:argument-type-prompt p:argument-type-parser))
@@ -250,11 +259,24 @@ would have passed throughout the bug."
   (is (member 'p:container-axis (p:policy-generics))))
 
 (test every-option-is-documented-and-has-a-default
-  (dolist (row (p:all-options))
-    (destructuring-bind (key variable value default documentation) row
-      (declare (ignore value))
-      (is (stringp documentation) "~a has no docstring" key)
-      (is (not (eq default :unset)) "~a has no default" variable))))
+  "Two checks over 112 options, and it used to be 224.
+
+Neither half can fail as the program is written -- DEFINE-OPTION has a
+CHECK-TYPE on the docstring at macroexpansion and the default is a required
+positional argument -- so this is a rule kept in case the macro loses either
+guard, and a rule is worth one assertion rather than one per option.  As a
+loop it was a fifth of the suite's headline check count moving whenever
+somebody added a knob."
+  (let ((undocumented '()) (defaultless '()))
+    (dolist (row (p:all-options))
+      (destructuring-bind (key variable value default documentation) row
+        (declare (ignore value))
+        (unless (stringp documentation) (push key undocumented))
+        (when (eq default :unset) (push variable defaultless))))
+    (is (null undocumented) "~d option~:p with no docstring: ~{~a~^ ~}"
+        (length undocumented) undocumented)
+    (is (null defaultless) "~d option~:p with no default: ~{~a~^ ~}"
+        (length defaultless) defaultless)))
 
 (test every-option-is-reachable-from-a-config-file
   "A config file is read in LATTICEWM/USER, so an option whose symbol that
@@ -272,15 +294,20 @@ build had any reason to complain.
 The check is symbol identity rather than accessibility: an option that is
 merely PRESENT in LATTICEWM/USER because something else interned it there is
 still the wrong symbol."
-  (dolist (row (p:all-options))
-    (destructuring-bind (key variable value default documentation) row
-      (declare (ignore key value default documentation))
-      (let* ((name (symbol-name variable))
-             (in-user (find-symbol name '#:latticewm/user)))
-        (is (eq in-user variable)
-            "~a is not reachable from a config file: LATTICEWM/USER sees ~
-             ~:[nothing by that name~;a different symbol~].  Export it from ~a."
-            variable in-user (package-name (symbol-package variable)))))))
+  (let ((unreachable '()))
+    (dolist (row (p:all-options))
+      (destructuring-bind (key variable value default documentation) row
+        (declare (ignore key value default documentation))
+        (let ((in-user (find-symbol (symbol-name variable) '#:latticewm/user)))
+          (unless (eq in-user variable)
+            (push (format nil "~a (~a sees ~:[nothing by that name~;a ~
+different symbol~]; export it from ~a)"
+                          variable '#:latticewm/user in-user
+                          (package-name (symbol-package variable)))
+                  unreachable)))))
+    (is (null unreachable)
+        "~d option~:p a config file cannot reach:~{~%    ~a~}"
+        (length unreachable) (reverse unreachable))))
 
 (test options-round-trip
   (let ((before (p:option :gaps)))
@@ -419,16 +446,20 @@ already a value they could have set."
     ;; one that does not.  Same shape as
     ;; EVERY-OPTION-IS-REACHABLE-FROM-A-CONFIG-FILE: symbol identity between
     ;; two independently maintained things.
-    (dolist (variable (remove-duplicates
-                       (loop for generic being the hash-keys of table
-                             append (gethash generic table))))
-      (is (eq variable
-              (let ((*package* (find-package '#:latticewm/user))
-                    (*read-eval* nil))
-                (ignore-errors (read-from-string (p:option-print-name variable)))))
-          "~a reads back to the option it names, in the package a ~
-           configuration file is read in"
-          (p:option-print-name variable)))
+    (let ((wrong (remove-if
+                  (lambda (variable)
+                    (eq variable
+                        (let ((*package* (find-package '#:latticewm/user))
+                              (*read-eval* nil))
+                          (ignore-errors
+                           (read-from-string (p:option-print-name variable))))))
+                  (remove-duplicates
+                   (loop for generic being the hash-keys of table
+                         append (gethash generic table))))))
+      (is (null wrong)
+          "~d printed name~:p that does not read back to the option it names, ~
+           in the package a configuration file is read in: ~{~a~^ ~}"
+          (length wrong) (mapcar #'p:option-print-name wrong)))
     ;; Methods only.  An option read by an ordinary function is not a shipped
     ;; default anybody can override, so there is no `write a method instead'
     ;; to point the reader at.
@@ -1200,19 +1231,34 @@ makes it exactly as replaceable as an invented one")
     (is (equal p:*empty-pane-color*
                (multiple-value-list (p:border-color-for policy :empty))))))
 
+(defclass migrating-node (c:node)
+  ((window :initarg :window :initform nil :accessor migrating-window))
+  (:documentation "A class this file owns, for the one test that redefines one."))
+
 (test adding-a-slot-to-a-live-class-migrates-existing-instances
   ;; SPIKE-WEEK0 §ext-3, which is what settled DEFCLASS over DEFSTRUCT for core
   ;; state.  An instance made *before* the redefinition gains the slot.
-  (let ((before (c:make-leaf)))
-    (eval '(defclass c:leaf (c:node)
-             ((window :initarg :window :initform nil :accessor c:leaf-window)
-              (test-only-slot :initform :migrated :accessor leaf-test-only-slot))))
+  ;;
+  ;; ON A CLASS THIS FILE OWNS, AND IT USED TO BE C:LEAF.  The old version
+  ;; redefined the shipped LEAF from a DEFCLASS hand-copied into this file and
+  ;; then "restored" it from the same copy -- one screen below the twenty-four
+  ;; lines explaining why hand-restoring a method had been catastrophic.  It
+  ;; was already lossy: model/node.lisp gives LEAF a class docstring and a slot
+  ;; docstring, and both were silently dropped for the rest of the image on
+  ;; every run.  Add a slot to LEAF and this deleted it, mid-suite, for every
+  ;; test that came after.  The property under test is CLOS's, not LEAF's.
+  (let ((before (make-instance 'migrating-node)))
+    (eval '(defclass migrating-node (c:node)
+             ((window :initarg :window :initform nil :accessor migrating-window)
+              (test-only-slot :initform :migrated :accessor node-test-only-slot))))
     (unwind-protect
-         (is (eq :migrated (funcall (read-from-string "latticewm/tests::leaf-test-only-slot")
+         (is (eq :migrated (funcall (read-from-string "latticewm/tests::node-test-only-slot")
                                     before))
              "an instance that predates the redefinition has the new slot")
-      (eval '(defclass c:leaf (c:node)
-               ((window :initarg :window :initform nil :accessor c:leaf-window)))))))
+      (eval '(defclass migrating-node (c:node)
+               ((window :initarg :window :initform nil :accessor migrating-window))
+               (:documentation
+                "A class this file owns, for the one test that redefines one."))))))
 
 (test closing-the-pipe-on-a-listing-flag-is-not-an-error
   "`latticewm --extension-surface | head' used to print five lines and then a

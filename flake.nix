@@ -119,17 +119,22 @@
             # login screen, which is the whole difference and is now tested
             # rather than asserted.  Re-vendor from the new river, or hold the
             # lock; both are deliberate acts and either is fine.
+            # THERE IS ONE LIST OF STEPS AND THIS IS NOT IT EITHER.  What stood
+            # here was five hand-typed `sbcl --load' lines under a comment
+            # reading "the same steps `make check` runs" — the identical defect
+            # as the installPhase below, in the same file, left standing
+            # directly above the commit that fixed the other one.  Gate 9 reads
+            # installPhase and had six references to it; nothing anywhere read
+            # buildPhase.  So `make check' could grow a step, or reorder one, or
+            # drop one, and the packaged build would go on running the old
+            # sequence while a comment three lines up said it did not.  Gate 21
+            # reads this phase now, on exactly gate 9's terms.
             buildPhase = ''
               export HOME=$TMPDIR
               export XDG_RUNTIME_DIR=$TMPDIR/run
               mkdir -p "$XDG_RUNTIME_DIR"
-              export CL_SOURCE_REGISTRY="${wayflanSrc}//:$PWD//"
-              sbcl --non-interactive --load tools/build.lisp
-              sbcl --non-interactive --load tools/gates.lisp
-              sbcl --non-interactive --load tools/test.lisp
-              LATTICEWM_REQUIRE_INTEGRATION=1 \
-                sbcl --non-interactive --load tools/integration.lisp
-              sbcl --non-interactive --load tools/image.lisp
+              export WAYFLAN_SRC="${wayflanSrc}"
+              make check image
             '';
 
             # THERE IS ONE INSTALLER AND THIS IS NOT IT.  This phase used to

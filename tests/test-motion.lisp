@@ -51,9 +51,15 @@
     (is (equal "a" (target root '(1 0) :left))
         "only then does it escape")))
 
-(test motion-is-involutive
-  ;; Right then left must return you exactly where you started.  This is the
-  ;; property that memory-based entry resolution would destroy.
+(test motion-is-involutive-when-the-panes-line-up
+  "Right then left returns you where you started, and this is not general.
+
+IT WAS ASSERTED AS GENERAL AND IT IS FALSE.  The tree below is built with no
+weights, so every child is equal and every centre lands in the sibling that
+faces it.  Under unequal weights it does not hold, it cannot be made to hold,
+and the test below this one is the counterexample -- see there for why.  What
+this test is actually for is still worth having: it is the property that
+last-focus entry resolution would destroy even in the easy case."
   (let* ((pol (policy))
          (root (c:make-split
                 :horizontal
@@ -70,6 +76,44 @@
               (is (equal start back)
                   "~s then ~s from ~s came back to ~s"
                   direction (c:opposite-direction direction) start back))))))))
+
+(test motion-is-not-involutive-once-the-panes-stop-lining-up
+  "The counterexample, written down because the guarantee above was general.
+
+DEFAULTS-MOTION SAID `this is what makes Right-then-Left return you exactly
+where you started', and the test that stood over it built a split with no
+weights -- four equal quadrants, the one arrangement in which it is true.
+
+Entry across the axis picks the child whose extent contains the *centre of the
+rect you left*, and that rule cannot be involutive when the two sides are
+divided differently: the centre you carry rightwards is computed from your
+extent, and the centre you carry back is computed from the extent of wherever
+you landed.  Left column 1:3 and right column 3:1 is the smallest case.  From
+the top-left pane, rightwards lands in the top-right one, whose centre is
+lower than the whole of the left column's top pane -- so leftwards from there
+lands in the *bottom* left.
+
+Fixing it would mean carrying the coordinate you crossed at, which is state
+motion does not have and which D20 declined for the same reason it declined
+last-focus memory.  So this is a documented property of the model rather than
+a bug, and the way to keep it documented is to assert it."
+  (let* ((pol (policy))
+         (root (c:make-split
+                :horizontal
+                (list (c:make-split :vertical
+                                    (list (leaf-with "l-top") (leaf-with "l-bottom"))
+                                    '(1 3))
+                      (c:make-split :vertical
+                                    (list (leaf-with "r-top") (leaf-with "r-bottom"))
+                                    '(3 1))))))
+    (let* ((there (p:find-motion-target pol root '(0 0) :right))
+           (back (and there (p:find-motion-target pol root there :left))))
+      (is (equal "r-top" (app-at root there))
+          "rightwards from the left column's top pane enters the tall top-right one")
+      (is (not (equal '(0 0) back))
+          "and leftwards from there does not come back: ~s" (and back (app-at root back)))
+      (is (equal "l-bottom" (app-at root back))
+          "it lands in the pane whose extent contains the centre it left"))))
 
 (test every-pane-is-reachable-by-directional-motion
   ;; The concrete failure that last-focus memory would cause: a pane that no

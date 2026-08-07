@@ -107,8 +107,12 @@ deps:
 build: toolchain
 	@$(RUN) --load tools/build.lisp
 
+# tools/run-gates.lisp and not tools/gates.lisp: the gates are bare top-level
+# forms, and a gate that signals rather than failing would otherwise take every
+# gate behind it with it.  The driver reads the same file and puts a handler
+# between its forms.
 gates: build
-	@$(RUN) --load tools/gates.lisp
+	@$(RUN) --load tools/run-gates.lisp
 
 test: toolchain
 	@$(RUN) --load tools/test.lisp

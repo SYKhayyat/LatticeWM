@@ -48,7 +48,7 @@ Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, nineteen gates, 1600+ checks
+make               # build, twenty-one gates, 1600+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -455,6 +455,11 @@ failed session, which is the worst possible moment to find one.
 
 * Development
 
+[[file:CONTRIBUTING.md][CONTRIBUTING.md]] is worth four minutes before a first pull request: it lists
+what each of the twenty-one gates refuses, which documents are frozen records
+and must not be edited into agreement with the code, and which parts of this
+tree are generated and should never be edited by hand at all.
+
 #+begin_src sh
 make          # build, gates, tests
 make test     # the unit suite alone
@@ -465,7 +470,7 @@ make image    # dump ./latticewm -- 13 MB; make image-fast for the dev loop
 make surface  # regenerate the docs under doc/
 #+end_src
 
-Nineteen gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
+Twenty-one gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
 as well, which is what "CI" ought to have meant when this line first claimed
 it: zero compiler warnings under =safety 3=; every
 policy generic and command documented; the lattice touching no core *and no
@@ -487,7 +492,7 @@ an option named after a policy generic being read by a method on that generic;
 a file whose name begins =defaults-= being the answers half of a pair whose
 other half defines no methods;
 and the project saying the same thing about itself in every place it says one.
-The reasoning behind each is in [[file:PLAN.org::#gates][PLAN.org §gates]].
+The reasoning behind each is in [[file:PLAN.org][PLAN.org §gates]].
 
 Gate 19 is the newest, and it is the only one that reads no Lisp. Three files
 declare this project's licence — =latticewm.asd=, =lattice.asd= and
@@ -596,7 +601,7 @@ wholesale stays legal; the lattice's workspace is a plane, always. Doing it and
 leaving the user nothing to set does not: the lattice pays ~*new-workspace*~
 back with ~*new-workspace-cells*~.
 
-Gate 14 is the one the other eighteen could not ask. All
+Gate 14 is the one the other twenty could not ask. All
 of them read the program or the documents; a hook is neither, because a hook
 that nothing has ever attached to is *correct* by every static measure and
 untested by construction. Fourteen of seventeen were in that state, and the
@@ -698,7 +703,7 @@ river back to 0.4.5, because every 4 → 5 change is additive: two new
 =capture_sessions= events and five clarifications of prose, nothing removed and
 nothing renamed. The version check refuses in both directions, so pinning back
 would have left the program unable to start on any river a user installs today.
-=src/protocol/PINNED= carries the diff and the argument; [[file:PLAN.org::#log8][PLAN.org §log8]] carries
+=src/protocol/PINNED= carries the diff and the argument; [[file:PLAN.org][PLAN.org §log8]] carries
 the decision. =nix build=, =nix-shell=, =make check= and CI are green.
 
 Both of those new events are now handled, which they were not when that
@@ -749,7 +754,7 @@ shutdown hooks and written the layout out. That sentence was false until
 2026-08-06: an orphaned window manager span a core indefinitely and said nothing,
 because a socket at end of file is readable and nothing in the loop could tell
 that from a socket with a message on it. Six of them were found at 95% CPU each
-on one machine. See [[file:FINDINGS.org::#spin][FINDINGS.org §spin]]; verified
+on one machine. See [[file:FINDINGS.org][FINDINGS.org §spin]]; verified
 against a real river killed with =SIGKILL= and with =SIGTERM=.
 
 =make check= fails when river or a terminal emulator is missing rather than
@@ -760,7 +765,7 @@ diagnosed and fixed: the window manager always quit, and the check failed on the
 runs where it quit *fastest*, because it read a slot off a server object the
 shutdown had already torn down. Six consecutive runs pass now. The instrument
 that hid it for a day is fixed too, and that is the transferable half; see
-[[file:FINDINGS.org::#quit-flake][FINDINGS.org §quit-flake]]. A red =check= is
+[[file:FINDINGS.org][FINDINGS.org §quit-flake]]. A red =check= is
 worth reading before it is worth re-running. What it
 still cannot reach is named out loud in its own output every run: a physically
 scaled output, libinput devices, and a layer-shell client, none of which a
@@ -778,7 +783,7 @@ fixed.* river's Wayland backend takes =WLR_WL_OUTPUTS=2= and its headless
 backend takes =WLR_HEADLESS_OUTPUTS=2=; either gives two real outputs at two
 origins, which is not two physical panels but is the same code. That run
 happened on 2026-08-06 and is written up in
-[[file:FINDINGS.org::#two-outputs][FINDINGS.org §two-outputs]]. One overlay per
+[[file:FINDINGS.org][FINDINGS.org §two-outputs]]. One overlay per
 output is correct, and a clean two-output start is correct. What was not: two
 outputs could end up showing the same workspace — after restoring a layout saved
 with fewer workspaces than there are monitors, and, it turned out, after a
@@ -790,7 +795,7 @@ six places that assign one each had to remember; two monitors switching
 workspaces trade rather than collide. Measured before and after against two
 outputs, and covered by unit tests that build a world with two outputs in it.
 Nothing is claimed here that is not either tested or stated as untested;
-[[file:PLAN.org::#log7][PLAN.org §log7]] is the current list of which is which.
+[[file:PLAN.org][PLAN.org §log7]] is the current list of which is which.
 
 Other things that are honestly newer than the rest. *HiDPI scaling of what the
 window manager draws itself* is exercised against a real =wl_shm=: a 2x canvas

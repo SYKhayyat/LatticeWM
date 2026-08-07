@@ -5,8 +5,9 @@
 ;;;; program has and the entire reason the project is in Common Lisp.  It is
 ;;;; also, as a *default*, a TCP server offering arbitrary code execution with
 ;;;; no authentication step — so it is off unless asked for, and bound to
-;;;; loopback when it is.  See *SWANK-PORT*, and see runtime/ipc.lisp for the
-;;;; control surface that is on by default and is a Unix socket.
+;;;; loopback when it is.  See *SWANK-PORT*, which says what that costs and
+;;;; what would buy it back, and see runtime/ipc.lisp for the control surface
+;;;; that is on by default and is a Unix socket.
 ;;;;
 ;;;; THE QUEUE IS NOT OPTIONAL AND IS NOT ABOUT SWANK.  The wayflan client is
 ;;;; single-threaded, so any thread that is not the window manager's must not
@@ -29,13 +30,31 @@ program that ships as a session binary.  For a development tool that is normal
 and excellent; for a default it is the kind of surprise that ends up in a CVE
 database rather than in a bug tracker.
 
-Nothing is lost by having it off.  The control socket in runtime/ipc.lisp is on
-by default and is reachable only by the user who owns the session, so scripting
-still works out of the box; and turning SWANK on is one line in a config file
-or one flag:
+WHAT IS LOST BY HAVING IT OFF, SAID HONESTLY -- because this docstring used to
+say `nothing is lost' and that was wrong about the audience the project names
+two paragraphs earlier.  The control socket in runtime/ipc.lisp is on by
+default, is reachable only by the user who owns the session, and covers
+scripting completely; and `latticewm --eval' and Super+; are both live.  None
+of that is `M-x slime-connect, C-c C-c on a DEFMETHOD, watch the windows move',
+which is a Lisper's whole relationship with a running Lisp program and is the
+one thing no other Wayland compositor can offer.  A socket that takes one form
+per line is a scripting interface.  Nobody rallies around a socket.
+
+So the default stays off and the *remedy is made loud* instead: it is one line,
+and the starter configuration this program writes into every user's home
+directory now says so, in the paragraph a Lisper reads first, rather than
+telling them to connect to a port nothing is listening on.
 
     latticewm --swank-port 4005
     (setf *swank-port* 4005)   ; in init.lisp
+
+THE STANDING QUESTION IS A UNIX SOCKET.  runtime/ipc.lisp solved this exact
+trust problem -- $XDG_RUNTIME_DIR, mode 0600, owner-only, chmod before listen
+-- and a SWANK on those terms could be on by default with none of the argument
+above applying to it.  SWANK's CREATE-SERVER takes a port, so that is work in
+SWANK's socket layer rather than a flag here, and it is not done.  It is the
+right shape of answer and it is written down here rather than in a plan nobody
+reads.
 
 See also *SWANK-INTERFACE*, which decides who may reach it.")
 

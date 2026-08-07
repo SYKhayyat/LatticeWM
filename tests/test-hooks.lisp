@@ -73,15 +73,21 @@ it has a writable state directory."
   ;; the one statement of what a hook function receives was a comment that
   ;; happened to be parenthesised.  It is recorded now, and everything below
   ;; this line is a consequence of that.
-  (dolist (row (p:all-hooks))
-    (destructuring-bind (name documentation attached arguments) row
-      (declare (ignore attached))
-      (is (stringp documentation) "~s has a docstring" name)
-      (is (listp arguments) "~s records what it passes" name)
-      (is (every #'symbolp arguments)
-          "~s's argument list is names, not types" name)
-      (is (eq (nth-value 1 (p:hook-arguments name)) t)
-          "~s is findable by name" name))))
+  ;; Four collected failures rather than four checks per hook: eighteen hooks
+  ;; made seventy-two of the suite's headline checks out of one rule that
+  ;; DEFHOOK's own macroexpansion already enforces.
+  (let ((wrong '()))
+    (dolist (row (p:all-hooks))
+      (destructuring-bind (name documentation attached arguments) row
+        (declare (ignore attached))
+        (unless (stringp documentation) (push (list name "no docstring") wrong))
+        (unless (listp arguments) (push (list name "does not record what it passes") wrong))
+        (unless (and (listp arguments) (every #'symbolp arguments))
+          (push (list name "argument list is not names") wrong))
+        (unless (eq (nth-value 1 (p:hook-arguments name)) t)
+          (push (list name "is not findable by name") wrong))))
+    (is (null wrong) "~d hook problem~:p:~{~%    ~{~s ~a~}~}"
+        (length wrong) (reverse wrong))))
 
 (test the-arity-of-a-lambda-list-is-a-range
   (is (equal '(2 . 2) (p:lambda-list-arity '(a b))))
@@ -242,9 +248,11 @@ it has a writable state directory."
   ;; program's seventeen, missing :LAYOUT-RESTORED, which is the hook the
   ;; flagship extension itself uses.
   (let ((printed (with-output-to-string (out) (p:print-hook-surface out))))
-    (dolist (row (p:all-hooks))
-      (is-true (search (format nil "~s" (first row)) printed)
-               "~s is in the generated document" (first row)))
+    (let ((absent (remove-if (lambda (row)
+                               (search (format nil "~s" (first row)) printed))
+                             (p:all-hooks))))
+      (is (null absent) "~d hook~:p not in the generated document: ~{~s~^ ~}"
+          (length absent) (mapcar #'first absent)))
     (is-true (search (format nil "~d hooks" (length (p:all-hooks))) printed)
              "and it counts them from the image rather than from a sentence")))
 

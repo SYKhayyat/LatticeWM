@@ -36,18 +36,72 @@
   (merge-pathnames (format nil "examples/~a" name)
                    (asdf:system-source-directory "latticewm")))
 
+(defun method-census ()
+  "Every method on every generic the program publishes, as (GENERIC . METHODS)."
+  (let ((out '()))
+    (dolist (package (remove nil (list (find-package '#:latticewm/policy)
+                                       (find-package '#:latticewm/core)
+                                       (find-package '#:latticewm/runtime)))
+             out)
+      (do-symbols (symbol package)
+        (when (eq (symbol-package symbol) package)
+          (let ((function (and (fboundp symbol) (ignore-errors (fdefinition symbol)))))
+            (when (typep function 'generic-function)
+              (push (cons function
+                          (copy-list (sb-mop:generic-function-methods function)))
+                    out))))))))
+
+(defun option-census ()
+  "Every registered option and the value it has now, as (VARIABLE . VALUE)."
+  (mapcar (lambda (row) (cons (second row) (third row)))
+          (p:all-options)))
+
+(defun restore-methods (census)
+  "Remove every method that was not there when CENSUS was taken."
+  (dolist (generic (method-census))
+    (let ((was (cdr (assoc (car generic) census :test #'eq))))
+      (dolist (method (cdr generic))
+        (unless (member method was :test #'eq)
+          (remove-method (car generic) method))))))
+
+(defun restore-options (census)
+  (dolist (row census)
+    (setf (symbol-value (car row)) (cdr row))))
+
 (defmacro with-example ((name) &body body)
   "Load an example into a fresh world, run BODY, and clean up after it.
 
-The cleanup matters: these examples define methods on the *shipped* policy
-class, which is the honest thing for them to do — it is what a user's config
-does — and it means a test that does not undo them leaks into every test that
-runs afterwards."
-  `(let ((r:*world* (c:make-world))
-         (p:*policy* (make-instance 'p:conventional-policy)))
-     (let ((*package* (find-package '#:latticewm/user)))
-       (load (example-path ,name)))
-     ,@body))
+THE CLEANUP IS THE POINT AND IT USED TO BE ONLY A PARAGRAPH.  This docstring
+said `a test that does not undo them leaks into every test that runs
+afterwards' and then rebound two specials and called LOAD -- no REMOVE-METHOD,
+no option restore, no UNWIND-PROTECT.  The examples define methods on the
+*shipped* policy class, which is the honest thing for them to do because it is
+what a user's configuration does, and suite.lisp runs this suite before the
+lattice suite in the same image.  So the whole plane suite ran with
+*FOCUS-FOLLOWS-MOUSE* turned on by example 01 and with example 02's
+ON-WINDOW-OPEN standing on CONVENTIONAL-POLICY, consulting a rule list that
+floats anything under 400x300 and sends \"firefox\" to another workspace.
+
+It was correct anyway, by string coincidence: no fixture window is called
+\"firefox\" and none of them announce a preferred size.  That is not a property
+anybody chose and it is not one anybody could have noticed losing -- example
+01's own ON-FOCUS-CHANGE leaking into the lattice suite is what took two new
+plane tests down, one commit before this was written.
+
+Methods and option values both, because both are global and both are what an
+example is made of."
+  (let ((methods (gensym "METHODS")) (options (gensym "OPTIONS")))
+    `(let ((r:*world* (c:make-world))
+           (p:*policy* (make-instance 'p:conventional-policy))
+           (,methods (method-census))
+           (,options (option-census)))
+       (unwind-protect
+            (progn
+              (let ((*package* (find-package '#:latticewm/user)))
+                (load (example-path ,name)))
+              ,@body)
+         (restore-methods ,methods)
+         (restore-options ,options)))))
 
 (defun open-windows (n &optional (world r:*world*))
   (dotimes (i n)

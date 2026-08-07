@@ -114,11 +114,15 @@ wrong: by not being printed at all."
     (is (search "LatticeWM container protocol" text))
     (is (not (search "UNDOCUMENTED" text))
         "the generated container surface flags something as undocumented")
-    (dolist (name (c:container-protocol-generics))
-      (let ((printed (string-downcase
-                      (symbol-name (if (consp name) (second name) name)))))
-        (is (search printed text)
-            "~a is on the protocol and not in the printed document" name)))))
+    (let ((absent (remove-if
+                   (lambda (name)
+                     (search (string-downcase
+                              (symbol-name (if (consp name) (second name) name)))
+                             text))
+                   (c:container-protocol-generics))))
+      (is (null absent)
+          "~d member~:p of the protocol not in the printed document: ~{~a~^ ~}"
+          (length absent) absent))))
 
 ;;; -------------------------------------- a container kind from outside
 

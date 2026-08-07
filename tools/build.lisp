@@ -27,8 +27,16 @@ lattice/map.lisp, and seven gates and 779 checks passed over a shipped feature
 that would not load.  It was found by a user's config file failing at startup,
 which is the worst place to find it.")
 (defparameter *loose-files*
-  '("tools/hardware-check.lisp")
+  '("tools/hardware-check.lisp" "tools/bench.lisp")
   "Files a *user* is told to load, which belong to no system.
+
+TOOLS/BENCH.LISP WAS THE THIRD INSTANCE OF THIS BUG AND IT WAS FOUND WHILE THE
+COMMIT FIXING THE SECOND ONE WAS STILL THE TIP.  `make bench' is referenced by
+the Makefile and by nothing else -- no gate, no CI job, no document -- and the
+file was in no system, so nothing compiled it and a rename in the runtime would
+have been discovered by whoever next wanted a number.  Its own header records
+that it spent seven sessions measuring the wrong half of the program, which is
+the kind of file that most needs somebody watching it.
 
 AND THEREFORE FILES NOTHING COMPILED, which is the same hole the lattice was in
 and it cost the same coin.  tools/hardware-check.lisp called CURRENT-VIEWPORT

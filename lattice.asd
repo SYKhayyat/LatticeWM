@@ -17,7 +17,18 @@
 
 (defsystem "lattice"
   :description "An infinite zoomable plane of cells, as an extension to LatticeWM."
+  :long-description
+  "Workspaces become an unbounded two-dimensional plane of cells, each holding
+an ordinary split tree, with a zoom that goes out to a map of the whole plane.
+It is a separate system that depends only on the core's exported policy
+package, and it is here to be the proof that the extension surface is one: it
+adds a container kind, ten policy methods and a vocabulary of commands, and
+edits nothing under src/."
   :author "Shaul Khayyat"
+  :mailto "shaul.khayyat@cloudresearch.com"
+  :homepage "https://github.com/SYKhayyat/LatticeWM"
+  :source-control (:git "https://github.com/SYKhayyat/LatticeWM.git")
+  :bug-tracker "https://github.com/SYKhayyat/LatticeWM/issues"
   :license "GPL-3.0-or-later"
   ;; The same VERSION file the core reads, and deliberately not a version of
   ;; its own.  The lattice is a separate *system* so that the core can be built

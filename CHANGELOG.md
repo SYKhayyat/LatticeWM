@@ -330,7 +330,78 @@ be able to do before anyone else can depend on it.
   whole reason for saving the class — was described but not shown. The saved
   class now rides on the mixin, which is the argument for writing a mixin.
 
+- `src/policy/protocol.lisp` opened by citing a build gate that did not exist:
+  "it contains no methods, and that rule is enforced by a build gate."
+  `grep -rn protocol.lisp tools/ tests/ Makefile .github/` returned nothing —
+  `*SMART-GAPS*` in the one file the project hands to strangers, and invisible
+  to gate 12 because a file header is neither prose nor a docstring. The gate
+  is written (gate 20) and the header now names what is in the file instead of
+  under-describing it.
+- `flake.nix`'s `buildPhase` was five hand-typed `sbcl --load` lines under a
+  comment reading "the same steps `make check` runs", three lines above the
+  `installPhase` that gate 9 exists to keep delegating. Six references to
+  `installPhase` in `gates.lisp`; zero to `buildPhase`. It runs `make check
+  image` now, and gate 21 holds it there on gate 9's terms.
+- `tools/gates.lisp` was twenty-one bare top-level forms with no error
+  containment between them, so a gate that signalled rather than failing took
+  every gate behind it with it. `tools/integration.lisp` wrote that lesson
+  down, and gates 13 and 16 wrap their own file reads in the same words; the
+  reasoning had reached two gates and not the file. `tools/run-gates.lisp` puts
+  a handler between the forms, and a contained error is a failure and not a
+  skip.
+- Gate 19 read `"twenty"` inside `"twenty-one"` and reported eight documents as
+  stale for saying the true number.
+- `tests/test-examples.lisp`'s `with-example` promised to clean up after an
+  example and did not: no `remove-method`, no option restore, no
+  `unwind-protect`. The examples define methods on the shipped policy class,
+  and the examples suite runs before the lattice suite in the same image, so
+  the whole plane suite ran with `*focus-follows-mouse*` on and example 02's
+  `on-window-open` installed. It was correct by string coincidence.
+- `adding-a-slot-to-a-live-class-migrates-existing-instances` redefined the
+  shipped `c:leaf` from a `defclass` hand-copied into the test file and
+  restored it from the same copy, silently dropping the class and slot
+  docstrings for the rest of the image on every run. The property is CLOS's,
+  not `leaf`'s; it is asserted on a class the test file owns.
+- `motion-is-involutive` asserted a general guarantee at the one arrangement
+  where it holds — a split with no weights — and `defaults-motion.lisp` stated
+  it as general prose. Entry across an axis aligns on the centre of the rect
+  you left, which cannot be involutive when the two sides are divided
+  differently. Both halves are asserted now, the counterexample included.
+- 21 tests were lint rules whose loops made checks that could not fail: an `is`
+  per option, per hook, per generic, over universes defined as the fixed point
+  of the predicate being tested. Collapsed to one assertion over the collected
+  failures, the way `every-symbol-the-core-exports-names-something` already did
+  it. The suite went from 1904 checks to 1294 with no loss of coverage, which
+  is the honest number.
+- `tools/bench.lisp` was compiled by nothing — the third instance of that bug,
+  found while the commit fixing the second was still the tip. It is in
+  `*loose-files*` now. `tools/test-lattice.lisp` was dead and is deleted.
+- `swank.lisp` said "nothing is lost by having SWANK off", which is airtight
+  about scripting and wrong about the audience the file names two paragraphs
+  earlier. The starter configuration told every new user to `M-x slime-connect`
+  to a port nothing is listening on; it now names the three ways in that work
+  and the one line that turns on the fourth.
+- 17 `[[file:X.org::#anchor]]` links in the current documents were Emacs
+  search-target syntax, which GitHub resolves as a path and 404s — the front
+  door, broken for everybody who is not reading it in Emacs. The 67 in the
+  frozen records are left alone.
+- `ASSESSMENT.org` told a visitor the program is "not ready to be somebody's
+  daily driver" against `README`'s "working, and used on bare metal". Both were
+  true when written; the record is frozen, so it now says at the top what it is
+  and where the current status lives.
+
 ### Added
+
+- `CONTRIBUTING.md`, an issue template, an extension-point issue template and a
+  pull request template. Twenty-one gates are a superb instrument for one
+  author and a wall to the second, and `.github/` held `workflows` and nothing
+  else — no warning anywhere about what a first branch has to survive.
+  `CONTRIBUTING.md` is on gate 19's document list from the day it was written,
+  because the number it tells a newcomer is how many ways their branch can
+  fail.
+- Dist metadata in both `.asd` files: `:long-description`, `:homepage`,
+  `:source-control`, `:bug-tracker`, `:mailto`. Quicklisp, ocicl and qlot read
+  a system definition and none of them read a README.
 
 - Gate 19 — the project says the same thing about itself everywhere it says
   one: licence, version and the number of gates that run.

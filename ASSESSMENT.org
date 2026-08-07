@@ -2,6 +2,20 @@
 #+DATE: 2026-08-01
 #+OPTIONS: toc:2 num:t
 
+#+begin_quote
+*This is a dated record and not the current status.* It is frozen on purpose:
+its verdict — /"not ready to be somebody's daily driver"/ — was true when it
+was written, the work it demanded was done, and editing that sentence into
+agreement with what shipped would destroy the only thing the document is for.
+
+For what is true today, read [[file:README.org][README]]'s status section, or run =make check=.
+For how the two came to disagree, read the sections below in order: each round
+of this file records what was wrong and the commits that closed it.
+
+Added 2026-08-07, because a visitor who found this file first was told the
+program is not usable by a document nothing else on the way in mentioned.
+#+end_quote
+
 * Second round, 2026-08-03
 :PROPERTIES:
 :CUSTOM_ID: round2

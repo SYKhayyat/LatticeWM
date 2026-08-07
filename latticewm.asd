@@ -78,8 +78,26 @@ Debian and Ubuntu LTS ship 2.2.9; Arch, Fedora and nixpkgs ship current."
 
 (defsystem "latticewm"
   :description "An extensible window manager for the river Wayland compositor."
+  :long-description
+  "A window manager whose behaviour is a set of documented generic functions
+you specialize from a configuration file, with the whole of Common Lisp
+available at runtime: redefine a method over SLIME and the windows move,
+without a restart and without losing your layout.  The window tree is a
+container protocol rather than a fixed set of kinds, so an extension can add a
+kind of container the core has never heard of -- which is what the `lattice'
+system, an infinite zoomable plane of cells, is a proof of."
   :author "Shaul Khayyat"
+  :mailto "shaul.khayyat@cloudresearch.com"
+  :homepage "https://github.com/SYKhayyat/LatticeWM"
+  :source-control (:git "https://github.com/SYKhayyat/LatticeWM.git")
+  :bug-tracker "https://github.com/SYKhayyat/LatticeWM/issues"
   :license "GPL-3.0-or-later"
+  ;; THE METADATA ABOVE IS THE FRONT DOOR FOR EVERY LISP THAT IS NOT A CLONE OF
+  ;; THIS REPOSITORY.  Quicklisp, ocicl and qlot all read a system definition
+  ;; and none of them read a README; without :HOMEPAGE and :SOURCE-CONTROL a
+  ;; system that arrives through a dist is a name, a description and no way
+  ;; back to the project.  `git clone && ./bootstrap.sh && make' is a C
+  ;; project's install story wearing Lisp, and it was the only one on offer.
   ;; ONE VERSION, IN A FILE, READ BY EVERYTHING THAT NEEDS ONE.
   ;;
   ;; It used to be written out in four places -- here, lattice.asd, flake.nix

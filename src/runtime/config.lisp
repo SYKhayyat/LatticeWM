@@ -357,9 +357,20 @@ particular program."
 ;;;; model, the policy surface and the runtime visible without prefixes.
 ;;;;
 ;;;; Everything here takes effect at startup.  Everything here can ALSO be
-;;;; evaluated into the running window manager from a REPL — connect with
-;;;; M-x slime-connect to port 4005 — and takes effect immediately, with no
-;;;; restart and without losing your layout.
+;;;; evaluated into the running window manager and take effect immediately,
+;;;; with no restart and without losing your layout.  Three ways in:
+;;;;
+;;;;   latticewm --eval '(setf *gaps* 12)'   the control socket, on by default
+;;;;   Super+;                               a minibuffer that reads a form
+;;;;   M-x slime-connect                     a full REPL, if you turn it on:
+;;;;
+;;;;     (setf *swank-port* 4005)   ; in this file, or --swank-port 4005
+;;;;
+;;;; SWANK is off unless you ask, because it is arbitrary code execution over
+;;;; TCP with no authentication step and this program starts as your session.
+;;;; It binds to loopback (*swank-interface*).  If you write Lisp, turn it on —
+;;;; redefining a method in a running window manager and watching the windows
+;;;; move is the thing this project is for.
 ;;;;
 ;;;; You do not have to start here.  Super+? o reads a setting's documentation
 ;;;; on screen and Super+? s changes it on the spot; this file is for making

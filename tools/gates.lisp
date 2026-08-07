@@ -44,10 +44,25 @@
 
 (defparameter *failures* '())
 
+(defparameter *current-gate* 0
+  "Which gate the form now being evaluated belongs to.
+
+READ BY TOOLS/RUN-GATES.LISP AND BY NOTHING IN THIS FILE, which is the shape
+this file needs and did not have: the gates are bare top-level forms, so a gate
+that signals rather than failing takes the whole run with it and every gate
+after it goes unreported.  tools/integration.lisp wrote that lesson down --
+`Run one section, and do not let it take the rest of the run with it' -- after
+being one 250-line LET that stopped growing at eighteen checks.  Gates 13 and
+16 wrap their own file reads for exactly the same reason, in exactly those
+words: a file this cannot read is a gate that cannot run, not a gate that
+passes.  The reasoning was applied to two gates and not to the file that holds
+them.")
+
 (defun fail (gate format &rest arguments)
   (push (format nil "gate ~a: ~?" gate format arguments) *failures*))
 
 (defun banner (gate title)
+  (setf *current-gate* gate)
   (format t "~&~%---- gate ~a: ~a ~a~%" gate title
           (make-string (max 0 (- 50 (length title))) :initial-element #\-)))
 
@@ -769,23 +784,33 @@ nothing.  Together they say breadth *and* depth.")
 ;; run.  tools/install-check.sh is where that happens; `make install-check'
 ;; runs it, CI runs it after the image, and `nix build' now runs the installer
 ;; itself, in a sandbox, on every build.
+(defun nix-phase (name)
+  "The body of flake.nix's NAME phase, as lines, or NIL.
+
+Nix has no reader here and does not need one: a phase is a '' ... '' block
+introduced by a line naming it, which is enough to say what is inside it.
+
+TWO GATES READ A PHASE and this used to be written out inside one of them.
+Gate 9 asks whether installPhase delegates to install.sh; gate 21 asks whether
+buildPhase delegates to the Makefile, and it exists because nothing did --
+buildPhase was five hand-typed `sbcl --load' lines under a comment claiming
+they were the steps `make check' runs."
+  (when (probe-file "flake.nix")
+    (with-open-file (in "flake.nix")
+      (loop with inside = nil
+            with marker = (format nil "~a = ''" name)
+            for line = (read-line in nil) while line
+            when (and inside (search "'';" line)) do (loop-finish)
+              when inside collect line into body
+            when (search marker line) do (setf inside t)
+            finally (return body)))))
+
 (flet ((contains (path text)
          (and (probe-file path)
               (with-open-file (in path)
                 (loop for line = (read-line in nil) while line
                       thereis (search text line)))))
-       (install-phase ()
-         ;; flake.nix's installPhase, as lines.  Nix has no reader here and does
-         ;; not need one: the phase is a '' … '' block introduced by a line
-         ;; naming it, which is enough to say what is inside it.
-         (when (probe-file "flake.nix")
-           (with-open-file (in "flake.nix")
-             (loop with inside = nil
-                   for line = (read-line in nil) while line
-                   when (and inside (search "'';" line)) do (loop-finish)
-                     when inside collect line into body
-                   when (search "installPhase = ''" line) do (setf inside t)
-                   finally (return body))))))
+       (install-phase () (nix-phase "installPhase")))
   (let ((problems '())
         (phase (install-phase)))
     (unless (contains "tools/image.lisp" "(asdf:load-system \"lattice\")")
@@ -2768,6 +2793,27 @@ shrinks.")
 
 ;;; --------------------------------------------------------------- gate 19
 
+(defun spells-p (spelling line)
+  "True when LINE writes SPELLING as a word rather than inside a longer one.
+
+`twenty' IS A SUBSTRING OF `twenty-one', and this gate's table holds both.  The
+plain SEARCH that used to be here reported every document as saying `twenty
+gates' the moment the twenty-first gate arrived and the documents were updated
+to say twenty-one -- eight failures, all of them the gate misreading a sentence
+that was correct.  A hyphen is part of a number word here, so it counts as a
+word constituent on both sides."
+  (flet ((constituent (character)
+           (and character (or (alpha-char-p character) (char= character #\-)))))
+    (let ((from 0))
+      (loop for at = (search spelling line :start2 from)
+            while at
+            do (setf from (1+ at))
+               (let ((before (and (plusp at) (char line (1- at))))
+                     (after (let ((end (+ at (length spelling))))
+                              (and (< end (length line)) (char line end)))))
+                 (unless (or (constituent before) (constituent after))
+                   (return t)))))))
+
 (banner 19 "the project says the same thing about itself everywhere")
 ;; THE THIRD COPY IS THE ONE THAT REACHES A STRANGER, AND IT WAS THE WRONG ONE.
 ;;
@@ -2932,7 +2978,13 @@ should read VERSION, the way it already reads river's version out of PINNED"
            ;; is a record of what was true when it was written; both are
            ;; append-only by discipline and correcting them would be laundering
            ;; the record, which DESIGN.org:101 exists to demonstrate not doing.
+           ;; CONTRIBUTING.md and the PR template are on this list from the
+           ;; day they were written, because a first contributor is exactly
+           ;; the reader who cannot tell a stale number from a true one, and
+           ;; the number they are being told is how many ways their branch can
+           ;; fail.
            (documents '("README.org" "INSTALL.org" "bootstrap.sh"
+                        "CONTRIBUTING.md" ".github/PULL_REQUEST_TEMPLATE.md"
                         ".github/workflows/check.yml")))
       (format t "  gates that run~46t~d~%" total)
       (if (null word)
@@ -2948,7 +3000,7 @@ table; add one, or the documents cannot be checked" total)
                       do (let ((lower (string-downcase line)))
                            (dolist (entry spelled)
                              (let ((spelling (cdr entry)))
-                               (when (and (search spelling lower)
+                               (when (and (spells-p spelling lower)
                                           (search "gate" lower)
                                           (not (string= spelling word))
                                           (not (and (search "other" lower)
@@ -2977,6 +3029,134 @@ table; add one, or the documents cannot be checked" total)
               (reverse problems))
         (format t "  the declarations, the LICENSE text and the gate count agree~%"))))
 
+;;; --------------------------------------------------------------- gate 20
+
+(banner 20 "the file the project calls the deliverable contains what it says")
+;; THE GATE THE SOURCE SAID EXISTED.
+;;
+;; src/policy/protocol.lisp opens with the first substantive sentence a stranger
+;; sent to "the deliverable" reads:
+;;
+;;     This file contains generic functions and their docstrings.  It contains
+;;     no methods, and that rule is enforced by a build gate.
+;;
+;; There was no such gate.  `grep -rn protocol.lisp tools/ tests/ Makefile
+;; .github/' returned nothing at all: no instrument in the project read that
+;; file's shape, and the rule had been true only for as long as nobody broke
+;; it.  This is *SMART-GAPS* -- a documented rule wired to nothing, which gate
+;; 11 exists to abolish -- in the one file handed to strangers, and it was
+;; invisible because gate 12 reads .org, .1 and .5 while this claim lives in a
+;; .lisp comment.  Gate 12 reads docstrings now and still would not have caught
+;; it: a file header is not a docstring either.
+;;
+;; THE RULE IS WORTH KEEPING, WHICH IS WHY THIS IS THE GATE AND NOT A DELETION.
+;; The whole argument of the file is that reading it end to end tells you
+;; everything the window manager can be talked out of.  A method in it is a
+;; default hiding in the catalogue -- the reader would have to know that some
+;; of these paragraphs are also behaviour, and could no longer tell which by
+;; looking.  conventional.lisp exists to be the other half.
+;;
+;; AND THE OPENING CLAUSE WAS ALREADY STRETCHED.  "Generic functions and their
+;; docstrings" was never the whole truth: the file carries the six protocol
+;; classes, the MOP introspection that answers POLICY-GENERICS, and the
+;; specials that the shipped methods read.  So the census is printed rather
+;; than only the violation, and the header now names what is in there.  A count
+;; nobody prints is a count that drifts, which is this project's oldest lesson
+;; about itself.
+(let* ((path (merge-pathnames "src/policy/protocol.lisp" *root*))
+       (text (code-of path))
+       (kinds '("defmethod" "defgeneric" "defclass" "defun" "defmacro"
+                "defvar" "defparameter"))
+       (census '()))
+  (dolist (kind kinds)
+    (let ((marker (format nil "(~a " kind))
+          (count 0)
+          (start 0))
+      (loop for at = (search marker text :start2 start :test #'char-equal)
+            while at
+            do (setf start (+ at (length marker)))
+               (incf count))
+      (push (cons kind count) census)))
+  (setf census (nreverse census))
+  (dolist (row census)
+    (format t "  ~a~46t~d~%" (car row) (cdr row)))
+  (let ((methods (cdr (assoc "defmethod" census :test #'string=))))
+    (if (plusp methods)
+        (fail 20 "~d method~:p in src/policy/protocol.lisp:~%~
+                  ~4tIts own header says it has none, and the reason is the~%~
+                  ~4treason the file exists: it is the catalogue of what the~%~
+                  ~4twindow manager can be talked out of, and a default hiding~%~
+                  ~4tin it is a paragraph that is also behaviour with nothing~%~
+                  ~4tto tell a reader which.  The shipped answers go in~%~
+                  ~4tconventional.lisp, as methods on CONVENTIONAL-POLICY."
+              methods)
+        (format t "  the catalogue is a catalogue: no methods answer here~%"))))
+
+;;; --------------------------------------------------------------- gate 21
+
+(banner 21 "the packaged build runs the build, and does not restate it")
+;; GATE 9 WITH THE OTHER PHASE, AND THE OTHER PHASE IS WHERE IT WAS NEEDED.
+;;
+;; flake.nix's installPhase used to hand-roll a second list of what ships,
+;; beside install.sh's, and the two had drifted apart everywhere; gate 9 fixed
+;; that and stands over it, with six references to `installPhase' in this file.
+;; Directly *above* it in the same file, buildPhase was five hand-typed
+;;
+;;     sbcl --non-interactive --load tools/build.lisp
+;;     sbcl --non-interactive --load tools/gates.lisp
+;;     ...
+;;
+;; lines under a comment reading "The same steps `make check` runs."  Zero
+;; references to `buildPhase' anywhere.  One phase healed and the second list
+;; left standing three lines away, with the gate written to enforce "one list"
+;; aimed at the half that no longer needed it.
+;;
+;; THE DRIFT THIS PREVENTS IS NOT HYPOTHETICAL EITHER.  `make check' is
+;; `build gates test integration' and it has changed twice in this project's
+;; life.  A step added to the Makefile would not have reached the packaged
+;; build, which is the path that produces the store path a user actually
+;; installs -- so `nix build' would have gone on passing a shorter check than
+;; the one the README tells contributors to run, and the comment three lines up
+;; would have gone on saying they were the same.
+;;
+;; ASKED ONLY WHEN THERE IS A FLAKE, on gate 9's argument exactly: §packaging's
+;; test is that deleting flake.nix leaves a project that still builds, so a
+;; gate that failed on its absence would assert the dependency the file exists
+;; to deny.
+(let ((phase (nix-phase "buildPhase"))
+      (problems '()))
+  (cond
+    ((not (probe-file "flake.nix"))
+     (format t "  no flake.nix, so there is one build and it is the Makefile~%"))
+    ((null phase)
+     (push (format nil "flake.nix has no buildPhase, so this gate no longer ~
+knows what a packaged build runs")
+           problems))
+    (t
+     (format t "  buildPhase lines~46t~d~%" (length phase))
+     (unless (some (lambda (line) (search "make " line)) phase)
+       (push (format nil "flake.nix's buildPhase does not run make, so the ~
+packaged build has its own idea of what building is and nothing compares the ~
+two")
+             problems))
+     (let ((handrolled
+             (remove-if-not
+              (lambda (line)
+                (some (lambda (verb) (search verb line))
+                      '("sbcl " "--load tools/" "asdf:load-system")))
+              phase)))
+       (when handrolled
+         (push (format nil "flake.nix's buildPhase runs the build itself:~
+~{~%      ~a~}~%    Every one of these is a step the Makefile already names. ~
+Add it there and let this phase call it, or the two lists drift and only one ~
+of them is what anybody runs"
+                       (mapcar (lambda (line) (string-trim " " line)) handrolled))
+               problems)))))
+  (if problems
+      (fail 21 "~{~%    ~a~}" (reverse problems))
+      (when phase
+        (format t "  the packaged build delegates to the one that is checked~%"))))
+
 ;;; ---------------------------------------------------------------- verdict
 
 (format t "~&~%~76,,,'=<~>~%")
@@ -2984,4 +3164,10 @@ table; add one, or the documents cannot be checked" total)
     (progn (dolist (f (reverse *failures*)) (format t "FAIL ~a~%" f))
            (format t "~d gate failure~:p~%" (length *failures*))
            (sb-ext:quit :unix-status 1))
-    (format t "ALL GATES PASS~%"))
+    (progn (format t "ALL GATES PASS~%")
+           ;; QUITTING ON THE PASSING SIDE TOO, so that reaching the end of
+           ;; tools/run-gates.lisp means the verdict never ran.  Falling
+           ;; through worked under `--load' and made the driver's truncation
+           ;; check fire on every green build.
+           (finish-output)
+           (sb-ext:quit :unix-status 0)))
