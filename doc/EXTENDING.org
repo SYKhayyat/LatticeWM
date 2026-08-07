@@ -175,7 +175,7 @@ lattice cells than between splits within a cell.
     (layout-policy t)                   ; layout.lisp
 #+end_example
 
-Read that as /you may not need a method at all/. Twenty-five of the sixty-eight
+Read that as /you may not need a method at all/. Twenty-five of the sixty-nine
 generics carry the line, and for those the decision is already tier-0: set the
 variable in your config file and the shipped answer changes. Write the method
 when you want a decision that a single value cannot express — one that depends
@@ -275,15 +275,16 @@ applies it to everything already plugged in.
 | ~border-color~ / ~border-width~ / ~gaps~ | how it looks |
 | ~border-state~ / ~border-color-for~ | a border state of your own — urgent, tagged, recording |
 | ~key-unbound~ | typing in an empty pane |
+| ~capture-keys~ / ~capture-wanted-p~ | which keys the window manager may read, and when — the two a modal layer needs |
 | ~input-settings~ | how should this keyboard or touchpad be configured? |
 | ~keyboard-layout-for~ | which xkb layout does this keyboard want? |
 
 ~latticewm --extension-surface~ prints every one with its contract and with the
 methods that currently answer it — including yours, which is how you check that
 your file was actually loaded. Do not count them from this table; ask. There
-are sixty-eight, and this table shows the dozen you are most likely to want.
+are sixty-nine, and this table shows the dozen you are most likely to want.
 
-#+CLAIM: (= 68 (length (policy-generics)))
+#+CLAIM: (= 69 (length (policy-generics)))
 
 ** The six protocols
 
@@ -784,8 +785,8 @@ against the loaded image on every build. NIL fails, naming the file, the line,
 the form, and the sentence above it.
 
 #+begin_example
-There are sixty-eight policy generics.
-#+CLAIM: (= 68 (length (policy-generics)))
+There are sixty-nine policy generics.
+#+CLAIM: (= 69 (length (policy-generics)))
 #+end_example
 
 Consecutive =#+CLAIM:= lines are one run, and every complete form in the run is

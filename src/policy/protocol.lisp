@@ -943,6 +943,36 @@ incrementally and never removed, which is the same rule REGISTER-BINDINGS uses
 for the keymap and for the same reason: a river_xkb_binding_v1 the compositor
 has already been told about is cheaper to leave disabled than to churn."))
 
+(defgeneric capture-wanted-p (policy world)
+  (:documentation
+   "Should the next keypress belong to the window manager rather than to a
+window?
+
+CAPTURE-KEYS says which keys are *readable*; this says whether they are being
+read *now*.  Both halves are needed and only one of them was a decision: the
+bindings are created once and enabled exactly while this answers true, so a key
+on the list that arrives while this answers false goes to the application, as
+it should.
+
+THIS WAS AN OR IN src/runtime/seats.lisp, and it is the second half of the same
+finding CAPTURE-KEYS was the first half of.  A modal editing layer — the single
+most obvious thing an Emacs-shaped window manager's users ask for — could
+declare its keys readable and still never be given one, because *when* the
+window manager reads was three terms of a boolean nothing could reach.
+
+    (defmethod capture-wanted-p ((policy my-policy) world)
+      (or (eq *my-mode* :normal) (call-next-method)))
+
+The shipped answer is the submap and DESIGN D19's empty pane.  A prompt in the
+echo area is *not* here and is not a policy decision: the minibuffer cannot
+read a line if the keys are not enabled, so the runtime ORs it in and a method
+that answers NIL cannot break the thing it would have to use to say so.
+
+Answer with T or NIL.  Consulted on every manage sequence, diffed against the
+last answer, and a truthy non-T value is normalised before that comparison —
+it used to be the pending submap itself, so two chords in a row disabled and
+re-enabled two hundred bindings for no reason."))
+
 (defgeneric shifted-character (policy character)
   (:documentation
    "What CHARACTER becomes with Shift held.

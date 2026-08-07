@@ -384,6 +384,30 @@ Rebind anything from a configuration file:
 (defvar *pending-keymap* nil
   "The submap we are inside, or NIL.  Set by a chord's first key.")
 
+(defmethod capture-wanted-p ((policy input-policy) world)
+  "The submap, and DESIGN D19's empty pane.
+
+HERE RATHER THAN IN input.lisp, WHICH IS WHERE THE REST OF INPUT-POLICY LIVES,
+because the answer reads *PENDING-KEYMAP* and this is the file that declares
+it — input.lisp loads nine files earlier, and a method referring forward to a
+special variable is a compile-time warning today and a load-order bug the day
+somebody reorders the module.
+
+The two are one question and they used to be two-thirds of a boolean in
+src/runtime/seats.lisp.  The submap was the one that got the *old* shape wrong:
+its keys were registered with river permanently instead of only while it was
+pending, so river ate them always and the window manager acted on them never."
+  (declare (ignore policy))
+  (and (or *pending-keymap*
+           ;; The cursor rests on a deliberately empty pane and no float has
+           ;; the keyboard — which is the whole of what makes an unbound `e'
+           ;; there mean `open an editor' rather than reach an application.
+           (let ((leaf (and world (c:world-leaf-at world (c:world-cursor world)))))
+             (and leaf
+                  (c:leaf-empty-p leaf)
+                  (null (c:world-focused-float world)))))
+       t))
+
 (defvar *help-visible* nil
   "What the help overlay is showing: NIL for nothing, T for the keymap, or a
 cons of a title and a list of (LEFT . RIGHT) rows for anything else.

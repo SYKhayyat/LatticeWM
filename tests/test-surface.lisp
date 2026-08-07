@@ -198,8 +198,25 @@
   ;; from outside src/ does not move, which is the honest direction to report
   ;; it in -- the lattice's BORDER-COLOR method is unchanged and still wins on
   ;; its first argument.
+  ;; SIXTY-EIGHT TO SIXTY-NINE IS THE NINTH MOVE, AND IT IS THE SECOND HALF OF
+  ;; THE FIFTH.  CAPTURE-KEYS was made a generic because the set of keys the
+  ;; window manager may ever read was a DEFPARAMETER; CAPTURE-WANTED-P is *when*
+  ;; it reads them, and that was an OR of three terms in src/runtime/seats.lisp.
+  ;; The hardcoded answer it replaces is right there in the diff.
+  ;;
+  ;; Both halves are needed and having only one is worse than having neither,
+  ;; because it looks solved: a modal editing layer -- which CAPTURE-KEYS' own
+  ;; docstring names as the single most obvious thing this program's users will
+  ;; ask for -- could declare its keys readable, be handed the bindings, and
+  ;; never have one enabled, with the surface document showing a generic it had
+  ;; correctly specialised.
+  ;;
+  ;; A knob is not added, and one is *removed* from the runtime: the prompt term
+  ;; stays in seats.lisp because the minibuffer cannot read a line if the
+  ;; bindings are disabled, so it is an invariant rather than a decision, and
+  ;; the other two are the shipped method.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 68) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 69) "the extension surface has ~d generics" n)))
 
 (test the-surface-is-what-takes-a-policy-and-nothing-else
   "POLICY-GENERICS used to mean 'every exported generic in the package'.
@@ -1122,6 +1139,47 @@ without BORDER-COLOR having heard of it")
     (is (eq :unfocused (p:border-state policy node nil))
         "and removing the two methods restores the shipped answer, because the
 shipped one is on APPEARANCE-POLICY and was never touched")))
+
+(test a-modal-layer-can-say-when-the-window-manager-reads
+  "CAPTURE-KEYS says which keys are readable; this says when they are read.
+
+Both halves are needed, and until now only the first was a decision — the
+second was an OR of three terms in src/runtime/seats.lisp, so a modal editing
+layer could declare F1 through F12 readable, be given the bindings, and never
+have one enabled.  The first half's docstring names a modal layer as the single
+most obvious thing this program's users will ask for, which makes the second
+half the wall it walks into."
+  (let ((policy (policy))
+        (empty (c:make-world :root (c:make-leaf) :cursor '()))
+        (occupied (c:make-world :root (leaf-with "a") :cursor '())))
+    (is-true (p:capture-wanted-p policy empty)
+             "D19's empty pane is a spawn menu with no menu, and it can only be
+one while the keys reach us")
+    (is-false (p:capture-wanted-p policy occupied)
+              "and a pane with something in it must not eat the keystrokes
+meant for it")
+    (is (eq t (p:capture-wanted-p policy empty))
+        "T rather than whatever was truthy: the caller compares this against
+the last answer with EQ, and the old shape could return the pending submap
+itself — so two chords in a row disabled and re-enabled two hundred bindings to
+arrive back where they started")
+    (let ((p:*pending-keymap* (p:make-keymap)))
+      (is-true (p:capture-wanted-p policy occupied)
+               "a chord waiting for its second key reads it wherever the cursor
+is"))
+    (defmethod p:capture-wanted-p ((p p:conventional-policy) world)
+      (declare (ignore world))
+      t)
+    (unwind-protect
+         (is-true (p:capture-wanted-p policy occupied)
+                  "and a policy that is always reading — which is what a modal
+layer is — says so in one method")
+      (remove-method #'p:capture-wanted-p
+                     (find-method #'p:capture-wanted-p '()
+                                  (list (find-class 'p:conventional-policy)
+                                        (find-class 't)))))
+    (is-false (p:capture-wanted-p policy occupied)
+              "and removing it restores the shipped answer")))
 
 (test a-state-nobody-gave-a-colour-draws-a-plain-border
   "FONT-FOR's generosity, which is the half of the pattern that is easy to

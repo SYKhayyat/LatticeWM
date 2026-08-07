@@ -222,19 +222,33 @@ manage sequence gets no capture keys and a logged error, which is the same
 outcome the old DEFPARAMETER would have had if the file failed to load."
   (or (guarded "capture-keys" (p:capture-keys (p:current-policy))) '()))
 
-(defun capture-wanted-p ()
+(defun capture-armed-now-p ()
   "Is anything currently waiting to read a key directly?
 
 Two things ever are: a prompt in the echo area, and DESIGN D19's empty pane.
 *Three* things are, since a submap joined them.  They share the machinery
-because they are the same question — *should the next keypress belong to the
-window manager rather than to a window?* — and having three answers to one
+because they are the same question — should the next keypress belong to the
+window manager rather than to a window? — and having three answers to one
 question is how they end up disagreeing.
 
-The submap was the one that got this wrong.  Its keys were registered with
-river permanently instead of only while it was pending, so river ate them
-always and the window manager acted on them never."
-  (or (reading-p) (cursor-on-empty-pane-p) *pending-keymap*))
+THE ANSWER WAS AN OR OF ALL THREE, HERE, AND THAT WAS THE OTHER HALF OF THE
++CAPTURE-KEYS+ FINDING.  P:CAPTURE-KEYS made the set of readable keys a
+decision; *when* the window manager reads was still three terms of a boolean in
+the runtime that no method could reach, so a modal editing layer could declare
+its keys readable and never be handed one.  Two of the three are P:CAPTURE-
+WANTED-P's shipped answer now.
+
+The prompt stays here on purpose and the generic's docstring says so: the
+minibuffer cannot read a line if the capture bindings are disabled, so a policy
+that answered NIL would break the only mechanism it could have used to say so.
+Normalised to T or NIL, because the caller compares this answer with EQ against
+the last one — and it used to be able to return the pending submap itself, so
+two chords in a row churned two hundred bindings to arrive back where they
+were."
+  (or (reading-p)
+      (and (guarded "capture-wanted-p"
+             (p:capture-wanted-p (p:current-policy) *world*))
+           t)))
 
 (defun ensure-capture-bindings (seat)
   "Make sure every key the policy asks for has a binding on SEAT.
@@ -319,7 +333,7 @@ because this runs on every manage sequence and there are ninety-eight of them."
       (when *pending-keymap*
         (best-effort "ensure_next_key_eaten"
           (w:bindings-seat-ensure-next-key-eaten bindings-seat)))
-      (let ((wanted (capture-wanted-p)))
+      (let ((wanted (capture-armed-now-p)))
         (ensure-capture-bindings seat)
         (unless (eq wanted (c:prop seat :capture-armed))
           (setf (c:prop seat :capture-armed) wanted)

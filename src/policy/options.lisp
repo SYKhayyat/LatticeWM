@@ -300,7 +300,7 @@ sorted by name."
 ;;; rule.  Nothing told the reader who arrives from the other end, and the
 ;;; other end is the *front* of the same document: the generics section is what
 ;;; gate 2 guards, what every docstring in this package points at, and what
-;;; `write a method' means.  Twenty-five of the sixty-eight generics have a
+;;; `write a method' means.  Twenty-five of the sixty-nine generics have a
 ;;; shipped answer that is a value a user can set without writing one, and the
 ;;; surface said so under none of them.
 ;;;
@@ -328,7 +328,7 @@ ordinary function is not a generic's default -- nothing can override it and
 there is no `write a method instead' to point the reader at.
 
 Built in one pass because OPTION-READERS costs a cross-reference walk per
-option, and asking it once per generic instead would be sixty-eight times over
+option, and asking it once per generic instead would be sixty-nine times over
 the same ground for the same table."
   (let ((table (make-hash-table :test #'eq)))
     (dolist (row (all-options))

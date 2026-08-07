@@ -156,6 +156,19 @@ be able to do before anyone else can depend on it.
   to find dead knobs. The `:lattice/parity` property and `tag-cell-parity`,
   which existed to feed it, went with it.
 
+- **A modal layer could declare its keys readable and never be handed one.**
+  `capture-keys` became a policy generic because the set of keys the window
+  manager may ever read was a `defparameter`; *when* it reads them stayed an
+  `or` of three terms in `seats.lisp` that no method could reach — so the
+  fix looked complete and the feature it was for was still impossible.
+  `capture-wanted-p` is the other half. The prompt term stays in the runtime,
+  because the minibuffer cannot read a line if the bindings are disabled and a
+  policy answering NIL would break the mechanism it would have to use to say
+  so. The answer is also normalised to T or NIL now: it could return the
+  pending submap itself, and the caller compares it with `eq`, so two chords in
+  a row disabled and re-enabled two hundred bindings to arrive back where they
+  started.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

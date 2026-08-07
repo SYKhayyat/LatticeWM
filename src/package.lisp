@@ -387,7 +387,8 @@ You never edit this package.")
    #:on-restore #:window-capabilities #:decoration-mode
    #:default-float-rect #:window-rule-for
    ;; --- input ----------------------------------------------------------
-   #:key-unbound #:on-key #:pointer-focus #:capture-keys #:*readline-chords*
+   #:key-unbound #:on-key #:pointer-focus #:capture-keys #:capture-wanted-p
+   #:*readline-chords*
    #:pointer-drag-rect #:pointer-resize-edges
    #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
    #:*click-to-focus* #:*click-to-raise* #:*float-on-drag*
