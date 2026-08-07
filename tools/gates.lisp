@@ -1748,11 +1748,39 @@ ten other methods around it, cannot answer for this one."
                    do (when (and (consp form) (eq (first form) 'cl:in-package))
                         (setf *package* (or (find-package (second form)) *package*)))
                       (when (= position index) (return form))))))
-       (mentions (tree name)
-         (labels ((walk (form)
-                    (cond ((and form (symbolp form)) (string= (symbol-name form) name))
-                          ((consp form) (or (walk (car form)) (walk (cdr form))))
-                          (t nil))))
+       (calls-p (tree name)
+         "True when TREE contains a written call to NAME.
+
+NOT `THE SYMBOL APPEARS SOMEWHERE IN THE FORM', WHICH IS WHAT THIS WAS.  The
+old test was (STRING= (SYMBOL-NAME FORM) NAME) at every node of the tree, with
+no package check and no evaluation-position check -- so '(CALL-NEXT-METHOD)
+quoted, a keyword written :CALL-NEXT-METHOD, or the symbol sitting in a data
+literal all answered a question about whether the method *composes*.  The
+failing half of this gate was one apostrophe away from unreachable, and the
+remedy the gate prints -- add CALL-NEXT-METHOD -- was satisfiable by adding it
+somewhere it could never run.
+
+Operator position, or after #', and QUOTE subtrees are not walked at all.
+
+WHAT IT STILL CANNOT SEE, said plainly rather than left to be discovered:
+(WHEN NIL (CALL-NEXT-METHOD)) is a written call that never runs, and deciding
+otherwise is reachability analysis this file has no business attempting.  The
+bar it now holds is `you wrote the call', which is the bar a reader of the
+method would apply; the bar it held before was `you wrote the word'."
+         (labels ((named-p (form)
+                    (and form (symbolp form) (string= (symbol-name form) name)))
+                  (walk-list (rest)
+                    (and (consp rest)
+                         (or (walk (car rest)) (walk-list (cdr rest)))))
+                  (walk (form)
+                    (and (consp form)
+                         (not (eq (car form) 'cl:quote))
+                         (or (named-p (car form))
+                             (and (eq (car form) 'cl:function)
+                                  (named-p (second form)))
+                             ;; ((LAMBDA ...) ...) and every nested form.
+                             (walk (car form))
+                             (walk-list (cdr form))))))
            (walk tree)))
        (specializer-names (method)
          (mapcar (lambda (specializer)
@@ -1784,8 +1812,8 @@ ten other methods around it, cannot answer for this one."
                                               source))))
                    (form (and path index (probe-file path)
                               (ignore-errors (toplevel-form path index))))
-                   (composes (and form (or (mentions form "CALL-NEXT-METHOD")
-                                           (mentions form "NEXT-METHOD-P"))))
+                   (composes (and form (or (calls-p form "CALL-NEXT-METHOD")
+                                           (calls-p form "NEXT-METHOD-P"))))
                    (offered (gethash (list generic (specializer-names method)) reads))
                    (name (call "latticewm/policy:option-shadow-name" shadow)))
               (cond (composes (incf composing))
@@ -1889,11 +1917,20 @@ ten other methods around it, cannot answer for this one."
 ;; before the system is loaded cannot name its symbols, and blanking the strings
 ;; would make this gate blind to the gate above it.
 ;;
-;; The named cost of that: a comment in tools/ or a sentence in a document that
-;; merely mentions a dead name keeps it alive here.  That is a gate that can be
-;; made quieter by prose and never louder, which is the acceptable direction --
-;; and lamdan/ is excluded from the documents for exactly this reason, since a
-;; critique naming a function as dead must not be the thing that saves it.
+;; The named cost of that: a comment in tools/ that merely mentions a dead name
+;; keeps it alive here.  That is a gate that can be made quieter by prose and
+;; never louder, which is the acceptable direction -- and lamdan/ is excluded
+;; from the documents for exactly this reason, since a critique naming a
+;; function as dead must not be the thing that saves it.
+;;
+;; THE .org FILES ARE SEARCHED FOR MARKED-UP NAMES ONLY, AND THAT IS NOT A
+;; REFINEMENT, IT IS WHAT MADE THE FAILING HALF REACHABLE.  A space counts as a
+;; name boundary, and src/package.lisp exports thirty-two ordinary English
+;; words -- WINDOW, CLOSE, FLOAT, FOCUS, MOVE, SPLIT, TAB, TAG, UNDO, KEY,
+;; NODE, WORLD.  So one sentence containing the word `window' answered for the
+;; export WINDOW, and about thirty published names could not be reported dead
+;; however dead they were.  Org marks code as ~name~ or =name=; a document
+;; answers for a name when it says the name as a name.  See TEXT-OF's :PROSE.
 ;;
 ;; WHAT IS EXEMPT FROM QUESTION 2, EACH FOR A DIFFERENT REASON:
 ;;
@@ -1966,7 +2003,29 @@ ten other methods around it, cannot answer for this one."
                           (walk form (defined form))))))))
        (text-of (path mode)
          "PATH's text: :CODE with comments and strings gone, :RAW as written,
-:TOOL as code plus the string literals that are wholly a qualified name.
+:PROSE as only the parts of a document that are marked up as code, :TOOL as
+code plus the string literals that are wholly a qualified name.
+
+:PROSE IS THE ONE THAT MADE THE FAILING HALF OF THIS GATE REACHABLE AGAIN.
+The document search treats a space as a name boundary, and src/package.lisp
+exports thirty-two ordinary English words -- WINDOW, CLOSE, FLOAT, FOCUS, MOVE,
+SPLIT, TAB, TAG, UNDO, KEY, NODE, WORLD and the rest.  So any sentence in any
+.org file containing the word `window' answered for the export WINDOW, and
+roughly thirty published names could not be reported dead however dead they
+were.  The gate's own preamble says a document counts because it is `a sentence
+somebody could read and then call it from a config file' -- and a sentence
+about a window is not that sentence.
+
+Org already draws the distinction: ~name~ and =name= are code, everything else
+is prose, and this tree writes them consistently.  So a document answers for a
+name when it says the name *as a name* -- inside those, inside a source or
+example block, or on a #+ line, which is where the CLAIMs live.  Marking up a
+name is one character either side, and it is what the surrounding paragraph
+needed anyway.
+
+.txt and roff keep the whole text: the generated surfaces and the man pages are
+reference material where a bare word is already a name, and they are generated
+from the image rather than written, so they cannot drift into flattering it.
 
 :TOOL is the whole reason this is not just CODE-OF, and it is narrow on
 purpose.  Gate 2 reaches the undocumented-generic readers through strings like
@@ -1986,6 +2045,31 @@ and this one is the proof, since it does not answer for TREE-MOVE."
                (:raw (with-open-file (in path :external-format :utf-8)
                        (let ((buffer (make-string (file-length in))))
                          (subseq buffer 0 (read-sequence buffer in)))))
+               (:prose
+                (with-open-file (in path :external-format :utf-8)
+                  (let ((out (make-string-output-stream))
+                        (in-block nil))
+                    (loop for line = (read-line in nil) while line
+                          do (let ((trimmed (string-left-trim '(#\Space #\Tab) line)))
+                               (cond
+                                 ((eql 0 (search "#+" trimmed))
+                                  (write-line line out)
+                                  (let ((keyword (string-upcase trimmed)))
+                                    (cond ((search "BEGIN_" keyword) (setf in-block t))
+                                          ((search "END_" keyword) (setf in-block nil)))))
+                                 (in-block (write-line line out))
+                                 (t
+                                  ;; ~code~ and =verbatim=, org's own two ways of
+                                  ;; saying "this is a name and not a word".
+                                  (dolist (marker '(#\~ #\=))
+                                    (let ((at 0))
+                                      (loop for open = (position marker line :start at)
+                                            for close = (and open (position marker line
+                                                                           :start (1+ open)))
+                                            while close
+                                            do (write-line (subseq line (1+ open) close) out)
+                                               (setf at (1+ close))))))))
+                          finally (return (get-output-stream-string out))))))
                (t
                 (let* ((text (with-open-file (in path :external-format :utf-8)
                                (let ((buffer (make-string (file-length in))))
@@ -2068,8 +2152,10 @@ c:axis-of are how a name is written when it is genuinely being used."
       (push (cons "a build tool" (string-downcase (text-of path :tool)))
             elsewhere))
     (dolist (path (append (directory (merge-pathnames "*.org" *root*))
-                          (directory (merge-pathnames "doc/*.org" *root*))
-                          (directory (merge-pathnames "doc/*.txt" *root*))
+                          (directory (merge-pathnames "doc/*.org" *root*))))
+      (incf scanned)
+      (push (cons "a document" (string-downcase (text-of path :prose))) elsewhere))
+    (dolist (path (append (directory (merge-pathnames "doc/*.txt" *root*))
                           (directory (merge-pathnames "doc/latticewm.1" *root*))
                           (directory (merge-pathnames "doc/latticewm-config.5" *root*))))
       (incf scanned)
@@ -2194,6 +2280,13 @@ c:axis-of are how a name is written when it is genuinely being used."
 ;;
 ;; IT RUNS AFTER GATE 6, for gate 11's reason: the lattice and the four worked
 ;; examples are loaded by then, so a method one of them contributes counts.
+(defparameter *shared-name-floor* 5
+  "Options named after a policy generic.  See the floor check below.
+
+At the number, like gate 6's floors and for the same reason: this one exists
+because the gate's own remedy is a way out of the gate, so the population it
+enumerates has to be a thing somebody is made to argue about before it
+shrinks.")
 (let* ((rows (call "latticewm/policy:all-options"))
        (generics (call "latticewm/policy:policy-generics"))
        (by-generic (call "latticewm/policy:options-by-generic"))
@@ -2208,8 +2301,33 @@ c:axis-of are how a name is written when it is genuinely being used."
         (if (member variable (gethash generic by-generic))
             (incf pairs)
             (push (list variable generic) orphans)))))
-  (format t "  options named after a generic~46t~d~%" (+ pairs (length orphans)))
+  (format t "  options named after a generic~46t~d  (floor ~d)~%"
+          (+ pairs (length orphans)) *shared-name-floor*)
   (format t "  and read by a method on it~46t~d~%" pairs)
+  ;; THE REMEDY THIS GATE PRINTS IS ALSO THE WAY OUT OF IT, WHICH IS WHY THERE
+  ;; IS A FLOOR UNDER THE POPULATION.  The failure message ends "rename one of
+  ;; them" -- and renaming the *option* empties the set this gate enumerates,
+  ;; so it prints `options named after a generic 0' and passes, with the user
+  ;; left in exactly the state the preamble above calls the failure: an option
+  ;; and a generic that are the same decision under two names, with nothing
+  ;; saying so.  A gate whose remedy can be applied to the gate is a gate that
+  ;; measures whether anybody has been annoyed by it lately.
+  ;;
+  ;; So the convention has a floor as well as a rule.  Five options are named
+  ;; after a policy generic and each of them is a real relationship; dropping
+  ;; below that is a decision about the convention, which is a thing to argue
+  ;; with in a commit message rather than a thing to do quietly while making a
+  ;; red build green.
+  (when (< (+ pairs (length orphans)) *shared-name-floor*)
+    (fail 17 "~d option~:p named after a policy generic, against a floor of ~d.~%~
+              ~4tThe convention is that an option and the generic it is named~%~
+              ~4tafter are one decision seen twice -- set the value or write~%~
+              ~4tthe method, and you know which wins.  This gate enumerates~%~
+              ~4tthe options that make that claim, and its own remedy ends~%~
+              ~4t`rename one of them', which empties the population and~%~
+              ~4tpasses.  If the convention is being retired, retire it here~%~
+              ~4tand say so; do not let it evaporate one rename at a time."
+          (+ pairs (length orphans)) *shared-name-floor*))
   (if orphans
       (fail 17 "~d option~:p named after a policy generic that no method on ~
                 that generic reads:~{~%    ~(~a~) / ~(~a~)~}~%~
@@ -2269,6 +2387,8 @@ c:axis-of are how a name is written when it is genuinely being used."
 ;; in is a fact about the text, and SB-INTROSPECT would answer with a truename
 ;; either way.  CODE-LINES blanks comments and strings first, so the paragraph
 ;; above cannot satisfy or trip it.
+(defparameter *defaults-pair-floor* 1
+  "Algorithm/answers pairs the tree is expected to have.  See the floor below.")
 (let ((pairs '())
       (problems '()))
   (dolist (path (sort (append (directory "src/**/*.lisp")
@@ -2295,7 +2415,30 @@ c:axis-of are how a name is written when it is genuinely being used."
                    (push (cons (relative engine) (relative path)) pairs)))))))))
   (dolist (pair (reverse pairs))
     (format t "    ~a~36tanswered by ~a~%" (car pair) (cdr pair)))
-  (format t "  algorithm/answers pairs~46t~d~%" (length pairs))
+  (format t "  algorithm/answers pairs~46t~d  (floor ~d)~%"
+          (length pairs) *defaults-pair-floor*)
+  ;; AND A FLOOR UNDER THE POPULATION, BECAUSE THE POPULATION IS FILENAMES.
+  ;; Everything above enumerates files literally called defaults-*.lisp, and
+  ;; the merge that prompted this gate took the count from two to one.  Rename
+  ;; the last one and the gate governs the empty set: no problems, no pairs,
+  ;; `algorithm/answers pairs 0', pass -- forever, with the convention gone and
+  ;; the check that was supposed to keep it still printing a green line.  A
+  ;; gate whose subject can be renamed out from under it is a gate about
+  ;; whether anybody has renamed anything.
+  ;;
+  ;; The floor is the convention itself: there is one pair, it is the one this
+  ;; gate was written for, and its disappearance is a decision about how the
+  ;; policy layer is filed.  That decision is allowed -- it just has to be made
+  ;; out loud, by lowering a number in this file, rather than by a rename that
+  ;; leaves every instrument saying yes.
+  (when (< (length pairs) *defaults-pair-floor*)
+    (fail 18 "~d algorithm/answers pair~:p, against a floor of ~d.~%~
+              ~4tThis gate's population is files named defaults-*.lisp, so~%~
+              ~4trenaming the last of them makes it govern nothing and pass~%~
+              ~4tfor good.  If the DEFAULTS- convention is being retired,~%~
+              ~4tretire it here and say why; the prefix means something in~%~
+              ~4ta tree where it means something once."
+          (length pairs) *defaults-pair-floor*))
   (if problems
       (fail 18 "~d DEFAULTS- file~:p that is not the answers half of a pair:~
                 ~{~%    ~a~}~%~

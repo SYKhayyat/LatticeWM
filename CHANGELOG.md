@@ -260,6 +260,30 @@ be able to do before anyone else can depend on it.
   the file for having cured it. It counts code lines now, through the same
   `code-of` that already makes the rest of gate 3 immune to being told it passes.
 
+- **Four gates whose failing half was unreachable.**
+  - Gate 15 decided whether a total override composes by looking for the
+    *symbol* `call-next-method` anywhere in the method's form — no package
+    check, no evaluation-position check. `'(call-next-method)` quoted satisfied
+    it. It now requires a written call: operator position or after `#'`, and
+    quoted subtrees are not walked. What it still cannot see —
+    `(when nil (call-next-method))` — is said out loud rather than left to be
+    found.
+  - Gate 16's document search treats a space as a name boundary, and
+    `src/package.lisp` exports thirty-two ordinary English words. Any sentence
+    containing "window" kept the export `window` alive, so roughly thirty
+    published names could not be reported dead however dead they were. `.org`
+    files are now searched for names that are marked up as names — `~name~`,
+    `=name=`, a source block, a `#+` line — which is the distinction org
+    already draws and this tree already writes.
+  - Gate 17's remedy is a way out of gate 17: its population is options whose
+    bare name matches a generic's, and the failure message ends "rename one of
+    them". Rename the option and the gate enumerates nothing and passes, with
+    the user in the state the preamble calls the failure. The population has a
+    floor now.
+  - Gate 18 is the same shape: its population is files literally named
+    `defaults-*.lisp`, there is one left, and deleting the prefix from it would
+    make the gate govern the empty set forever. Also floored.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says
