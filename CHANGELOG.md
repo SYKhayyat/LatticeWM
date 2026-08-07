@@ -242,6 +242,24 @@ be able to do before anyone else can depend on it.
   enough on its own. The `modifiers_watch` wrapper's docstring and DESIGN's
   open-question block say the same thing now.
 
+- **Gate 6's floors were defending the tutorial's line count.** They were set at
+  exactly the number the tree produces — 15 generics and 22 methods, the union
+  of `lattice/` and `examples/`, with zero slack on either — so deleting any one
+  worked example failed the build. An example you cannot delete is not an
+  example. The floors are now sourced from `lattice/` alone (12 and 13); gate 6
+  still *loads* `examples/`, which is the check that has actually caught
+  something. And the number is printed twice, because 15 is measuring n = 1: the
+  lattice supplies 12 of those 15 generics, and everything else outside `src/`
+  supplies 7. The second figure is the uncomfortable one and is the one to argue
+  with.
+- **Gate 3's line budget counted comments.** `*lattice-line-budget*` was 2,600
+  *raw* lines against a tree of 2,142, of which 293 were blank and 265 were
+  comment — so a quarter of what it measured was how much the author explains
+  himself, and the cheapest way to buy headroom was to delete an explanation.
+  That is old gate 6's disease, sitting four lines under a comment congratulating
+  the file for having cured it. It counts code lines now, through the same
+  `code-of` that already makes the rest of gate 3 immune to being told it passes.
+
 ### Added
 
 - Gate 19 — the project says the same thing about itself everywhere it says

@@ -205,22 +205,42 @@ know the extension exists.")
 ;; passes the letter by pushing everything through PROPS and &rest arguments
 ;; until it has almost no methods at all.  Both are stated as numbers because
 ;; both are only visible as numbers.
-(defparameter *lattice-line-budget* 2600
-  "Past this, the lattice is a second window manager rather than an extension.")
+(defparameter *lattice-line-budget* 1500
+  "Past this many *code* lines, the lattice is a second window manager.
+
+CODE LINES, WHICH IT WAS NOT, AND THAT WAS OLD GATE 6'S DISEASE IN THE FILE
+THAT EXECUTED IT.  This counted every line the file had -- 2,142 of them, of
+which 293 were blank and 265 were comment.  So a quarter of what the budget
+measured was how much the author explains himself, and the cheapest way to buy
+headroom under it was to delete an explanation.  A build gate that pays for
+deleted comments is the same species as a ratio that pays for moved files, and
+it survived the sweep that killed the ratio because that sweep was aimed at a
+gate's *name*.
+
+The number moved with the rule, keeping about the headroom the old one had --
+a fifth over where the tree sits, which is room to add a container kind and
+not room to add a window manager.  CODE-OF blanks comments *and docstrings*,
+so this is also immune to the failure gate 3's first version had: an
+explanation of the rule cannot spend the budget it explains, and a file cannot
+buy headroom by saying less.")
 (defparameter *lattice-method-floor* 12
   "Below this, it is not extending through the protocol -- it is going round it.")
 (if (probe-file "lattice.asd")
     (let* ((files (directory "lattice/*.lisp"))
+           (blank-p (lambda (pair)
+                      (string= "" (string-trim '(#\Space #\Tab) (cdr pair)))))
            (lines (reduce #'+ files :key
                           (lambda (path)
-                            (with-open-file (in path)
-                              (loop for line = (read-line in nil) while line
-                                    count t)))))
+                            (count-if-not blank-p (code-lines path)))))
            (methods (reduce #'+ files :key
                             (lambda (path)
-                              (with-open-file (in path)
-                                (loop for line = (read-line in nil) while line
-                                      count (search "(defmethod " line))))))
+                              ;; Over code as well: a docstring that quotes
+                              ;; "(defmethod " is prose, and counting it would
+                              ;; let the floor be answered by talking about
+                              ;; methods instead of writing them.
+                              (count-if (lambda (pair)
+                                          (search "(defmethod " (cdr pair)))
+                                        (code-lines path)))))
            (core-edits
              ;; The letter of the gate, checked where it is actually
              ;; expressible: the lattice's own system definition must not
@@ -247,7 +267,7 @@ know the extension exists.")
                                            *extension-namespaces*)
                                   collect (format nil "~a:~d"
                                                   (relative path) number)))))
-      (format t "  lattice/: ~d lines (budget ~d), ~d defmethods (floor ~d)~%"
+      (format t "  lattice/: ~d code lines (budget ~d), ~d defmethods (floor ~d)~%"
               lines *lattice-line-budget* methods *lattice-method-floor*)
       (when core-edits
         (fail 3 "lattice.asd claims a component under src/: ~{~a~^ ~}"
@@ -261,9 +281,11 @@ know the extension exists.")
                  ~4tCURSOR-PLACE-NAME is the worked example."
               reach-ins))
       (when (> lines *lattice-line-budget*)
-        (fail 3 "the lattice is ~d lines against a budget of ~d -- ~
+        (fail 3 "the lattice is ~d code lines against a budget of ~d -- ~
                  an extension this size is a second core, and the thesis is ~
-                 that a container kind costs a few hundred lines"
+                 that a container kind costs a few hundred lines.~%~
+                 ~4tComments and blank lines are not counted, so deleting an~%~
+                 ~4texplanation does not buy any of this back."
               lines *lattice-line-budget*))
       (when (< methods *lattice-method-floor*)
         (fail 3 "the lattice has ~d defmethods against a floor of ~d -- ~
@@ -427,10 +449,32 @@ know the extension exists.")
 ;; method outside src/, and the only way to raise these is to write one.
 ;;
 ;; The number is much less flattering than 0.99, and that is the point:
-;; 15 of 65 generics have ever been specialised by anything but their own
-;; shipped default.  Fifty carry a docstring and a gate-2 obligation against a
-;; maybe.  That is the real state of the extension surface, and it is now the
-;; number printed on every build instead of a comfortable ratio.
+;; 15 of 69 generics have ever been specialised by anything but their own
+;; shipped default.  Fifty-four carry a docstring and a gate-2 obligation
+;; against a maybe.  That is the real state of the extension surface, and it is
+;; now the number printed on every build instead of a comfortable ratio.
+;;
+;; AND THEN IT IS PRINTED AGAIN WITH THE EXTENSION TAKEN OUT, BECAUSE 15 IS
+;; MEASURING n = 1.  The lattice supplies 13 of the 22 methods and 12 of the 15
+;; generics; everything else outside src/ -- the four worked examples -- supplies
+;; 7 generics and 9 methods.  So most of the evidence that "the behaviour of
+;; this system is answerable from outside the core" is one extension, written by
+;; the same hand as the protocol it is testing, in the same fortnight.  A single
+;; union figure reads as breadth and is not.  Both numbers are printed; the
+;; second one is the uncomfortable one and is the one to argue with.
+;;
+;; It is worth saying what this measurement can and cannot support, because
+;; lattice.asd says "the purpose is falsifiability" and this is not that.  What
+;; the evidence carries is smaller and still worth having: *the container
+;; protocol plus the layout and motion generics are sufficient for a second
+;; tree-shaped, rectangle-subdividing layout model, including a sparse,
+;; unbounded, two-dimensional, persistent one.*  Falsifiability needs a second
+;; party who cannot edit the core and is not the author -- and under
+;; FINDINGS.org's own rule ("if step 4 turns out to require core surgery, that
+;; is the finding") the core was edited six times and each edit was recorded as
+;; output, which is excellent hygiene and the opposite of a falsification test.
+;; No gate can fix that.  What a gate can do is stop the number flattering
+;; itself, which is what the second line is for.
 ;;
 ;; WHY THIS RUNS AFTER GATE 4 AND NOT BEFORE.  It has to load the lattice and
 ;; the worked examples, which are the only things outside src/ that specialise
@@ -444,8 +488,8 @@ know the extension exists.")
 ;; read first.  A rename in the core that breaks one of them is exactly the bug
 ;; that broke lattice/map.lisp when the lattice was not on gate 1's list, found
 ;; by a user's config file failing at startup.
-(defparameter *outside-generic-floor* 15
-  "Policy generics with at least one specialising method outside src/.
+(defparameter *outside-generic-floor* 12
+  "Policy generics with at least one specialising method *in lattice/*.
 
 SET AT THE NUMBER, NOT COMFORTABLY BELOW IT, and that is a deliberate break
 with how the ratio's floor was set.  A floor with slack under it is an
@@ -455,13 +499,25 @@ of the tree that lowers it, only the deletion of a method somebody wrote on the
 outside.  Lowering it is therefore a decision, which is what a threshold is
 for.
 
+FROM lattice/ ALONE, AND IT USED TO BE FROM EVERYTHING OUTSIDE src/, WHICH
+FROZE THE TUTORIAL.  The union of lattice/ and examples/ was 15 generics and
+22 methods and the floors were set at exactly 15 and 22, with zero slack on
+either -- so deleting any one worked example failed the build.  Delete 01 and
+the count is 14; delete 03 and the method count is 20.  An example you cannot
+delete is not an example, it is load-bearing infrastructure with a docstring,
+and the ratchet was defending the teaching material's line count.  The load of
+examples/ above stays, because *that* is the check which has actually caught
+something -- a rename in the core that breaks a file EXTENDING.org sends a
+stranger to read first.  What is floored is the extension, which is the thing
+the claim is about.
+
 PLAN.org §generics wrote down the shape and never got it: \"If this list
 reaches thirty, the decomposition has gone wrong in the direction of ceremony.\"
 The list is at sixty-nine.  A threshold nobody is ever made to argue with is a
 decoration, and the way to stop that is to leave no slack to spend quietly.")
 
-(defparameter *outside-method-floor* 22
-  "Methods on policy generics defined outside src/.
+(defparameter *outside-method-floor* 13
+  "Methods on policy generics defined in lattice/.
 
 The second number because the first one alone can be gamed the way gate 3's
 line budget can: one token method per generic answers the count and demonstrates
@@ -484,45 +540,67 @@ nothing.  Together they say breadth *and* depth.")
   (let* ((generics (call "latticewm/policy:policy-generics"))
          (outside '()))
     (dolist (name generics)
-      (let ((files (remove-duplicates
-                    (loop for method in (closer-mop:generic-function-methods
-                                         (fdefinition name))
-                          for source = (ignore-errors
-                                        (sb-introspect:find-definition-source method))
-                          for file = (and source
-                                          (sb-introspect:definition-source-pathname
-                                           source))
-                          ;; A method whose source SBCL cannot name counts as
-                          ;; inside, which is the conservative direction: it
-                          ;; can only make this gate harder to pass.
-                          when (and file (not (under "src/" file)))
-                            collect (relative file))
-                    :test #'string=)))
+      (let ((files '()))
+        (loop for method in (closer-mop:generic-function-methods
+                             (fdefinition name))
+              for source = (ignore-errors
+                            (sb-introspect:find-definition-source method))
+              for file = (and source
+                              (sb-introspect:definition-source-pathname source))
+              ;; A method whose source SBCL cannot name counts as inside, which
+              ;; is the conservative direction: it can only make this gate
+              ;; harder to pass.
+              when (and file (not (under "src/" file)))
+                do (pushnew (cons (relative file) (and (under "lattice/" file) t))
+                            files :test #'equal))
         (when files (push (cons name files) outside))))
-    (let ((count (length outside))
-          (methods (reduce #'+ outside :key (lambda (entry) (length (cdr entry))))))
-      (dolist (entry (sort outside #'string< :key (lambda (e) (symbol-name (car e)))))
-        (format t "    ~(~a~)~24t~{~a~^  ~}~%" (car entry) (cdr entry)))
-      (format t "  specialised from outside src/~46t~d of ~d  (floor ~d)~%"
-              count (length generics) *outside-generic-floor*)
-      (format t "  methods answering them from outside src/~46t~d  (floor ~d)~%"
-              methods *outside-method-floor*)
-      (format t "  answered only by their own shipped default~46t~d~%"
-              (- (length generics) count))
-      (when (< count *outside-generic-floor*)
-        (fail 6 "~d policy generic~:p ~:*~[have~;has~:;have~] a specialising ~
-                 method outside src/, against a floor of ~d.~%~
-                 ~4tPLAN.org §extensibility-real: the boundary is not the~%~
-                 ~4tdisease, how little of the system lives above it is.~%~
-                 ~4tSomething that used to be answerable from outside is not."
-              count *outside-generic-floor*))
-      (when (< methods *outside-method-floor*)
-        (fail 6 "~d method~:p on policy generics are defined outside src/, ~
-                 against a floor of ~d.~%~
-                 ~4tThe surface is being demonstrated in fewer places than it~%~
-                 ~4twas.  A generic nobody has answered from outside is a~%~
-                 ~4tdocstring, not an extension point."
-              methods *outside-method-floor*)))))
+    (flet ((generics-of (test)
+             (count-if (lambda (entry) (some test (cdr entry))) outside))
+           (methods-of (test)
+             (reduce #'+ outside
+                     :key (lambda (entry) (count-if test (cdr entry))))))
+      (let ((count (generics-of (constantly t)))
+            (methods (methods-of (constantly t)))
+            (lattice-count (generics-of #'cdr))
+            (lattice-methods (methods-of #'cdr))
+            (other-count (generics-of (lambda (f) (not (cdr f)))))
+            (other-methods (methods-of (lambda (f) (not (cdr f))))))
+        (dolist (entry (sort outside #'string< :key (lambda (e) (symbol-name (car e)))))
+          (format t "    ~(~a~)~24t~{~a~^  ~}~%"
+                  (car entry) (mapcar #'car (cdr entry))))
+        (format t "  specialised from outside src/~46t~d of ~d~%"
+                count (length generics))
+        (format t "  methods answering them from outside src/~46t~d~%" methods)
+        (format t "  answered only by their own shipped default~46t~d~%"
+                (- (length generics) count))
+        ;; THE SAME NUMBER WITH THE EXTENSION TAKEN OUT, WHICH IS THE NUMBER
+        ;; ANYONE ACTUALLY CARES ABOUT.  The claim under test is that the
+        ;; behaviour of this system is answerable from outside the core.  Most
+        ;; of the evidence for it is one extension, written by the same hand as
+        ;; the protocol it is testing, in the same fortnight -- so the headline
+        ;; figure is measuring n = 1 and reads as breadth.  Printed rather than
+        ;; floored: the honest number is the one you have to look at, and a
+        ;; floor under it would be a floor under the tutorial.
+        (format t "  of those, from lattice/~46t~d generics, ~d methods  ~
+                   (floors ~d, ~d)~%"
+                lattice-count lattice-methods
+                *outside-generic-floor* *outside-method-floor*)
+        (format t "  of those, from anything else~46t~d generics, ~d methods~%"
+                other-count other-methods)
+        (when (< lattice-count *outside-generic-floor*)
+          (fail 6 "the lattice specialises ~d policy generic~:p, against a ~
+                   floor of ~d.~%~
+                   ~4tPLAN.org §extensibility-real: the boundary is not the~%~
+                   ~4tdisease, how little of the system lives above it is.~%~
+                   ~4tSomething that used to be answerable from outside is not."
+                lattice-count *outside-generic-floor*))
+        (when (< lattice-methods *outside-method-floor*)
+          (fail 6 "the lattice defines ~d method~:p on policy generics, ~
+                   against a floor of ~d.~%~
+                   ~4tThe surface is being demonstrated in fewer places than~%~
+                   ~4tit was.  A generic nobody has answered from outside is~%~
+                   ~4ta docstring, not an extension point."
+                lattice-methods *outside-method-floor*))))))
 
 ;;; ---------------------------------------------------------------- gate 7
 
