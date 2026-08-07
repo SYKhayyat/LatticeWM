@@ -159,9 +159,26 @@
                            --river ${pkgs.river}/bin/river
             '';
 
+            # THIS SAID `bsd3' AND THE FILE BESIDE IT IS 674 LINES OF GPLv3.
+            #
+            # Both .asd files say GPL-3.0-or-later, and PLAN.org records fixing
+            # them — they had said BSD-3-Clause and were simply wrong.  Both
+            # were corrected; this, the third copy, was not, and it is the one
+            # that becomes what `nix search' shows.  As a metadata nit it is one
+            # word.  As a *community* project it is what stops a distribution
+            # packager cold and what makes the licence of an incoming
+            # contribution genuinely ambiguous, which is worse than either.
+            #
+            # Twenty lines of comment in this same file argue that a licence
+            # text must travel with a copy.  The declaration is the other half
+            # of that argument and it disagreed with it.
+            #
+            # Gate 19 now reads all three declarations and the LICENSE text and
+            # fails when they disagree, because "corrected in two of three
+            # places" is exactly the failure this was.
             meta = with pkgs.lib; {
               description = "An extensible window manager for the river Wayland compositor";
-              license = licenses.bsd3;
+              license = licenses.gpl3Plus;
               platforms = platforms.linux;
               mainProgram = "latticewm";
             };

@@ -327,10 +327,12 @@ a weak model editing a monolith.
 All six run on every commit from day one. They are cheap and they are the only automated
 defence the project has.
 
-/There are eighteen now. The six planned here are below; the twelve that were added are
-in [[#gates-added][§gates-added]]. Nine of the twelve exist for a bug that had already
+/There are nineteen now. The six planned here are below; the thirteen that were added are
+in [[#gates-added][§gates-added]]. Nine of the thirteen exist for a bug that had already
 shipped and the bug is the reason; gates 15, 17 and 18 passed the day they were written,
-and each says so in its own entry rather than being quietly counted with the others./
+and each says so in its own entry rather than being quietly counted with the others. Gate
+19 is the fourth of that kind and it did not pass on the day it was written: it found
+=flake.nix= declaring a licence the =LICENSE= file contradicts./
 
 1. *Zero compiler warnings* under ~(declaim (optimize (safety 3) (speed 1)))~ with
    ~ftype~ on every exported function. Verified in
@@ -380,7 +382,7 @@ lattice that is three hundred lines of methods is the thesis holding. One that i
 thousand lines re-implementing geometry is the thesis failing while wearing the gate's
 uniform.
 
-** The twelve that were added
+** The thirteen that were added
 :PROPERTIES:
 :CUSTOM_ID: gates-added
 :END:
@@ -758,6 +760,33 @@ existed were individually reasonable and all pointed somewhere else.
     shipped answers live in six files for six good reasons, and no rule this project could
     state would separate those from the lifecycle pair. It holds the one rule the tree does
     state, and it *passed the day it was written*, like gates 15 and 17.
+
+19. *The project says the same thing about itself everywhere it says one.* Two halves,
+    one shape. The first: three files declare this project's licence — =latticewm.asd=,
+    =lattice.asd= and =flake.nix= — and a fourth, =LICENSE=, is 674 lines of the licence
+    itself. §The release shape, below, records correcting =:license= in both =.asd=
+    files, which had said =BSD-3-Clause= and were simply wrong. Both were corrected. The third
+    copy was not, and the third copy is =meta.license= in the flake: what =nix search=
+    prints, what a distribution packager reads, and what decides the licence an incoming
+    contribution arrives under. It said =bsd3= beside a GPLv3 file for the whole life of
+    the fix. As a metadata nit that is one word; as a *community* project it stops a
+    packager cold and makes an incoming contribution's licence genuinely ambiguous.
+
+    The second half is the number of gates. "Eighteen gates run on every build" was
+    written in =README.org=, in =INSTALL.org= three times, and in the CI workflow's own
+    header — five sentences, read by nothing, so every gate added after them became a
+    silent falsehood. That is ~*smart-gaps*~ in the documents this project stakes its
+    record on, and gate 12 could not see it because gate 12 asks whether a *claim about
+    the program* is true and this is a claim about the *build*. So this gate counts the
+    =banner= forms in ~tools/gates.lisp~ and holds the live documents to the number,
+    exempting =PLAN.org= and =FINDINGS.org= because they are records of what was true when
+    they were written and correcting them would be laundering. It found one more the day
+    it was written: =README.org= said gate 14 was "the one the other sixteen could not
+    ask", and there had been seventeen of them for two sessions.
+
+    *This is gate 9's own comment, one level up:* /a number repeated in two files is the
+    FINDINGS §census failure/. A licence repeated in four is the same failure in a
+    currency where being wrong is a legal fact rather than a stale one.
 
 * Packaging: both targets, neither privileged
 :PROPERTIES:

@@ -1,8 +1,14 @@
 ;;;; tools/gates.lisp --- the build gates.  PLAN.org asked for six; there
-;;;; are eighteen.  Nine of the twelve that were added were added because
-;;;; they had already found something; gates 15, 17 and 18 are the other
-;;;; three, all three passed the day they were written, and each says so where
-;;;; it stands rather than here.
+;;;; are nineteen.  Nine of the thirteen that were added were added because
+;;;; they had already found something; gates 15, 17 and 18 are three of the
+;;;; other four, all three passed the day they were written, and each says so
+;;;; where it stands rather than here.  Gate 19 is the fourth and it failed:
+;;;; flake.nix declared a licence the LICENSE file contradicts.
+;;;;
+;;;; AND GATE 19 IS ALSO WHY THE SENTENCE ABOVE STAYS TRUE.  "Eighteen gates
+;;;; run on every build" was written in five places and read by nothing, so
+;;;; every gate added after it made five sentences false in silence.  Gate 19
+;;;; counts the banners in this file and holds the documents to the number.
 ;;;;
 ;;;; "All six run on every commit from day one.  They are cheap and they are
 ;;;; the only automated defence the project has."
@@ -2224,6 +2230,162 @@ c:axis-of are how a name is written when it is genuinely being used."
                 ~4tactually holds."
             (length problems) (sort problems #'string<))
       (format t "  every DEFAULTS- file is the answers half of one~%")))
+
+;;; --------------------------------------------------------------- gate 19
+
+(banner 19 "the project says the same thing about itself everywhere")
+;; THE THIRD COPY IS THE ONE THAT REACHES A STRANGER, AND IT WAS THE WRONG ONE.
+;;
+;; PLAN.org records fixing `:license' in both .asd files: they said
+;; BSD-3-Clause and were simply wrong.  Both were corrected.  flake.nix's
+;; `meta.license' — the copy that becomes what `nix search' prints, the copy a
+;; distribution packager reads, the copy that decides what licence an incoming
+;; contribution arrives under — said `licenses.bsd3' beside a LICENSE file
+;; holding 674 lines of GPLv3, and stayed wrong for as long as the other two
+;; had been right.
+;;
+;; The species is gate 9's, one level up and stated in its own comment: *a
+;; number repeated in two files is the FINDINGS §census failure*.  A licence
+;; repeated in four is the same failure in a currency where being wrong is a
+;; legal fact rather than a stale one.  Nothing here can pick the right answer
+;; — only that all four agree, which is the whole of what was missing.
+;;
+;; The .asd values come from the live image rather than from the text, because
+;; ASDF has already read them and a second reader would be a second thing to be
+;; wrong.  flake.nix and LICENSE are read as text: there is no nix here, and the
+;; declaration is one line naming an attribute in `pkgs.lib.licenses'.
+(flet ((line-containing (path text)
+         (when (probe-file path)
+           (with-open-file (in path)
+             (loop for line = (read-line in nil) while line
+                   when (search text line) return line)))))
+  (let* ((problems '())
+         ;; SPDX, which is what a .asd carries, against the nixpkgs attribute
+         ;; name, which is what a flake carries.  Only the licences this project
+         ;; could plausibly be under; an answer outside the table is reported as
+         ;; unrecognised rather than assumed to agree, because a table that
+         ;; silently passes what it does not know is gate 17's disease.
+         (spdx->nix '(("GPL-3.0-or-later" . "gpl3Plus")
+                      ("GPL-3.0-only"     . "gpl3Only")
+                      ("BSD-3-Clause"     . "bsd3")
+                      ("MIT"              . "mit")))
+         (core (asdf:system-license (asdf:find-system "latticewm")))
+         (extension (asdf:system-license (asdf:find-system "lattice")))
+         (flake (line-containing "flake.nix" "license = licenses."))
+         (declared (and flake
+                        (let ((start (+ (search "license = licenses." flake)
+                                        (length "license = licenses."))))
+                          (string-right-trim
+                           ";" (string-trim " " (subseq flake start))))))
+         (expected (cdr (assoc core spdx->nix :test #'string=))))
+    (format t "  latticewm.asd~46t~a~%" core)
+    (format t "  lattice.asd~46t~a~%" extension)
+    (format t "  flake.nix~46tlicenses.~a~%" (or declared "(none declared)"))
+    (unless (equal core extension)
+      (push (format nil "latticewm.asd says ~s and lattice.asd says ~s"
+                    core extension)
+            problems))
+    (unless expected
+      (push (format nil "latticewm.asd's ~s is not an SPDX identifier this ~
+gate knows how to check against a nixpkgs attribute; add it to the table here ~
+rather than leaving the flake unchecked"
+                    core)
+            problems))
+    ;; ASKED ONLY WHEN THERE IS A FLAKE, for gate 9's reason: §packaging's test
+    ;; is that deleting flake.nix leaves a project that still builds.
+    (when (probe-file "flake.nix")
+      (cond ((null declared)
+             (push (format nil "flake.nix declares no meta.license, so the ~
+packaged copy tells `nix search' nothing about a project that ships 674 lines ~
+of licence text")
+                   problems))
+            ((and expected (not (string= declared expected)))
+             (push (format nil "flake.nix says licenses.~a and the .asd files ~
+say ~s, which is licenses.~a"
+                           declared core expected)
+                   problems))))
+    ;; And the text itself, because three declarations agreeing with each other
+    ;; and not with the file is the same failure with better manners.
+    (let ((header (line-containing "LICENSE" "GENERAL PUBLIC LICENSE")))
+      (cond ((not (probe-file "LICENSE"))
+             (push "there is no LICENSE file" problems))
+            ((and (search "GPL-3.0" (or core "")) (null header))
+             (push (format nil "the .asd files say ~s and LICENSE does not ~
+look like the GNU General Public License" core)
+                   problems))))
+    ;; AND THE OTHER NUMBER THIS PROJECT REPEATS IN PROSE: HOW MANY GATES.
+    ;;
+    ;; "Eighteen gates run on every build" is asserted in README.org, in
+    ;; INSTALL.org three times, and in the CI workflow's own header comment.
+    ;; Nothing read any of them, so adding a gate silently made five sentences
+    ;; false — which is the *SMART-GAPS* shape one level up: a documented fact
+    ;; wired to nothing, in the documents this project stakes its record on.
+    ;;
+    ;; The count comes from this file's own text rather than from a variable,
+    ;; because a variable is a nineteenth place to be wrong.  Gate 1 lives in
+    ;; tools/build.lisp and is counted here because every document counts it.
+    (let* ((banners (with-open-file (in "tools/gates.lisp")
+                      (loop for line = (read-line in nil) while line
+                            count (eql 0 (search "(banner " line)))))
+           (total (1+ banners))              ; gate 1 runs during the load
+           (spelled '((16 . "sixteen") (17 . "seventeen") (18 . "eighteen")
+                      (19 . "nineteen") (20 . "twenty") (21 . "twenty-one")
+                      (22 . "twenty-two") (23 . "twenty-three")
+                      (24 . "twenty-four") (25 . "twenty-five")))
+           (word (cdr (assoc total spelled)))
+           ;; "Gate 14 is the one the other eighteen could not ask" is a claim
+           ;; about the count too, and it is the count minus the gate doing the
+           ;; asking.  It was stale by one before this check existed, which is
+           ;; the argument for spending four lines on the exception rather than
+           ;; excusing the whole sentence shape.
+           (others (cdr (assoc (1- total) spelled)))
+           ;; The live claims only.  PLAN.org is a session log and FINDINGS.org
+           ;; is a record of what was true when it was written; both are
+           ;; append-only by discipline and correcting them would be laundering
+           ;; the record, which DESIGN.org:101 exists to demonstrate not doing.
+           (documents '("README.org" "INSTALL.org" ".github/workflows/check.yml")))
+      (format t "  gates that run~46t~d~%" total)
+      (if (null word)
+          (push (format nil "~d gates and no spelling for it in this gate's ~
+table; add one, or the documents cannot be checked" total)
+                problems)
+          (dolist (path documents)
+            (when (probe-file path)
+              (with-open-file (in path)
+                (loop for line = (read-line in nil)
+                      for number from 1
+                      while line
+                      do (let ((lower (string-downcase line)))
+                           (dolist (entry spelled)
+                             (let ((spelling (cdr entry)))
+                               (when (and (search spelling lower)
+                                          (search "gate" lower)
+                                          (not (string= spelling word))
+                                          (not (and (search "other" lower)
+                                                    (equal spelling others))))
+                                 (push (format nil
+                                               "~a:~d says ~s gates and ~d run"
+                                               path number spelling total)
+                                       problems))))))))))
+      ;; And the one that is not prose: the verdict line has to be able to name
+      ;; every gate that failed, so a gate whose number is not in the banner
+      ;; sequence would be reported as a gate nobody can find.
+      (unless (= banners (length (remove-duplicates
+                                  (with-open-file (in "tools/gates.lisp")
+                                    (loop for line = (read-line in nil) while line
+                                          when (eql 0 (search "(banner " line))
+                                            collect (subseq line 8
+                                                            (position #\Space line
+                                                                      :start 8)))))))
+        (push "two gates share a number" problems)))
+    (if problems
+        (fail 19 "~{~%    ~a~}~%~
+                  ~4tThe copy that is wrong is usually the one nobody edits,~%~
+                  ~4tand that is the packaging metadata rather than the~%~
+                  ~4tsystem definition -- so it is also the copy a distribution~%~
+                  ~4tand a first contributor actually read."
+              (reverse problems))
+        (format t "  the declarations, the LICENSE text and the gate count agree~%"))))
 
 ;;; ---------------------------------------------------------------- verdict
 
