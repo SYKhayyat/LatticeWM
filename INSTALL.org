@@ -40,6 +40,21 @@ river -c latticewm    # nested, in a window, inside the session you have
 Nothing else.  =bootstrap.sh= puts the Lisp libraries under =./.deps/= and
 writes nowhere else; =rm -rf .deps= undoes it completely.
 
+*Almost nothing else.  One of the Lisp dependencies grovels a C header*, so a
+working C compiler is a build requirement of this project even though nothing
+in it is written in C.  Most distributions give you one with the base install;
+*Fedora does not give you all of it*, because its gcc is configured to read
+RPM's hardening specs and those live in =redhat-rpm-config=:
+
+#+begin_src sh
+sudo dnf install redhat-rpm-config     # Fedora, RHEL, CentOS
+#+end_src
+
+Without it =bootstrap.sh= stops with =gcc: fatal error: cannot read spec file
+'/usr/lib/rpm/redhat/redhat-hardened-cc1'=, which names neither this project
+nor the package.  It says which package now, and this paragraph exists because
+a stock Fedora is where that was found rather than where it was predicted.
+
 ** SBCL
 
 #+begin_src sh
@@ -93,11 +108,36 @@ Zig program with no plugin system.  Check out the matching tag rather than
 =main=:
 
 #+begin_src sh
-sudo pacman -S zig wayland wayland-protocols libxkbcommon pixman     # or your equivalent
+sudo pacman -S zig wayland wayland-protocols libxkbcommon pixman wlroots  # or your equivalent
 git clone --recurse-submodules https://codeberg.org/river/river
 cd river && git checkout v0.4.6
 zig build -Doptimize=ReleaseSafe --prefix ~/.local install
 #+end_src
+
+*Two things that cost an evening here and are written down rather than
+remembered.* River pins its Zig hard: =v0.4.6= wants *Zig 0.16*, and a 0.14 or
+0.15 fails at =build.zig= line 10 with ='@import' of ZON must have a known
+result type=, which names neither Zig nor a version. Read =README.md= at the
+tag you checked out — it says which. If your distribution packages a different
+one, the official tarball unpacks anywhere and needs no root:
+
+#+begin_src sh
+curl -sSLO https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+tar xf zig-x86_64-linux-0.16.0.tar.xz
+./zig-x86_64-linux-0.16.0/zig build -Doptimize=ReleaseSafe --prefix ~/.local install
+#+end_src
+
+And river pins *wlroots* just as hard: =v0.4.6= wants *0.20*, and a 0.19 fails
+with =unable to find dynamic system library 'wlroots-0.20'=.  Check with
+=pkg-config --modversion wlroots-0.20= before starting.
+
+*Both of those are moving targets and your distribution decides which you get.*
+Ubuntu 26.04 packages Zig 0.14 and wlroots 0.19 — neither is enough, so river
+has to be built with a downloaded Zig against a wlroots you also build.
+Fedora 44 packages Zig 0.16 and wlroots 0.20.2, and river builds out of the box
+on it.  That is not a recommendation of one distribution over another; it is
+the reason this section exists, and the reason the two-line check above is
+worth running before the clone rather than after the failure.
 
 =bootstrap.sh= warns if it finds a river that is not the vendored release —
 reading the release out of =src/protocol/PINNED=, so the warning cannot drift

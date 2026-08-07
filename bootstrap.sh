@@ -307,11 +307,58 @@ fi
 
 say ""
 say "fetching the lisp dependencies ..."
+# WHAT THE LOG ACTUALLY SAYS, RATHER THAN WHERE THE LOG IS.
+#
+# This used to be `die "see .deps/bootstrap.log"' and nothing else, and on a
+# stock Fedora the thing it was pointing at is forty frames of SBCL backtrace
+# with the sentence that matters four screens above the end:
+#
+#   gcc: fatal error: cannot read spec file
+#   '/usr/lib/rpm/redhat/redhat-hardened-cc1': No such file or directory
+#
+# One of our dependencies groveled a C header, Fedora's gcc is configured to
+# read RPM's hardening specs, and those specs are in a package that a stock
+# install does not have.  The failure names neither this project nor the
+# package -- and the first thing a new user meets on the second-most-common
+# distribution was a pointer to a file whose useful line they had to find.
+#
+# So: pull out the first line that looks like a cause, say what it usually
+# means where we know, and keep pointing at the log for the rest.
+dependency_failure() {
+    line=$(grep -m1 -E "fatal error|error:|Unhandled|No such file" \
+               "$deps/bootstrap.log" 2>/dev/null || true)
+    say ""
+    say "bootstrap: could not fetch the lisp dependencies."
+    [ -n "$line" ] && say "  $line"
+
+    case "$line" in
+        *rpm/redhat*)
+            say ""
+            say "  That is Fedora's gcc reading RPM's hardening specs, which"
+            say "  live in a package a stock install does not have:"
+            install_hint redhat-rpm-config
+            say ""
+            say "  One of the dependencies grovels a C header, so a working C"
+            say "  compiler is a build dependency of this project even though"
+            say "  nothing here is written in C."
+            ;;
+        *"gcc"*|*"cc1"*|*"cc: "*)
+            say ""
+            say "  A dependency groveled a C header and the C compiler failed."
+            say "  A working gcc and the headers it wants are needed here even"
+            say "  though nothing in this project is written in C."
+            ;;
+    esac
+
+    say ""
+    die "the whole of it is in .deps/bootstrap.log"
+}
+
 sbcl --non-interactive --no-userinit \
      --load "$quicklisp/setup.lisp" \
      --eval "(ql:quickload (list $(for s in $SYSTEMS; do printf '"%s" ' "$s"; done)))" \
      >>"$deps/bootstrap.log" 2>&1 ||
-    die "could not fetch the dependencies; see .deps/bootstrap.log"
+    dependency_failure
 
 for s in $SYSTEMS; do say "  $s"; done
 

@@ -437,6 +437,24 @@ be able to do before anyone else can depend on it.
   reproduce the repository's layout, and `make install-check` is what caught
   the first attempt putting `FINDINGS.org` in `doc/doc/`.
 
+- **`bootstrap.sh` failed on a stock Fedora and pointed at a backtrace.** One
+  of the Lisp dependencies grovels a C header, Fedora's gcc is configured to
+  read RPM's hardening specs, and those live in `redhat-rpm-config`, which a
+  stock install does not have. The failure was `gcc: fatal error: cannot read
+  spec file '/usr/lib/rpm/redhat/redhat-hardened-cc1'`, forty frames of SBCL
+  backtrace above the end of `.deps/bootstrap.log`, and all the script said was
+  "see .deps/bootstrap.log". It now pulls the first line that looks like a
+  cause out of the log, says what it means where it knows, and names the
+  package through the per-distro table it already had. Found by running the
+  non-nix path on Fedora 44 rather than by predicting it.
+- `INSTALL.org` said a C compiler was not needed and named no river build
+  constraints beyond the tag. River pins Zig and wlroots hard — `v0.4.6` wants
+  Zig **0.16** and wlroots **0.20**, and the failures name neither: a 0.14 Zig
+  dies at `build.zig:10` with "'@import' of ZON must have a known result type"
+  and a 0.19 wlroots with "unable to find dynamic system library
+  'wlroots-0.20'". Ubuntu 26.04 packages neither version; Fedora 44 packages
+  both. Both checks are one line and both are written down now.
+
 ### Added
 
 - Gate 20 — no methods in `src/policy/protocol.lisp`, which its own header had
