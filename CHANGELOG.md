@@ -437,6 +437,26 @@ be able to do before anyone else can depend on it.
   reproduce the repository's layout, and `make install-check` is what caught
   the first attempt putting `FINDINGS.org` in `doc/doc/`.
 
+- **Undo went back to the beginning of time through three of the four doors.**
+  `*undo-coalesce-seconds*` merges consecutive steps that share a label, so
+  that holding the resize key is one step back rather than forty — and it
+  decides by comparing labels. That is right for `resize left`, which repeats
+  because the gesture repeats. It is wrong for `from a REPL`, which *every*
+  change through SWANK, the control socket and `Super+;` carries: an entire
+  session of unrelated changes coalesced into one entry holding the oldest
+  tree, and undo jumped all the way back to it. A step is coalescible now only
+  when its label came from a command, which is what defaulting the new
+  parameter to `(eq label *undo-label*)` says — no call site changed, and a
+  door that invents a new constant is covered by construction rather than by
+  being added to a list. Found the first time `make integration` was ever run
+  on this machine; 1302 unit checks could not see it, because it needs four
+  doors, a real compositor and a clock.
+- **Two integration checks raced an asynchronous removal and failed about half
+  the time.** `window-live-p` goes false the moment river says `closed`; taking
+  the leaf out of the tree and running `:window-closed` happen just after, on
+  our side. Asserted flat, they were a coin toss — which is worse than always
+  failing, because a check that is usually green is one nobody believes when it
+  goes red. They poll now, which is what the file already does one screen up.
 - **`bootstrap.sh` failed on a stock Fedora and pointed at a backtrace.** One
   of the Lisp dependencies grovels a C header, Fedora's gcc is configured to
   read RPM's hardening specs, and those live in `redhat-rpm-config`, which a

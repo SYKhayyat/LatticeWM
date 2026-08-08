@@ -157,10 +157,17 @@ no state to leave set if something signals in between."
   (when (and *world* (plusp *undo-depth*))
     (setf (undo-baseline) (snapshot-layout label))))
 
-(defun push-undo (snapshot)
-  "Put SNAPSHOT on the ring and abandon the redo branch."
+(defun push-undo (snapshot &optional coalescible)
+  "Put SNAPSHOT on the ring and abandon the redo branch.
+
+COALESCIBLE says whether this step may merge with the one before it, and it is
+a parameter rather than a property of the label because *THE LABEL IS NOT
+ALWAYS A VERB*.  See NOTE-LAYOUT-SETTLED: three of the four doors into the
+layout hand this a constant string, and merging on a constant merges
+everything."
   (let ((ring (undo-ring))
-        (coalesce (and *undo-coalesce-seconds*
+        (coalesce (and coalescible
+                       *undo-coalesce-seconds*
                        (* *undo-coalesce-seconds*
                           internal-time-units-per-second))))
     ;; Coalesce a run of the same verb: holding a resize key is one gesture and
@@ -183,8 +190,27 @@ no state to leave set if something signals in between."
     (setf (c:prop *world* :redo-ring) '())
     snapshot))
 
-(defun note-layout-settled (&optional (label *undo-label*))
+(defun note-layout-settled (&optional (label *undo-label*)
+                                      (coalescible (eq label *undo-label*)))
   "Record an undo step if the tree has changed since the last settle.
+
+COALESCING MERGES ON THE LABEL, AND THREE OF THE FOUR DOORS HAND IT A CONSTANT.
+This is the bug the integration suite found the first time it was ever run
+against a real compositor, and no unit check could have: *UNDO-COALESCE-SECONDS*
+exists so that holding the resize key is one step back rather than forty, and it
+decides by comparing the label of this step with the label of the last one.
+That is right for `resize left', which repeats because the gesture repeats.  It
+is wrong for `from a REPL', which every change through SWANK, the control
+socket and `Super+;' carries -- so an entire session's worth of unrelated
+changes coalesced into a single entry holding the *oldest* tree, and undo
+jumped all the way back to it.  Three of the four doors this program exists for
+had an undo that went to the beginning of time.
+
+So a step is coalescible only when its label came from a command, which is what
+defaulting COALESCIBLE to (EQ LABEL *UNDO-LABEL*) says: called with no label it
+is a verb and may merge, called with one it is a door and may not.  No call
+site had to change, and a door that invents a new constant is covered by
+construction rather than by being added to a list.
 
 THE SETTLE POINTS ARE THE DOORS, and there are four: a key binding running to
 completion, `Super+;', the control socket, and a thunk queued from another
@@ -204,7 +230,7 @@ per keystroke, whether or not anything changed."
            (unless (equal signature (layout-snapshot-signature baseline))
              (setf (layout-snapshot-label baseline) label
                    (layout-snapshot-time baseline) (get-internal-real-time))
-             (push-undo baseline)
+             (push-undo baseline coalescible)
              (setf (undo-baseline) (snapshot-layout label signature)))))))))
 
 (defun undo-command-wrapper (command arguments thunk)

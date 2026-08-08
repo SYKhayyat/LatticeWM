@@ -1744,9 +1744,25 @@ are what a person means by the arrangement, and both are copy-stable."
               (check (poll-until (lambda () (not (c:window-live-p window))) 10)
                      "the client exits, river says `closed', and the window ~
                       stops being live")
-              (check (null (c:leaf-holding (c:world-root *world*) window))
+              ;; POLLED, BECAUSE THE REMOVAL IS NOT THE SAME EVENT AS THE
+              ;; DEATH.  WINDOW-LIVE-P goes false the moment river says
+              ;; `closed'; taking the leaf out of the tree and running
+              ;; :WINDOW-CLOSED happen on our side, just after.  Asserted flat,
+              ;; these two raced that gap and failed in about half of all runs
+              ;; -- which is worse than failing always, because a check that is
+              ;; usually green is a check nobody believes when it goes red.
+              ;; POLL-UNTIL is what this file already uses for exactly this, one
+              ;; screen up, and its own docstring is about not confusing "has
+              ;; not happened yet" with "did not happen".
+              (check (poll-until (lambda ()
+                                   (null (c:leaf-holding (c:world-root *world*) window)))
+                                 5)
                      "the tree no longer holds it")
-              (let ((firings (fired :window-closed)))
+              (let ((firings (progn (poll-until (lambda ()
+                                                  (find window (fired :window-closed)
+                                                        :key #'first))
+                                                5)
+                                    (fired :window-closed))))
                 (check (find window firings :key #'first)
                        ":window-closed ran, carrying the window that went")
                 (check (every (lambda (given)
