@@ -120,15 +120,24 @@ pkgs.mkShell {
   shellHook = ''
     export LATTICEWM_ROOT=$PWD
     export CL_SOURCE_REGISTRY="$WAYFLAN_SRC//:$PWD//"
+    # OLDER ONLY.  This used to fire on any river that was not the vendored
+    # release, because the startup check was an equality and any difference was
+    # a failure waiting at a login screen.  The check is a floor now: a river
+    # newer than the one src/protocol/ was vendored from is a supported
+    # configuration, LatticeWM binds at its own version and river answers in
+    # that dialect, and printing a warning about it would train people to skip
+    # the warning that still means something.
   '' + pkgs.lib.optionalString
-    (pinnedRiver != null && pkgs.river.version != pinnedRiver) ''
+    (pinnedRiver != null && pkgs.lib.versionOlder pkgs.river.version pinnedRiver) ''
     echo "" >&2
-    echo "  The river in this shell is ${pkgs.river.version}, and the protocol in" >&2
-    echo "  src/protocol/ was vendored from river ${pinnedRiver}." >&2
+    echo "  The river in this shell is ${pkgs.river.version}, older than the" >&2
+    echo "  river ${pinnedRiver} the protocol in src/protocol/ was vendored from." >&2
     echo "" >&2
-    echo "  Build, gates and unit tests are unaffected.  'make integration'" >&2
-    echo "  and 'make check' will fail on the version check, by design --" >&2
-    echo "  see src/protocol/PINNED.  'nix build' pins both and is green." >&2
+    echo "  Build, gates and unit tests are unaffected.  LatticeWM accepts a" >&2
+    echo "  range rather than one release, so this may well be fine -- but if" >&2
+    echo "  it is below the floor, 'make integration' and 'make check' fail on" >&2
+    echo "  the version check by design, naming both numbers.  'nix build'" >&2
+    echo "  pins both and is green." >&2
     echo "" >&2
   '';
 }

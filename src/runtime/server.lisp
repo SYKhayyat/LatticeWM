@@ -399,11 +399,13 @@ say if you asked them."
               (when (> area best-area)
                 (setf best output best-area area)))))))))
 
-(defun output-showing-workspace (index)
-  "The first output whose displayed workspace is INDEX, or NIL."
-  (when (integerp index)
-    (loop for output in (all-outputs)
-          when (eql index (c:prop output :workspace)) return output)))
+;; OUTPUT-SHOWING-WORKSPACE WAS HERE AND IS P:OUTPUT-SHOWING NOW.  Motion has
+;; to ask the same question -- crossing from one screen to the next is `go to
+;; the workspace the next screen is displaying' -- and policy may not call the
+;; runtime, so keeping this here would have meant two functions answering one
+;; question, which is the shape this project spends its gates on.  It moved
+;; rather than being copied; the property it reads is still OUTPUT-CONTENT's
+;; to define, and P:OUTPUT-WORKSPACE is the one reader of it.
 
 (defun current-output ()
   "The output the cursor is on, or the best guess available.
@@ -429,7 +431,7 @@ unavailable at a different moment:
   (let* ((path (current-path))
          (node (current-node path)))
     (or (output-for-rect (node-rect-now node))
-        (output-showing-workspace (first path))
+        (p:output-showing *world* (first path))
         (first (all-outputs)))))
 
 (defun output-of-window (window)

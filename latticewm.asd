@@ -299,5 +299,10 @@ without a compositor — which is the whole model."
      ;; compositor was reading -- and the canvas docstring said so as though it
      ;; were a design property.
      (:file "test-overlay")
+     ;; Which rivers this build will talk to.  The version check was an
+     ;; equality, inline in BIND-ONE-GLOBAL and unreachable without a live
+     ;; registry, so the one function deciding whether the program starts on
+     ;; anybody's machine had no test at all.
+     (:file "test-versions")
      (:file "test-examples"))))
   :perform (test-op (o c) (symbol-call :latticewm/tests :run-all)))

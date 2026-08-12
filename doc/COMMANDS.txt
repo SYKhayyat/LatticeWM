@@ -124,6 +124,19 @@ LatticeWM commands.
 (focus-next)
   Move the cursor to the next pane in layout order, wrapping.
 
+(focus-output which)
+  Move the cursor to another screen — a direction, or a number from one.
+  
+  Nothing on either screen changes: no window moves and neither monitor is asked
+  to display anything different.  You arrive where you last were on that screen
+  rather than at its first pane, which is *REMEMBER-PLACE* and is the difference
+  between a command worth pressing and one you try once.
+  
+  You will not often need this, and that is deliberate: plain motion crosses the
+  screen boundary on its own when you walk off the edge — see
+  *MOTION-CROSSES-OUTPUTS*.  This is the version for when you are in the middle
+  of a screen and do not want to walk.
+
 (focus-path path)
   Move the cursor to PATH, a list of addresses from the root.
 
@@ -358,6 +371,13 @@ LatticeWM commands.
   One key, both directions.  That is the whole point of a scratchpad: the
   terminal you consult twenty times an hour should cost one keystroke each way
   and should never need to be found.
+
+(send-to-output which &key (follow nil))
+  Move the focused pane to another screen — a direction, or a number from one.
+  
+  SEND-TO-WORKSPACE with the number looked up instead of typed, so everything it
+  argues about landing on a *place inside* the workspace rather than on the
+  workspace holds here without being restated.  FOLLOW takes you with it.
 
 (send-to-workspace number &key (follow nil))
   Move the focused pane to workspace NUMBER, counting from one.

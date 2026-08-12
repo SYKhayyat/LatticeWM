@@ -222,7 +222,7 @@ moved it to another monitor would be answering a question nobody asked.
 If the other output had nothing to trade back it is left with no workspace, and
 ENSURE-WORKSPACES-FOR-OUTPUTS gives it one before anything is drawn."
   (when (and output (integerp index))
-    (let ((other (output-showing-workspace index))
+    (let ((other (p:output-showing *world* index))
           (was (c:prop output :workspace)))
       (when (and other (not (eq other output)))
         (setf (c:prop other :workspace) was)
@@ -243,7 +243,7 @@ no outputs left at all there is nothing to be done and nothing to see."
     (when (and (integerp index) outputs
                (notany (lambda (output) (eql index (c:prop output :workspace)))
                        outputs))
-      (let ((adopter (or (output-showing-workspace (first (current-path)))
+      (let ((adopter (or (p:output-showing *world* (first (current-path)))
                          (first outputs))))
         (when (and adopter (c:world-focused-float *world*))
           (setf (c:world-focused-float *world*) nil))

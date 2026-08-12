@@ -361,11 +361,17 @@ So both commands go through here.
 AND THROUGH SHOW-WORKSPACE-ON, which is the half that only matters on two
 monitors: asking for a workspace the other screen is already showing used to
 put both screens on it, and two outputs showing one workspace is a collapsed
-layout and a blank second monitor.  They trade there."
+layout and a blank second monitor.  They trade there.
+
+AND YOU ARRIVE WHERE YOU LEFT OFF.  This jumped to (LIST INDEX), which
+descends to the workspace's *first* leaf — so every visit to a workspace put
+you at its top left, whatever you had been doing there.  P:REMEMBERED-PLACE
+answers with the place if there is one and with the workspace itself if there
+is not, which is what this line meant both times."
   (let ((output (current-output)))
     (show-workspace-on output index)
     (setf (c:container-selection stack) index)
-    (p:jump-cursor (policy) *world* (list index))
+    (p:jump-cursor (policy) *world* (p:remembered-place *world* index))
     (run-hooks :workspace-changed index)
     (notify "~a ~d" (p:world-role-name *world* stack) (1+ index))
     index))
@@ -427,6 +433,65 @@ grows."
           ;; SHOW-WORKSPACE rather than the four lines it replaced, because one
           ;; of the four was missing here and the screen stayed where it was.
           (show-workspace stack index))))))
+
+;;; ------------------------------------------------------------- the screens
+;;;
+;;; EIGHTY COMMANDS AND NOT ONE OF THEM NAMED AN OUTPUT.  Per-output workspaces
+;;; have worked for a while — each monitor displays its own, they trade rather
+;;; than collide, and the arrangement survives an undock — and there was no
+;;; verb that took you to the other screen or sent anything there.  The only
+;;; door was `workspace N', which puts N on the screen you are already looking
+;;; at and trades away whatever was there: a real workflow, and the only one.
+;;;
+;;; Both of these are compositions and neither has an algorithm in it.  The
+;;; cursor is one place in one model (SHOW-WORKSPACE-ON's ruling), so `focus
+;;; the other screen' is a jump into the workspace that screen displays, and
+;;; `send this there' is SEND-TO-WORKSPACE with the number looked up rather
+;;; than typed.  That is the whole of what the ruling costs, and it is why
+;;; neither of these needed the model to grow a field.
+
+(defun resolve-output (which)
+  "The output WHICH names: a direction, a number counting from one, or itself.
+
+Directions are relative to the screen the cursor is on and are the same four
+words every other verb in this file takes, so `the next screen right' and `the
+next pane right' are one vocabulary rather than two."
+  (etypecase which
+    (c:output which)
+    (keyword (p:output-in-direction
+              *world* (p:output-showing *world* (first (current-path))) which))
+    (integer (nth (1- which) (all-outputs)))))
+
+(defcommand focus-output (which)
+  "Move the cursor to another screen — a direction, or a number from one.
+
+Nothing on either screen changes: no window moves and neither monitor is asked
+to display anything different.  You arrive where you last were on that screen
+rather than at its first pane, which is *REMEMBER-PLACE* and is the difference
+between a command worth pressing and one you try once.
+
+You will not often need this, and that is deliberate: plain motion crosses the
+screen boundary on its own when you walk off the edge — see
+*MOTION-CROSSES-OUTPUTS*.  This is the version for when you are in the middle
+of a screen and do not want to walk."
+  (:interactive :direction)
+  (with-relayout
+    (let* ((output (resolve-output which))
+           (index (and output (p:output-workspace output))))
+      (when (integerp index)
+        (p:jump-cursor (policy) *world* (p:remembered-place *world* index))))))
+
+(defcommand send-to-output (which &key (follow nil))
+  "Move the focused pane to another screen — a direction, or a number from one.
+
+SEND-TO-WORKSPACE with the number looked up instead of typed, so everything it
+argues about landing on a *place inside* the workspace rather than on the
+workspace holds here without being restated.  FOLLOW takes you with it."
+  (:interactive :direction)
+  (let* ((output (resolve-output which))
+         (index (and output (p:output-workspace output))))
+    (when (integerp index)
+      (send-to-workspace (1+ index) :follow follow))))
 
 (defcommand send-to-workspace (number &key (follow nil))
   "Move the focused pane to workspace NUMBER, counting from one.

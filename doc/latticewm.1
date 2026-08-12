@@ -164,9 +164,15 @@ the SIL Open Font License the bundled Terminus font is under.
 .I PREFIX/share/latticewm/protocol/
 The river protocol descriptions this binary was built against, and
 .IR PINNED ,
-which records the river release they came from.  LatticeWM refuses to start
-against a river whose river_window_manager_v1 is a different version, and this
-is how that refusal is diagnosed on a machine with no source tree.
+which records the river release they came from.  LatticeWM binds
+river_window_manager_v1 at the version these descriptions declare, so a newer
+river is speaking a dialect this binary understands and is supported; it
+refuses only against a river
+.I older
+than its floor, because it would be sending requests that river does not have.
+.B latticewm \-\-version
+prints the accepted range, and this directory is how that is diagnosed on a
+machine with no source tree.
 .SH ENVIRONMENT
 .TP
 .B XDG_CONFIG_HOME

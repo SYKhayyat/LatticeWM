@@ -68,6 +68,24 @@
   (dolist (row census)
     (setf (symbol-value (car row)) (cdr row))))
 
+(defun timer-census ()
+  "The name of every timer registered right now."
+  (let ((out '()))
+    (maphash (lambda (name timer) (declare (ignore timer)) (push name out))
+             r::*timers*)
+    out))
+
+(defun restore-timers (census)
+  "Take off every timer that was not registered when CENSUS was taken.
+
+Names rather than the records, and removal rather than restoration, because
+that is the whole of what is being undone: an example may only *add* one, and
+re-adding under a name that already exists replaces rather than duplicates, so
+a timer present in both censuses is the same timer and must be left alone."
+  (dolist (name (timer-census))
+    (unless (member name census :test #'equal)
+      (r:remove-timer name))))
+
 (defmacro with-example ((name) &body body)
   "Load an example into a fresh world, run BODY, and clean up after it.
 
@@ -89,19 +107,31 @@ anybody chose and it is not one anybody could have noticed losing -- example
 plane tests down, one commit before this was written.
 
 Methods and option values both, because both are global and both are what an
-example is made of."
-  (let ((methods (gensym "METHODS")) (options (gensym "OPTIONS")))
+example is made of.
+
+AND TIMERS, WHICH IS THE THIRD ONE AND ARRIVED THE SAME WAY THE OTHER TWO DID.
+Example 05 registers a clock at load time, because a status line with a clock
+in it has to.  A timer outlives the test that loaded it, fires on the window
+manager's own thread for the rest of the image, and calls MARK-DIRTY on a
+world that was rebound and thrown away -- and it would have been found the way
+the methods were, by an unrelated suite failing for no reason anybody could
+see.  The list of globals an example can touch is the list of things this has
+to put back, and it is now three long."
+  (let ((methods (gensym "METHODS")) (options (gensym "OPTIONS"))
+        (timers (gensym "TIMERS")))
     `(let ((r:*world* (c:make-world))
            (p:*policy* (make-instance 'p:conventional-policy))
            (,methods (method-census))
-           (,options (option-census)))
+           (,options (option-census))
+           (,timers (timer-census)))
        (unwind-protect
             (progn
               (let ((*package* (find-package '#:latticewm/user)))
                 (load (example-path ,name)))
               ,@body)
          (restore-methods ,methods)
-         (restore-options ,options)))))
+         (restore-options ,options)
+         (restore-timers ,timers)))))
 
 (defun open-windows (n &optional (world r:*world*))
   (dotimes (i n)
@@ -258,6 +288,40 @@ asserts the difference."
     ;; that says the method ran at all.
     (is (= 5 (length (funcall (read-from-string "latticewm/user::clock-segment"))))
         "hh:mm")))
+
+(test a-clock-segment-comes-with-something-that-makes-it-tick
+  "The half of a status line that is not the segment.
+
+The clock read `asked fresh every frame', which was true, and there were no
+frames: every redraw in this program is caused by something, and nothing was
+caused by time passing.  So the shipped example displayed the time of the last
+layout change.  The assertion is that loading it registers a timer, because
+that is the part a reader would otherwise write a segment without."
+  (with-example ("05-status-line.lisp")
+    (is (member :status-line-clock (timer-census) :test #'equal)
+        "loading the example started the clock")
+    (funcall (read-from-string "latticewm/user::status-line-extras") nil)
+    (is (not (member :status-line-clock (timer-census) :test #'equal))
+        "and turning the segments off takes the wakeup off with them")
+    (funcall (read-from-string "latticewm/user::status-line-extras") t)
+    (is (member :status-line-clock (timer-census) :test #'equal)
+        "and back on again, with no restart and no second clock")))
+
+(test loading-an-example-twice-leaves-one-of-everything
+  "Re-registering by name replaces rather than duplicates.
+
+Loading a configuration file a second time is what SHIFT+SUPER+C does and what
+anybody editing their init file at a REPL does all evening.  ADD-HOOK's
+docstring records this project losing an afternoon to the other side of it --
+`the help overlay drew itself twice, once through each generation of the same
+function' -- and a timer is the mechanism where the same mistake costs a
+wakeup forever rather than a double draw."
+  (with-example ("05-status-line.lisp")
+    (let ((before (length (timer-census))))
+      (let ((*package* (find-package '#:latticewm/user)))
+        (load (example-path "05-status-line.lisp")))
+      (is (= before (length (timer-census)))
+          "the second load replaced the clock rather than adding one"))))
 
 (test the-count-a-general-purpose-status-bar-cannot-write
   "The segment that is the argument for the whole approach: it is a fact about

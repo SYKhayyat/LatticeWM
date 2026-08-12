@@ -86,6 +86,16 @@
 (defvar *failures* '() "Failed check descriptions, newest first.")
 (defvar *missing* '() "Dependencies that were not installed.  Fatal under strict.")
 (defvar *skipped* '() "Things a headless backend cannot have.  Never fatal.")
+(defvar *older-river* '()
+  "Things the river under test is too old to do.  Never fatal.
+
+A THIRD CATEGORY, AND IT HAD TO BE ITS OWN.  Since this project stopped
+demanding one exact river and started accepting a range, `did not happen' has
+three causes and they are not interchangeable: the harness is headless, a
+dependency is absent, or the compositor predates the feature.  Folding the
+third into the first would report a version gap as a property of the backend,
+which sends whoever reads it looking for hardware.  This is the only one of
+the three that a person can fix by upgrading, so it says so separately.")
 (defvar *sections* '() "(TITLE . CHECK-COUNT), newest first.")
 (defvar *section* "start-up" "The section a check belongs to.")
 
@@ -117,6 +127,20 @@ have."
   (let ((text (format nil "~?" format arguments)))
     (push (format nil "[~a] ~a" *section* text) *skipped*)
     (format t "  skip  ~a~%" text)
+    (force-output)
+    nil))
+
+(defun too-old (format &rest arguments)
+  "Note something this river is too old to do.  Reported, never fatal.
+
+Never fatal even under LATTICEWM_REQUIRE_INTEGRATION, unlike a missing
+dependency: a river inside the supported range that lacks a feature added
+later in that range is the configuration this project deliberately accepts.
+Failing here would be the version equality that was removed, put back in the
+test suite."
+  (let ((text (format nil "~?" format arguments)))
+    (push (format nil "[~a] ~a" *section* text) *older-river*)
+    (format t "  old   ~a~%" text)
     (force-output)
     nil))
 
@@ -240,6 +264,22 @@ else already holds wayland-1, which is every developer's machine."
     (uiop:launch-program
      (list (namestring program)
            "-log-level" "error"
+           ;; THE ONLY THING THAT ACTUALLY TURNS XWAYLAND OFF.  This used to be
+           ;; an XWAYLAND=0 in the environment below, with a comment saying
+           ;; nothing here needs Xwayland -- true, and read by nobody: neither
+           ;; river nor wlroots consults that variable.  So Xwayland started on
+           ;; every run, and the second it was supposed to save was spent
+           ;; anyway, silently, because a started Xwayland looks like a working
+           ;; one from out here.
+           ;;
+           ;; It stops being silent on a machine where /tmp/.X11-unix is not a
+           ;; real directory -- WSL makes it a symlink into /mnt/wslg, and
+           ;; wlroots refuses a symlink.  There river exits XwaylandCreateFailed
+           ;; before it ever creates its Wayland socket, and this whole suite
+           ;; reports that river would not start, which is not what happened.
+           ;;
+           ;; No test below opens an X client, so this costs nothing.
+           "-no-xwayland"
            ;; River runs one command as its init.  Ours reports the socket and
            ;; then does nothing: the window manager connects from *this*
            ;; process, so that the test can hold the world and ask it questions.
@@ -248,9 +288,6 @@ else already holds wayland-1, which is every developer's machine."
      :environment (list "WLR_BACKENDS=headless"
                         "WLR_LIBINPUT_NO_DEVICES=1"
                         "WLR_RENDERER=pixman"
-                        ;; Nothing needs Xwayland here, and starting it costs a
-                        ;; second and a screenful of xkbcomp warnings.
-                        "XWAYLAND=0"
                         (format nil "XDG_RUNTIME_DIR=~a" *runtime-dir*)
                         (format nil "HOME=~a" (or (sb-posix:getenv "HOME") "/tmp"))
                         (format nil "PATH=~a" (or (sb-posix:getenv "PATH") "/usr/bin")))
@@ -434,7 +471,50 @@ END-POINTER-OP directly, so it fires every run, and listing it would have been
 an excuse for coverage that already existed.
 
 A hook that is *not* on this list and did not fire is a failure, which is what
-makes the list the interesting part of the check rather than an excuse in it.")
+makes the list the interesting part of the check rather than an excuse in it.
+A hook a river is too old to fire is excused separately — this list is about
+the backend, and HOOKS-THIS-RIVER-CANNOT-FIRE is about the compositor.")
+
+(defparameter +capture-sessions-since+ 5
+  "The river_window_management_v1 version that introduced capture_sessions.
+
+FIVE, AND THE XML SAYS SO: both `river_window_v1.capture_sessions' and
+`river_output_v1.capture_sessions' carry since=\"5\", and they are the whole of
+what version 5 added — it introduced no requests at all.
+
+So a river offering 4 is not broken and is not misconfigured.  It is inside
+the supported range, doing exactly what version 4 says, and the events simply
+do not exist there.  Before the range existed this number could not have
+mattered, because the only river that would start was the one the XML came
+from.  Now it is the first place the range is visible from inside a test.")
+
+(defvar *bound-wm-version* nil
+  "The river_window_manager_v1 version this run bound at.
+
+RECORDED WHEN IT IS TRUE, NOT READ WHEN IT IS WANTED.  *SERVER* is NIL after
+the shutdown section, and the two sections that report on hooks run after it —
+so asking the connection for its version there gets NIL, and a predicate built
+on `(and *server* ...)' answers `too old' for every river alive or dead.  That
+is the failure mode where an excuse written for river 0.4.5 silently excuses
+river 0.5 as well, and the excused hook is one nothing ever drove.")
+
+(defun river-speaks-capture-sessions-p ()
+  "Can the river we bound to send capture_sessions at all?
+
+Reads the *bound* version rather than what river advertised: binding is
+clamped to the vendored ceiling, so what river knows and what it may send us
+are different numbers, and only the second one decides whether an event can
+arrive."
+  (and *bound-wm-version*
+       (>= *bound-wm-version* +capture-sessions-since+)))
+
+(defun hooks-this-river-cannot-fire ()
+  "Declared hooks the running river is too old to drive.
+
+Computed rather than listed, because the answer depends on the compositor in
+front of us instead of on this file."
+  (unless (river-speaks-capture-sessions-p)
+    '(:capture-changed)))
 
 (defun watch-every-hook ()
   "Put a recorder on every declared hook.  Returns how many were attached.
@@ -637,9 +717,17 @@ are what a person means by the arrangement, and both are copy-stable."
            (check server "the window manager connected")
            (unless server (return-from driving))
            (check manager "river_window_manager_v1 is bound")
-           (check (= (r::server-version server) r::+window-management-version+)
-                  "at version ~d, which is the version we generated against"
-                  (r::server-version server))
+           ;; Between the floor and the ceiling, not equal to either.  The
+           ;; river under test may be newer than the XML we vendored, and that
+           ;; is now a supported configuration rather than a refusal -- so the
+           ;; assertion is the range, and that we clamped to the ceiling
+           ;; instead of binding whatever was on offer.
+           (setf *bound-wm-version* (r::server-version server))
+           (check (<= r::+window-management-floor+ *bound-wm-version*
+                      r::+window-management-version+)
+                  "bound at version ~d, inside v~d-v~d"
+                  *bound-wm-version* r::+window-management-floor+
+                  r::+window-management-version+)
            ;; The globals the rest of this file depends on.  Every one of them
            ;; is a silent feature loss rather than an error when it is missing:
            ;; no wl_shm is a window manager that cannot draw its own echo area
@@ -802,7 +890,22 @@ are what a person means by the arrangement, and both are copy-stable."
                (check shown "and river is showing one of them")
                (wm (lambda () (notify "integration: ~d" 43)))
                (check (settle) "a second message settles a round trip")
-               (check (not (eq shown (r::overlay-committed echo)))
+               ;; POLLED, BECAUSE SETTLE IS A ROUNDTRIP AND NOT A REDRAW.  This
+               ;; read the committed canvas the instant the roundtrip returned,
+               ;; which assumes the notify was painted inside it.  It usually
+               ;; is, and on a loaded machine it is not: the redraw happens in
+               ;; the next render sequence, so a run that lost the race
+               ;; reported that the echo area had overwritten the buffer river
+               ;; was reading -- an alarming claim about double buffering, and
+               ;; untrue.  Caught once in four runs on a slow filesystem.
+               ;;
+               ;; What is asserted is unchanged: the new frame must land in a
+               ;; different buffer.  Only the deadline moved, and it moved to
+               ;; match the release check immediately below, which was already
+               ;; written this way.
+               (check (poll-until (lambda ()
+                                    (not (eq shown (r::overlay-committed echo))))
+                                  10)
                       "which drew into a different buffer and committed that, ~
                        rather than overwriting the one on screen")
                (check (poll-until
@@ -814,6 +917,26 @@ are what a person means by the arrangement, and both are copy-stable."
                       "and river released the buffer it had finished with -- ~
                        the event this program owed the protocol and did not ~
                        answer"))
+             ;; THE OTHER HALF OF THE SAME OMISSION.  wl_buffer.release says
+             ;; when the pixels are ours again; wl_surface.frame says when
+             ;; drawing is worth anything at all, and there was no frame
+             ;; callback anywhere in src/ either.  Both are inbound
+             ;; obligations, both were invisible to gate 8 for the same reason,
+             ;; and both are only answerable by a compositor -- the unit suite
+             ;; sets the slot by hand and says so.
+             ;;
+             ;; What is asserted is that river *answers*: a callback goes out
+             ;; with the commit and comes back.  A compositor that never
+             ;; replied would leave DRAW-WHEN-READY deferring every redraw for
+             ;; +FRAME-PATIENCE+ and drawing a second late forever, which is
+             ;; exactly the failure the bound exists to make survivable and
+             ;; would otherwise be invisible.
+             (wm (lambda () (notify "integration: ~d" 44)))
+             (check (settle) "a third message settles")
+             (check (poll-until (lambda () (null (r::overlay-frame echo))) 10)
+                    "and river answered the frame callback that went with it ~
+                     -- so drawing is paced by the compositor rather than by ~
+                     whatever asked")
              (check (eq (current-output) (overlay-output echo))
                     "belonging to an output rather than to the program")
              (let ((rect (overlay-rect echo))
@@ -962,6 +1085,29 @@ are what a person means by the arrangement, and both are copy-stable."
                (window (window-named "latticewm-a" 1)))
            (cond
              ((null output) (missing "no output, so no capture count to receive"))
+             ;; A COUNT OF NIL MEANS TWO DIFFERENT THINGS NOW, and only one of
+             ;; them is a bug.  Against a river that speaks version 5 it is the
+             ;; handler that never ran, which is what this section was written
+             ;; to catch.  Against a river offering 4 it is the protocol
+             ;; working: the event does not exist, nobody sent it, and NIL is
+             ;; the honest record of never having been told.  Asserting
+             ;; INTEGERP there is asserting that an older river is a newer one.
+             ((not (river-speaks-capture-sessions-p))
+              (too-old "river speaks v~d and capture_sessions arrived in v~d, ~
+                        so no count was sent for the output or the window.  ~
+                        The model keeps NIL for exactly this: it has not been ~
+                        told, as opposed to having been told zero"
+                       *bound-wm-version* +capture-sessions-since+)
+              ;; What still holds at any version: nothing is recording, so
+              ;; nothing may claim to be.  This is the half of the section that
+              ;; does not depend on the event, and it is worth keeping, because
+              ;; a captured-p that answered T off a NIL count would be a real
+              ;; failure that the skip would otherwise have hidden.
+              (check (not (c:output-captured-p output))
+                     "and nothing is recording this headless screen anyway")
+              (when window
+                (check (not (c:window-captured-p window))
+                       "with nothing recording the window either")))
              (t
               (check (poll-until (lambda ()
                                    (integerp (c:output-capture-sessions output)))
@@ -969,18 +1115,18 @@ are what a person means by the arrangement, and both are copy-stable."
                      "river reported the output's capture sessions: ~a"
                      (c:output-capture-sessions output))
               (check (not (c:output-captured-p output))
-                     "and nothing is recording this headless screen")))
-           (cond
-             ((null window) (missing "no window, so no per-window capture count"))
-             (t
-              (check (poll-until (lambda ()
-                                   (integerp (c:window-capture-sessions window)))
-                                 10)
-                     "and the window's own count, which is the other half of ~
-                      the event: ~a"
-                     (c:window-capture-sessions window))
-              (check (not (c:window-captured-p window))
-                     "with nothing recording it either")))
+                     "and nothing is recording this headless screen")
+              (cond
+                ((null window) (missing "no window, so no per-window capture count"))
+                (t
+                 (check (poll-until (lambda ()
+                                      (integerp (c:window-capture-sessions window)))
+                                    10)
+                        "and the window's own count, which is the other half of ~
+                         the event: ~a"
+                        (c:window-capture-sessions window))
+                 (check (not (c:window-captured-p window))
+                        "with nothing recording it either")))))
            (check (null (c:world-captures *world*))
                   "so the listing is empty and the status line says no REC")))
 
@@ -1845,7 +1991,13 @@ are what a person means by the arrangement, and both are copy-stable."
            ;; a hook nothing in the project has ever executed.
            (dolist (row declared)
              (let ((name (first row)))
-               (unless (or (fired name) (member name +cannot-fire-headless+))
+               (unless (or (fired name)
+                           (member name +cannot-fire-headless+)
+                           ;; Not an excuse this file gets to write down: it is
+                           ;; recomputed from the version we bound at, so it
+                           ;; excuses nothing on a river new enough to have
+                           ;; driven the hook.
+                           (member name (hooks-this-river-cannot-fire)))
                  (check nil "~s never fired, and is not one a headless backend ~
                              is unable to fire.  Drive it, or say here why it ~
                              cannot be driven" name))))
@@ -1920,7 +2072,15 @@ are what a person means by the arrangement, and both are copy-stable."
            (unless (fired name)
              (skip "~s: nothing here can produce it -- no input devices, no ~
                     unpluggable monitor, no physical pointer.  Watched in ~
-                    tools/hardware-check.lisp instead" name)))))
+                    tools/hardware-check.lisp instead" name)))
+         ;; And the ones this river is too old to drive, named the same way and
+         ;; for the same reason -- but reported as a version gap, because that
+         ;; is a thing the reader can act on and `no input devices' is not.
+         (dolist (name (hooks-this-river-cannot-fire))
+           (unless (fired name)
+             (too-old "~s: this river binds at v~d, and what drives that hook ~
+                       arrived in v~d" name *bound-wm-version*
+                      +capture-sessions-since+)))))
 
   ;; --- teardown ---------------------------------------------------------
   (dolist (process *clients*)
@@ -1943,6 +2103,14 @@ are what a person means by the arrangement, and both are copy-stable."
 (when *skipped*
   (format t "~%~d thing~:p a headless backend cannot have:~%" (length *skipped*))
   (format t "~{  skip  ~a~%~}" (reverse *skipped*)))
+
+(when *older-river*
+  (format t "~%~d thing~:p this river is too old to do~@[ (river_window_manager_v1 ~
+             v~d, this build speaks up to v~d)~]:~%"
+          (length *older-river*)
+          *bound-wm-version*
+          (and *bound-wm-version* r::+window-management-version+))
+  (format t "~{  old   ~a~%~}" (reverse *older-river*)))
 
 (when *missing*
   (format t "~%~d dependenc~:@p that should have been installed:~%" (length *missing*))

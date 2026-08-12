@@ -25,7 +25,142 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+### Added
+
+- **Motion crosses the screen boundary.** Walking off the edge of one monitor
+  arrives on the next one, at the place you last stood there. Motion in this
+  program is continuous across every other boundary — out of a split when the
+  direction crosses its axis, into the lattice cell next door through the edge
+  you left by — and the screen was the last one it was not crossing, which made
+  two monitors feel like two window managers. It costs no key, and with one
+  monitor there is nothing in any direction so nothing changes.
+  `*motion-crosses-outputs*` turns it off.
+- **`focus-output` and `send-to-output`.** Eighty commands and not one of them
+  named an output: per-output workspaces have worked for a while — each screen
+  shows its own, they trade rather than collide, the arrangement survives an
+  undock — and the only way to reach the other one was `workspace N`, which
+  puts N on the screen you are already looking at. Both new verbs are
+  compositions rather than algorithms, because the cursor is one place in one
+  model: focusing another screen is a jump into the workspace it displays, and
+  sending is `send-to-workspace` with the number looked up instead of typed.
+  `Ctrl+Shift+Super+`(direction) sends; focusing is deliberately unbound,
+  because the arrow keys already do it.
+- **Per-workspace focus memory** (`*remember-place*`). Switching to a workspace
+  put the cursor at its first leaf, always. On one monitor that is a small
+  annoyance you stop noticing; with two it is what made crossing between
+  screens not worth doing. Recorded on the workspace rather than the output —
+  a workspace moved to the other screen takes its place with it — and a
+  remembered path that no longer leads anywhere goes through `repair-path`
+  like every other stale path here.
+- **Timers** (`add-timer`, `remove-timer`). Nothing in this program happened
+  because time passed: every redraw was caused by a key, a window, a monitor or
+  a client. `wait-for-work` has always taken a timeout and had always been
+  handed the same constant; a timer is that number becoming a question. Timers
+  are registered by name, so loading a configuration file twice leaves one
+  clock rather than two — the mistake `add-hook`'s docstring records this
+  project losing an afternoon to.
+- **`wl_surface.frame`.** There was no frame callback anywhere in `src/`, so
+  drawing was opportunistic: a drawer decided it had something new and
+  committed, whether or not the surface was on a screen anybody could see.
+  `draw-when-ready` paces a drawer to the compositor and keeps only the newest
+  redraw, and the empty-pane outlines — which redraw on every relayout,
+  including the ones a pointer drag produces — now use it. The wait is bounded
+  by `+frame-patience+`, because a surface that is occluded is never told to
+  draw again and a redraw deferred behind that callback would wait forever.
+
+### Changed
+
+- **The river version check is a floor and a ceiling instead of an equality,
+  so a newer river works.** LatticeWM refused to start against any river whose
+  `river_window_manager_v1` was not the exact version its vendored XML
+  declared, in either direction. Since river changes that interface inside a
+  patch release, and since distributions upgrade river without asking, that
+  meant a login screen that refused over a protocol change which was purely
+  additive. It now refuses only *below* its floor — the oldest version carrying
+  every request it sends — and binds at `min(offered, ceiling)` above it.
+  Wayland obliges the compositor to speak the version a client bound, so a
+  river released after this build answers in the dialect this build was
+  compiled for, losing the features added since and nothing else. In practice
+  one build now serves river 0.4.5 through anything newer;
+  `latticewm --version` prints the range.
+
+  The equality was written against a real hazard — a pre-release protocol can
+  change what a request *means* without bumping its number — but it never
+  addressed that hazard, because a river that does so still advertises the same
+  number and still passes an equality. What it caught was the announced, polite
+  case, which is the one Wayland already makes safe, and it caught it by
+  refusing to start.
+
+- **Every protocol global is now bound at a version this build can decode.**
+  `river_layer_shell_v1` and the three input protocols bound at whatever river
+  advertised, which is a client promising to understand events its generated
+  bindings have never seen; the broken promise arrived as `dispatch-one-event`
+  logging "undecodable event ignored" at `:debug`. All six protocols now have a
+  ceiling constant, all six are clamped to it, and gate 5 checks all six
+  against the vendored XML rather than two. The one function that decides any
+  of this is out of `bind-one-global` and under test — it needed a live
+  `wl_registry` to reach, so nothing had ever asked it a question.
+
 ### Fixed
+
+- **The shipped status-line example's clock showed the time of the last layout
+  change.** `clock-segment`'s docstring said the time was "asked fresh every
+  frame", which was true, and there were no frames. Sit still for twenty
+  minutes and it read twenty minutes ago — worse than no clock, because a wrong
+  clock is believed. It ticks now, and turning the segments off takes the
+  wakeup off with them.
+- `with-example` restored methods and option values and not timers, so the
+  clock above would have outlived the test that loaded it and fired on a world
+  that had been thrown away. The list of globals an example can touch is the
+  list of things that macro has to put back, and it is three long now.
+- `output-showing-workspace` was answered in the runtime and motion needed the
+  same question answered in policy, which may not call the runtime. It moved to
+  `p:output-showing` rather than being copied.
+- `CONTRIBUTING.md` still said `examples/` was load-bearing for gate 6. It was,
+  and stopped being when the floors moved to `lattice/` alone.
+- **`make integration` failed against a river inside the range it now
+  supports.** Three checks asserted that river had reported a
+  `capture_sessions` count, which is a `since="5"` event; against river 0.4.5,
+  which offers interface version 4, the suite bound at 4, was correctly never
+  sent the event, and reported the protocol working as three failures. The
+  suite had outlived the equality it was written under — it still assumed the
+  running river's version was the vendored one. Not having been told and having
+  been told zero are different states, the model already keeps them apart, and
+  the harness now reads which one it is: a version gap is reported as its own
+  category, never fatal, naming both numbers, and separately from the things a
+  headless backend cannot have. The half of the section that holds at any
+  version — that nothing claims to be recording — still runs.
+- **`make integration` started Xwayland on every run, having tried not to.** It
+  set `XWAYLAND=0` in river's environment, a variable neither river nor wlroots
+  reads, with a comment explaining that nothing there needs Xwayland. True, and
+  it started anyway, costing the second the comment said it saved. It becomes
+  fatal wherever `/tmp/.X11-unix` is not a real directory — WSL makes it a
+  symlink, and wlroots refuses one — where river exits before creating its
+  Wayland socket and the suite reports that river would not start. river's own
+  `-no-xwayland` flag does what was meant.
+- **One integration check raced the redraw it was checking.** The echo area's
+  double-buffer assertion read the committed canvas the instant a roundtrip
+  returned, which assumes the notification was painted inside it; the redraw
+  can land in the next render sequence. A run that lost the race claimed the
+  echo area had overwritten the buffer river was reading, which is an alarming
+  thing to be told and was not true. It polls now, like the buffer-release
+  check beneath it that was already written that way.
+- **A fresh clone printed a backtrace instead of "run ./bootstrap.sh".**
+  `tools/prelude.lisp` checks the SBCL floor by loading `latticewm.asd` before
+  it checks for missing dependencies, and that file declares
+  `:defsystem-depends-on ("wayflan-client")` — so on any machine without the
+  dependencies, which is every fresh clone and the entire situation
+  `missing-systems` exists for, the load signalled `MISSING-DEPENDENCY` and the
+  useful message forty lines below was unreachable. The comment beside it had
+  reasoned about a *missing* `.asd` and not about a present one that cannot be
+  read. Found by running the build on a second distribution with no Quicklisp
+  in it — the same way the Fedora bootstrap failure was found, and for the same
+  reason: the author's machine has had the dependencies since before that file
+  existed.
+- `tools/integration.lisp` now asks river whether it answers a frame callback,
+  beside the check that it releases a buffer. Both are inbound obligations,
+  both were invisible to gate 8 because it faces outward from our code toward
+  the protocol, and neither is answerable by a suite with no compositor.
 
 - `flake.nix` declared `licenses.bsd3` beside 674 lines of GPLv3. Both `.asd`
   files had already been corrected from `BSD-3-Clause`; the packaging metadata,
@@ -474,6 +609,25 @@ be able to do before anyone else can depend on it.
   and a 0.19 wlroots with "unable to find dynamic system library
   'wlroots-0.20'". Ubuntu 26.04 packages neither version; Fedora 44 packages
   both. Both checks are one line and both are written down now.
+- **`README.org` and `INSTALL.org` both advertised "1600+ checks"** in the first
+  code block a reader meets. True when the suite was 1,904; the collapse of the
+  21 lint tests took it to 1,302 and the two headline numbers were left behind.
+  Both say 1300+ now. The deflation was deliberate and the headline was not
+  updated with it, which is the same shape as every other number this project
+  has had in two places.
+- **`doc/latticewm-config.5` rendered its own thesis statement with literal
+  asterisks** — `*This page is a map, not a reference.*`, org bold syntax in a
+  roff file, where every other emphasis on the page is a `.B` line. Gate 12
+  reads the man pages now, but it reads them for *names*, and org markup that
+  roff prints verbatim is not a name.
+- **The working vocabulary was still in no document.** The six generated
+  surfaces answer "where do I hang a method" exhaustively and cannot answer
+  "what do I write in the body", because the answer is ordinary functions and a
+  document generated from a registry holds what a registry holds. `divide-rect`
+  is exported, is the load-bearing call in both tier-3 examples, and appeared in
+  no file under `doc/`. "The calls, once" in `doc/EXTENDING.org` is the
+  eighteen names — geometry, paths, the world, the pointer, the hooks — with
+  what each is for and which of them must not be reimplemented.
 
 ### Added
 

@@ -46,7 +46,25 @@ either.")
 ;;
 ;; NIL rather than T, so a tree where the .asd is genuinely absent still
 ;; reaches MISSING-SYSTEMS below and says the useful thing.
-(asdf:find-system "latticewm" nil)
+;;
+;; AND IGNORE-ERRORS, BECAUSE THE NIL WAS NOT ENOUGH AND THE CASE IT MISSED IS
+;; THE COMMON ONE.  That argument covers a *missing* .asd.  It does not cover a
+;; present one that cannot be read: latticewm.asd declares
+;; :DEFSYSTEM-DEPENDS-ON ("wayflan-client"), so on a machine where the
+;; dependencies are absent -- which is every fresh clone, and the entire
+;; situation MISSING-SYSTEMS exists for -- this line signalled MISSING-DEPENDENCY
+;; and the message forty lines below, the one that says `run ./bootstrap.sh',
+;; was unreachable.  A first `make' printed a backtrace naming ASDF internals
+;; instead.
+;;
+;; Found by running this on a second distribution with no quicklisp in it, which
+;; is the same way the Fedora bootstrap failure was found: the author's machine
+;; has had the dependencies since before this file existed.
+;;
+;; Nothing is lost by swallowing it.  The floor check's whole job is to arrive
+;; before a wall of compiler output, and on a tree that cannot load its
+;; dependencies there is not going to be any compiler output.
+(ignore-errors (asdf:find-system "latticewm" nil))
 
 (defun quicklisp-setup ()
   "The setup file of a quicklisp under .deps/, if bootstrap.sh made one."

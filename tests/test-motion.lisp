@@ -226,3 +226,121 @@ a bug, and the way to keep it documented is to assert it."
     (is (equal '(1) (c:world-cursor world)))
     (is (null (c:world-focus-window world))
         "and there is simply no window to give Wayland focus to")))
+
+;;; ------------------------------------------- the screens, and your place on them
+;;;
+;;; Per-output workspaces have worked for a while and nothing could reach them:
+;;; eighty commands and not one named an output, so `the other monitor' was
+;;; addressable only by putting a workspace on the screen you were already
+;;; looking at.  Two rulings decide the shape of the fix and neither is
+;;; overturned here -- the cursor stays one place in one model
+;;; (SHOW-WORKSPACE-ON), and which workspace an output displays stays a
+;;; property of the output (OUTPUT-CONTENT).  So crossing is a cursor move
+;;; within one tree, and these say so.
+
+(defun two-screen-world (&key (left-workspace 0) (right-workspace 1))
+  "A world with two workspaces of two panes and a monitor showing each.
+
+Side by side in one logical coordinate space, which is how river describes a
+multi-monitor arrangement and why OUTPUT-IN-DIRECTION is ordinary geometry.
+
+THE RIGHT-HAND WORKSPACE IS SPLIT VERTICALLY, and that is not decoration: it
+makes leaving that screen by walking left possible from *either* of its panes,
+so a test can cross away from the second one without first walking to the
+first one -- which is a move within the screen and would update the very
+memory the test is about.  Getting this wrong is how the first draft of
+YOU-ARRIVE-WHERE-YOU-LEFT-OFF asserted something false and blamed the code."
+  (let* ((root (c:make-stack
+                (list (c:make-split :horizontal
+                                    (list (leaf-with "l0") (leaf-with "l1")))
+                      (c:make-split :vertical
+                                    (list (leaf-with "r0") (leaf-with "r1"))))
+                0))
+         (world (c:make-world :root root))
+         (left (make-instance 'c:output :name "LEFT"))
+         (right (make-instance 'c:output :name "RIGHT")))
+    (setf (c:output-rect left) (c:make-rect 0 0 1920 1080)
+          (c:output-rect right) (c:make-rect 1920 0 1920 1080)
+          (c:prop left :workspace) left-workspace
+          (c:prop right :workspace) right-workspace
+          (c:world-outputs world) (list left right))
+    (values world left right)))
+
+(test which-screen-is-that-way
+  (multiple-value-bind (world left right) (two-screen-world)
+    (is (eq right (p:output-in-direction world left :right)))
+    (is (eq left (p:output-in-direction world right :left)))
+    (is (null (p:output-in-direction world right :right))
+        "there is nothing past the last screen, and that is not an error")
+    (is (null (p:output-in-direction world left :up))
+        "two monitors side by side are not above each other")
+    (is (eq right (p:output-showing world 1))
+        "and the output showing a workspace is found by the one function that
+answers that -- it used to be answered in the runtime as well")))
+
+(test walking-off-the-edge-of-one-screen-arrives-on-the-next
+  "Motion is continuous across every boundary, and the screen was the last one
+it was not crossing.  It costs no key: with one monitor there is nothing in any
+direction and the behaviour is unchanged."
+  (multiple-value-bind (world) (two-screen-world)
+    (setf (c:world-cursor world) '(0 1))     ; right-hand pane of the left screen
+    (let ((landed (p:move-cursor (policy) world :right)))
+      (is (equal '(1 0) landed)
+          "off the right edge of the left screen and onto the right one")
+      (is (equal '(1 0) (c:world-cursor world))))
+    (let ((landed (p:move-cursor (policy) world :down)))
+      (is (equal '(1 1) landed) "and ordinary motion resumes on the new screen"))))
+
+(test crossing-can-be-turned-off-and-then-the-edge-is-the-edge
+  (multiple-value-bind (world) (two-screen-world)
+    (setf (c:world-cursor world) '(0 1))
+    (let ((p:*motion-crosses-outputs* nil))
+      (is (null (p:move-cursor (policy) world :right))
+          "the edge of the workspace is the edge of the world again")
+      (is (equal '(0 1) (c:world-cursor world)) "and nothing moved"))))
+
+(test you-arrive-where-you-left-off
+  "The piece that was genuinely missing.  Without it every crossing costs you
+your place, which is what made the explicit commands not worth pressing."
+  (multiple-value-bind (world) (two-screen-world)
+    (setf (c:world-cursor world) '(0 0))
+    ;; Work on the right-hand screen, ending up in its *lower* pane.
+    (p:move-cursor (policy) world :right)      ; (0 1), the left screen's second
+    (p:move-cursor (policy) world :right)      ; crosses to (1 0)
+    (p:move-cursor (policy) world :down)       ; (1 1)
+    (is (equal '(1 1) (c:world-cursor world)))
+    ;; Leave for the other screen without moving within this one first, which
+    ;; is why that workspace is split the other way.
+    (p:move-cursor (policy) world :left)
+    (is (equal '(0 1) (c:world-cursor world))
+        "and the left screen remembered us too -- (0 1) is where we left it")
+    (p:move-cursor (policy) world :right)
+    (is (equal '(1 1) (c:world-cursor world))
+        "the right-hand screen still has us in its lower pane")))
+
+(test a-remembered-place-that-no-longer-exists-is-repaired-rather-than-checked
+  "A stale path goes through REPAIR-PATH like every other stale path in this
+program, which lands you at the deepest surviving part of where you were.
+
+NOTE-PLACE is internal on purpose and these reach in with a double colon.  The
+memory is recorded on every *announced* cursor arrival, which is what `the
+cursor moved' means here -- and examples/02 shows why that is not the same as
+every SETF of the cursor: it moves the cursor into another workspace to place
+a window and puts it straight back, which nobody sees and which must not
+record anything.  Exporting a call for extensions to make would be a rule the
+shipped examples do not follow, which is the defect gate 11 exists for."
+  (multiple-value-bind (world) (two-screen-world)
+    (setf (c:world-cursor world) '(1 1))
+    (p::note-place world '(1 1))
+    ;; That whole workspace becomes a single pane while we are not looking.
+    (setf (c:child-at (c:world-root world) 1) (leaf-with "survivor"))
+    (is (equal '(1) (p:jump-cursor (policy) world (p:remembered-place world 1)))
+        "the deepest thing that still exists")))
+
+(test remembering-can-be-turned-off
+  (multiple-value-bind (world) (two-screen-world)
+    (let ((p:*remember-place* nil))
+      (setf (c:world-cursor world) '(1 1))
+      (p::note-place world '(1 1))
+      (is (equal '(1) (p:remembered-place world 1))
+          "nothing is recorded and nothing is remembered, so it is the workspace"))))

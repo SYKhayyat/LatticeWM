@@ -316,6 +316,29 @@ is different on every row, which is what makes it a glyph."
 damage of the next frame is measured against.  NIL after a resize or a hide,
 and then the next commit damages everything because there is nothing to
 compare with.")
+   (frame :initform nil :accessor overlay-frame
+          :documentation
+          "The outstanding wl_callback from wl_surface.frame, or NIL.
+
+Non-NIL means the compositor has not yet said it is ready for another frame on
+this surface.  See DRAW-WHEN-READY.")
+   (frame-asked :initform 0 :accessor overlay-frame-asked
+                :documentation
+                "When the outstanding frame callback was requested.
+
+A frame callback is a promise the compositor keeps only while the surface is
+being *displayed*: an occluded surface, or one on a monitor that has gone to
+sleep, is never told to draw again and quite correctly.  That is the whole
+value of the mechanism and it is also the way to strand a redraw forever, so
+the wait has a bound.  See +FRAME-PATIENCE+.")
+   (redraw :initform nil :accessor overlay-redraw
+           :documentation
+           "What to draw when the compositor is ready, or NIL.
+
+At most one, and a later request replaces an earlier one rather than queueing
+behind it: these are redraws of the same surface, so the newest is the only
+one whose result anybody would ever see.  Queueing them would mean drawing
+every intermediate frame of a gesture that has already finished.")
    (rect :initform (c:make-rect 0 0 0 0) :accessor overlay-rect)
    (visible :initform nil :accessor overlay-visible-p)
    (name :initarg :name :initform "overlay" :reader overlay-name)
@@ -435,6 +458,7 @@ Called when a monitor is unplugged.  Not doing this leaked a shell surface, a
 river node, an mmap and a file descriptor per overlay per hotplug — which on a
 laptop that is docked and undocked twice a day is a real leak with a slow fuse."
   (when overlay
+    (forget-frame overlay)
     (release-canvases overlay)
     (let ((node (overlay-node overlay)))
       (when node (ignore-errors (w:node-destroy node))))
@@ -607,6 +631,99 @@ there is more than one."
         (canvas-erase canvas)
         (setf (overlay-canvas overlay) canvas)))))
 
+;;; ------------------------------------------------------------ frame clock
+;;;
+;;; THE COMPOSITOR KNOWS WHEN DRAWING IS WORTH ANYTHING AND WE WERE NOT ASKING.
+;;; Every redraw in this program was opportunistic: a drawer decided it had
+;;; something new and committed, whatever the compositor was doing and whether
+;;; or not the surface was on a screen anybody could see.  That is fine at the
+;;; rate a status line changes and wrong the moment anything is continuous --
+;;; a zoom, a drag, an animation -- because the frames nobody sees cost exactly
+;;; as much to draw as the frames they do.
+;;;
+;;; wl_surface.frame is the compositor answering "tell me when another frame is
+;;; worth drawing".  It fires once per commit, only while the surface is being
+;;; displayed, and never for a surface that is occluded or on a sleeping
+;;; monitor.  That last property is the point and is also the trap, which
+;;; +FRAME-PATIENCE+ is the answer to.
+;;;
+;;; What this is NOT is a timer.  A frame callback only ever arrives in
+;;; response to a commit, so it cannot make a clock tick -- see ADD-TIMER in
+;;; runtime/main.lisp, which is the other half and was the missing one.
+
+(defparameter +frame-patience+ 1
+  "Seconds to wait for a frame callback before drawing anyway.
+
+A surface that is not being displayed never gets one, and a deferred redraw
+behind a callback that will never arrive is a screen that is silently wrong.
+One second is far longer than any real frame -- sixty times longer at 60Hz --
+so nothing that is actually being displayed ever reaches it, and anything that
+is not gets its redraw a beat late instead of never.")
+
+(defun overlay-request-frame (overlay)
+  "Ask the compositor to say when this surface is worth drawing again.
+
+Called from OVERLAY-COMMIT, because a frame callback is only ever a question
+about the commit that carries it: requesting one without committing asks about
+a frame that is not going to happen."
+  (let ((surface (overlay-surface overlay)))
+    (when surface
+      (best-effort "wl_surface.frame"
+        (let ((callback (wl:wl-surface.frame surface)))
+          (setf (overlay-frame overlay) callback
+                (overlay-frame-asked overlay) (get-internal-real-time))
+          (on-events (callback "wl_callback")
+            (:done (frame-arrived overlay))))))))
+
+(defun frame-arrived (overlay)
+  "The compositor is ready for another frame on OVERLAY."
+  (setf (overlay-frame overlay) nil)
+  (let ((thunk (overlay-redraw overlay)))
+    (when thunk
+      (setf (overlay-redraw overlay) nil)
+      (guarded "deferred redraw" (funcall thunk)))))
+
+(defun frame-overdue-p (overlay)
+  "Has the outstanding frame callback been outstanding too long?"
+  (let ((asked (overlay-frame-asked overlay)))
+    (> (- (get-internal-real-time) asked)
+       (* +frame-patience+ internal-time-units-per-second))))
+
+(defun draw-when-ready (overlay function)
+  "Run FUNCTION now, or at the next frame if the compositor is still busy.
+
+For drawers that fire faster than a screen refreshes -- a pointer drag, a
+continuous zoom -- where the intermediate frames are work nobody sees.  A
+drawer that fires when something a person did changed the picture, which is
+most of them, should just draw: this is a throttle rather than a queue and
+holding one redraw back to coalesce with another one that may not come is a
+worse trade than drawing twice.
+
+Returns T when FUNCTION ran and NIL when it was deferred."
+  (cond ((or (null (overlay-frame overlay)) (frame-overdue-p overlay))
+         (setf (overlay-redraw overlay) nil)
+         (funcall function)
+         t)
+        (t (setf (overlay-redraw overlay) function)
+           nil)))
+
+(defun forget-frame (overlay)
+  "Drop any outstanding frame callback and any redraw waiting behind it.
+
+Called when the surface goes away or stops being shown.  The deferred redraw
+goes with it deliberately: it was a redraw of something that is no longer on
+screen, and running it on the way out would be drawing into a buffer nobody is
+going to look at.
+
+THE CALLBACK ITSELF IS DROPPED RATHER THAN DESTROYED, and that is the protocol
+rather than laziness.  wl_callback has no requests at all -- the vendored
+wayland.xml says of it that \"the object returned by this request will be
+destroyed by the compositor after the callback is fired and as such the client
+must not attempt to use it after that point\" -- so there is nothing to send.
+Forgetting our reference is the whole of what a client does here."
+  (setf (overlay-frame overlay) nil
+        (overlay-redraw overlay) nil))
+
 (defun overlay-commit (overlay &key (rect (overlay-rect overlay)))
   "Attach the canvas, damage what changed, commit, and position the surface."
   (let ((surface (overlay-surface overlay))
@@ -642,6 +759,10 @@ there is more than one."
                 (when (and (< x right) (< y bottom))
                   (wl:wl-surface.damage-buffer surface x y
                                                (- right x) (- bottom y)))))))
+      ;; Before the commit, because the callback is a question about *this*
+      ;; frame: wl_surface.frame is a request on the pending surface state and
+      ;; asking after the commit asks about the next one.
+      (overlay-request-frame overlay)
       (wl:wl-surface.commit surface)
       ;; From here until the release event the pixels are the compositor's.
       (setf (canvas-busy canvas) t
@@ -667,6 +788,11 @@ there is more than one."
   ;; no longer references and report only the difference between two frames
   ;; separated by a blank one.
   (setf (overlay-committed overlay) nil)
+  ;; And nothing is going to be told to draw again, because a surface with no
+  ;; buffer attached is not being displayed.  A redraw deferred behind that
+  ;; callback would wait out +FRAME-PATIENCE+ and then draw into a hidden
+  ;; overlay, which is a second of latency to produce nothing.
+  (forget-frame overlay)
   (when (and (overlay-canvases overlay)
              (p:overlay-buffer-idle-p (overlay-kind overlay)))
     (release-canvases overlay))

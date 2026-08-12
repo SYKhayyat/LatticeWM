@@ -112,12 +112,26 @@
             # two numbers and pinning back would have frozen the pair on a
             # release that leaves nixpkgs on a schedule nobody here controls.
             #
-            # What is load-bearing is that this phase is the thing that noticed.
-            # The nixpkgs input is still a channel, so a future `nix flake
-            # update' can still move the compositor under a vendored XML — and
-            # when it does, this phase fails at `nix build' rather than at a
-            # login screen, which is the whole difference and is now tested
-            # rather than asserted.  Re-vendor from the new river, or hold the
+            # AND THE CHECK IT TRIPPED ON HAS SINCE BECOME A FLOOR, which
+            # changes what this phase catches and is worth saying plainly
+            # rather than leaving for somebody to discover.  A `nix flake
+            # update' that moves river *forward* under a vendored XML no longer
+            # fails here, because it is no longer a failure: the program binds
+            # at its own version and river speaks it.  What still fails here is
+            # a river below the floor — one missing a request the program
+            # sends — which is the case that genuinely cannot be degraded
+            # around.  The trade is deliberate.  Early warning on a forward
+            # move was only ever valuable because a forward move was fatal; it
+            # is not fatal now, and buying the warning back would cost every
+            # user whose distribution ships river before we do.
+            #
+            # What is load-bearing is that this phase connects at all.  The
+            # nixpkgs input is still a channel, so a future `nix flake update'
+            # can still move the compositor under a vendored XML — and when it
+            # moves somewhere the program cannot follow, this phase fails at
+            # `nix build' rather than at a login screen, which is the whole
+            # difference and is tested rather than asserted.  Re-vendor from
+            # the new river to pick up its features, or hold the
             # lock; both are deliberate acts and either is fine.
             # THERE IS ONE LIST OF STEPS AND THIS IS NOT IT EITHER.  What stood
             # here was five hand-typed `sbcl --load' lines under a comment

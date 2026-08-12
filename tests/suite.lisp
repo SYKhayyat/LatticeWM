@@ -27,7 +27,7 @@
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
            #:container #:hooks #:minibuffer #:devices #:capture #:boundaries
-           #:pixels))
+           #:pixels #:versions))
 
 (in-package #:latticewm/tests)
 

@@ -250,15 +250,24 @@ particular program."
 ;;;;
 ;;;;   latticewm --eval '(setf *gaps* 12)'   the control socket, on by default
 ;;;;   Super+;                               a minibuffer that reads a form
-;;;;   M-x slime-connect                     a full REPL, if you turn it on:
+;;;;   M-x slime-connect                     a full REPL, one form away:
 ;;;;
-;;;;     (setf *swank-port* 4005)   ; in this file, or --swank-port 4005
+;;;;     Super+;  (start-swank 4005)      then M-x slime-connect to 4005
 ;;;;
-;;;; SWANK is off unless you ask, because it is arbitrary code execution over
-;;;; TCP with no authentication step and this program starts as your session.
-;;;; It binds to loopback (*swank-interface*).  If you write Lisp, turn it on —
-;;;; redefining a method in a running window manager and watching the windows
-;;;; move is the thing this project is for.
+;;;; THAT IS THE WHOLE OF IT AND IT NEEDS NO RESTART.  Type it into the
+;;;; minibuffer when you want a REPL; there is nothing listening until you do.
+;;;; StumpWM's manual asks for two forms and a Quicklisp load to reach the same
+;;;; place, and this is the same idea with the loading already done.
+;;;;
+;;;; Put (setf *swank-port* 4005) in this file if you would rather have it at
+;;;; every startup.  It is off by default because a REPL on a TCP port is
+;;;; arbitrary code execution with no authentication step, in a program that
+;;;; starts as your session — so it should be a thing you asked for rather than
+;;;; a thing you have.  It binds to loopback (*swank-interface*).
+;;;;
+;;;; If you write Lisp, do this on your first day: redefining a method in a
+;;;; running window manager and watching the windows move is what this project
+;;;; is for, and it is the one thing no other Wayland compositor can offer.
 ;;;;
 ;;;; You do not have to start here.  Super+? o reads a setting's documentation
 ;;;; on screen and Super+? s changes it on the spot; this file is for making
@@ -281,6 +290,30 @@ particular program."
 ;; (setf *split-axis* :longer)         ; :longer | :horizontal | :vertical
 ;; (setf *focus-after-close* :stay)    ; :stay | :mru | :next
 ;; (setf *focus-follows-mouse* t)
+
+;;; --------------------------------------------------- when a window opens
+;;; The three settings above decide it in general.  This decides it per
+;;; application, which is what people actually want: a volume mixer should
+;;; float, a browser should always land on the same workspace, and every dialog
+;;; should float without naming them one at a time.
+;;;
+;;; The first rule that matches wins, so put the specific ones first.  Match on
+;;; :APP-ID, :TITLE, either of those as :APP-ID-CONTAINS / :TITLE-CONTAINS, or
+;;; :PARENT for what river reports as a child window.  To find out what to
+;;; write, ask the running program at Super+; —
+;;;
+;;;     (mapcar #'window-app-id (all-windows))
+;;;
+;;; which is the same list a rule is matched against.
+;;;
+;;; examples/02-window-rules.lisp is the worked version, including the tier-1
+;;; method to write when a table is not enough.
+
+;; (setf *window-rules*
+;;       '(((:app-id \"pavucontrol\")        :float t)
+;;         ((:app-id \"firefox\")            :workspace 2)
+;;         ((:title-contains \"Picture-in\") :float t)
+;;         ((:parent t)                     :float t)))
 
 ;;; ------------------------------------------------------- your hardware
 ;;; The keyboard, the mouse and the touchpad.  On river there is nothing else

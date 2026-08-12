@@ -122,3 +122,73 @@ line of text and no route to a debugger."
     (signals error (p:guarded "ctx" (boundary-victim)))
     (signals error (p:best-effort "ctx" (boundary-victim)))
     (signals error (p:with-abandon (boundary-victim)))))
+
+;;; ------------------------------------------------------------------ timers
+;;;
+;;; The same premise one mechanism over: the event loop has always taken a
+;;; timeout and had never been asked for one, so nothing in this program
+;;; happened because time passed.  These check the three properties the loop
+;;; depends on -- that the wait shortens to the nearest deadline, that a
+;;; repeating timer keeps its place while a one-shot takes itself off, and
+;;; that a timer which signals is contained rather than taking the desktop.
+
+(test the-wait-is-the-distance-to-the-nearest-deadline
+  "TIMER-WAIT is what turned the constant into a question.
+
+Bounded above by *POLL-INTERVAL*, so a timer can only ever make the loop wake
+sooner than the backstop; and never zero, because a zero timeout is a spin."
+  (let ((r::*timers* (make-hash-table :test #'equal)))
+    (is (= r:*poll-interval* (r::timer-wait))
+        "with nothing registered the backstop is the whole answer")
+    (r:add-timer :far 600 (lambda () nil))
+    (is (= r:*poll-interval* (r::timer-wait))
+        "and a deadline beyond the backstop does not lengthen the wait")
+    (r:add-timer :near 2 (lambda () nil))
+    (is (<= (r::timer-wait) 2) "the nearest deadline shortens it")
+    (is (plusp (r::timer-wait)) "and never to zero, which would be a spin")))
+
+(test a-repeating-timer-keeps-its-place-and-a-one-shot-takes-itself-off
+  (let ((r::*timers* (make-hash-table :test #'equal))
+        (repeats 0)
+        (onces 0))
+    (r:add-timer :repeating 1 (lambda () (incf repeats)))
+    (r:add-timer :once 1 (lambda () (incf onces)) :repeat nil)
+    ;; Due now rather than in a second: the suite does not have a second.
+    (maphash (lambda (name timer)
+               (declare (ignore name))
+               (setf (r::timer-due timer) 0))
+             r::*timers*)
+    (is (= 2 (r::run-due-timers)) "both were due")
+    (is (= 1 repeats))
+    (is (= 1 onces))
+    (is (member :repeating (loop for k being the hash-keys of r::*timers* collect k))
+        "the repeating one is still registered")
+    (is (not (member :once (loop for k being the hash-keys of r::*timers* collect k)))
+        "and the one-shot took itself off rather than needing to be removed")))
+
+(test re-adding-a-timer-under-one-name-replaces-it
+  "The property that makes loading a configuration file twice safe."
+  (let ((r::*timers* (make-hash-table :test #'equal)))
+    (r:add-timer :clock 30 (lambda () nil))
+    (r:add-timer :clock 30 (lambda () nil))
+    (is (= 1 (hash-table-count r::*timers*))
+        "one name, one timer, however many times it is registered")
+    (r:remove-timer :clock)
+    (is (= 0 (hash-table-count r::*timers*)))))
+
+(test a-timer-that-signals-does-not-take-the-loop-with-it
+  "It runs inside GUARDED, so a broken clock costs a log line and its own tick."
+  (let ((r::*timers* (make-hash-table :test #'equal))
+        (after 0)
+        (p:*log-to-stderr* nil)
+        (p:*log-file* nil))
+    (r:add-timer :broken 1 (lambda () (boundary-victim)))
+    (r:add-timer :fine 1 (lambda () (incf after)))
+    (maphash (lambda (name timer)
+               (declare (ignore name))
+               (setf (r::timer-due timer) 0))
+             r::*timers*)
+    (finishes (r::run-due-timers))
+    (is (= 1 after) "the timer behind the broken one still ran")
+    (is (= 2 (hash-table-count r::*timers*))
+        "and the broken one keeps its place rather than being dropped")))

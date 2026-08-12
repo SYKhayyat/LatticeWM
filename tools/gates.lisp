@@ -396,18 +396,53 @@ buy headroom by saying less.")
   ;; from -- diagnosable only by running it, which is the one thing a gate is
   ;; here to spare you.  It is four steps in INSTALL.org; this is the line
   ;; that stops it being done in three.
+  ;;
+  ;; ALL SIX PROTOCOLS, WHICH USED TO BE TWO.  The other four had no constant
+  ;; to check because they had no constant at all: they bound at whatever
+  ;; version river advertised, so there was nothing for a gate to disagree
+  ;; with.  That is the newer-river half of the same bug this gate was written
+  ;; for -- a build promising to decode events its bindings have never seen --
+  ;; and it is only checkable now that each one has a ceiling to check against.
   (dolist (row '(("river-window-management-v1" "river_window_manager_v1"
                   "latticewm/runtime::+window-management-version+")
                  ("river-xkb-bindings-v1" "river_xkb_bindings_v1"
-                  "latticewm/runtime::+xkb-bindings-version+")))
+                  "latticewm/runtime::+xkb-bindings-version+")
+                 ("river-layer-shell-v1" "river_layer_shell_v1"
+                  "latticewm/runtime::+layer-shell-version+")
+                 ("river-input-management-v1" "river_input_manager_v1"
+                  "latticewm/runtime::+input-manager-version+")
+                 ("river-libinput-config-v1" "river_libinput_config_v1"
+                  "latticewm/runtime::+libinput-config-version+")
+                 ("river-xkb-config-v1" "river_xkb_config_v1"
+                  "latticewm/runtime::+xkb-config-version+")))
     (destructuring-bind (file interface variable) row
       (let ((declared (declared-interface-version
                        (format nil "src/protocol/~a.xml" file) interface))
             (bound (symbol-value (sym variable))))
         (if (eql declared bound)
-            (format t "  ~a~40tbinds v~d~%" interface bound)
+            (format t "  ~a~40tceiling v~d~%" interface bound)
             (fail 5 "~a declares version ~a in the vendored XML, but ~a is ~a"
-                  interface declared variable bound))))))
+                  interface declared variable bound)))))
+  ;; AND EVERY FLOOR IS UNDER ITS OWN CEILING.  A floor above the ceiling is a
+  ;; program that refuses every river in existence, including the one it was
+  ;; vendored from, and it is a one-character typo away at all times: the two
+  ;; constants sit next to each other and rise on different occasions -- the
+  ;; ceiling whenever we re-vendor, the floor only when we start sending a
+  ;; request that is newer than the old one.  Nothing else notices, because
+  ;; the failure needs a running compositor to show itself.
+  (dolist (row '(("river_window_manager_v1"
+                  "latticewm/runtime::+window-management-floor+"
+                  "latticewm/runtime::+window-management-version+")
+                 ("river_xkb_bindings_v1"
+                  "latticewm/runtime::+xkb-bindings-floor+"
+                  "latticewm/runtime::+xkb-bindings-version+")))
+    (destructuring-bind (interface floor-var ceiling-var) row
+      (let ((floor (symbol-value (sym floor-var)))
+            (ceiling (symbol-value (sym ceiling-var))))
+        (if (<= floor ceiling)
+            (format t "  ~a~40taccepts v~d-v~d~%" interface floor ceiling)
+            (fail 5 "~a floor is ~d but its ceiling is ~d, so no river can ~
+                     ever satisfy it" interface floor ceiling))))))
 
 ;;; ---------------------------------------------------------------- gate 6
 

@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, twenty-two gates, 1600+ checks
+make                  # build, twenty-two gates, 1300+ checks
 make image            # dump ./latticewm, one executable, 13 MB
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
@@ -28,12 +28,13 @@ river -c latticewm    # nested, in a window, inside the session you have
 |                | is dumped at zstd level 22 and SBCL used zlib, maximum 9,  |
 |                | before 2.2.6.  =bootstrap.sh= checks it and reads the      |
 |                | number out of =latticewm.asd=, which checks it again.      |
-| =river= 0.4.6  | The compositor.  LatticeWM is its window manager, not a    |
-|                | replacement for it.  *Exactly* 0.4.6, not "0.4 or newer":  |
-|                | river changes =river-window-management-v1= within a patch  |
-|                | release, LatticeWM checks the interface version at startup |
-|                | and refuses rather than misbehave, and §"Moving to a newer |
-|                | river" below is four steps and needs nobody.               |
+| =river= 0.4.5+ | The compositor.  LatticeWM is its window manager, not a    |
+|                | replacement for it.  *0.4.5 or newer, including newer than |
+|                | this build knows about* — LatticeWM binds the protocol at  |
+|                | its own version, so a river that has moved ahead speaks    |
+|                | the older dialect back and everything works minus the      |
+|                | features nobody has vendored yet.  §"river, and the        |
+|                | version that matters" says where the floor comes from.     |
 | =git=, =curl=  | Once, to fetch the rest.                                   |
 |----------------+------------------------------------------------------------|
 
@@ -81,19 +82,50 @@ distro if SBCL is missing.
 
 ** river, and the version that matters
 
-*LatticeWM needs river 0.4.6.*  Not 0.4 or newer — that particular release,
-until this program is re-vendored against a later one.  This is not a
-preference and it is stricter than it looks, so it is worth the paragraph.
+*LatticeWM needs river 0.4.5 or newer, and "or newer" has no upper end.*
 
 It talks =river-window-management-v1=, the protocol through which river hands
 window management to an outside program.  That protocol does not exist before
 0.4 at all, and it is young enough that river still changes it *within* a
-version number: 0.4.6 raised it from 4 to 5 in what was otherwise a patch
-release.  LatticeWM checks the version at startup and refuses to run on a
-mismatch in *either* direction, naming both numbers, rather than starting and
-misbehaving in ways nobody could diagnose.  If you see that refusal, it is
-doing its job; =src/protocol/PINNED= says which river this build was vendored
-from and the refusal itself says how to re-vendor.
+version number: 0.4.6 raised the interface from 4 to 5 in what was otherwise a
+patch release.  So the version is checked at startup — but as a *floor*, not
+as an equality, and the difference is the whole of this section.
+
+Wayland versions every interface, and a client says which version it wants
+when it binds.  The compositor is then obliged to speak that version, not the
+newest one it knows.  LatticeWM binds at the version its vendored XML declares,
+so a river three releases ahead answers in the dialect this build was compiled
+for.  You lose the features added after your build, and nothing else.  That
+means *your distribution can move river without asking you*, which is what
+distributions do, and which used to mean a login screen that refused.
+
+Downward there is no such trick, and that is where the floor is.  Of the
+requests LatticeWM sends, the newest arrived in interface version 4
+(=exit_session=, =set_dimension_bounds=, =set_presentation_mode=), so 4 is the
+floor.  Below it LatticeWM would be sending requests the compositor has never
+heard of, and there is no degrading around that — so it refuses, names both
+numbers, and tells you to upgrade.  The floor moves only when LatticeWM starts
+sending something newer; re-vendoring alone does not move it.
+
+In river releases that is *0.4.5 or newer*, which is the number quoted above.
+river 0.4.5 carries interface version 4 and 0.4.6 carries 5.  Whether some
+earlier 0.4.x also carried 4 is not recorded here, so an older river may work
+and is untested.  The check is on the interface version, not on the release
+string, so if it starts it is because the protocol agreed.
+
+*The bottom of that range is exercised rather than assumed.*  =make
+integration= — the suite that drives a real headless river as a client — runs
+green against river 0.4.5 on Fedora 44, which is a build vendored at interface
+version 5 talking to a compositor offering 4.  It binds at 4, receives no
+=capture_sessions= because that event arrived in 5, reports that as a version
+gap rather than a failure, and passes everything else.  That is the exact
+configuration the old equality check refused to start in.
+
+If you want to know what a given build accepts, ask it:
+
+#+begin_src sh
+latticewm --version    # LatticeWM 0.1.0 (river_window_manager_v1 v4-v5, ...)
+#+end_src
 
 Check what you have:
 
@@ -138,6 +170,12 @@ Fedora 44 packages Zig 0.16 and wlroots 0.20.2, and river builds out of the box
 on it.  That is not a recommendation of one distribution over another; it is
 the reason this section exists, and the reason the two-line check above is
 worth running before the clone rather than after the failure.
+
+*Check your package manager before any of this.*  Fedora 44 packages river
+itself — =sudo dnf install river= gives 0.4.5, which is inside the supported
+range, so none of the Zig and wlroots archaeology above applies there.  That is
+the ordinary case and it is worth trying first; the build instructions are for
+when your distribution has nothing, or has something below the floor.
 
 =bootstrap.sh= warns if it finds a river that is not the vendored release —
 reading the release out of =src/protocol/PINNED=, so the warning cannot drift

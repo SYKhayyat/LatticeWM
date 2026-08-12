@@ -216,3 +216,69 @@ means mkstemp, ftruncate, mmap and create_pool per wobble")
         "including an extension's own"))
   (let ((p:*overlay-buffer-idle* nil))
     (is (not (p:overlay-buffer-idle-p :help)) "and NIL is still none of them")))
+
+;;; --------------------------------------------------------- the frame clock
+;;;
+;;; Same shape as the rest of this file: the callback itself needs a
+;;; compositor, and the decision it drives does not.  DRAW-WHEN-READY is a
+;;; three-way choice -- draw now, defer, or give up waiting -- and all three
+;;; are constructible by setting the overlay's frame slot by hand.
+
+(test drawing-is-paced-by-the-frame-callback
+  "Draw now when nothing is outstanding, defer when something is."
+  (let ((overlay (make-instance 'r::overlay :name "test" :kind :cursor))
+        (drawn 0))
+    (is-true (r:draw-when-ready overlay (lambda () (incf drawn)))
+             "with no frame outstanding the drawer runs immediately")
+    (is (= 1 drawn))
+    ;; A frame is outstanding: the compositor has been asked and has not
+    ;; answered.  Any proxy object will do -- nothing reads it but us.
+    (setf (r:overlay-frame overlay) :a-callback
+          (r::overlay-frame-asked overlay) (get-internal-real-time))
+    (is-false (r:draw-when-ready overlay (lambda () (incf drawn)))
+              "and while it is outstanding the drawer is held")
+    (is (= 1 drawn) "held, not run")
+    (r::frame-arrived overlay)
+    (is (= 2 drawn) "and it runs when the compositor says it is ready")
+    (is-false (r:overlay-frame overlay) "the callback is spent")))
+
+(test only-the-newest-deferred-redraw-survives
+  "They are redraws of one surface, so the newest is the only one anybody
+would see.  Queueing them would draw every intermediate frame of a gesture
+that has already finished."
+  (let ((overlay (make-instance 'r::overlay :name "test" :kind :cursor))
+        (ran '()))
+    (setf (r:overlay-frame overlay) :a-callback
+          (r::overlay-frame-asked overlay) (get-internal-real-time))
+    (r:draw-when-ready overlay (lambda () (push :first ran)))
+    (r:draw-when-ready overlay (lambda () (push :second ran)))
+    (r:draw-when-ready overlay (lambda () (push :third ran)))
+    (r::frame-arrived overlay)
+    (is (equal '(:third) ran) "three requests, one frame, the last picture")))
+
+(test a-frame-callback-that-never-comes-does-not-strand-the-screen
+  "The property that makes the mechanism safe.  A surface that is occluded or
+on a sleeping monitor is never told to draw again — quite correctly, and it is
+also how a deferred redraw waits forever.  Past +FRAME-PATIENCE+ the drawer
+stops waiting."
+  (let ((overlay (make-instance 'r::overlay :name "test" :kind :cursor))
+        (drawn 0))
+    (setf (r:overlay-frame overlay) :a-callback
+          ;; Asked for longer ago than anybody is prepared to wait.
+          (r::overlay-frame-asked overlay)
+          (- (get-internal-real-time)
+             (* 2 r::+frame-patience+ internal-time-units-per-second)))
+    (is-true (r:draw-when-ready overlay (lambda () (incf drawn)))
+             "the wait is bounded, so the drawer runs anyway")
+    (is (= 1 drawn))))
+
+(test hiding-an-overlay-drops-the-redraw-waiting-behind-it
+  (let ((overlay (make-instance 'r::overlay :name "test" :kind :cursor))
+        (drawn 0))
+    (setf (r:overlay-frame overlay) :a-callback
+          (r::overlay-frame-asked overlay) (get-internal-real-time))
+    (r:draw-when-ready overlay (lambda () (incf drawn)))
+    (r:forget-frame overlay)
+    (r::frame-arrived overlay)
+    (is (= 0 drawn)
+        "a redraw of something no longer on screen is not worth running late")))

@@ -18,6 +18,12 @@
 ;;;; this layout model can tell you and a general-purpose bar cannot, because a
 ;;;; bar has no idea what a workspace of yours contains.  That asymmetry is the
 ;;;; argument for the whole approach.
+;;;;
+;;;; It also shows the other half of a status line, which is that something has
+;;;; to make it tick.  A segment that reads a clock is only as fresh as the
+;;;; last redraw, and until ADD-TIMER existed there was nothing in this program
+;;;; that happened because time passed — so the clock here was, for four days,
+;;;; a display of when you last moved a window.
 
 (in-package #:latticewm/user)
 
@@ -31,6 +37,33 @@
   (multiple-value-bind (second minute hour) (decode-universal-time (get-universal-time))
     (declare (ignore second))
     (format nil "~2,'0d:~2,'0d" hour minute)))
+
+;;; ----------------------------------------------------------- and the tick
+;;;
+;;; A CLOCK NEEDS SOMETHING TO MAKE IT TICK, AND SAYING "EVERY FRAME" IS NOT
+;;; IT.  The sentence above is true and was not enough: every redraw in this
+;;; program is caused by something -- a key, a window, a monitor -- and nothing
+;;; was caused by time passing.  So this clock showed the time of the last
+;;; layout change.  Sit still for twenty minutes and it read twenty minutes
+;;; ago, which is worse than no clock, because a wrong clock is believed.
+;;;
+;;; ADD-TIMER is the answer and this is the whole of it.  Fifteen seconds
+;;; rather than sixty: the minute the clock displays does not turn over on the
+;;; minute *we* started counting, so a sixty-second tick is on average thirty
+;;; seconds late.  Four ticks a minute costs nothing, and three of them draw
+;;; nothing at all -- MARK-DIRTY asks for a layout, the emit diff notices that
+;;; every window is already where it should be, and no request goes to river.
+;;; The redraw that is skipped is skipped by machinery that was already there.
+;;;
+;;; The timer is named, so loading this file twice leaves one clock.
+
+(defun start-clock (&optional (seconds 15))
+  "Make the clock segment keep up with the clock."
+  (add-timer :status-line-clock seconds #'mark-dirty))
+
+(defun stop-clock ()
+  "Stop asking.  The segment still updates whenever anything else redraws."
+  (remove-timer :status-line-clock))
 
 (defun load-segment ()
   "The one-minute load average, or \"\" where there is no /proc/loadavg.
@@ -96,7 +129,17 @@ things that are true all the time."
 ;;; ------------------------------------------------------------ the switch
 
 (defun status-line-extras (&optional (on t))
-  "Turn the extra segments on or off.  Takes effect on the next frame."
+  "Turn the extra segments on or off.  Takes effect on the next frame.
+
+TURNING IT OFF TAKES THE TIMER OFF TOO, which is the half an example is for.
+A timer nobody can see the effect of is still a wakeup four times a minute
+forever, and the person who turned this off has no way to know it is there.
+An extension that can be disabled has to undo everything it did, and this is
+the same lesson REMOVE-HOOK teaches one mechanism over."
   (setf *status-line-extras* on)
+  (if on (start-clock) (stop-clock))
   (relayout)
   on)
+
+;;; On by default, because the file is meant to be loaded and then looked at.
+(start-clock)

@@ -46,6 +46,53 @@ Two more that are easy to confuse:
   returns. Where the two share a name — ~gaps~ and ~*gaps*~ — the relationship
   is always that one. Overriding the generic stops the option being read.
 
+* The calls, once
+
+The generated surfaces answer /where do I hang a method/ exhaustively — every
+generic, its docstring, its methods, and the option each shipped answer reads.
+None of them answers /what do I write in the body/, and they cannot: the things
+you write in a body are ordinary functions, and a document generated from a
+registry can only contain what a registry holds. So this vocabulary lived in
+~examples/~ and nowhere else, and a reader who wanted a layout model of their
+own had to reverse-engineer it from a worked one.
+
+Here it is. Every name below is exported, and every one is available with no
+prefix in ~latticewm/user~ — the package your configuration file and your
+extension are both read in. The running program will always know better:
+~(apropos "rect" :latticewm/core)~ at a REPL is the complete answer, and this
+is the part of it you actually reach for.
+
+** Geometry — this is what a layout method is made of
+
+| ~(make-rect x y w h)~ | A rectangle. Compositor-logical pixels, origin top-left, +Y pointing /down/. Lattice coordinates point +Y up and are inverted once, at the emitter; not here. |
+| ~(divide-rect r axis weights :gap n)~ | Cut ~r~ into ~(length weights)~ pieces along ~:horizontal~ or ~:vertical~, in proportion to ~weights~, leaving ~n~ pixels between neighbours. *The call tier 3 is built out of.* Its rounding is accumulated rather than per-child, so the pieces tile ~r~ exactly — write your own and your panes fray by a pixel per split. |
+| ~(rect-right r)~, ~(rect-bottom r)~ | One pixel past that edge. |
+| ~(rect-center r)~ | Two values: the centre's X and Y. |
+| ~(rect-contains-p r x y)~ | Is that point inside. |
+| ~(direction-horizontal-p d)~ | True for ~:left~ and ~:right~. The four directions are the whole motion vocabulary. |
+| ~(direction-sign d)~ | ~-1~ for ~:left~ and ~:up~, ~+1~ for ~:right~ and ~:down~. |
+
+** Paths — how you name a place, and how you survive the tree moving
+
+A path is a list of addresses from the root, one per container on the way down.
+It is not a pointer: the tree is rebuilt constantly and a path survives that,
+which is the entire reason the model has no parent pointers.
+
+| ~(resolve-path root path)~ | The node there, or ~NIL~. A stale path is an ordinary event, so this returns ~NIL~ rather than signalling. |
+| ~(resolve-chain root path)~ | Every node from ~root~ to that one, inclusive. What you use to walk back /up/, since nodes do not know their parents. |
+| ~(repair-path root path)~ | The nearest place that still exists — walk as far as the path leads, then down to the first leaf. Always a valid leaf path. *Every verb calls this after surgery; do not write a second one.* Fifteen improvised repairs make fifteen subtly different "where did my focus go" bugs. |
+| ~(leaf-paths root)~ | Every leaf path at or under ~root~, in layout order. Enumerating /places/ rather than windows. |
+| ~(workspace-path world)~ | The current workspace as a one-element path, or the empty path when the root is not a workspace stack. |
+| ~(tree-replace-at root path node)~ | Put ~node~ there. Returns two values, the new root and a repaired focus path. Replacing the root — an empty ~path~ — is legal. |
+
+** The world, the window, the pointer
+
+| ~(world-cursor world)~ | The path the keyboard is at. ~setf~-able, and moving it alone costs nothing: undo compares the *tree*, so twenty focus changes in a row record no step. Change the tree and call ~note-layout-settled~. |
+| ~(prop node key)~ | Extension storage on a node, and the sanctioned place for it: ~(setf (prop node :my-extension/pinned) t)~. Namespace your keys — gate 13 reads them, and a key read but never written fails the build as provably dead. |
+| ~(window-preferred-size window)~ | Two values, both ~NIL~ when the client said nothing. Only ever a number when the client pinned its minimum and maximum equal, which is how a fixed-size dialog announces itself — exactly the case where honouring it matters. |
+| ~(warp-pointer x y)~ | Move the pointer, in output-layout coordinates. It exists so that an extension never has to reach into the wire package; the first worked example that crossed that seam did so because this function was missing. |
+| ~(remove-hook name function)~ | The other half of ~add-hook~, and the one an extension that can be disabled needs. Pass the same symbol you added. |
+
 * Ask the running window manager
 
 Before reading anything, ask it. It knows more about itself than this file
@@ -134,6 +181,32 @@ these are not preferences somebody guessed at, they are the places the design
 declined to decide for you.
 
 ~latticewm --list-options~ lists all of them with their reasoning.
+
+** The one table that is not a value
+
+~*window-rules*~ is tier 0 and does not look like the rest of it, because the
+question it answers is per-application rather than global: what happens when
+*this* window opens.
+
+#+begin_src lisp
+(setf *window-rules*
+      '(((:app-id "pavucontrol")        :float t)
+        ((:app-id "firefox")            :workspace 2)
+        ((:title-contains "Picture-in") :float t :border-color (1 0.4 0 1))
+        ((:parent t)                    :float t)))
+#+end_src
+
+Each rule is ~(MATCH . OVERRIDES)~ and the first match wins, so specific rules
+go first. Match on ~:app-id~, ~:title~, ~:app-id-contains~, ~:title-contains~,
+or ~:parent~ for what river reports as a child window. Override ~:float~,
+~:workspace~, ~:path~, ~:focus~, ~:fullscreen~, ~:minimize~, ~:border-color~,
+~:border-width~, ~:decoration~, ~:capabilities~, ~:tags~ and ~:label~.
+
+The table is deliberately not the whole answer. It covers what a declarative
+list can express, and ~window-rule-for~ is the generic underneath it — so a
+rule that needs to *look* at something, rather than match a string, is a tier-1
+method rather than a bigger table. ~examples/02-window-rules.lisp~ shows both
+halves and is the first place to read.
 
 ** Which wins, the option or the generic
 

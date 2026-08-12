@@ -94,12 +94,19 @@ adding a container kind the core has never heard of, in a separate ASDF system
 that edits nothing under `src/`. Gates 3 and 4 hold it to that.
 
 **Where a second extension goes.** Right now: nowhere, and that is the
-project's biggest gap rather than a policy. `examples/` is a fixture — its
-contents are load-bearing for gate 6 — and not a commons. A separate
-`latticewm-contrib` repository, with a low bar and no gates, is the intended
-answer, in StumpWM's model. Until it exists, open an issue and say what you
-built; the shape of the second extension is information this project does not
-have.
+project's biggest gap rather than a policy. A separate `latticewm-contrib`
+repository, with a low bar and no gates, is the intended answer, in StumpWM's
+model — where the core is not feature-rich and `stumpwm-contrib` is. Until it
+exists, open an issue and say what you built; the shape of the second
+extension is information this project does not have.
+
+`examples/` is *not* that place and is not a substitute for it. It used to be
+worse than that: gate 6's floors were set at the exact number of generics the
+whole tree answered, `examples/` included, so the build did not survive
+deleting any of them — an example you cannot delete is load-bearing
+infrastructure with a docstring. The floors come from `lattice/` alone now and
+the teaching material is free again, which removes the obstacle to a commons
+without supplying one.
 
 ## Commit and PR shape
 

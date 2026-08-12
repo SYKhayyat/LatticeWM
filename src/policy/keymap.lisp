@@ -44,8 +44,22 @@ wins."
   (let ((mod (modifier-string))
         (shift (modifier-string :shift))
         (ctrl (modifier-string :ctrl))
-        (alt (modifier-string :alt)))
-    ;; --- the verb x direction grid.  Four lines, sixteen bindings. ---------
+        (alt (modifier-string :alt))
+        (screen (modifier-string :ctrl :shift)))
+    ;; --- the verb x direction grid.  Five lines, twenty bindings. ----------
+    ;;
+    ;; FOCUS-OUTPUT IS DELIBERATELY NOT HERE, and the omission is the point.
+    ;; Motion crosses the screen boundary on its own now, so `Super+Right' at
+    ;; the right-hand edge of the left monitor already puts you on the right
+    ;; one -- see *MOTION-CROSSES-OUTPUTS*.  A chord for what a key you are
+    ;; already pressing does would be a second way to say one thing, and this
+    ;; file's own argument about the help submap is that a chord has to be
+    ;; earned.  FOCUS-OUTPUT is still a command, reachable by name, for the
+    ;; case where you are in the middle of a screen and do not want to walk.
+    ;;
+    ;; SEND-TO-OUTPUT has no such free version -- `move' in a direction moves
+    ;; within the tree, and there is no edge for it to fall off -- so it takes
+    ;; the one modifier pair the grid had left.
     (loop for (direction . keys) in +direction-keys+
           do (dolist (key keys)
                (define-key keymap (format nil "~a~a" mod key)
@@ -55,7 +69,9 @@ wins."
                (define-key keymap (format nil "~a~a" ctrl key)
                  (list "resize" direction))
                (define-key keymap (format nil "~a~a" alt key)
-                 (list "swap" direction))))
+                 (list "swap" direction))
+               (define-key keymap (format nil "~a~a" screen key)
+                 (list "send-to-output" direction))))
     ;; --- panes ------------------------------------------------------------
     (define-key keymap (format nil "~areturn" mod) '("terminal"))
     (define-key keymap (format nil "~ad" mod) '("split" :horizontal))

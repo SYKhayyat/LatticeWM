@@ -39,16 +39,19 @@ look surprising until you have read it. It is worth the thirty seconds.
 
 * Install
 
-You need *river 0.4.6* and *SBCL*. That river release specifically: the window
-management protocol changes within a version number, so LatticeWM checks and
-refuses rather than misbehaves — [[file:INSTALL.org][INSTALL.org]] explains it and says how to move to
-a later river. Any Linux — nix is one supported route, not a requirement.
-Per-distribution package names are in [[file:INSTALL.org][INSTALL.org]].
+You need *river 0.4.5 or newer* and *SBCL*. Newer is genuinely fine, including
+rivers released after this build: LatticeWM binds the window management
+protocol at its own version, so a river that has moved ahead speaks the older
+dialect back and you lose only the features nobody has vendored yet. Below the
+floor it refuses and names both numbers, because it would be sending requests
+that river does not have — [[file:INSTALL.org][INSTALL.org]] has the reasoning. Any Linux; nix is one
+supported route, not a requirement. Per-distribution package names are in
+[[file:INSTALL.org][INSTALL.org]].
 
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, twenty-two gates, 1600+ checks
+make               # build, twenty-two gates, 1300+ checks
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -175,6 +178,55 @@ plain left-click cannot be used with any application.
 #+CLAIM:          ("Super+Next" "next-workspace")))
 
 Workspaces are one-based, so the key and the number on it agree.
+
+** More than one monitor
+
+Each screen shows its own workspace and keeps it across an undock. Two things
+are worth knowing and neither needs configuring.
+
+*Motion crosses the screen boundary.* Walk off the right-hand edge of the left
+monitor with =Super+Right= and you are on the right-hand one — no chord, no
+mode, and you arrive where you last were on that screen rather than at its
+first pane. Motion in this window manager is continuous across every boundary
+and the screen is simply the last of them. With one monitor there is nothing
+in any direction and nothing changes.
+
+| =Ctrl+Shift+Super+h j k l= / arrows | send this window to the next screen |
+
+#+CLAIM: (every (lambda (row) (equal (rest row) (lookup-key *keymap* (kbd (first row)))))
+#+CLAIM:        '(("Super+Ctrl+Shift+h" "send-to-output" :left)
+#+CLAIM:          ("Super+Ctrl+Shift+l" "send-to-output" :right)
+#+CLAIM:          ("Super+Ctrl+Shift+Left" "send-to-output" :left)))
+
+=M-x focus-output= moves the cursor to another screen without walking there,
+for when you are in the middle of one. It has no binding on purpose: the arrow
+keys already do it.
+
+** When a window opens
+
+By default it *splits the focused pane*, along whichever side is longer so
+panes tend towards square. Three settings and one table cover almost everything
+people want to change:
+
+#+begin_src lisp
+(setf *spawn-mode* :fill-first)   ; :split (default), :fill-first, :stack
+(setf *split-axis* :horizontal)   ; :longer (default), :horizontal, :vertical
+
+(setf *window-rules*
+      '(((:app-id "pavucontrol")        :float t)
+        ((:app-id "firefox")            :workspace 2)
+        ((:title-contains "Picture-in") :float t)
+        ((:parent t)                    :float t)))   ; dialogs
+#+end_src
+
+Match on =:app-id=, =:title=, either of those as a substring, or =:parent= for
+what river reports as a child window; the first rule that matches wins. To find
+out what to write, ask the running program — =(mapcar #'window-app-id
+(all-windows))= at =Super+;= is the same list a rule is matched against.
+
+=examples/02-window-rules.lisp= is the worked version, including the method to
+write when a table is not enough, and =latticewm --list-options= prints every
+override key with what it does.
 
 *There is no limit and there is no configured count.* The workspace list is a
 stack at the root of the layout tree, and a stack grows: asking for one that is
@@ -432,12 +484,31 @@ Forms run in the window manager's own thread, so they may touch the compositor.
 The protocol is *write a form, read a line*, so anything that can open a socket
 can drive it.
 
-A SWANK server is available too and is *off by default*: it offers arbitrary
-code execution over TCP with no authentication step, which is right for a
-development tool and wrong for something that starts before you have done
-anything. Turn it on with =--swank-port 4005=, and it binds to loopback. It is
-for an editor — SLIME, a live REPL, a debugger on a running desktop. Anything
-that only wants to *send a form* wants the socket above, which needs no flag.
+** A REPL inside your window manager, one form away
+
+This is the thing no other Wayland compositor can offer, so it is worth being
+exact about how little it costs. Press =Super+;= and type:
+
+#+begin_src lisp
+(start-swank 4005)
+#+end_src
+
+Then =M-x slime-connect= to =localhost 4005=, and you are at a REPL *inside*
+the running window manager: =C-c C-c= on a =defmethod= and the windows move.
+No restart, no configuration file, and nothing listening until you ask.
+
+StumpWM — the program this one is most like — asks for two forms and a
+Quicklisp load at its own eval prompt to reach the same place, and does not
+mention SWANK in its manual at all. This is the same idea with the loading
+already done.
+
+It is *off by default*, and it stays that way: a REPL on a TCP port is
+arbitrary code execution with no authentication step, in a program that starts
+as your session before you have done anything. Put =(setf *swank-port* 4005)=
+in your =init.lisp=, or pass =--swank-port 4005=, if you would rather have it
+at every startup; it binds to loopback either way. Anything that only wants to
+*send a form* wants the control socket above, which needs no flag and is
+already on.
 
 There used to be a =tools/wmeval= here that spoke SWANK's wire protocol, and it
 was the one shipped thing that needed the port open. It is gone: it was

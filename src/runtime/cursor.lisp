@@ -57,7 +57,21 @@ this whole file exists to prevent."
     (guarded "empty panes" (draw-empty-panes-on output))))
 
 (defun draw-empty-panes-on (output)
-  "Outline the empty panes lying on OUTPUT."
+  "Outline the empty panes lying on OUTPUT.
+
+PACED TO THE COMPOSITOR RATHER THAN TO THE EVENT THAT ASKED.  This runs from
+:DRAW-OVERLAYS, which fires on every relayout — including the ones a pointer
+drag produces, which arrive as fast as the mouse can generate motion and far
+faster than any screen refreshes.  DRAW-WHEN-READY holds the redraw until the
+compositor says it wants another frame and keeps only the newest one, so a
+gesture costs the frames that are displayed rather than the frames that are
+requested.  Nothing is lost when a redraw is dropped, because the one that
+replaced it draws the same picture from the same model, only later and
+correct."
+  (draw-when-ready (overlay-for :cursor output)
+                   (lambda () (%draw-empty-panes-on output))))
+
+(defun %draw-empty-panes-on (output)
   (let* ((overlay (overlay-for :cursor output))
          (panes (empty-pane-placements output)))
     (cond

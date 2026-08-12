@@ -124,10 +124,121 @@ falls back to sleeping, which is correct and merely less responsive."
 (defvar *poll-interval* 30
   "Seconds to wait before waking up with nothing to do.
 
-Should never actually elapse: the loop wakes on compositor input and on the
-wakeup interrupt below.  It exists only so that a bug in either cannot wedge
-the window manager permanently, and 30 seconds is long enough that the cost of
-it existing is nil — two wakeups a minute.")
+Should never actually elapse: the loop wakes on compositor input, on the
+wakeup interrupt below, and on the nearest timer.  It exists only so that a bug
+in any of them cannot wedge the window manager permanently, and 30 seconds is
+long enough that the cost of it existing is nil — two wakeups a minute.")
+
+;;; ------------------------------------------------------------------ timers
+;;;
+;;; THERE WAS NO PERIODIC ANYTHING, AND THE MECHANISM WAS ALREADY BUILT.  Every
+;;; redraw in this program is caused by something: a key, a window, a monitor,
+;;; a request from a client.  Nothing was caused by time passing.  So the clock
+;;; in the shipped status-line example — whose own docstring says the time is
+;;; "asked fresh every frame", which is true — showed the time of the last
+;;; layout change, because there are no frames.  Sit still for twenty minutes
+;;; and it read twenty minutes ago.
+;;;
+;;; WAIT-FOR-WORK has always taken a timeout and has always been handed the
+;;; same constant.  A timer is that number becoming a question: how long until
+;;; the next thing that wants to happen?  The loop was already correct; it was
+;;; only ever asked one thing.
+;;;
+;;; THEY ARE NAMED, AND THAT IS THE HALF THAT IS NOT OBVIOUS.  Registering by
+;;; name makes re-registering idempotent, so a configuration file that is
+;;; loaded twice — which is what SHIFT+SUPER+C does, and what anybody editing
+;;; their init file at a REPL does all evening — ends up with one clock rather
+;;; than two.  ADD-HOOK's docstring records this project losing an afternoon to
+;;; exactly that shape: "the help overlay drew itself twice, once through each
+;;; generation of the same function."
+
+(defstruct (timer (:constructor %make-timer (name interval function repeat)))
+  "A thing to do later, and possibly again.
+
+DEFSTRUCT rather than DEFCLASS: DESIGN's ruling is about core *state* that a
+live image has to be able to grow a slot on — a node, a world — and this is a
+runtime record with four fields that nothing outside this file reads."
+  name interval function repeat (due 0))
+
+(defvar *timers* (make-hash-table :test #'equal)
+  "NAME -> TIMER.  See ADD-TIMER.")
+
+(defun add-timer (name interval function &key (repeat t))
+  "Call FUNCTION every INTERVAL seconds, or once after it when REPEAT is NIL.
+
+NAME is any object comparable under EQUAL, and adding a timer under a name
+that already has one *replaces* it — so loading your configuration a second
+time does not give you two.
+
+FUNCTION is called on the window manager's own thread, between compositor
+events, so it may touch the model and call MARK-DIRTY directly and does not
+need CALL-IN-WM-THREAD.  It is called inside GUARDED: a timer that signals
+gets a log line with a backtrace and keeps its place, because a broken clock
+must not take the desktop with it.
+
+    (add-timer :my-clock 60 (lambda () (mark-dirty)))
+
+An INTERVAL of 60 does not mean `on the minute'.  If you want a clock that
+changes when the displayed minute does, ask for a shorter interval and let the
+emit diff drop the redraws that would show the same thing — which is what the
+shipped status line does."
+  (check-type interval (real (0)))
+  (setf (gethash name *timers*)
+        (let ((timer (%make-timer name interval function repeat)))
+          (setf (timer-due timer) (+ (get-internal-real-time)
+                                     (* interval internal-time-units-per-second)))
+          timer))
+  (wake-event-loop)
+  name)
+
+(defun remove-timer (name)
+  "Take the timer called NAME off, if there is one."
+  (remhash name *timers*)
+  nil)
+
+(defun timer-wait ()
+  "Seconds until the nearest timer is due, bounded by *POLL-INTERVAL*.
+
+Never negative and never zero: a zero timeout would turn the wait into a spin,
+and something already due is handled by RUN-DUE-TIMERS on the way past rather
+than by waiting no time at all."
+  (let ((soonest nil)
+        (now (get-internal-real-time)))
+    (maphash (lambda (name timer)
+               (declare (ignore name))
+               (let ((seconds (/ (float (- (timer-due timer) now))
+                                 internal-time-units-per-second)))
+                 (when (or (null soonest) (< seconds soonest))
+                   (setf soonest seconds))))
+             *timers*)
+    (if soonest
+        (max 0.001 (min *poll-interval* soonest))
+        *poll-interval*)))
+
+(defun run-due-timers ()
+  "Run every timer whose moment has arrived.  Returns how many ran.
+
+The due time of a repeating timer is computed from *now* rather than from when
+it was last due, which is the choice that matters on a laptop: a machine that
+was asleep for an hour comes back and runs each timer once, rather than
+discovering it owes sixty ticks and running them all."
+  (let ((now (get-internal-real-time))
+        (ran 0)
+        (expired '()))
+    (maphash (lambda (name timer)
+               (when (>= now (timer-due timer))
+                 (incf ran)
+                 (guarded (format nil "timer ~a" name)
+                   (funcall (timer-function timer)))
+                 (if (timer-repeat timer)
+                     (setf (timer-due timer)
+                           (+ (get-internal-real-time)
+                              (* (timer-interval timer)
+                                 internal-time-units-per-second)))
+                     (push name expired))))
+             *timers*)
+    (dolist (name expired) (remhash name *timers*))
+    ran))
 
 (defvar *wakeup-pending* nil
   "True between asking the loop to wake and it waking.
@@ -268,9 +379,14 @@ what says so if there is ever a fourth."
         ;; before the catch exists, which the first one cannot see.
         (unless (consume-wakeup)
           (handler-case
+              ;; TIMER-WAIT, not *POLL-INTERVAL*: the constant was always the
+              ;; answer to "how long until the next thing that wants to
+              ;; happen", and until there were timers the answer was always
+              ;; the same.  It still bounds the wait, so a timer cannot make
+              ;; the backstop longer.
               (if fd
-                  (sb-sys:wait-until-fd-usable fd :input *poll-interval* nil)
-                  (sleep 0.05))
+                  (sb-sys:wait-until-fd-usable fd :input (timer-wait) nil)
+                  (sleep (min 0.05 (timer-wait))))
             (error () nil)
             (sb-sys:interactive-interrupt () nil))))
       ;; Whatever woke us, the queue is about to be drained, so the next caller
@@ -287,6 +403,11 @@ what says so if there is ever a fourth."
     (loop while (server-running *server*)
           do (with-abandon
                (drain-wm-queue)
+               ;; Beside the queue, because they are the same species: work
+               ;; the loop owes that did not come from the compositor.  Before
+               ;; DISPATCH-EVENTS so that a timer which marks the layout dirty
+               ;; has its request folded into this pass rather than the next.
+               (run-due-timers)
                (unless (dispatch-events)
                  (setf (server-running *server*) nil))
                ;; The other way a session ends, and the one nothing signalled.
@@ -475,10 +596,10 @@ debug it (connecting, binding, the first manage sequence) is still after it."
                (maybe-show-welcome)
                (run-event-loop)
                t)
-           (protocol-version-mismatch (condition)
+           (protocol-version-too-old (condition)
              (report-cannot-start
               (make-condition 'cannot-start
-                              :summary "the compositor speaks a different version of the protocol."
+                              :summary "this river is older than the protocol version LatticeWM needs."
                               :detail (princ-to-string condition)))
              nil)
            (cannot-start (condition)
@@ -786,12 +907,13 @@ useful if a non-zero exit means what it says."
       (cond
         ((flag "--help") (printing (write-string +usage+)))
         ((flag "--version")
-         (format t "~&LatticeWM ~a (river_window_manager_v1 v~d, ~
+         (format t "~&LatticeWM ~a (river_window_manager_v1 v~d-v~d, ~
                     river_xkb_bindings_v1 v~d)~%"
                  (or (ignore-errors
                       (asdf:component-version (asdf:find-system "latticewm")))
                      "0.1.0")
-                 +window-management-version+ +xkb-bindings-version+)
+                 +window-management-floor+ +window-management-version+
+                 +xkb-bindings-version+)
          (sb-ext:exit :code 0))
         ((flag "--eval")
          (let ((forms (argument-values arguments "--eval")))

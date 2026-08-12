@@ -422,7 +422,11 @@ You never edit this package.")
    ;; policy, and the container protocol needs the identical description.
    #:policy-generic-p #:policy-generics #:extension-surface
    #:print-extension-surface #:print-hook-surface #:undocumented-generics
-   #:*motion-reference-rect*))
+   #:*motion-reference-rect*
+   ;; --- the screens, and where you last were on each -------------------
+   #:output-workspace #:output-showing #:output-in-direction
+   #:*motion-crosses-outputs* #:cross-to-output
+   #:*remember-place* #:remembered-place))
 
 (defpackage #:latticewm/runtime
   (:use #:cl)
@@ -543,17 +547,25 @@ keybindings, the command registry, and the session loop.")
    #:*world* #:*server* #:server #:seat #:primary-seat #:server-manager
    #:server-display #:server-seats #:server-running #:seat-proxy
    #:window-of-proxy #:all-windows #:all-outputs #:current-output
-   #:output-at #:output-for-rect #:output-of-window #:output-showing-workspace
+   ;; OUTPUT-SHOWING-WORKSPACE was here and is P:OUTPUT-SHOWING now, so that
+   ;; motion -- which has to ask the same question and may not call the runtime
+   ;; -- asks it of the one function that answers it.
+   #:output-at #:output-for-rect #:output-of-window
    #:node-rect-now
    #:overlay-for #:all-overlays #:destroy-overlay #:forget-overlays-for-output
    #:hide-overlays #:overlay-kind #:overlay-output #:overlay-name
    #:overlay-visible-p #:destroy-canvas #:canvas-width #:canvas-height
+   ;; the frame clock: when drawing is worth anything.  See DRAW-WHEN-READY.
+   #:draw-when-ready #:overlay-frame #:forget-frame
    #:current-node #:current-leaf #:current-window #:current-path
    #:focused-window #:in-wm-thread-p
    #:window-river-node #:guarded #:best-effort #:with-abandon
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
+   ;; things that happen because time passed rather than because a client
+   ;; said something.  See ADD-TIMER.
+   #:add-timer #:remove-timer #:*poll-interval*
    ;; pointer-driven management
    #:start-pointer-op #:end-pointer-op #:apply-pointer-delta
    #:pointer-op #:pointer-op-kind #:pointer-op-window #:pointer-op-rect

@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-69 generics, 112 options.  Generated from the running image.
+69 generics, 114 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -1557,7 +1557,7 @@ completely quiet while a float is up.
 
 *debug-on-error*
   now: NIL
-  read by: echo-content (appearance-policy t), make-workspace (structure-policy t t), on-window-open (lifecycle-policy t window), (lambda (condition0) in libinput-result-hook), (lambda (condition1) in ipc-accept-loop), (lambda (condition11) in attach-xkb-keyboard), (lambda (condition11) in keymap-from-text), (lambda (condition13) in attach-libinput-device), (lambda (condition15) in attach-input-device), (lambda (condition15) in bind-one-global), (lambda (condition17) in emit-window-management-state), (lambda (condition18) in attach-pointer-bindings), (lambda (condition19) in attach-xkb-keyboard), (lambda (condition2) in end-pointer-op), (lambda (condition2) in evlambda-for-window), (lambda (condition2) in start-pointer-op-1), (lambda (condition20) in hide-unplaced-windows), (lambda (condition21) in attach-libinput-device), (lambda (condition23) in attach-seat), (lambda (condition24) in emit-window-management-state), (lambda (condition3) in end-pointer-op), (lambda (condition3) in start-pointer-op-1), (lambda (condition33) in bind-globals), (lambda (condition33) in evlambda-for-window), (lambda (condition34) in evlambda-for-window), (lambda (condition4) in attach-input-manager), (lambda (condition4) in attach-libinput-config), (lambda (condition4) in attach-libinput-device), (lambda (condition4) in attach-manager-hooks), (lambda (condition4) in attach-xkb-config), (lambda (condition4) in attach-xkb-keyboard), (lambda (condition4) in make-canvas), (lambda (condition42) in bind-globals), (lambda (condition5) in register-bindings), (lambda (condition6) in attach-layer-shell-output), (lambda (condition6) in attach-layer-shell-seat), (lambda (condition6) in attach-seat), (lambda (condition7) in attach-input-device), (lambda (condition7) in attach-output), (lambda (condition7) in ensure-capture-bindings), apply-cursor-theme, apply-device-settings, apply-input-if-needed, apply-keyboard-focus, apply-keyboard-layout, apply-lock-state, apply-pointer-delta, apply-repeat-info, arm-capture, attach-input-device, attach-input-manager, attach-layer-shell-output, attach-layer-shell-seat, attach-libinput-config, attach-libinput-device, attach-manager-hooks, attach-output, attach-pointer-bindings, attach-seat, attach-xkb-config, attach-xkb-keyboard, bind-globals, bind-one-global, candidates-for, capture-armed-now-p, capture-key-list, collect-dimension-work, compute-layout, declare-window-capabilities, detach-output, detach-seat, detach-window, drain-manage-work, drain-wm-queue, draw-empty-panes, draw-overlays, echo-segments, emit-borders, emit-dimension-work, emit-floats, emit-pending-closes, emit-render-order, emit-rendering-state, emit-window-management-state, emit-window-visible, end-pointer-op, end-prompt, ensure-capture-bindings, ensure-workspaces-for-outputs, evlambda-for-window, float-window-now, forget-overlays-for-output, fresh-workspace, handle-key, handle-unbound-key, hide-overlays, hide-unplaced-windows, ipc-accept-loop, keymap-from-text, libinput-result-hook, load-state, make-canvas, maybe-show-welcome, minimize-window, name-of-window, next-keyboard-layout, on-pointer-enter, on-window-interaction, output-contents, overlay-commit, overlay-hide, place-rect, place-unplaced-windows, pointer-binding-pressed, pointer-moved, quit, read-node, register-bindings, relayout, request-manage, restore-snapshot, restore-window, restore-window-facts, run-command, run-event-loop, run-hooks, run-key-target, save-state, send-device-setting, send-libinput-setting, send-to-workspace, set-default-layer-output, solo-windows, spawn, spawn-for-empty-pane, start, start-pointer-op-1, warp-pointer, world-role-name
+  read by: echo-content (appearance-policy t), make-workspace (structure-policy t t), on-window-open (lifecycle-policy t window), (lambda (condition0) in libinput-result-hook), (lambda (condition1) in ipc-accept-loop), (lambda (condition11) in attach-xkb-keyboard), (lambda (condition11) in keymap-from-text), (lambda (condition13) in attach-libinput-device), (lambda (condition15) in attach-input-device), (lambda (condition15) in bind-one-global), (lambda (condition17) in emit-window-management-state), (lambda (condition18) in attach-pointer-bindings), (lambda (condition19) in attach-xkb-keyboard), (lambda (condition2) in end-pointer-op), (lambda (condition2) in evlambda-for-window), (lambda (condition2) in start-pointer-op-1), (lambda (condition20) in hide-unplaced-windows), (lambda (condition21) in attach-libinput-device), (lambda (condition23) in attach-seat), (lambda (condition24) in emit-window-management-state), (lambda (condition3) in end-pointer-op), (lambda (condition3) in start-pointer-op-1), (lambda (condition33) in bind-globals), (lambda (condition33) in evlambda-for-window), (lambda (condition34) in evlambda-for-window), (lambda (condition4) in attach-input-manager), (lambda (condition4) in attach-libinput-config), (lambda (condition4) in attach-libinput-device), (lambda (condition4) in attach-manager-hooks), (lambda (condition4) in attach-xkb-config), (lambda (condition4) in attach-xkb-keyboard), (lambda (condition4) in make-canvas), (lambda (condition42) in bind-globals), (lambda (condition5) in register-bindings), (lambda (condition6) in attach-layer-shell-output), (lambda (condition6) in attach-layer-shell-seat), (lambda (condition6) in attach-seat), (lambda (condition7) in attach-input-device), (lambda (condition7) in attach-output), (lambda (condition7) in ensure-capture-bindings), (lambda (condition9) in overlay-request-frame), (lambda (condition9) in run-due-timers), apply-cursor-theme, apply-device-settings, apply-input-if-needed, apply-keyboard-focus, apply-keyboard-layout, apply-lock-state, apply-pointer-delta, apply-repeat-info, arm-capture, attach-input-device, attach-input-manager, attach-layer-shell-output, attach-layer-shell-seat, attach-libinput-config, attach-libinput-device, attach-manager-hooks, attach-output, attach-pointer-bindings, attach-seat, attach-xkb-config, attach-xkb-keyboard, bind-globals, bind-one-global, candidates-for, capture-armed-now-p, capture-key-list, collect-dimension-work, compute-layout, declare-window-capabilities, detach-output, detach-seat, detach-window, drain-manage-work, drain-wm-queue, draw-empty-panes, draw-overlays, echo-segments, emit-borders, emit-dimension-work, emit-floats, emit-pending-closes, emit-render-order, emit-rendering-state, emit-window-management-state, emit-window-visible, end-pointer-op, end-prompt, ensure-capture-bindings, ensure-workspaces-for-outputs, evlambda-for-window, float-window-now, forget-overlays-for-output, frame-arrived, fresh-workspace, handle-key, handle-unbound-key, hide-overlays, hide-unplaced-windows, ipc-accept-loop, keymap-from-text, libinput-result-hook, load-state, make-canvas, maybe-show-welcome, minimize-window, name-of-window, next-keyboard-layout, on-pointer-enter, on-window-interaction, output-contents, overlay-commit, overlay-hide, overlay-request-frame, place-rect, place-unplaced-windows, pointer-binding-pressed, pointer-moved, quit, read-node, register-bindings, relayout, request-manage, restore-snapshot, restore-window, restore-window-facts, run-command, run-due-timers, run-event-loop, run-hooks, run-key-target, save-state, send-device-setting, send-libinput-setting, send-to-workspace, set-default-layer-output, solo-windows, spawn, spawn-for-empty-pane, start, start-pointer-op-1, warp-pointer, world-role-name
   Let errors reach the debugger instead of being logged and swallowed.
 
 For a REPL that is attached to a running window manager, which is what this
@@ -1667,12 +1667,12 @@ at any size.
 
 *empty-hint-color*
   now: (0.7 0.75 0.86 1.0)
-  read by: draw-empty-panes-on
+  read by: %draw-empty-panes-on
   Text colour of the hint inside the focused empty pane.
 
 *empty-outline-color*
   now: (0.3 0.32 0.4 0.55)
-  read by: draw-empty-panes-on
+  read by: %draw-empty-panes-on
   Outline colour of an unfocused empty pane.
 
 *empty-pane-color*
@@ -1688,7 +1688,7 @@ is not a taste choice, it is the failure the ruling warned about.
 
 *empty-pane-hint*
   now: T
-  read by: draw-empty-panes-on
+  read by: %draw-empty-panes-on
   Show which keys open something, inside the focused empty pane.
 
 *empty-pane-keys*
@@ -2058,6 +2058,29 @@ a config file can do it without a method:
 
     (push '(:h . :mod5) *modifier-aliases*)
 
+*motion-crosses-outputs*
+  now: T
+  read by: move-cursor
+  Walking off the edge of one monitor arrives on the next one.
+
+MOTION IS CONTINUOUS ACROSS EVERY BOUNDARY, and the screen is the last
+boundary this program was not crossing.  Motion already leaves a split when
+the direction crosses its axis, and crosses into the lattice cell next door
+entering through the edge it left by; pressing Right at the right-hand edge of
+the left monitor did nothing at all, which made two monitors feel like two
+window managers.
+
+It costs no key.  With one monitor there is nothing in any direction and the
+behaviour is unchanged to the character, so this is invisible until a second
+screen is plugged in -- which is when somebody wants it.
+
+Where you arrive is where you last were on that screen (see *REMEMBER-PLACE*),
+not its first pane, because arriving somewhere you did not choose is what made
+the explicit commands not worth pressing either.
+
+Set it to NIL for motion that stops at the edge of a workspace, and reach the
+other screen with FOCUS-OUTPUT.
+
 *motion-reference-rect*
   now: (0 0 1920 1080)
   read by: motion-rects
@@ -2231,6 +2254,33 @@ whole different muscle memory -- a vi user wants almost none of these and a
 readline maximalist wants more -- and because it is the one part of
 CAPTURE-KEYS somebody might reasonably want to change without writing a
 method.
+
+*remember-place*
+  now: T
+  read by: note-place, remembered-place
+  Come back to where you were standing in a workspace, rather than to its top.
+
+Switching to a workspace used to put the cursor at its first leaf, always.  On
+one monitor that is a small annoyance you stop noticing; with two it is the
+thing that makes crossing between screens not worth doing, because every
+crossing costs you your place and there is no key that gives it back.
+
+The memory is a property of the *workspace*, not of the output.  That is the
+smaller and the more correct of the two: the cursor is one place in one model
+(see SHOW-WORKSPACE-ON, which rules that a command must not move the keyboard
+to another monitor), so what a workspace has to remember is where you stood in
+it — and a workspace that moves to the other screen takes that with it, which
+is what anybody would expect and what a per-output table would get wrong.
+
+The stored path is relative to the workspace node rather than to the root, so
+it stays true if the workspace is not where it was in the stack.  A remembered
+path that no longer leads anywhere is not a problem to check for: it goes
+through REPAIR-PATH like every other stale path in this program, which lands
+you at the deepest surviving part of where you were — still closer than the
+top.
+
+Set it to NIL to always arrive at the first pane, which is deterministic and
+which some people genuinely prefer.
 
 *repeat-delay*
   now: NIL

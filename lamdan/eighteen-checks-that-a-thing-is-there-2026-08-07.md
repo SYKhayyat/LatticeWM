@@ -11,6 +11,64 @@ repeats it. Two claims below are *about* what it landed.
 
 ---
 
+**CLOSED in the commits 2026-08-07 at `befe584`, marked on this document 2026-08-11.**
+Twenty-nine commits, all on the day the sweep landed. Every claim and every smaller thing
+below carries its disposition inline, marked at the head of its section. Five dispositions
+are used and they are not the same thing:
+
+| | meaning |
+|---|---|
+| **LANDED** | done substantially as prescribed |
+| **LANDED, DIFFERENTLY** | the observation was accepted and the prescribed remedy replaced; the replacement is named |
+| **RULED AGAINST** | the project ruled the other way on the record, and the ruling is cited |
+| **WITHDRAWN** | the observation was wrong when written |
+| **OPEN** | not done, and not ruled against — the reason is named and the item is still live |
+
+Score: 7 claims, 6 of the lens-3 remainder, 31 of 33 smaller things, and all 7 items of the
+all-Linux list **LANDED**; 3 **LANDED, DIFFERENTLY**; 1 **WITHDRAWN**; 3 **OPEN**. Gates
+went eighteen to **twenty-two**. The unit suite went 1,904 to 1,302 — the deflation is the
+point, not a regression: 21 lint tests whose loops could not fail were collapsed — and then
+to **1,345** as the second batch was written. And `make integration` ran for the first time
+in this project's life, on river 0.4.6 on two distributions, which is where the last two
+bugs came from.
+
+**A second batch closed on 2026-08-11**, after the questions this report could not answer
+were put to the author. Six items: the on-demand SWANK path documented, `*window-rules*`
+given a door, a timer facility, `wl_surface.frame`, and the per-output work — which is the
+one that changed a disposition rather than adding one. See the postscript.
+
+**And one row of this report is WITHDRAWN on the evidence.** I called per-output workspaces
+an architectural gap and the `(prop output :workspace)` mechanism a workaround. Both are
+rulings, argued at length, in the docstrings of the generic and the function that implement
+them. I had not read either. The correction is in the postscript, in full, because a sweep
+that marks its own bad call as landed is worth less than one that says where it was wrong.
+
+**A named gap in the closing, and then it was closed.** The dispositions below were first
+read off the commits and the tree, with nothing executed — the machine marking this document
+had no SBCL and no river, so a disposition certified that a change was *in the tree*, which
+is the same class of check this report spends 1,300 lines complaining about.
+
+That is no longer the state. The second batch was built and run under WSL: **Ubuntu with
+SBCL 2.6.0 and Fedora 44 with SBCL 2.6.6, twenty-two gates and 1,345 unit checks on both,
+and `make integration` against river 0.4.6 on the headless wlroots backend — 233 checks,
+twice in a row, exit 0.** Which means the two mechanisms in this batch that only a
+compositor can answer — that river releases a buffer, and that river answers a frame
+callback — were asked of one rather than asserted about bookkeeping. The second of those is
+a new line in `tools/integration.lisp` beside the first, for the reason this report gave
+about gate 8: both are inbound obligations and neither is visible to an instrument that
+faces outward.
+
+**The report's central claim, answered.** Six instruments were pointed at existence and are
+now pointed at truth or at reach: gate 12 reads docstrings and man pages and fingerprints
+the image around every `#+CLAIM:`; gate 16 stopped treating the word "window" in a sentence
+as documentation for the export `WINDOW`; gates 17 and 18 grew floors under their own
+populations; gate 22 refuses a request named outside `src/wire/`; `install-check.sh` stopped
+asking only whether a file exists and started asking how big it is; and CI regenerates the
+six documents and diffs them. Four new gates, and the class of check the project knows how
+to write is wider than it was.
+
+---
+
 ## The sketch, committed before reading any implementation
 
 Written from `README.org`, both `.asd` files, the Makefile targets, per-file line counts,
@@ -175,7 +233,20 @@ not narrow it.
 
 `rewrite` — ten lines, and print the number twice.
 
-The previous sweep's best work was killing gate 6, a policy÷runtime line-count ratio that
+> **LANDED — `fd0f9b9`.** Both prescriptions, in the order given. The floors come from
+> `lattice/` alone now — **12 generics and 13 methods**, at the number and still a ratchet —
+> and gate 6 goes on *loading* `examples/`, because the load is the check that has caught
+> something and the count was the freeze. The tutorial is unfrozen: merging 01 into 02 is a
+> pedagogical decision again rather than a red build.
+>
+> And the number is printed twice. The second one is **7 generics and 9 methods** from
+> everything outside `src/` that is not the lattice, sitting next to the union figure, with a
+> comment saying that a single union figure reads as breadth and is not.
+>
+> Item 3 — freeze `src/`, hand a second implementer a spec for a layout model the author did
+> not design — is **OPEN** and is the report's own most expensive item. See the postscript's
+> barrier 2: `latticewm-contrib` is the artifact that would make it affordable, and it does
+> not exist. a policy÷runtime line-count ratio that
 four commits had moved files to satisfy. Its replacement asks the right question: **how
 many policy generics have ever been answered from outside `src/`.** Floors at
 `tools/gates.lisp:441,457` — 15 generics, 22 methods — under a docstring that is proud of
@@ -270,7 +341,26 @@ The lattice cost more than that.
 
 `rewrite` — the surfaces document where to hang a method and none of what goes in the body.
 
-The project ships six generated documents totalling 4,871 committed lines, and stakes a
+> **LANDED — `db81ce8`, completed `2026-08-11`.** All three prescriptions, and the first one
+> is the one that was worth the day.
+>
+> `examples/05-status-line.lisp`: the time, the load average, and how many windows are in a
+> workspace you are *not* looking at — twenty lines, no second process. It is the first
+> example that uses a hook at all, the first that must be undone, the first that reserves
+> screen space, and the first that composes with a peer rather than replacing it. The third
+> segment is a fact about the layout, which is the one thing a general-purpose status bar
+> cannot produce, and is therefore the argument for the whole seam.
+>
+> `EXTENSION-SURFACE.txt` is grouped by protocol. Its preamble spent a paragraph on the six
+> protocol classes and then sorted 2,459 lines by `string<`.
+>
+> The vocabulary landed in two halves, and the first half was not the finding. `db81ce8`
+> added "The words, once" — nine *concept* words, world/node/pane/path/address/cursor. Useful,
+> and not what was missing: the finding was about ordinary *functions*, and `divide-rect` was
+> still in no file under `doc/` four days later. "The calls, once" is the other half —
+> geometry, paths, the world, the pointer, the hooks — eighteen names with what each is for
+> and which are load-bearing. It exists because the generated surfaces enumerate registries,
+> and a vocabulary is not a registry. totalling 4,871 committed lines, and stakes a
 great deal on them: *"All three are generated from the running image, so none of them can
 drift"* (`README.org:381`). The extension surface lists 66 generics with their docstrings,
 their methods, and which option each shipped answer reads. It is genuinely undriftable and
@@ -351,7 +441,36 @@ of prose. (3) is a sort key.
 
 `rewrite` — point the prose gate at the prose.
 
-`src/policy/protocol.lisp:3-5`, the first substantive sentence of the file the project calls
+> **LANDED — `025d14b`, `9a4ece0`, `e3e198c`.** All six, and the fifth is the one that closed
+> the class rather than the instances.
+>
+> **Gate 20 is the gate `protocol.lisp` claimed.** It also prints the census of everything
+> else in that file, because the opening clause was already stretched: 66 generics, 7 classes,
+> 6 functions, 2 specials, **0 methods**. Writing it beat deleting the sentence, because the
+> rule was good.
+>
+> **Gate 21 holds `flake.nix`'s `buildPhase`** to running `make check image` rather than
+> hand-typing five `sbcl --load` lines three above the `installPhase` gate 9 exists to keep
+> honest.
+>
+> **Gate 12 reads docstrings now** (`9a4ece0`), and the discriminator is case: this tree
+> writes code in capitals and emphasis in lowercase, which is org's `~...~` distinction
+> already spelled in a convention docstrings follow. 86 names across 1,420 docstrings. Of 131
+> earmuffed mentions, three turned out to be shouted emphasis and were rewritten rather than
+> exempted. The man pages are read whole with roff escapes undone — 42 names, including the
+> forty `latticewm-config.5` named and the check that exists *because of* `*smart-gaps*`
+> validated none of.
+>
+> **`make surface && git diff --exit-code doc/` is a CI job** (`e3e198c`), and regenerating
+> immediately found the committed surface already stale — four options had gained a reader
+> nobody had recorded. The documents were made reproducible first, because they could not
+> otherwise pass: `/home/shaul` out of `OPTIONS.txt`, the author's build tree out of four
+> `EXTENSION-SURFACE.txt` lines, `who-references` output sorted rather than left in
+> compilation order, and `value:`/`attached:` printed only when they say something — never in
+> the generating image, which is the one where they are guaranteed meaningless.
+>
+> `*generated-documents*` is enumerated against `doc/*.txt`, with `HOOKS.txt` in it. The
+> `config.lisp:337` SWANK paragraph is dealt with in the postscript, where the fix inverted. of the file the project calls
 the deliverable and points every stranger at:
 
 > This file contains generic functions and their docstrings. **It contains no methods, and
@@ -476,7 +595,25 @@ that closes the class rather than the instances.
 
 `rewrite`, narrow — one function.
 
-`lattice/commands.lisp:356` — `enable` does `(setf p:*policy* (make-instance 'lattice-policy))`.
+> **LANDED — `86b8e20`.** The lattice's methods specialise on `lattice-mixin`, which inherits
+> `policy` and supplies no defaults; `enable` composes it over the class of whatever policy is
+> in force and `change-class`es the object, so a peer's slots come through the switch and
+> `call-next-method` reaches its answers. `disable` restores the saved class rather than
+> constructing a fresh `conventional-policy`. Two details that are the difference between the
+> idea and the working version: the composed class is interned under a derived name, so
+> enabling twice finds the same class instead of emptying every dispatch cache, and enabling
+> twice at all is a no-op rather than the CLOS error for a mixin appearing twice in one
+> precedence list. `lattice-policy` still exists and is what the composition collapses to over
+> a plain `conventional-policy`, which is what every document, test and example already names.
+>
+> `install-vocabulary` shadowing-imports the names already spoken for *before* the
+> `use-package`, so the collision is resolved before it can signal and costs one name and one
+> log line rather than an unspecified prefix of the vocabulary.
+>
+> And `EXTENDING.org` now says which idiom to write and why — the sentence this section
+> correctly said appeared in no document anywhere. `80d90c9` fixed the recipe it printed: the
+> mixin example set a `*previous*` that did not exist. The saved class rides on the mixin,
+> which is the entire argument for writing a mixin rather than a global. `(setf p:*policy* (make-instance 'lattice-policy))`.
 `:468` — `disable` does `(setf p:*policy* (make-instance 'p:conventional-policy))`.
 
 The four worked examples chose the other idiom: methods directly on `conventional-policy`.
@@ -526,7 +663,29 @@ extension, which is everyone.
 
 `rewrite` — two names and one word.
 
-`log.lisp:242-257`:
+> **LANDED — `2d97a8c`.** Both, and the concession in the postscript was right to go.
+>
+> `handler-bind` runs its handler on the signalling stack: log there, then transfer. All
+> three macros were built on `handler-case` and all three now bind. `with-abandon` invokes its
+> own `abandon` restart from inside the handler, so the liveness guarantee is unchanged and
+> the frames are real — it had been *shadowing* `install-debugger-hook`, the one place in the
+> program that captured a true backtrace.
+>
+> Two names: `guarded` is the policy boundary — log loudly, with frames, keep going, per
+> decision — and `best-effort` is the wire boundary, where a request against a proxy river has
+> already destroyed is an ordinary outcome and gets a line and no backtrace. Our own calls get
+> neither, and the three sites that keep a guard deliberately carry the argument at the site.
+> The per-decision granularity is written down as the justification, which the docstring had
+> never given.
+>
+> `*debug-on-error*` is new and is the postscript's point in one option: with it set, all
+> three decline to handle, so a connected SLIME gets the debugger, the real stack and the
+> restart. There had been no such thing, in a program whose thesis is that you edit it while
+> it runs.
+>
+> `tests/test-boundaries.lisp` is the part that is not the fix — nothing had ever asked these
+> macros a question, which is how all three came to be built on the wrong operator. The
+> assertion was checked against the bug: reverting `guarded` to `handler-case` makes it fail.
 
 > Used at every boundary where a *policy method* is called — that is, at every point where
 > user code runs inside ours. […] Deliberately *not* used around our own internal calls:
@@ -580,7 +739,31 @@ incrementally — new code uses the right one, old code is moved when touched.
 
 `rewrite` — move the hook one level down.
 
-`history.lisp:159` installs `undo-command-wrapper` on `p:*command-wrappers*`, and the file
+> **LANDED — `c520cae`, and the integration run found the rest of it in `befe584`.**
+>
+> Undo is taken at settle points now, not around calls. `note-layout-settled` compares the
+> tree's signature against a baseline kept in the world and copies only when they differ, so
+> the copy that becomes the undo step is one that was already made. `after-command` calls it,
+> which covers the keys, `Super+;` and the control socket in one place because all three
+> converge there; `drain-wm-queue` calls it for the REPL. `load-state` re-baselines against
+> the layout it restored, so the first change after a restart is a step and not a diff against
+> an empty tree. `with-undo`, `record-undo` and the nineteen-name `*undo-exempt-commands*` are
+> gone — the deny-list disappeared exactly as predicted, because the test became "did the root
+> change" instead of "which function ran". `note-layout-settled` is exported and documented as
+> the call an extension makes when it opens a fifth door.
+>
+> The mutation ruling at `model/surgery.lisp:5` stands, and did not need overturning.
+>
+> **And then the compositor said something 1,302 unit checks could not.** The first
+> `make integration` run in this project's life found that undo through three of the four
+> doors went back to the *beginning of the session*. `*undo-coalesce-seconds*` merges
+> consecutive steps sharing a label — right for "resize left", where the label repeats because
+> the gesture repeats, and wrong for "from a REPL", which every change through SWANK, the
+> socket and `Super+;` carries. An entire session coalesced into one entry holding the oldest
+> tree. A step is coalescible now only when its label came from a command, spelled as a
+> defaulted parameter so a door that invents a new label is covered by construction rather
+> than by being remembered. This section was right about the altitude and could not have found
+> this: it needs four doors, a live compositor and a clock. `undo-command-wrapper` on `p:*command-wrappers*`, and the file
 argues correctly that this beats seventeen verbs opting in. But the wrapper's reach is
 exactly `p:run-command`, and **none of the live-system doors go through it**:
 
@@ -628,7 +811,25 @@ shape as `command-repeatable-p` which the project already ruled correct.
 
 `rewrite` — one flip, ten lines.
 
-`src/runtime/surface.lisp:29-31`, the `canvas` docstring:
+> **LANDED, DIFFERENTLY — `7b49c07`.** A pool, not a flip. An overlay owns a pool of buffers;
+> `wl_buffer.release` is handled — one `on-events` form, so **gate 8 sees it and now counts
+> eighteen interfaces rather than seventeen**, which is the report's thesis closing on itself —
+> and `ensure-overlay` hands back a buffer that is neither busy nor the one on screen, growing
+> to a third if a compositor holds two at once and logging rather than growing without bound
+> past that. A two-buffer flip assumes the compositor releases before the next redraw; the
+> pool does not have to assume, which is the same reason this file vendors six XMLs.
+>
+> Two consequences that were separate findings in the section below, both forced by the pool:
+> the record of what a frame drew moved from the overlay to the *canvas*, because with a pool
+> the buffer handed back holds a frame from two redraws ago and clearing the wrong list leaves
+> a stale label under a fresh one; and `overlay-commit` damages the union of what the new
+> buffer holds and what the one on screen holds, rather than the whole surface.
+>
+> The unit suite says at the top of `tests/test-overlay.lisp` that it cannot reach the
+> protocol half, and asserts the bookkeeping including a two-buffer alternation with the pixels
+> read back. The half that needs a compositor is in `tools/integration.lisp`, which asserts
+> that a redraw commits a different buffer and that river releases the one it finished with —
+> and that half has now actually run.
 
 > Pixels are ARGB8888, premultiplied, one 32-bit word each, row-major. DATA is a foreign
 > pointer; **the compositor is looking at the same bytes we are, so a write is visible as
@@ -675,6 +876,42 @@ lines in `ensure-overlay` and `overlay-commit`.
 arithmetic in this region is already wrong by 8×.
 
 ### The rest of lens 3, ranked by ratio and honest about which are cheap
+
+> **All six LANDED — `7b49c07`, `c520cae`, `3fe2de3`, `10c6681`.**
+>
+> *Damage computed and discarded*, and *`*overlay-buffer-idle*`'s 8× arithmetic*: both in
+> `7b49c07`, above. The option is a list of overlay kinds defaulting to `(:help)` instead of a
+> `t` that had the drawn map doing `mkstemp`, `ftruncate(33MB)` and `mmap` twice per wobble of
+> a zoom — the arithmetic was wrong in its own favour and the default was exactly backwards
+> for the one overlay a continuous gesture toggles.
+>
+> *Every arrow key deep-copying every workspace*: gone with claim 6's chokepoint. The
+> mechanism was upside down — it copied first and threw the copy away when the signature came
+> back equal — and the deny-list existed to suppress what the arithmetic still let through.
+>
+> *`container-addresses` on a grid growing for the length of the session* — `3fe2de3`, and it
+> is the one place the lattice genuinely fights a core assumption, so it is worth the
+> paragraph. `*tidy-on-leave*` (default `T`) drops the cell you leave when arriving there is
+> all that ever happened to it, and refuses three: a cell with anything in it, a cell somebody
+> named, and the last cell of a plane. What turning it off costs is in its docstring, because
+> footprints are a real thing to want and that should be a decision rather than a discovery.
+> The consumer's per-iteration closure went with it.
+>
+> *The cheap ones*, all seven, in `3fe2de3`: `output-contents` asks each output once — which
+> also made the answer *consistent*, since the second call used to happen after
+> `p:*solo-windows*` was set — `do-windows` walks the table, `emitted` stopped consing a key to
+> ask a question whose answer is almost always "nothing changed", `render-order` partitions
+> instead of `stable-sort`ing a `copy-list`, `default-address` stopped building the whole index
+> list to take its head, and the status line stopped allocating three lists over every leaf to
+> produce an integer.
+>
+> *`request-manage` has no debounce* — `10c6681`. `server-manage-requested` is true exactly
+> over the window between asking and being given a sequence, cleared at the top of
+> `run-manage-sequence` and cleared *before* the body, because an ask made inside a sequence is
+> a genuine ask for the next one. The `setf` is after the request and inside the
+> `best-effort`, so a send that signals leaves the flag alone and the next caller tries again:
+> the other direction — a flag stuck true — is a window manager that has gone deaf, and no log
+> line would say so.
 
 **The damage tracking computes the damage and then throws it away.** `cursor.lisp:71-76` and
 `lattice/overlay.lisp:98-103` both go to real trouble — *"a full-screen clear is two million
@@ -742,6 +979,67 @@ oscillate. A `manage-requested` boolean cleared at `:manage-start` is six lines.
 ---
 
 ## Smaller things, stated once
+
+> **31 of 33 LANDED, 2 LANDED DIFFERENTLY, 1 OPEN.** Thirty-three one-paragraph dispositions
+> would bury the section they are about, so they are one table. The four that are not a plain
+> **LANDED** carry a note at the item itself.
+>
+> | # | item | | where |
+> |---|---|---|---|
+> | 1 | `restart-wm` does not restart | LANDED | `f9bee4d` |
+> | 2 | `RIVER` is one name for two types | LANDED | `eb6264e` |
+> | 3 | `flake.nix` declares `licenses.bsd3` | LANDED | `75d5908` |
+> | 4 | every source install ships 190 MB | LANDED | `d8ce0ac` |
+> | 5 | `bootstrap.sh` unpinned, checksum on the wrong file | LANDED | `bdd00c4` |
+> | 6 | the state file's version gate destroys the file | LANDED | `f9bee4d` |
+> | 7 | `--eval` exits 0 on failure | LANDED | `f9bee4d` |
+> | 8 | `motion-is-involutive` asserts a false property | LANDED | `025d14b` |
+> | 9 | `with-example` leaks everything it loads | LANDED | `025d14b` |
+> | 10 | the hand-copied `defclass` restoring `c:leaf` | LANDED | `025d14b` |
+> | 11 | 21 lint tests whose loops cannot fail | LANDED | `025d14b` |
+> | 12 | three exported functions with zero callers | LANDED | `f9bee4d` |
+> | 13 | gate 5's 462 lines read by gate 5 | **LANDED, DIFFERENTLY** | `db81ce8` |
+> | 14 | gate 3 holds old gate 6's metric | LANDED | `fd0f9b9` |
+> | 15 | gates 15, 16, 17, 18 escapable by rename | LANDED | `81af94a` |
+> | 16 | gate 12 `EVAL`s into the image seven gates read | LANDED | `9a4ece0` |
+> | 17 | `gates.lisp` has no error containment | LANDED | `025d14b` |
+> | 18 | `appearance.lisp` keeps a dead metric's shape | LANDED | `db81ce8` |
+> | 19 | the keymap is not in `policy/` | LANDED | `db81ce8` |
+> | 20 | `border-color`'s closed `cond` | LANDED | `d9fafd8` |
+> | 21 | `*input-rules*` is written twice | **OPEN** | — |
+> | 22 | `*lattice-border-parity*` superseded and alive | LANDED | `d9fafd8` |
+> | 23 | `map.lisp` argues from hold-to-peek | LANDED | `e24ceea` |
+> | 24 | `cursor-grid` inner, `cursor-cell` outer | LANDED | `f6b830a` |
+> | 25 | `ASSESSMENT.org` contradicts the README | LANDED | `db81ce8` |
+> | 26 | 83 dead org cross-file links | **LANDED, DIFFERENTLY** | `025d14b` |
+> | 27 | `tools/bench.lisp` compiled by nothing | LANDED | `025d14b` |
+> | 28 | `make -j check` races three SBCLs | LANDED | `abc6eb3` |
+> | 29 | `:serial t` encodes a narrative | LANDED | `db81ce8` |
+> | 30 | four functions inside a Python string | LANDED | `db81ce8` |
+> | 31 | two help texts pinned to line numbers | LANDED | `abc6eb3`, `bdc16f3` |
+> | 32 | the version in four places, tag matching none | LANDED | `58cd86a` |
+> | 33 | `INSTALL.org`'s river table; roff asterisks | LANDED | `a8bfd2c`; `2026-08-11` |
+>
+> **On 13.** The 80 identity wrappers were not deleted, which is what this section asked for
+> by implication. What landed instead is the discipline being made real: thirteen requests
+> went round the wire layer and every one was a teardown, so eleven aliases were added, every
+> call site moved, and **gate 22** refuses a request named outside `src/wire/` — while still
+> allowing the protocol package to name an *interface*, which is how a global gets bound and
+> has nothing to wrap. The circle this section found closing inside one file — `wm-manage-finish`
+> saying *prefer `with-manage-sequence`* while `with-manage-sequence` sent `manage_finish` raw —
+> is closed the other way now. The wrappers are cheap; the ungoverned call sites were the
+> defect, and the report named the wrong one of the two.
+>
+> **On 26.** 17 links in the *current* documents were rewritten. The 67 in the frozen records
+> were deliberately left: `DESIGN.org` and `PLAN.org` are append-only by ruling, and editing
+> them to fix a link is the laundering that ruling exists to prevent. A dead link in a frozen
+> record is a smaller cost than a record that can be edited.
+>
+> **On 33.** `INSTALL.org`'s table said `river 0.4+` twenty-five lines above a sentence saying
+> exactly 0.4.6; it now says *Exactly* 0.4.6 in the table, and gained the two version
+> constraints river itself pins and that nothing named — Zig 0.16, wlroots 0.20, both learned
+> the slow way on Fedora. The roff bold was still literal four days later and is fixed now:
+> `.B` on its own line, which is what every other emphasis in that file uses.
 
 - **`restart-wm` does not restart.** `verbs.lisp:605`, bound to `Shift+Super+r`. It clears
   the running flag and exits; `install.sh:121` is `exec river -c latticewm`, which runs the
@@ -940,6 +1238,24 @@ oscillate. A `manage-requested` boolean cleared at `:manage-start` is six lines.
   and "leave alone" once you flatten options into a plist. A rule that does not mention a key
   does not set it, so the ambiguity cannot arise in the table form. Ship `*input-rules*` with
   a first entry of `(t :tap-to-click t ...)` and 22 globals become one.
+
+  > **OPEN — declined at `e24ceea`, and the reason is recorded in `devices.lisp`'s header
+  > rather than left to be rediscovered.** It works. What it costs is fifteen docstrings that
+  > `--list-options` prints, the first line of the tier table, and **gate 11** — which
+  > certifies that every option is read, from cross-references SBCL recorded, and would go
+  > blind on all fifteen the moment they were reached through `symbol-value`. That is a real
+  > objection and it is not a refutation: the diagnosis — one decision written twice, with a
+  > six-boolean special case as the seam — stands, and nothing about the diagnosis was
+  > answered.
+  >
+  > The bug underneath it was found and fixed on the way. `apply-device-settings` dropped
+  > every pair whose value was false, so `(setf *tap-to-click* nil)` sent nothing and the
+  > touchpad went on tapping. Everything above that line was right and said so out loud —
+  > `option-settings` goes out of its way to send the six meaningful booleans either way and
+  > explains why; two tests assert the plist carries `:natural-scroll nil` when a rule asks
+  > for it. Every instrument agreed the plist was correct. It was. **The last reader of it
+  > threw those pairs away, and no instrument looked there** — which is this report's claim,
+  > found by going to fix something else.
 
 - **`*lattice-border-parity*`'s own docstring says *"Superseded by `*COORDINATE-TINT*`"*** and
   the branch is kept alive in `border-color` to satisfy it. Gate 11 certifies it as read.
@@ -1190,7 +1506,59 @@ model.
 4005` line in the sample config was a stale falsehood to delete. It is the sentence that
 should be made **true**. The finding stands; the fix inverts.
 
+> **LANDED, DIFFERENTLY — `025d14b`. The Unix-socket SWANK is OPEN, and is written down at
+> the point of decision.** The false sentence is gone: the starter configuration written into
+> every user's home directory now names the three doors that *are* open and the one line that
+> opens the fourth, in the paragraph a Lisper reads first. `*swank-port*`'s docstring concedes
+> the argument in as many words — it used to say "nothing is lost" and that was wrong about
+> the audience the project names two paragraphs earlier.
+>
+> What did not land is the part this section actually asked for: SWANK on `ipc.lisp`'s terms —
+> `$XDG_RUNTIME_DIR`, mode 0600, owner-only, chmod before listen — which could then be **on by
+> default** with none of the security argument applying. The docstring says why: `create-server`
+> takes a port, so it is work in SWANK's socket layer rather than a flag here. That is a
+> statement of cost, not a ruling, and it is recorded under the heading THE STANDING QUESTION
+> IS A UNIX SOCKET so the next person meets it at the option rather than in a plan nobody
+> reads. The default is still off, and "nobody rallies around a socket" is still true.
+>
+> **And on 2026-08-11 the premise got checked, which nobody had done.** I wrote that a
+> Lisper's whole relationship with a running Lisp program is `M-x slime-connect`, and implied
+> this project was behind the field on it. StumpWM — the program this one is most like —
+> **ships no SWANK at all**: the word does not appear in its manual, and there is no swank
+> module in `stumpwm-contrib`. Its manual's answer to *Interacting with the Lisp process* is
+> `C-t :`, an eval prompt, which is exactly `Super+;`. SWANK lives on a wiki page and the
+> instruction is to type `(ql:quickload :swank)` and `(swank:create-server)` **into that
+> prompt, when you want it**.
+>
+> So the field's practice is on-demand, and this program was already a form ahead of it —
+> `start-swank` is exported, so `Super+;` `(start-swank 4005)` is the whole thing, with no
+> Quicklisp step. What was missing was anybody saying so: the starter configuration sent
+> every new user to `(setf *swank-port* 4005)`, which needs a restart, and is the worse of
+> the two paths this program ships. The one-form path is now the first thing the starter
+> config says about SWANK and has a section of its own in `README.org`. **The finding was
+> right that the door was invisible and wrong about which door it was.**
+
 ### The three barriers to the stated want, ranked
+
+> **Barrier 1 — LANDED for the build, OPEN for the dist.** `bootstrap.sh` pins the Quicklisp
+> dist to 2026-01-01 — the same tree the nixpkgs wayflan package pins, which is what makes
+> "the two paths compile the same source" a mechanism rather than an intention — and the
+> checksum moved onto the file that moves (`bdd00c4`). An SBCL floor is declared once and
+> checked in three places (`a8bfd2c`). `make dist` and one `VERSION` exist (`58cd86a`). Both
+> `.asd` files carry dist metadata, because Quicklisp, ocicl and qlot read a system definition
+> and none of them read a README (`025d14b`). **What is still OPEN is the act itself:** the
+> project is not *in* Quicklisp, ocicl or qlot. Everything that made submitting it possible
+> landed; submitting it did not.
+>
+> **Barrier 2 — OPEN, and it is the one that gates claim 1.** Gate 6's floors come from
+> `lattice/` alone now, so the examples are unfrozen and breadth *could* accumulate. There is
+> still nowhere for it to accumulate: `latticewm-contrib` does not exist, and until it does
+> the extension count stays at n = 1 for the reason StumpWM's would have.
+>
+> **Barrier 3 — LANDED — `025d14b`, `db81ce8`.** `CONTRIBUTING.md`, two issue templates and a
+> PR template; `.github/` had held `workflows` and nothing else. That does not make twenty-two
+> gates a smaller wall — it makes the wall documented, which is the difference between a
+> contributor who gives up and one who knows what the build is asking for.
 
 **1. Nobody can get in.** No Quicklisp, no ocicl, no qlot, no dist metadata — verified, the
 repo has none. And `bootstrap.sh` *vendors Quicklisp in order to bootstrap itself*, which is
@@ -1232,7 +1600,79 @@ The four features a new user asks for first are already blocked, and the sweep f
 | urgency / tagged / recording borders | `border-color`'s `cond` is closed at three states by construction, forty lines from `font-for`, which solved it correctly |
 | animations, fades, drag previews | no `wl_surface.frame` callback and no `wl_buffer.release` — claim 7, which the same fix closes |
 
+> **Three of four LANDED; one OPEN, and it is the architectural one.**
+>
+> *A modal layer* — **LANDED, `cadb09d`**, and it was half-built in a way that looked whole.
+> `capture-keys` had been made a policy generic; `capture-wanted-p` was a hardcoded `or` in
+> `seats.lisp` with no method anywhere near it. So a modal layer could declare F1–F12
+> readable, be handed two hundred bindings, see its generic listed in `--extension-surface`
+> with its own method under it, and **never receive a key**. `p:capture-wanted-p` is that
+> other half. It also fixed churn nobody had noticed: `arm-capture` compares the answer with
+> `EQ` against the last one, and the old `or` could return the pending submap *object*, so two
+> chords in a row disabled and re-enabled two hundred bindings to arrive back where they
+> started — in the one path that runs before the compositor can process input.
+>
+> *Border states* — **LANDED, `d9fafd8`.** `border-state` says which state a border is in;
+> `border-color-for` says what that state is drawn in, with the state in dispatch position.
+> Two generics rather than one, because an extension that could only override the second would
+> have no way to make anything say `:urgent`. A state nobody gave a colour gets the unfocused
+> one rather than a `no-applicable-method` in the middle of a frame — which is `font-for`'s
+> generosity and the half of the pattern that is easy to leave out.
+>
+> *Animations* — **LANDED, `7b49c07` and `2026-08-11`.** The buffer pool came first;
+> `wl_surface.frame` is handled now, `draw-when-ready` paces a drawer to the compositor
+> rather than to the event that asked, and the empty-pane outlines — which redraw on every
+> relayout, including the ones a pointer drag produces — use it. The wait is bounded, because
+> a surface that is occluded is never told to draw again and a redraw deferred behind that
+> callback would wait forever.
+>
+> *Per-output workspaces* — **WITHDRAWN, and this row was wrong twice over.** I wrote that
+> `world` has one cursor and one root stack and called the `(prop output :workspace)`
+> mechanism a workaround. Both halves are rulings with arguments in the tree, and I had not
+> read either.
+>
+> `output-content`'s docstring: *"PLAN.org's fiat rules multi-monitor as 'one model, one
+> viewport per output', and this generic is that ruling. […] The index lives on the output's
+> PROPS rather than in a slot, because which workspace a monitor is showing is exactly the
+> kind of state that should not require a core class to grow a field — and because an
+> extension that wants a different rule needs somewhere to put its own answer."* It is a
+> *policy generic*, so per-output content is an extension point, which is more than most
+> compositors offer. And it is finished work, not a stub: `show-workspace-on` as the single
+> writer, `ensure-workspaces-for-outputs`, `rehome-orphaned-workspace` for an unplug,
+> `restore-output-workspaces` keyed on the monitor's name so it survives a dock cycle.
+>
+> `show-workspace-on`'s docstring on the other half: *"the cursor is a place in a model
+> rather than a consequence of which screen is active, and a command that moved it to another
+> monitor would be answering a question nobody asked."*
+>
+> **What was actually missing was in the verbs, and this report did not find it: eighty
+> commands and not one of them named an output.** No focus the other screen, no send this
+> there, no swap. The only door was `workspace N`, which puts N on the screen you are already
+> looking at and trades away what was there — a real workflow, and the only one. Landed
+> `2026-08-11` as three additions and no model change, because the rulings do not obstruct
+> the feature, they *define* it: the cursor is one place in one model, so crossing to the
+> other monitor means going to the workspace that monitor displays. Motion crosses the screen
+> boundary on its own for no key at all; `focus-output` and `send-to-output` are for when you
+> do not want to walk; and `*remember-place*` is the piece that was genuinely absent, because
+> landing on a workspace's first pane every time is what made crossing not worth doing.
+>
+> The lesson is the one this report keeps finding and did not apply to itself: **a mechanism
+> that looks like a workaround may be a ruling nobody wrote down where you were looking.** It
+> was written down. In the docstring of the generic.
+
 ### Two things to fix before any of the above
+
+> **Both LANDED — `75d5908`, `db81ce8`.** The licence was corrected in the same commit that
+> committed this report: `flake.nix` says `licenses.gpl3Plus`, which is what `nix search`
+> prints and what a distribution packager reads.
+>
+> The front door: five `.org` files out of the repository root and into `doc/`, with all 140
+> org links still resolving, and `ASSESSMENT.org` says at the top what it is rather than
+> telling a visitor the program is not usable. That move immediately produced a bug worth the
+> line — `install.sh` reused the source path for both ends of the copy, so an installed copy
+> got `doc/doc/FINDINGS.org` — and `make install-check` caught it against a real prefix
+> (`8970cf1`). The check that installs to a scratch prefix and asserts every artifact the
+> documents promise is the one that noticed the documents had moved.
 
 **`flake.nix:164` declares `licenses.bsd3` and `LICENSE` is GPLv3.** As a metadata nit it is a
 one-line fix. As a community project it is what `nix search` shows, it stops a distro packager
@@ -1285,6 +1725,55 @@ the XML we vendored; nothing has ever re-vendored against a *different* river an
 that the recipe still works. That is a `plain`-job step.
 
 **The change, in order.**
+
+> **All seven LANDED.** This is the list the day was spent on, and it is the one the stated
+> want turns on.
+>
+> 1. **`plain` goes all the way** — `e3e198c`. Image, install to a scratch prefix,
+>    `install-check`, a staged `DESTDIR` install and `make dist`. A `flake` job runs
+>    `nix build` and `nix flake check`, which had run never, and `nix build` is the only thing
+>    that has ever caught a river protocol break. A `surface` job regenerates and diffs.
+>    Plus `actions/cache` and a concurrency group, so two pushes in a minute stop racing two
+>    cold builds. `plain` is also this project's only empirical answer to whether the declared
+>    SBCL floor is real: it builds against whatever Ubuntu packages rather than what nixpkgs
+>    pins.
+> 2. **`DESTDIR`** — `bdc16f3`. Two sets of paths, and the difference *is* the feature: the
+>    undecorated names are where the program will live and are what gets written *into* files;
+>    the d-prefixed names are where the bytes go. `DESTDIR` implies `--no-config`, which was
+>    already wrong without it — under this project's own documented
+>    `sudo ./install.sh --prefix /usr/local` the starter `init.lisp` landed in *root's*
+>    `.config`. `install-check.sh` asserts the one thing only the staged path can get wrong:
+>    that the launcher and the session entry name the prefix and not the staging root.
+> 3. **One image target** — `d8ce0ac`. The ship value is the default and `image-fast` is the
+>    development one. `install-check.sh` grew the assertion that would have caught it: every
+>    check in that file asked whether a file *exists*, which is this report's whole thesis, so
+>    it could not see a binary fourteen times too large sitting at exactly the path it was
+>    looking for.
+> 4. **The Quicklisp dist is pinned** — `bdd00c4`, and the pin is *asserted* rather than
+>    assumed: the installed `distinfo.txt` must name the dist that was asked for, because a
+>    pin that silently did not take reads as reproducible and is not.
+> 5. **The SBCL floor is declared and checked** — `a8bfd2c`. 2.2.6, and the reason is named
+>    rather than guessed: core compression became zstd there and its levels became 0..22, and
+>    `tools/image.lisp` dumps at 22 — so below the floor the build passes and `make image`
+>    cannot, which leaves nothing to install.
+> 6. **`make dist`, one version** — `58cd86a`, read from `VERSION` by both `.asd` files and by
+>    `flake.nix`, with gate 19 holding the two roff pages to it and refusing a version literal
+>    in `flake.nix`. `.gitattributes` pins LF, which is what makes `VERSION` a value rather
+>    than nearly one — and matters more for the shell scripts, since a CRLF checkout fails with
+>    `/bin/sh^M: bad interpreter`, which names neither the file that is wrong nor what is wrong
+>    with it, on a contributor's first command.
+> 7. **The re-vendor recipe is tested** — `db81ce8`. `make revendor-check` asserts that a river
+>    we cannot speak to is refused *by name with both numbers*; `make revendor-check RIVER_SRC=…`
+>    runs the four steps for real. CI runs the first.
+>
+> And the item that was not on the list and should have been: **`bootstrap.sh` failed on a
+> stock Fedora and told the user to go read a backtrace** (`988d1b2`). One dependency grovels
+> a C header, Fedora's gcc reads RPM hardening specs, and those specs live in a package a
+> stock install does not have — so the first thing a Fedora user met was forty frames of SBCL
+> naming neither this project nor the package. The script extracts the cause, says what it
+> means where it knows, and names the package through the per-distro table it already had.
+> That is what "all of Linux" costs, and it was found by running the non-nix path somewhere
+> other than the author's machine for the first time.
 
 1. **Make `plain` go all the way** — `make image install` into a scratch prefix, then
    `install-check`. Four lines, and it is the only way the majority path gets tested at all.

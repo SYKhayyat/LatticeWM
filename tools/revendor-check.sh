@@ -1,30 +1,37 @@
 #!/bin/sh
 # tools/revendor-check.sh --- Run the re-vendor recipe, and check that it works.
 #
-# INSTALL.org's four-step re-vendor recipe is not a footnote.  This project
-# pins river 0.4.6 exactly and refuses to start against anything else, which is
-# the right call for a protocol that moves inside a patch release -- and it
-# means that on most distributions at most times the packaged river will not
-# match, so the recipe *is* the install path for the majority.  It ends
-# "Nothing about this needs the original author," which is exactly right, and
-# nothing tested it.  Gate 5 asserts that the versions we bind match the XML we
-# vendored; nothing had ever re-vendored against a *different* river and asked
-# whether the recipe still worked.
+# INSTALL.org's re-vendor recipe is not a footnote, and it ends "Nothing about
+# this needs the original author," which is exactly right and was untested.
+# Gate 5 asserts that the versions we bind match the XML we vendored; nothing
+# had ever re-vendored against a *different* river and asked whether the recipe
+# still worked.
+#
+# WHAT RE-VENDORING IS FOR HAS CHANGED, AND THIS SCRIPT'S FIRST VERSION SAID SO
+# WRONGLY.  It opened "this project pins river 0.4.6 exactly and refuses to
+# start against anything else ... so the recipe *is* the install path for the
+# majority."  That was true when the startup check was an equality.  It is not
+# true now: the check is a floor and a ceiling, a river newer than the vendored
+# one is a supported configuration, and nobody has to re-vendor to run this
+# program.  Re-vendoring is how you pick up features river has added since --
+# a deliberate act by whoever is developing, not a tax on whoever is
+# installing.  The recipe still has to work; it is just no longer the door.
 #
 # TWO HALVES, AND ONLY ONE OF THEM NEEDS A SECOND RIVER.
 #
 #   ./tools/revendor-check.sh /path/to/river
 #       The real thing: copy that river's protocol XML over src/protocol/,
 #       write PINNED, and run the build and the gates.  Green means somebody
-#       with a newer river can follow four steps in a document and have a
-#       working window manager without asking anybody.
+#       can follow the recipe against a river nobody here has seen and end up
+#       with a working window manager without asking anybody.
 #
 #   ./tools/revendor-check.sh
-#       The half that needs nothing: synthesise a river this program does not
-#       accept by bumping an interface version in a scratch copy of the XML,
-#       and assert that the build *refuses*, by name, with a message that says
-#       which interface and which two numbers.  A pin that fails silently is
-#       worse than no pin, and that is the property being asserted.
+#       The half that needs nothing: bump an interface version in a scratch
+#       copy of the XML, which is exactly what a re-vendor that copied the
+#       files and forgot the constant looks like, and assert that the *build*
+#       refuses by name with both numbers.  That failure is the one worth
+#       catching, because it is the one that otherwise compiles, passes every
+#       count in the gate, and shows up at a login screen.
 #
 # The working tree is restored either way, including after a failure.
 
@@ -80,7 +87,7 @@ if [ -n "$river_src" ]; then
 fi
 
 # ------------------------------------------------------- the synthetic half
-say "no river given: checking that a river we do NOT accept is refused"
+say "no river given: checking that a half-finished re-vendor is refused"
 
 xml="$root/src/protocol/river-window-management-v1.xml"
 before=$(grep -o 'name="river_window_manager_v1" version="[0-9]*"' "$xml" | head -1)
@@ -90,19 +97,20 @@ if [ -z "$before" ]; then
 fi
 current=$(printf '%s' "$before" | sed 's/.*version="\([0-9]*\)".*/\1/')
 bumped=$((current + 1))
-say "vendored river_window_manager_v1 is version $current; pretending it is $bumped"
+say "vendored river_window_manager_v1 is version $current; pretending it is"
+say "$bumped, which is a re-vendor that copied the XML and forgot the constant"
 
 sed -i.bak "s/name=\"river_window_manager_v1\" version=\"$current\"/name=\"river_window_manager_v1\" version=\"$bumped\"/" "$xml"
 rm -f "$xml.bak"
 
 if (cd "$root" && make build gates >"$backup/out" 2>&1); then
     say ""
-    say "THE PIN DOES NOT HOLD.  The XML now declares river_window_manager_v1"
-    say "at version $bumped and the program binds $current, and the build passed"
-    say "anyway -- so a river this program cannot speak to would be accepted at"
-    say "build time and refused at a login screen, which is the failure mode"
-    say "src/protocol/PINNED and flake.nix both call the largest threat to this"
-    say "project.  Gate 5 is what should have caught this."
+    say "THE CHECK DOES NOT HOLD.  The XML now declares river_window_manager_v1"
+    say "at version $bumped and the program's ceiling is $current, and the build"
+    say "passed anyway -- so a re-vendor that copied the files and skipped the"
+    say "constant would compile, pass every count in the gate, and then bind a"
+    say "version it cannot decode, which is diagnosable only by running it."
+    say "Gate 5 is what should have caught this."
     exit 1
 fi
 

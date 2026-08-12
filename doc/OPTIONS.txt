@@ -561,6 +561,28 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   
       (push '(:h . :mod5) *modifier-aliases*)
 
+*MOTION-CROSSES-OUTPUTS*
+  default: T
+  Walking off the edge of one monitor arrives on the next one.
+  
+  MOTION IS CONTINUOUS ACROSS EVERY BOUNDARY, and the screen is the last
+  boundary this program was not crossing.  Motion already leaves a split when
+  the direction crosses its axis, and crosses into the lattice cell next door
+  entering through the edge it left by; pressing Right at the right-hand edge of
+  the left monitor did nothing at all, which made two monitors feel like two
+  window managers.
+  
+  It costs no key.  With one monitor there is nothing in any direction and the
+  behaviour is unchanged to the character, so this is invisible until a second
+  screen is plugged in -- which is when somebody wants it.
+  
+  Where you arrive is where you last were on that screen (see *REMEMBER-PLACE*),
+  not its first pane, because arriving somewhere you did not choose is what made
+  the explicit commands not worth pressing either.
+  
+  Set it to NIL for motion that stops at the edge of a workspace, and reach the
+  other screen with FOCUS-OUTPUT.
+
 *MOTION-REFERENCE-RECT*
   default: (0 0 1920 1080)
   The nominal output used to compute geometry for motion when no layout has
@@ -721,6 +743,32 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   readline maximalist wants more -- and because it is the one part of
   CAPTURE-KEYS somebody might reasonably want to change without writing a
   method.
+
+*REMEMBER-PLACE*
+  default: T
+  Come back to where you were standing in a workspace, rather than to its top.
+  
+  Switching to a workspace used to put the cursor at its first leaf, always.  On
+  one monitor that is a small annoyance you stop noticing; with two it is the
+  thing that makes crossing between screens not worth doing, because every
+  crossing costs you your place and there is no key that gives it back.
+  
+  The memory is a property of the *workspace*, not of the output.  That is the
+  smaller and the more correct of the two: the cursor is one place in one model
+  (see SHOW-WORKSPACE-ON, which rules that a command must not move the keyboard
+  to another monitor), so what a workspace has to remember is where you stood in
+  it — and a workspace that moves to the other screen takes that with it, which
+  is what anybody would expect and what a per-output table would get wrong.
+  
+  The stored path is relative to the workspace node rather than to the root, so
+  it stays true if the workspace is not where it was in the stack.  A remembered
+  path that no longer leads anywhere is not a problem to check for: it goes
+  through REPAIR-PATH like every other stale path in this program, which lands
+  you at the deepest surviving part of where you were — still closer than the
+  top.
+  
+  Set it to NIL to always arrive at the first pane, which is deterministic and
+  which some people genuinely prefer.
 
 *REPEAT-DELAY*
   default: NIL

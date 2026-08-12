@@ -203,11 +203,16 @@ fi
 # is only ever going to compile would be wrong.
 #
 # THE VERSION IT WANTS IS READ FROM src/protocol/PINNED, not written here.
-# river-window-management-v1 changes *within* a version number — 0.4.6 raised
-# it from 4 to 5 in a patch release — so the startup check is an equality and
-# "0.4 or newer" is the wrong sentence to print.  Keeping the release name in
-# one file means this warning cannot drift from what the program will actually
-# accept, which is exactly how it drifted before.
+# Keeping the release name in one file means this warning cannot drift from
+# what the program will actually accept, which is exactly how it drifted
+# before.
+#
+# AND IT ONLY WARNS DOWNWARD, which it did not used to.  The startup check was
+# an equality once, so any river but the vendored one earned a warning; it is a
+# floor now, and a river *newer* than the vendored release is a supported
+# configuration rather than a problem.  Warning on it would be telling the
+# truth about the past and a lie about the program, and the fastest way to
+# teach somebody to ignore warnings is to print one that does not matter.
 if command -v river >/dev/null 2>&1; then
     version=$(river -version 2>/dev/null || echo unknown)
     say "river       $version"
@@ -218,17 +223,25 @@ if command -v river >/dev/null 2>&1; then
     found=${version%% *}
     pinned=$(sed -n '1s/^river \([0-9][0-9.]*\).*/\1/p' \
                  "$root/src/protocol/PINNED" 2>/dev/null || true)
-    case "$found" in
-        unknown) ;;
-        "${pinned:-$found}") ;;
-        *) say ""
-           say "  WARNING: this river is $found, and the protocol in"
-           say "  src/protocol/ was vendored from river ${pinned:-0.4.6}."
-           say "  LatticeWM checks the interface version at startup and"
-           say "  refuses to run on a mismatch rather than misbehave -- river"
-           say "  changes that protocol within a version number.  INSTALL.org,"
-           say "  'Moving to a newer river', is four steps and needs nobody."
+    # `sort -V' rather than a string compare, because the only question that
+    # matters now is older-or-not and "0.4.10" is not less than "0.4.6" no
+    # matter what a lexical compare thinks.  It is in coreutils, so it is on
+    # every machine that got this far.
+    older=no
+    if [ -n "${pinned:-}" ] && [ "$found" != unknown ] && [ "$found" != "$pinned" ]; then
+        [ "$(printf '%s\n%s\n' "$found" "$pinned" | sort -V | head -1)" = "$found" ] \
+            && older=yes
+    fi
+    case "$found:$older" in
+        unknown:*) ;;
+        *:yes) say ""
+           say "  NOTE: this river is $found, older than the ${pinned:-0.4.6} the"
+           say "  protocol in src/protocol/ was vendored from.  That is usually"
+           say "  fine -- LatticeWM accepts a range, not one release -- but if"
+           say "  it is below the floor it will say so at startup and name both"
+           say "  numbers.  'latticewm --version' prints the range it accepts."
            ;;
+        *) ;;
     esac
 else
     say "river       not found -- the build will work; running it will not."

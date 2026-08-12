@@ -1,10 +1,25 @@
 river 0.4.6 / nixpkgs /nix/store/4555ycy58srgn47zrjndmm4hjqd3inxa-river-0.4.6
 
+THIS IS A CEILING, NOT A PIN, AND THE NAME OF THE FILE IS NOW WRONG.  It is
+kept because four other files parse its first line, and a rename is not worth
+what it would cost them.  What this release name means today: the protocol XML
+beside it was copied from river 0.4.6, the bindings were generated from that
+XML, and LatticeWM binds every interface at the version that XML declares.  It
+does not mean you need river 0.4.6.  Newer is a supported configuration and
+always will be — Wayland obliges the compositor to speak the version a client
+bound — and the floor is 0.4.5, set by the oldest interface version carrying
+every request this program sends.  See src/runtime/session.lisp.
+
+Re-vendoring is therefore how features are picked up, not how installation is
+survived.  The paragraphs below are the last time it happened.
+
 Re-vendored from 0.4.5, which is what this directory held until the flake's
-build phase first connected to the river the same derivation pins and got the
-refusal +WINDOW-MANAGEMENT-VERSION+ exists to give.  River bumped
-river_window_manager_v1 from 4 to 5 in a *patch* release, which is the thing
-flake.nix's header says is the largest single threat to this project.
+build phase first connected to the river the same derivation pins and got a
+refusal.  River bumped river_window_manager_v1 from 4 to 5 in a *patch*
+release, which is the thing flake.nix's header says is the largest single
+threat to this project.  It is worth recording that the refusal was correct
+about the fact and wrong about the response: the version had moved, and the
+right answer was to keep running, which is what the check does now.
 
 There were two ways out and this is the one taken: move to 0.4.6 rather than
 pin river back to 0.4.5.  The argument is the diff, not a preference.  Every
@@ -22,9 +37,15 @@ change from 4 to 5 is additive or a clarification of prose:
 Nothing was removed and nothing was renamed, so the feared failure — a
 pre-release protocol breaking *within* a version number — is not what happened
 here.  Pinning back would have frozen the pair on a superseded release that
-leaves nixpkgs on its own schedule, and the version check refuses in both
+leaves nixpkgs on its own schedule.
+
+That last sentence used to continue "and the version check refuses in both
 directions: a build vendored at 4 cannot start on any river a user installs
-today.
+today."  That was the reason to change the check rather than a reason to
+re-vendor faster.  Refusing upward bought nothing — the diff above is the
+evidence, and every line of it is additive — and it cost the session of
+everyone whose distribution moved before this project did.  A build vendored
+at 4 runs on a river offering 5 now, and receives no capture_sessions.
 
 Both capture_sessions events are now handled.  They were not when this file
 was first written, and the note here said so: "a feature we do not have rather
@@ -35,10 +56,22 @@ the window and on the output, a change is announced in the echo area, the
 shipped status line carries a standing REC for as long as it lasts, and
 :CAPTURE-CHANGED is the hook for anything else — src/runtime/capture.lisp.
 
+The other direction is exercised, not assumed.  `make integration' drives a
+real headless river, and against Fedora 44's river 0.4.5 — interface version 4,
+one below this vendored XML — the whole suite passes: it binds at 4, is never
+sent either capture_sessions, and reports that as a version gap rather than a
+failure.  Both capture_sessions handlers are therefore covered by the unit
+suite and by nothing live, which is honest and is the cost of the range: the
+only compositor that can send them is one newer than the oldest we accept.
+
 The three input protocols moved 1 -> 2 in the same release, each adding a
-`done' event.  They are bound at whatever version is offered rather than
-checked for equality, so they degrade to their old behaviour against an older
-river instead of refusing.
+`done' event this program does not listen for.  They used to bind at whatever
+version river offered, which this file described as degrading "to their old
+behaviour against an older river instead of refusing."  True, and only half the
+axis: against a *newer* river the same line promised to decode events these
+bindings have never seen, and a promise like that is not broken loudly.  All
+six protocols have a ceiling constant now and all six are clamped to it; gate 5
+checks every one against the XML here rather than two of them.
 
 wayland.xml is wayland 1.23, taken from wayflan's own vendored copy.  It is
 here for gate 8 and for nothing else: wayflan generates the core protocol into
