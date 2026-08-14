@@ -73,7 +73,7 @@
 ;;; feature is a failure and not a silent fallback to an uncompressed image:
 ;;; `make image' is what `make install' installs, install-check has a size
 ;;; ceiling precisely because an uncompressed image once shipped by accident,
-;;; and quietly producing the 190 MB one here is how that happened.
+;;; and quietly producing the uncompressed one here is how that happened.
 ;;; WRITTEN AS A LIST OF LINES RATHER THAN ONE FORMAT STRING, because a
 ;;; diagnostic whose whole job is to be readable must not have its indentation
 ;;; decided by CL's tilde-newline rule.  The first draft of this used `~%~' at

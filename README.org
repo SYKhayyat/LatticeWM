@@ -360,6 +360,29 @@ asserts on every build that it touches no core file. What that cost is written
 up in [[file:doc/FINDINGS.org][FINDINGS.org]] — read that first if you want to know whether the premise
 holds.
 
+* Screen capture
+
+The one thing you cannot see by looking at your own screen is that somebody
+else can see it too. A screen share you forgot to stop looks exactly like a
+screen share you never started.
+
+River reports how many capture sessions are reading each window and each
+monitor, so LatticeWM can tell you: it says so in the echo area when one starts
+or stops, the shipped status line carries a standing =REC= for as long as one
+lasts — because an announcement scrolls away and the fact does not — and =M-x
+captures= lists what is being recorded, including a window you minimized and
+can no longer see. =:capture-changed= is the hook for anything else: a status
+bar, a light on a keyboard, a script that mutes a microphone.
+
+Nothing about placement changes. A window being recorded is still tiled,
+hidden, minimized and closed exactly as it was; this is information, and it is
+deliberately only information. Set =*announce-capture*= to =nil= for the status
+line without a line in the echo area every time OBS adds a source.
+
+This needs a river that carries interface version 5 — 0.4.6 or newer. Against
+an older one the count is simply never reported, which the model keeps distinct
+from "reported as zero".
+
 * Configuring it
 
 #+begin_src sh
@@ -566,277 +589,78 @@ failed session, which is the worst possible moment to find one.
 
 * Development
 
-[[file:CONTRIBUTING.md][CONTRIBUTING.md]] is worth four minutes before a first pull request: it lists
-what each of the twenty-two gates refuses, which documents are frozen records
-and must not be edited into agreement with the code, and which parts of this
-tree are generated and should never be edited by hand at all.
+Everything CI runs is reachable from your machine:
 
 #+begin_src sh
-make          # build, gates, tests
-make test     # the unit suite alone
+make              # build, the twenty-two gates, and the unit suite
+make test         # the unit suite alone
 make integration  # a real river, headless, driven for a few seconds
-make check    # all of the above -- what CI should run
-make run      # river nested inside your current session
-make image    # dump ./latticewm -- 13 MB; make image-fast for the dev loop
-make surface  # regenerate the docs under doc/
+make check        # all of the above -- and what CI runs
+make run          # river nested inside your current session
+make image        # dump ./latticewm -- 13 MB; make image-fast for the dev loop
+make surface      # regenerate the six documents under doc/
 #+end_src
 
-Twenty-two gates run on every build — and, since there is a [[file:.github/workflows/check.yml][workflow]] now, on every push
-as well, which is what "CI" ought to have meant when this line first claimed
-it: zero compiler warnings under =safety 3=; every
-policy generic and command documented; the lattice touching no core *and no
-core file naming the lattice*, within a line budget and above a method floor;
-the core running with the lattice absent;
-codegen counts *and the protocol versions the program binds* matching the
-pinned XML; how many policy generics have ever been answered from *outside*
-=src/= staying above a floor; every declared hook run and every run hook declared; every
-event handled existing on the interface it is handled for; the image, the
-installer and the shipped configuration agreeing about where an extension
-lives; no container kind named by class outside its own definition; every
-registered option read by something; every claim these documents make
-about the program still being true of it; every node property the program
-*reads* being written by something; every declared hook being attached to
-by a suite that runs it; every policy that overrides the method reading an
-option offering an option of its own in its place; every name the two
-published packages export naming something and being reached by something;
-an option named after a policy generic being read by a method on that generic;
-a file whose name begins =defaults-= being the answers half of a pair whose
-other half defines no methods;
-and the project saying the same thing about itself in every place it says one.
-The reasoning behind each is in [[file:doc/PLAN.org][PLAN.org §gates]].
+*Twenty-two gates run on every build, and on every push.* They are not style
+checks: each one exists because something in this project rotted silently once,
+and each prints the argument for its own existence before it prints what is
+wrong with your branch.
 
-Gate 19 is the newest, and it is the only one that reads no Lisp. Three files
-declare this project's licence — =latticewm.asd=, =lattice.asd= and
-=flake.nix= — and a fourth, =LICENSE=, is 674 lines of the licence itself. Two
-of the declarations had been corrected from =BSD-3-Clause=, which they said and
-which was simply wrong; the third had not, and the third is =meta.license= in
-the flake, which is what =nix search= prints, what a distribution packager
-reads, and what decides the licence an incoming contribution arrives under. A
-metadata nit on a one-author project and a real obstacle on a community one.
+*The argument for each gate lives in the gate* — as the comment above it in
+=tools/gates.lisp=, which is the one place it cannot drift away from the check
+it describes. This section used to carry a second copy of all of it, a paragraph
+per gate, for about a quarter of this file. A third copy of a thing that already
+exists twice is precisely the failure the gates were built to catch, so it is
+gone rather than updated.
 
-It also counts itself. The sentence this paragraph opens under — /N gates run on
-every build/ — was written out in five places and read by nothing, so every gate
-added after them made five sentences false in silence, and the number they all
-carried was the number that had been right two sessions earlier. That is the
-=*smart-gaps*= shape, in the documents this project
-stakes its record on. Gate 19 counts the banners in ~tools/gates.lisp~ and
-holds =README.org=, =INSTALL.org= and the CI workflow to the number. It found
-one more on the day it was written: the sentence about gate 14 below said "the
-other sixteen" and there had been seventeen of them for some time.
+Where to go instead:
 
-Gate 18 is about the file list rather than the program.
-Two files under =src/policy/= carry a =defaults-= prefix — and they meant
-different things by it. ~policy/motion.lisp~ is the *algorithm*, the walk up
-the ancestor chain, and defines no methods at all; ~policy/defaults-motion.lisp~
-is the set of answers that walk asks the shipped containers for. A reader
-looking for ~step-address~ does not need to know what step-address is about,
-only that it is an answer. ~policy/defaults-lifecycle.lisp~ wore the same prefix
-over a sort by *subject*: it held four methods on ~lifecycle-policy~ and
-~policy/lifecycle.lisp~ held five more, split "properties" from "events", and
-so put ~window-rule-for~ — whose whole job is setting a window's properties —
-in the events file, which the properties file then needed a comment to explain. The
-two are now one file with sections, and the prefix is checked, because what let
-that happen is that it had never meant anything: no gate, nothing written down,
-and the one place it *was* written down — the file list at the top of
-~policy/conventional.lisp~ — had itself drifted to "the methods are in five
-files" over a list of seven. The gate cannot tell a good decomposition from a
-bad one in general and does not try; ~input-policy~'s answers live in six files
-for six good reasons. It holds the one rule the tree does state.
+- [[file:CONTRIBUTING.md][CONTRIBUTING.md]] — what will refuse your branch, as a table, before you hit it
+- [[file:doc/ONBOARDING.org][doc/ONBOARDING.org]] — the map of the tree, the five instruments and what each
+  one structurally cannot see, and what each kind of change obliges you to do
+- =tools/gates.lisp= — the reasoning, per gate, beside the gate
 
-Gate 17 is the smallest question in the file: when an
-option and a generic share a name, are they one relationship or two things
-spelled alike? Five pairs share one — ~gaps~ and ~*gaps*~, ~border-width~ and
-~*border-width*~, ~keys-hint~, ~move-into-occupied~, ~new-child-side~ — and the
-rule this project settled on says they are one thing: /the generic is the
-extension point, the option is what its shipped method returns/. That was true
-of all five by nothing stronger than the fact that somebody had written it that
-way. Move the read into a helper, answer the option from a different generic,
-and the program holds a generic and an identically-named option with no
-relationship at all — while every gate passes, because gate 11 only asks that
-*something* reads the option and gate 15 only asks about methods that override
-a reader. A user reads ~gaps~, sets ~*gaps*~, and is wrong for a reason no
-instrument can see. That is ~*smart-gaps*~ and ~*new-workspace*~ a third time:
-a relationship between two independently maintained things, assumed rather than
-asked about. The gate asks the image, and the same fact is now printed in the
-document — every generic whose shipped method reads an option says =answered
-from: *gaps*= under its docstring, so the reader who arrives at the *generics*
-section, which is the one every docstring points at and the one that says
-"write a method", can see that twenty-five of the sixty-nine decisions are
-already settable without writing anything.
+** The one check that is different in kind
 
-#+CLAIM: (let ((by-generic (options-by-generic)))
-#+CLAIM:   (every (lambda (g) (member (find-symbol (format nil "*~a*" (symbol-name g))
-#+CLAIM:                                          '#:latticewm/policy)
-#+CLAIM:                              (gethash g by-generic)))
-#+CLAIM:          '(gaps border-width keys-hint move-into-occupied new-child-side)))
+=make integration= runs river on a headless backend, connects to it as the
+ordinary Wayland client this program is, opens windows, drives the real commands
+from outside a protocol sequence, and asserts on what came back. Every other
+check in this project *constructs* the state it examines, and the bugs that
+survive live exactly where constructed state cannot reach.
 
-Gate 16 is about the one thing on the extension surface
-that belongs to no mechanism. Every other gate asks after a *kind* of thing
-that has a registry — a generic, an option, a hook, a property key — and a
-plain exported function is in none of them. It is a line somebody typed in
-=src/package.lisp=, and the only thing that had ever checked that line against
-the program was a person reading it. Two kinds of promise were being broken.
-~replace-child~ was exported and defined *nowhere at all*, on the advertised
-container protocol; it was fixed by hand and ~world-props~ was already the next
-one, left in the list when the accessor was renamed to ~props~. ~export~ interns
-the symbol, so ~(c:world-props *world*)~ in a config file reads perfectly and
-dies at run time with an undefined function, which looks like a bug in *your*
-config rather than a hole in ours. And five more were defined, exported, and
-reached by nothing whatever — no caller, no test, no line of any document. The
-clearest was ~axis-of~, whose entire docstring was "alias for ~direction-axis~,
-for call sites that read better this way", with no call sites. The gate reads
-~src/~ with the reader, so a name is matched by symbol identity and a docstring
-cannot answer for code that does not exist, and searches the suites, the build
-tools and the documents as text, because a name is still a name. It fails on a
-published name nothing reaches and *reports* the thirteen that only a suite or
-only a document reaches — these packages exist to be called from outside this
-repository, so a model function the program itself never needs is what a
-published API is supposed to look like.
+It has found six, and not one of them is visible to a test that builds its own
+world:
 
-Gate 15 is the second half of a sentence the project had
-been writing down for three commits: /the generic is the extension point, the
-option is what its shipped method returns, and a policy that overrides that
-method stops reading the option/. Gate 11 made the first two clauses facts
-about the image. The third was prose — and it was true of a shipped option
-nobody could have known about. Load the lattice and ~make-workspace~ is
-answered by a method that never reaches the shipped one, so ~*new-workspace*~
-decides nothing: registered, documented, settable, printed by
-=--list-options=, and certified as read by gate 11, which is right, because the
-method that reads it still exists and simply never runs. Every instrument
-pointed at that option said it worked. So =latticewm --extension-surface= now
-prints, under each option, which methods win over its readers — a fact about
-the image you are running rather than a sentence somebody has to remember to
-keep true — and the gate requires that an override which wins everywhere either
-compose with ~call-next-method~ or read an option of its own. Overriding
-wholesale stays legal; the lattice's workspace is a plane, always. Doing it and
-leaving the user nothing to set does not: the lattice pays ~*new-workspace*~
-back with ~*new-workspace-cells*~.
+- pointer bindings enabled through the *keyboard* interface — a type error
+  inside a generated marshaller, caught, logged and otherwise completely
+  silent. Super+drag did nothing;
+- a window that had left the tree, by being minimized or by being on the
+  workspace you walked away from, never being hidden — so the model was right
+  and the screen was wrong;
+- =new-workspace= moving the cursor to a workspace it never put on screen;
+- =op_start_pointer= sent outside the manage sequence that is the only place it
+  is legal, so Super+drag did nothing a second time for a different reason;
+- =nix build= succeeding while building a session entry that could not start,
+  because nothing in that build had ever connected to the river it pins;
+- and an overlay saying /any key closes this/ while the capture bindings that
+  would deliver those keys were disabled — a decision the unit suite can check
+  and an *arming* only a compositor can confirm.
 
-Gate 14 is the one the other twenty-one could not ask. All
-of them read the program or the documents; a hook is neither, because a hook
-that nothing has ever attached to is *correct* by every static measure and
-untested by construction. Fourteen of seventeen were in that state, and the
-three that were checked first were all wrong — ~:startup~ ran before the
-compositor connection existed while its docstring said it ran after,
-~:output-added~ ran before the monitor had a name or a size, and
-~:focus-changed~ was skipped by the commonest focus change there is, a window
-closing. So every declared hook must now be attached to and watched by tests/,
-by the integration run, or by the session recorder, depending on which of the
-three can produce the event at all; the integration run keeps a recorder on
-every hook for the whole session and fails on one that neither fired nor is
-named as one a headless backend cannot fire.
+** The pipeline, and what it was doing before
 
-Gate 13 is gate 11's question asked of the mechanism next
-door. A node property is a keyword you type in two places — the write and the
-read — and nothing registers it, declares it or checks it, so a key with only
-one of the two is invisible: ~prop~ answers ~nil~, the branch behind it never
-runs, and nothing ever fails. Two had shipped that way. The lattice's
-~clip-rect~ — the cropped trailing cell above, river's best request, a row in
-FINDINGS' list of what the extension overrides — read a bound that nothing
-wrote, so it returned "clip nothing" for its entire life; and the core's
-~render-order~ had a third render tier above the floats that no node could ever
-be put into. The gate reads the source with the *reader* rather than grepping it,
-so a key is found by symbol identity and a docstring naming one cannot make it
-pass. It fails on a key that is read and never written, and *reports* the
-converse rather than failing: ~props~ exists precisely so that state can be hung
-on an object for a reader the core does not know about, and a gate that demanded
-an in-tree consumer for =:pid= would be a check writing the design.
+=README.org= used to say =nix build=, =nix-shell=, =make check= and CI were
+green. Three quarters of that was true. *CI had never been green — not one run,
+ever*, and this sentence had been sitting here saying otherwise.
 
-Gate 12 came before it and it is the only one that reads a sentence. Eleven
-gates point at the code and none of them can see a paragraph, so when SWANK
-was turned off by default — correctly; it was unauthenticated code execution
-started before the user had done anything — the first instruction in the
-extension guide became false and every check passed. The same had already
-happened three times over: this file said the layer-shell and HiDPI paths were
-"exercised by the test suite" when nothing referenced them, =*smart-gaps*= was
-documented as working while nothing read it, and the plan's own written
-ceiling of thirty policy generics went on saying thirty while the count
-reached sixty-nine. So a document is now declared *current* or *historical*,
-every option a current document names must exist, and any sentence can be
-pinned to the image with a =#+CLAIM:= line that the build evaluates. It cannot
-find a false sentence nobody annotated, and nothing honest can; what it can do
-is make one pinnable for the cost of a line, and refuse to let a document
-arrive unclassified.
+What it was reporting was three real defects: a test helper that only worked on
+a newer SBCL than the project claimed to support, a generated document whose
+content depended on the compiler that generated it, and an install check whose
+stated precondition was false on the only machine that ran it. All three are
+fixed and each carries a changelog entry.
 
-Gate 11 came before it and is a question the other ten could not ask.
-=*smart-gaps*= was registered, exported, documented, printed by
-=--list-options= and described as working in a generated document — and read
-by nothing, from the commit that added it until the one that added the gate.
-Gate 2 asks whether every generic is documented; gate 9 asks whether the
-installer and the image agree about the option *list*; a unit test asks whether
-each option's symbol is the one a configuration file would set, which is the
-check that found twenty-four unsettable options. All of them ask the registry
-about itself. Being registered, documented, installable and settable are four
-promises an option makes, and it makes a fifth: that somebody looks. Gate 11
-asks SBCL's own cross-reference data who reads each one, so it is a fact about
-the compiled program rather than about its spelling — a docstring mentioning
-the name does not satisfy it and a read inside a macro expansion does not
-escape it.
-
-Gate 6 used to be the runtime-to-policy *line ratio*, and deleting it is the
-one gate change worth mentioning in a README. A ratio of directory line counts
-can be satisfied by moving files, and over four commits it was: the number was
-walked from 0.82 to 1.17 largely by relocation, two of those commits reproduce
-92–100% of the moved lines verbatim and add no dispatch point, and the floor
-was set after the position had been arranged. What it stood for — that most of
-the system's behaviour should live above the boundary — is right, so gate 6 now
-asks it directly and unmovably: *how many policy generics has anybody outside
-=src/= ever specialised?* The answer today is 15 of 69, which is a much less
-flattering number than 0.99 and is the actual state of the extension surface.
-
-#+CLAIM: (= 69 (length (policy-generics)))
-
-=make integration= is the one that is different in kind. It runs river on a
-headless backend, connects to it as the ordinary Wayland client this program
-is, opens windows, drives the real commands from outside a protocol sequence,
-and asserts on what came back — because every other check in the project
-*constructs* state, and the bugs that survive live exactly where constructed
-state cannot reach.
-
-It has found five. Four are fixed: pointer bindings enabled through the wrong
-interface, so Super+drag did nothing; a window that left the tree — by being
-minimized, or by being on the workspace you walked away from — never being
-hidden, so the model was right and the screen was wrong; =new-workspace= moving
-the cursor to a workspace it never put on the screen; and =op_start_pointer=
-sent outside the manage sequence that is the only place it is legal, so
-Super+drag did nothing for a second time and a different reason. Not one of them
-is visible to a test that builds its own world.
-
-The fifth was a packaging decision rather than a bug to patch, and it is now
-made. *=nix build= failed, and should have.* River bumped
-=river_window_manager_v1= from 4 to 5 in a patch release, the flake pins a
-channel rather than a river, and the vendored protocol was version 4 — so the
-flake was building a session entry that could not start, and succeeded, because
-nothing in that build had ever connected to the river it pins.
-
-All six river protocols have been re-vendored from 0.4.6 rather than pinning
-river back to 0.4.5, because every 4 → 5 change is additive: two new
-=capture_sessions= events and five clarifications of prose, nothing removed and
-nothing renamed. The version check refused in *both* directions when that
-decision was made, so pinning back would have left the program unable to start
-on any river a user installs today; it is a floor and a ceiling now, and
-=INSTALL.org= has that half. =src/protocol/PINNED= carries the diff and the
-argument; [[file:doc/PLAN.org][PLAN.org §log8]] carries the decision.
-
-That paragraph used to end "=nix build=, =nix-shell=, =make check= and CI are
-green", and three quarters of that was true. *CI had never been green — not one
-run, ever* — and the sentence had been sitting here saying otherwise. What
-it was reporting was three real defects: a test helper that only worked on
-newer SBCL, a generated document whose content depended on the compiler that
-generated it, and an install check whose stated precondition was false on the
-only machine that ran it. All three are fixed and each has a changelog entry.
-The lesson is the cheap one and it is worth writing down where it happened: *a
-red instrument nobody reads is indistinguishable from no instrument*, and this
-project had spent a lot of effort building the instrument.
-
-Both of those new events are now handled, which they were not when that
-paragraph was written. The window manager knows how many screen capture
-sessions are reading each window and each screen: it says so when one starts or
-stops, the status line carries a standing =REC= for as long as one lasts, =M-x
-captures= says what is being recorded — including a window you minimized and
-can no longer see — and =:capture-changed= is the hook for a status bar, a
-keyboard light or a script that mutes a microphone. Nothing about placement
-changes; being recorded is information, not a policy.
+The lesson is a cheap one and worth writing down where it happened: *a red
+instrument nobody reads is indistinguishable from no instrument*, and this
+project had spent a great deal of effort building the instrument.
 
 * Documentation
 
@@ -871,120 +695,86 @@ document"/, which is what a record that has not been laundered looks like.
 
 Working, and used on bare metal.
 
-*What the build now stands on, stated first because it is the part that was
-weakest.* The whole of =make build gates test surface= is green on SBCL 2.2.6 —
-the declared floor — and on 2.2.9 and 2.6.6, and the six generated documents
+** What the build stands on
+
+The whole of =make build gates test surface= is green on SBCL *2.2.6* — the
+declared floor — and on *2.2.9* and *2.6.6*, and the six generated documents
 come out *byte-identical on all three*. The integration suite is green against
-river at both ends of the supported range: 0.4.5, which carries interface
+river at *both ends* of the supported range: 0.4.5, which carries interface
 version 4 and is the floor, and 0.4.6, which carries 5 and is what the vendored
-protocol was generated from. Those are four separate claims that used to be one
-claim and an assumption; [[file:INSTALL.org][INSTALL.org]] has the table and
-=src/protocol/PINNED= has the protocol half.
+protocol was generated from.
 
-None of that was true a release ago, and the way it was false is worth one
-sentence: there was a CI job built for the express purpose of asking whether
-the declared SBCL floor was real, it had answered *no* on thirty consecutive
-runs, and nobody had read it. The answer was a defect in a test helper rather
-than in the program — but a red instrument nobody reads is indistinguishable
-from no instrument, which is the failure mode after the one the gates were
-designed against.
+Those are four separate claims that were one claim and an assumption a release
+ago. [[file:INSTALL.org][INSTALL.org]] has the table; =src/protocol/PINNED= has
+the protocol half.
 
-Verified on real hardware: keybindings including shifted keys, the minibuffer,
-spawning, closing, splits, floating, the empty-pane spawn, persistence, and
-the lattice — walking cell to cell across an infinite plane, carrying windows
-between cells, and zooming out to a grid.
+** How far each thing is actually checked
 
-Verified against a *headless river* on every run of =make check=. The suite
-prints its own section and assertion counts every run, which is why they are
-not written here — a number in prose that nothing checks is the failure this
-project has watched four times. None of these can pass without a compositor
-having agreed: connecting and version negotiation; an output with
-the name and size river gave it; the manage and render sequences; the
-shared-memory overlay path, its HiDPI arithmetic, and river releasing a buffer
-it has finished reading — which is the one event this program owed the
-protocol and, for its whole life, did not answer; the echo area's own
-surface and the space it reserves; every key in the keymap becoming a real
-binding object, and a key bound at runtime becoming one more; the pointer
-bindings; a client window announced, placed, sized and focused; the emitter's
-diff re-sending nothing when nothing changed; two windows in disjoint
-rectangles; a dozen commands driven from outside a protocol sequence the way a
-script drives them; floating, drag-move, drag-resize, fullscreen and minimize;
-workspaces, tags, named scratchpads, undo and redo; the saved layout written
-and read back with a real window's tags in it; and the control socket
-answering one line per form.
+The distinction that matters here is not tested/untested but *what kind of
+thing did the checking*, because a suite that builds its own world can only
+ever confirm the builder.
+
+| area | how far |
+|------+---------|
+| keys, minibuffer, spawn, close, splits, floating, empty-pane spawn, persistence, the lattice | *real hardware*, by hand |
+| the protocol: connection, version negotiation, manage and render sequences, the shm overlay path, buffer release, frame callbacks | *a real headless river*, every =make check= |
+| every keymap key becoming a binding object, and one bound at runtime becoming one more | a real river |
+| a client window announced, placed, sized, focused; two windows in disjoint rectangles | a real river |
+| the verbs, driven from outside a protocol sequence the way a script drives them | a real river |
+| floating, drag-move, drag-resize, fullscreen, minimize; workspaces, tags, scratchpads, undo, redo | a real river |
+| the saved layout, written and read back with a real window's tags in it | a real river |
+| the control socket, one line per form | a real river |
+| overlays dismissing on a key bound to nothing | a real river — the arming is the half no unit test can see |
+| input configuration: device enumeration, key repeat, compiling and installing a keyboard layout | a real river, running nested, which is where devices exist |
+| multi-monitor: one workspace per output, no two the same, trading rather than colliding | *two real outputs*, plus unit tests that build a two-output world |
+| HiDPI arithmetic: a 2x canvas at twice the device size, logical coordinates for text and fills | a real =wl_shm= |
+| the layer-shell exclusive zone | a real waybar, once: usable area 0,0 1280x696 → 0,34 1280x662, and the window under it moved by exactly that |
+
+** What is not checked, said plainly
+
+The integration suite names these in its own output on every run rather than
+passing quietly over them, and a headless backend is why:
+
+- *a physically scaled output* — the backend is 1x, so scaling is exercised as
+  arithmetic and never as a display;
+- *libinput hardware* — tap-to-click, acceleration, click and scroll method are
+  written and unit-tested as decisions and cannot be exercised without a device
+  behind them;
+- *a screen locker* — the layer-shell path has been run against a panel and
+  never against a locker;
+- *a physical pointer* — drag-resize is checked as far as the arithmetic goes
+  and the bindings river made are counted, but no pointer is ever pressed.
+
+[[file:doc/PLAN.org][PLAN.org §log7]] is the current list of which is which.
+This section used to claim the HiDPI, layer-shell and pointer paths were "all
+three exercised by the test suite". There was no test reference to
+=surface.lisp=, =layer.lisp=, =pointer.lisp= or =outputs.lisp= of any kind.
+
+** Three bugs worth knowing were there
 
 *When river goes away, so does LatticeWM* — within a second, having run its
-shutdown hooks and written the layout out. That sentence was false until
-2026-08-06: an orphaned window manager span a core indefinitely and said nothing,
+shutdown hooks and written the layout out. That was false until an orphaned
+window manager was found spinning a core indefinitely and saying nothing,
 because a socket at end of file is readable and nothing in the loop could tell
-that from a socket with a message on it. Six of them were found at 95% CPU each
-on one machine. See [[file:doc/FINDINGS.org][FINDINGS.org §spin]]; verified
-against a real river killed with =SIGKILL= and with =SIGTERM=.
+that from a socket with a message on it. Six of them, at 95% CPU each, on one
+machine. [[file:doc/FINDINGS.org][FINDINGS.org §spin]]; verified against a real
+river killed with =SIGKILL= and with =SIGTERM=.
 
-=make check= fails when river or a terminal emulator is missing rather than
-skipping and exiting 0 — see =REQUIRE_INTEGRATION= in the Makefile. It was
-*intermittently red on a good tree* — the suite's last check, that =quit= ends
-the session, failed twice in seven runs on 2026-08-06 — and that has been
-diagnosed and fixed: the window manager always quit, and the check failed on the
-runs where it quit *fastest*, because it read a slot off a server object the
-shutdown had already torn down. Six consecutive runs pass now. The instrument
-that hid it for a day is fixed too, and that is the transferable half; see
-[[file:doc/FINDINGS.org][FINDINGS.org §quit-flake]]. A red =check= is
-worth reading before it is worth re-running. What it
-still cannot reach is named out loud in its own output every run: a physically
-scaled output, libinput devices, and a layer-shell client, none of which a
-headless backend has.
+*=make check= was intermittently red on a good tree* — the suite's last check,
+that =quit= ends the session, failed twice in seven runs. It failed on the runs
+where the window manager quit *fastest*, because it read a slot off a server
+object the shutdown had already torn down. The instrument that hid it is fixed
+too, and that is the transferable half.
+[[file:doc/FINDINGS.org][FINDINGS.org §quit-flake]]. A red =check= is worth
+reading before it is worth re-running.
 
-*Input configuration* — device enumeration, key repeat, and compiling and
-installing a keyboard layout — has been driven end to end against a real river
-running nested, which is where the devices exist. The libinput half of it
-(tap-to-click, acceleration, click and scroll method) is written and unit-tested
-as a decision, and cannot be exercised without real hardware behind it; the
-integration test says =skip= there rather than passing quietly.
-
-*Multi-monitor has been executed against two outputs, and the bug found there is
-fixed.* river's Wayland backend takes =WLR_WL_OUTPUTS=2= and its headless
-backend takes =WLR_HEADLESS_OUTPUTS=2=; either gives two real outputs at two
-origins, which is not two physical panels but is the same code. That run
-happened on 2026-08-06 and is written up in
-[[file:doc/FINDINGS.org][FINDINGS.org §two-outputs]]. One overlay per
-output is correct, and a clean two-output start is correct. What was not: two
-outputs could end up showing the same workspace — after restoring a layout saved
-with fewer workspaces than there are monitors, and, it turned out, after a
-single press of a workspace key on a perfectly ordinary two-monitor session —
-and every window was then placed twice while the second monitor went black.
-*Every output shows a workspace of its own and no two show the same one* is a
-property the layout re-establishes on every pass now, rather than something the
-six places that assign one each had to remember; two monitors switching
-workspaces trade rather than collide. Measured before and after against two
-outputs, and covered by unit tests that build a world with two outputs in it.
-Nothing is claimed here that is not either tested or stated as untested;
-[[file:doc/PLAN.org][PLAN.org §log7]] is the current list of which is which.
-
-Other things that are honestly newer than the rest. *HiDPI scaling of what the
-window manager draws itself* is exercised against a real =wl_shm=: a 2x canvas
-is allocated at twice the device size, reports its logical size unchanged, and
-takes text and fills in logical coordinates. What is not exercised is a display
-that is actually scaled, because a headless backend is 1x. *Pointer
-drag-resize* is exercised as far as the arithmetic goes — a cumulative delta
-moves the window exactly that far and repeating it does not move it again — and
-the bindings river made are counted, but no physical pointer is ever pressed.
-*The layer-shell path that panels and screen lockers use* has been run against a
-real panel — waybar, layer =top=, 34 pixels of exclusive zone — and the
-exclusive-zone arithmetic is correct: the usable area moves from 0,0 1280x696 to
-0,34 1280x662 and the window under it moves down by exactly that. The
-integration suite still says =skip= there, because a build sandbox has no panel
-to open; that is a statement about the sandbox and not about the path. What is
-still unexercised is a screen locker. The interaction found in the same sitting
-— the lattice's drawn map covering the window manager's own echo area, because
-its canvas was sized to the whole output while its cells were laid out in the
-usable area — is fixed, and =make check= now watches it: with the map forced up,
-the two surfaces are asked where they are and the map has to be exactly the area
-the cells were laid out in.
-
-That paragraph used to say all three were exercised by the test suite. They
-were not: there was no test reference to =surface.lisp=, =layer.lisp=,
-=pointer.lisp= or =outputs.lisp= of any kind.
+*Two monitors could end up showing the same workspace* — after restoring a
+layout saved with fewer workspaces than there are monitors, and, it turned out,
+after a single press of a workspace key on an ordinary two-monitor session.
+Every window was then placed twice while the second monitor went black. One
+workspace per output is a property the layout re-establishes on every pass now,
+rather than something the six places that assign one each had to remember.
+[[file:doc/FINDINGS.org][FINDINGS.org §two-outputs]].
 
 * License
 

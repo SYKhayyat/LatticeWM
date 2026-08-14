@@ -138,7 +138,9 @@ integration: toolchain
 	@LATTICEWM_REQUIRE_INTEGRATION="$(REQUIRE_INTEGRATION)" \
 	  $(RUN) --load tools/integration.lisp
 
-# What CI should run, and what to run before pushing.
+# What CI runs, and what to run before pushing.  It said "should run" from the
+# day the workflow landed until the day the workflow first passed, which is a
+# smaller distance than it sounds and was worth closing.
 #
 # A GREEN `check' THAT VERIFIED NOTHING IS WORSE THAN A RED ONE.  This used to
 # run `integration' without that variable, so on a machine with no river — which

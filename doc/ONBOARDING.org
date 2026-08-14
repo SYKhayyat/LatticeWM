@@ -258,7 +258,18 @@ something to say:
   of one option, under a completely green build.
 - *Gate 17* refuses an option named after a generic that is not that generic's
   shipped answer. If there is a =gaps= generic and a =*gaps*= option, they are
-  one relationship or they are a trap.
+  one relationship or they are a trap. Five pairs share a name today, and the
+  rule they all obey is: /the generic is the extension point, the option is what
+  its shipped method returns./ Nothing stronger than habit made that true, until
+  the gate asked — move the read into a helper, or answer the option from a
+  different generic, and a user reads ~gaps~, sets =*gaps*=, and is wrong for a
+  reason no instrument could see.
+
+  #+CLAIM: (let ((by-generic (options-by-generic)))
+  #+CLAIM:   (every (lambda (g) (member (find-symbol (format nil "*~a*" (symbol-name g))
+  #+CLAIM:                                          '#:latticewm/policy)
+  #+CLAIM:                              (gethash g by-generic)))
+  #+CLAIM:          '(gaps border-width keys-hint move-into-occupied new-child-side)))
 - *Gate 15* refuses a method that overrides away the only reader of an option
   without offering an option of its own. There is always a knob, even when it is
   not that one.
