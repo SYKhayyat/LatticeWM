@@ -453,13 +453,36 @@ in three lines.
 
 ** Panels, bars and lockers
 
-Anything using =wlr-layer-shell= works: waybar, yambar, mako, swaybg, swaync,
-and every screen locker. LatticeWM binds river's layer-shell protocol, lays
-windows out inside the area panels have left themselves, and stops sending
-keyboard focus while a locker holds it.
+Anything using =wlr-layer-shell= works: waybar, yambar, mako, swaybg, swaync.
+LatticeWM binds river's layer-shell protocol and lays windows out inside the
+area panels have left themselves.
 
-That last part is not a nicety. Without it a window manager re-focuses a window
+Measured against a real waybar on a 1280x720 output: the usable area goes from
+=0,0 1280x696= to =0,30 1280x666= when a 30-pixel bar appears, the tiled window
+under it moves by exactly that, and both go back when the bar exits. The number
+comes from the compositor — river subtracts every layer surface's exclusive
+zone and tells us what is left — so this works for any panel, on any edge, at
+any size, with nothing to configure. =*honour-exclusive-zones*= turns it off.
+
+*Lockers are two different things now, and it is worth being exact.* A layer
+surface can take the keyboard *exclusively*, and LatticeWM handles that: it
+stops sending focus requests, and stops drawing a focused border on a window
+that does not have focus. Without it a window manager re-focuses a window
 underneath the lock screen on every manage sequence, forever.
+
+But current lockers do not do that any more. swaylock and gtklock use
+=ext-session-lock-v1=, a separate protocol the *compositor* implements, and
+under it river handles the lock surface and its input itself. LatticeWM is told
+— river sends =session_locked= and it is recorded on the world — and it has
+nothing it needs to do. Verified: with swaylock holding an
+=ext-session-lock-v1= lock over a nested river, the window manager stays alive,
+the tree keeps its windows, and commands still run. Killing the locker does
+*not* unlock the session, which is the protocol working as designed rather than
+a bug.
+
+So the layer-shell branch is for the lockers that predate that protocol, and
+the exclusive-focus path is exercised by nothing here — an honest gap, and a
+narrow one.
 
 ** Fonts
 
@@ -726,9 +749,11 @@ ever confirm the builder.
 | the control socket, one line per form | a real river |
 | overlays dismissing on a key bound to nothing | a real river — the arming is the half no unit test can see |
 | input configuration: device enumeration, key repeat, compiling and installing a keyboard layout | a real river, running nested, which is where devices exist |
-| multi-monitor: one workspace per output, no two the same, trading rather than colliding | *two real outputs*, plus unit tests that build a two-output world |
+| multi-monitor: one workspace per output, no two the same, surviving repeated workspace switches | *two real outputs*, live — river's Wayland backend takes =WLR_WL_OUTPUTS=2= — plus unit tests that build a two-output world |
+| motion crossing the screen boundary, =focus-output=, =send-to-output= | two real outputs, live: =focus :right= moved the cursor from WL-1 to WL-2 and back |
 | HiDPI arithmetic: a 2x canvas at twice the device size, logical coordinates for text and fills | a real =wl_shm= |
-| the layer-shell exclusive zone | a real waybar, once: usable area 0,0 1280x696 → 0,34 1280x662, and the window under it moved by exactly that |
+| the layer-shell exclusive zone | a real waybar: usable area went =0,0 1280x696= → =0,30 1280x666= for a 30-pixel bar, the window under it moved by exactly that, and both returned when the bar exited |
+| a screen locker holding an =ext-session-lock-v1= lock | a real swaylock over a nested river: the lock is reported, the window manager stays alive, the tree keeps its windows, and commands still run |
 
 ** What is not checked, said plainly
 
@@ -739,11 +764,19 @@ passing quietly over them, and a headless backend is why:
   arithmetic and never as a display;
 - *libinput hardware* — tap-to-click, acceleration, click and scroll method are
   written and unit-tested as decisions and cannot be exercised without a device
-  behind them;
-- *a screen locker* — the layer-shell path has been run against a panel and
-  never against a locker;
-- *a physical pointer* — drag-resize is checked as far as the arithmetic goes
-  and the bindings river made are counted, but no pointer is ever pressed.
+  behind them. This is the one that needs a machine rather than a better
+  harness;
+- *a pointer press* — the two pointer bindings river makes are counted live and
+  the drag arithmetic is unit-tested, but no button is ever pressed. Synthesised
+  input gets close and not there: =wlrctl= offers =click= and no separate
+  press/release, so the displacement half of a drag cannot be produced at all,
+  and a Super+click through a virtual pointer produced nothing observable —
+  which does not distinguish "the binding did not fire" from "the synthetic
+  press never reached the matcher", so it is reported as untested rather than as
+  a defect;
+- *a layer-shell locker taking exclusive keyboard focus* — the branch exists and
+  is described above, and the lockers that would exercise it have moved to
+  =ext-session-lock-v1=, which is checked instead.
 
 [[file:doc/PLAN.org][PLAN.org §log7]] is the current list of which is which.
 This section used to claim the HiDPI, layer-shell and pointer paths were "all
