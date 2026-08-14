@@ -244,8 +244,28 @@ that answered NIL would break the only mechanism it could have used to say so.
 Normalised to T or NIL, because the caller compares this answer with EQ against
 the last one — and it used to be able to return the pending submap itself, so
 two chords in a row churned two hundred bindings to arrive back where they
-were."
+were.
+
+AN OVERLAY IS THE FOURTH, AND ITS ABSENCE MADE THE FIRST SENTENCE A NEW USER
+READS FALSE.  The welcome screen, the keymap overlay, an apropos listing and
+the undo history all print `any key closes this' across the top, and
+*HELP-VISIBLE*'s own docstring says the rule is `any key puts it away'.  The
+branch implementing it lives in HANDLE-KEY, which river only ever reaches for a
+key that is *bound* — so the rule held for Super chords and for nothing else.
+Escape, space, Return, q and x each left the overlay exactly where it was, on a
+first run, in the sixty seconds that decide whether somebody keeps the program.
+
+Worse than unhandled: while an overlay was up and nothing else was pending,
+this answered NIL, so the capture bindings were disabled and the window manager
+was not handed the keystroke at all.  The dismissal was unreachable rather than
+merely unwritten, which is why the fix is here and not only in the handler.
+
+Here in the runtime's OR rather than in P:CAPTURE-WANTED-P, for the same reason
+the prompt is: a policy that answered NIL would make an overlay covering the
+whole screen impossible to remove, and a help screen you cannot close is a
+lock screen."
   (or (reading-p)
+      (and *help-visible* t)
       (and (guarded "capture-wanted-p"
              (p:capture-wanted-p (p:current-policy) *world*))
            t)))
@@ -309,6 +329,17 @@ state — which is the sort of `works on the second try' that costs an afternoon
                        (if (member :shift modifiers)
                            (p:shifted-character (p:current-policy) base)
                            base)))))
+    ;; DISMISS FIRST, AND WITHOUT CONSUMING, which is the same shape HANDLE-KEY
+    ;; arrived at the hard way.  Taking the overlay down and *also* swallowing
+    ;; the keystroke is how "the first super return did not open term" got
+    ;; reported: on a first run the overlay is the welcome screen, so the first
+    ;; deliberate keypress of somebody's first session vanished into closing it.
+    ;; A window manager that ignores your first instruction is broken at the
+    ;; only moment first impressions are formed.
+    ;;
+    ;; Not while a prompt is reading.  A prompt drawn over an overlay is
+    ;; something you are typing into, and Escape there means "leave the prompt".
+    (unless (reading-p) (dismiss-overlay))
     (cond
       ((reading-p) (prompt-key keysym modifiers character))
       ;; A chord is waiting for its second key.  HANDLE-KEY already knows what

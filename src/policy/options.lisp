@@ -109,12 +109,50 @@ exactly one config.lisp."
         ((consp form) (mapcar #'shorten-source-paths form))
         (t form)))
 
+(defun named-reader (reader)
+  "READER reduced to something a person can go and look at, or NIL.
+
+SBCL names an anonymous function after whatever it was compiled inside:
+
+  (LAMBDA (CONDITION17) :IN EMIT-WINDOW-MANAGEMENT-STATE)
+  (LAMBDA () :IN \"/home/somebody/latticewm/src/runtime/config.lisp\")
+
+The first folds to the function that contains it, which is the answer the
+reader wanted in the first place — and which is already in the list, because
+the containing function is recorded too.  The second folds to nothing: a file
+is not a thing you can go and read the definition of.
+
+THIS IS A CORRECTNESS FIX AND NOT TIDYING, AND THE GIVEAWAY IS CONDITION17.
+That name is a GENSYM counter.  It records how many times GENSYM had been
+called by the time GUARDED's expansion reached that handler, which is a fact
+about compilation order and about the compiler — not about this program.  Nor
+is its presence stable: SBCL 2.6 records these inner lambdas in its
+cross-reference database and SBCL 2.2.9 does not record them at all.  So
+doc/EXTENSION-SURFACE.txt carried forty-two of them when generated on one
+supported compiler and none of them on another, and `make surface && git diff
+--exit-code doc/' — the check that turns \"generated, so it cannot drift\" from
+a claim about the generator into a claim about the repository — could not be
+green on both.  It was red for the entire life of the job, for this.
+
+It is the same rule SHORTEN-SOURCE-PATHS enforces, one step further in: a
+generated document may contain facts about the program and nothing else, and
+the identity of a gensym is a fact about the build.
+
+Only LAMBDA is folded.  If a future SBCL starts recording FLET or LABELS
+references the same way, the surface job goes red and says which line — which
+is the instrument working, not failing."
+  (cond ((and (consp reader) (eq (first reader) 'lambda))
+         (let ((in (member :in reader)))
+           (and in (second in) (symbolp (second in)) (second in))))
+        (t reader)))
+
 (defun option-readers (name)
   "Every function and method in the loaded image that reads option NAME.
 
 Function names, so a method comes back as SBCL writes it —
 (SB-PCL::FAST-METHOD GAPS (LAYOUT-POLICY T)) — which OPTION-READER-NAME turns
-into something to say out loud.
+into something to say out loud.  Anonymous functions are folded to whatever
+contains them by NAMED-READER, which is where the argument for that lives.
 
 SORTED, AND THAT IS NOT TIDINESS.  SB-INTROSPECT:WHO-REFERENCES answers in
 whatever order the cross-reference database holds, which is a function of
@@ -133,7 +171,9 @@ The user sets it, nothing happens, and the documentation agrees with them."
   (let ((variable (option-variable name)))
     (when variable
       (sort (remove-duplicates
-             (mapcar #'first (sb-introspect:who-references variable))
+             (remove nil (mapcar (lambda (reference)
+                                   (named-reader (first reference)))
+                                 (sb-introspect:who-references variable)))
              :test #'equal)
             #'string<
             :key (lambda (reader)

@@ -61,6 +61,31 @@ do for `go to workspace' and an impossible one for `describe this key'."
           t)
     (string (run-key-target (list target)))))
 
+(defun dismiss-overlay ()
+  "Take down whatever is on the help overlay.  True when there was something.
+
+*HELP-VISIBLE*'s docstring states the rule this implements — `any key puts it
+away' — and says why it is one variable with three states rather than three
+variables: so that the key handler can put away whatever is up without knowing
+what it is.
+
+IT IS A FUNCTION BECAUSE IT NEEDS TWO CALLERS AND HAD ONE.  The rule lived
+inline in HANDLE-KEY, which river reaches only for keys that are *bound* --
+because a compositor delivers to the focused window everything the window
+manager did not ask for.  So `any key closes this', printed across the top of
+the welcome screen, the keymap overlay, an apropos listing and the undo
+history, meant `any Super chord closes this', and the five keys somebody
+actually presses -- Escape, space, Return, q, x -- did nothing at all.
+
+The other caller is HANDLE-CAPTURED-KEY in seats.lisp, which is where an
+arbitrary key arrives.  It lives here rather than there because this file loads
+first and a function whose home depends on load order is a bug waiting for a
+rainy day -- the same argument *HELP-VISIBLE* itself carries."
+  (when *help-visible*
+    (setf *help-visible* nil)
+    (mark-dirty)
+    t))
+
 (defun handle-key (key)
   "A bound key fired.  Returns T when it was handled.
 
@@ -87,8 +112,7 @@ most confusing thing a keymap can do."
       ;; toggling would put the overlay straight back up, so Super+/ would
       ;; refuse to close what Super+/ opened.
       ((and *help-visible* (not (reading-p)))
-       (setf *help-visible* nil)
-       (mark-dirty)
+       (dismiss-overlay)
        (let ((target (lookup-key *keymap* key)))
          (if (and (consp target) (equal (first target) "help"))
              t

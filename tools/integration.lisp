@@ -1255,6 +1255,77 @@ are what a person means by the arrangement, and both are copy-stable."
                        "and both were given an explicit place in the render order"))))))
 
        ;; ------------------------------------------------------------------
+       ;; "ANY KEY CLOSES THIS" WAS FALSE, AND ONLY A COMPOSITOR CAN SAY SO.
+       ;;
+       ;; The welcome screen, the keymap overlay, an apropos listing and the
+       ;; undo history each print that sentence across the top, and
+       ;; *HELP-VISIBLE*'s own docstring calls the rule `any key puts it away'.
+       ;; The branch implementing it lived in HANDLE-KEY, which river only ever
+       ;; reaches for a key that is *bound* -- because a compositor gives the
+       ;; window manager only the keys it asked for and gives the rest to the
+       ;; focused window.  So the rule meant `any Super chord closes this', and
+       ;; on a genuine first run Escape, space, Return, q and x each left the
+       ;; welcome overlay exactly where it was.
+       ;;
+       ;; The unit suite can assert the decision and the key list, and does.
+       ;; Neither can see the half that was actually broken: with an overlay up
+       ;; and nothing else pending, CAPTURE-ARMED-NOW-P answered NIL, so the
+       ;; capture bindings were *disabled* and river was never going to hand us
+       ;; the keystroke at all.  Whether river was told to enable them is a
+       ;; fact about a compositor, and this is the only place that can ask it.
+       (section "an overlay closes on a key that is bound to nothing"
+         (let ((seat (primary-seat)))
+           (cond
+             ((null seat) (skip "no seat, so no capture bindings"))
+             ((c:leaf-empty-p (current-leaf))
+              (skip "the cursor is on an empty pane, which arms the capture ~
+                     bindings by itself -- so this could not tell an overlay ~
+                     from a pane"))
+             (t
+              (wm (lambda () (setf *help-visible* nil)))
+              (settle)
+              (check (not (c:prop seat :capture-armed))
+                     "with nothing on the overlay the keys belong to the ~
+                      window under the cursor")
+              (multiple-value-bind (result status)
+                  (wm (lambda () (run-command "welcome")))
+                (declare (ignore result))
+                (check (eq :ok status) "the welcome overlay goes up (~a)" status))
+              (settle)
+              (check (poll-until (lambda () (c:prop seat :capture-armed)) 10)
+                     "and river was told to enable the capture bindings -- ~
+                      this is the half that was false, and it is why five ~
+                      natural keys did nothing")
+              ;; q, because it is bound to nothing at all.  If this passed with
+              ;; a bound key it would be re-checking HANDLE-KEY, which was
+              ;; never the broken path.
+              (wm (lambda () (r::handle-captured-key (char-code #\q) '())))
+              (settle)
+              (check (null *help-visible*)
+                     "q closes it, and q is bound to nothing")
+              (check (not (c:prop seat :capture-armed))
+                     "and with the overlay gone the keys go back to the window")
+              ;; The other two states of the one variable, because the rule has
+              ;; to put away whatever is up without knowing what it is.
+              (wm (lambda () (run-command "help")))
+              (settle)
+              (check (poll-until (lambda () (c:prop seat :capture-armed)) 10)
+                     "the keymap overlay arms them too")
+              (wm (lambda () (r::handle-captured-key #xff1b '())))
+              (settle)
+              (check (null *help-visible*) "and Escape closes that one")
+              (wm (lambda () (show-help-page "integration"
+                                             (list (cons "a" "b")))))
+              (settle)
+              (check (poll-until (lambda () (c:prop seat :capture-armed)) 10)
+                     "and so does a page put up by apropos or describe-command")
+              (wm (lambda () (r::handle-captured-key (char-code #\Space) '())))
+              (settle)
+              (check (null *help-visible*) "which space closes")
+              (check (server-running *server*)
+                     "and river is still talking to us after all of it")))))
+
+       ;; ------------------------------------------------------------------
        ;; THE VERBS.  Forty-four commands ship and five were ever called by a
        ;; test; every binding in both README key tables had a docstring, a gate
        ;; asserting the docstring exists, and nothing that ran it.  What is

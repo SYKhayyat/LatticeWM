@@ -7,7 +7,7 @@
 # test entirely — so the one check that receives state rather than constructing
 # it was the one check nothing ran unattended.
 #
-# Four jobs now, and each answers a question the others cannot.
+# Five jobs now, and each answers a question the others cannot.
 #
 #   check  — the whole of `make check': build, twenty-two gates, the unit suite, and
 #            the integration suite against a headless river, with
@@ -31,10 +31,26 @@
 #            here that asks what a *user* gets" — and asks it under nix-shell.
 #            So the path every non-nix Linux user takes was never run end to
 #            end by anything: not the image, not install.sh, not install-check.
-#            It goes all the way now, and it is also this project's only
-#            empirical answer to whether the declared SBCL floor is real, since
-#            it builds against whatever the distribution packages rather than
-#            what nixpkgs pins.
+#            It goes all the way now, and it builds against whatever the
+#            distribution packages rather than what nixpkgs pins.
+#
+#   floor   — the declared minimum SBCL, downloaded and run.  `plain' used to
+#            carry this job's description as well as its own: it was called
+#            "this project's only empirical answer to whether the declared SBCL
+#            floor is real", on the grounds that ubuntu-latest ships 2.2.9 and
+#            2.2.9 is above the floor.  Above the floor is not the floor.  The
+#            answer it gave, on thirty consecutive runs, was *no* — four tests
+#            in BOUNDARIES died on an UNBOUND-VARIABLE before reaching an
+#            assertion — and nobody read it.
+#
+#            The cause was a test helper, not the program: a macro whose body
+#            referred to a variable bound only after the body ran, which SBCL
+#            2.6 deletes and 2.2.9 does not.  Fixed, and the floor turns out to
+#            be true.  But "turns out to be true" is a sentence, and a sentence
+#            about a version nothing runs is the exact shape of claim this whole
+#            file exists to convert into a fact.  So the floor is now run: the
+#            number comes out of latticewm.asd with sed, the way bootstrap.sh
+#            already reads it, so there is no copy of it here to go stale.
 #
 #   flake  — `nix build' and `nix flake check', which ran never.  `nix build'
 #            is the only thing that has ever caught a river protocol break: it
@@ -172,6 +188,95 @@ jobs:
                "$RUNNER_TEMP/pkg/usr/bin/latticewm-session"
       - name: make dist
         run: make dist
+
+  floor:
+    name: the declared minimum SBCL, actually run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # THE NUMBER IS NOT WRITTEN HERE.  It is read out of latticewm.asd with
+      # the same sed bootstrap.sh uses, so raising or lowering the floor is one
+      # edit in one file and this job follows it.  A copy of the version in a
+      # workflow is a copy that comes to disagree with the check the program
+      # performs, which is the defect gate 19 exists for one currency over.
+      - name: fetch and install the floor SBCL
+        run: |
+          set -eu
+          floor=$(sed -n 's/^(defparameter cl-user::\*latticewm-minimum-sbcl\* "\([0-9.]*\)".*/\1/p' \
+                      latticewm.asd)
+          test -n "$floor" || { echo "could not read the floor out of latticewm.asd"; exit 1; }
+          echo "the declared floor is SBCL $floor"
+          f="sbcl-$floor-x86-64-linux-binary.tar.bz2"
+          curl -fsSL -o "$f" \
+            "https://downloads.sourceforge.net/project/sbcl/sbcl/$floor/$f"
+          tar xf "$f"
+          ( cd "sbcl-$floor-x86-64-linux" && INSTALL_ROOT="$HOME/sbcl-floor" sh install.sh )
+          # On PATH, not just in a variable.  bootstrap.sh resolves `sbcl'
+          # itself -- it has to, because the version check it performs is about
+          # whichever compiler a user actually has -- so a floor SBCL that only
+          # exists in $LISP would be bootstrapped by a compiler that is not the
+          # one under test, or by none at all.
+          echo "SBCL_HOME=$HOME/sbcl-floor/lib/sbcl" >> "$GITHUB_ENV"
+          echo "$HOME/sbcl-floor/bin" >> "$GITHUB_PATH"
+      - name: sbcl version
+        run: |
+          command -v sbcl
+          sbcl --version
+      - uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-floor-${{ hashFiles('bootstrap.sh') }}
+      # No fasl cache here on purpose.  This job's whole question is whether a
+      # cold compile succeeds on the oldest compiler, and a warm cache is the
+      # state in which gate 1 once missed real warnings in files that did not
+      # happen to recompile.
+      - name: bootstrap, build, gates, tests
+        run: |
+          ./bootstrap.sh
+          make build gates test
+      # AND THE CONSTRAINT THE FLOOR IS SET BY, WHICH TURNS OUT NOT TO BE
+      # TESTABLE HERE -- AND THAT IS ITSELF WORTH ASSERTING.
+      #
+      # 2.2.6 is the number because core compression became zstd there and
+      # tools/image.lisp dumps at level 22.  But compression is a *build-time
+      # option* of SBCL rather than a property of its version, and the official
+      # binary tarball for 2.2.6 was built without it.  So this runner can
+      # prove the program builds and passes on the declared floor, and it
+      # cannot make the image there -- not because the floor is wrong, but
+      # because the compiler this job can install is not the compiler a
+      # distribution ships.
+      #
+      # Rather than skip it, assert the behaviour that discovering this
+      # produced: the dump refuses in a sentence naming the cause and the way
+      # out, instead of an unhandled SIMPLE-ERROR under eighteen frames of SBCL
+      # backtrace at the end of an otherwise green build.  That message is a
+      # shipped diagnostic like any other, and it sits on the path a person
+      # hits doing exactly what this job does.
+      - name: the image, or the reason there cannot be one
+        run: |
+          set -eu
+          if sbcl --noinform --non-interactive \
+               --eval '(sb-ext:exit :code (if (find :sb-core-compression *features*) 0 1))'
+          then
+            echo "this SBCL can compress a core, so the image itself is the check"
+            make install-check
+          else
+            echo "this SBCL cannot compress a core, so the diagnostic is the check"
+            out=$(make image 2>&1 || true)
+            printf '%s\n' "$out"
+            printf '%s' "$out" | grep -q "this SBCL cannot compress a core" || {
+              echo "::error::make image did not print the compression diagnostic"
+              exit 1; }
+            printf '%s' "$out" | grep -q "LATTICEWM_COMPRESS=0" || {
+              echo "::error::the diagnostic did not name the way out"
+              exit 1; }
+            test ! -e ./latticewm || {
+              echo "::error::make image refused and left an image behind"
+              exit 1; }
+            echo "and the uncompressed path still works on this compiler:"
+            LATTICEWM_COMPRESS=0 make image
+            test -x ./latticewm
+          fi
 
   flake:
     name: nix build, nix flake check

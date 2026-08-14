@@ -115,7 +115,17 @@ somebody's feature stopped happening.
 
 The budget is passed down untouched.  These segments go on the end, so they are
 the first to be dropped on a narrow screen, which is the right way round for
-things that are true all the time."
+things that are true all the time.
+
+DECLARED IGNORED RATHER THAN QUIETLY UNUSED, and the reason is one line further
+out than this method.  A bare CALL-NEXT-METHOD forwards the original arguments,
+so COLUMNS genuinely has nothing to do here — but SBCL says so on every build,
+gate 1 is `zero compiler warnings', and the build printed one anyway because
+gate 1 compiled src/ and lattice/ and nothing under examples/.  A gate with an
+unstated scope is a gate somebody stops reading.  It compiles this directory
+now, so an example that would not compile is a failure rather than a line
+scrolling past."
+  (declare (ignore columns))
   (let ((shipped (call-next-method)))
     (if (not *status-line-extras*)
         shipped

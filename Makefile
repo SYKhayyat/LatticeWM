@@ -12,7 +12,7 @@
 #                    pushing.  Fails rather than skips when river or a terminal
 #                    emulator is missing; REQUIRE_INTEGRATION=0 to forgive that
 #   make image       dump ./latticewm, one executable -- compressed, 13 MB
-#   make image-fast  the same, uncompressed: 190 MB, ~350 ms faster to start
+#   make image-fast  the same, uncompressed: ~52 MB, ~350 ms faster to start
 #   make run         run nested inside the current Wayland session
 #   make surface     regenerate the generated documents under doc/
 #   make install     ./latticewm, a session entry and a man page into $(PREFIX)
@@ -297,7 +297,7 @@ revendor-check:
 # places the version was written out.
 #
 # `git archive' rather than `tar', so what ships is exactly what is tracked:
-# no .deps/, no fasl cache, no 190 MB image someone left in the tree, and no
+# no .deps/, no fasl cache, no built image someone left in the tree, and no
 # question about whether a file was included by accident.
 #
 # It refuses on a dirty tree and on a tag that disagrees, because a tarball

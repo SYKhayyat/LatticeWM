@@ -60,9 +60,26 @@ The other direction is exercised, not assumed.  `make integration' drives a
 real headless river, and against Fedora 44's river 0.4.5 — interface version 4,
 one below this vendored XML — the whole suite passes: it binds at 4, is never
 sent either capture_sessions, and reports that as a version gap rather than a
-failure.  Both capture_sessions handlers are therefore covered by the unit
-suite and by nothing live, which is honest and is the cost of the range: the
-only compositor that can send them is one newer than the oldest we accept.
+failure.
+
+AND NOW THE NEAR DIRECTION IS EXERCISED TOO.  This paragraph used to end "both
+capture_sessions handlers are therefore covered by the unit suite and by
+nothing live, which is honest and is the cost of the range: the only compositor
+that can send them is one newer than the oldest we accept."  That was true and
+it was a cost worth paying down rather than restating, because a handler no
+compositor has ever driven is a handler that has never been told it is wrong.
+
+The suite has since been run against river 0.4.6 as well — interface version 5,
+which is what the XML in this directory was generated from — and both events
+arrive: a count on the output, a count on the window, and :CAPTURE-CHANGED
+firing with the two arguments it declares.  Nothing is reported as a version
+gap in that run, because there is no gap to report.
+
+So the range is now checked at both ends by the same suite, and the two runs
+assert different things.  The floor run says a request this program sends is
+one an older river understands.  The ceiling run says an event this program
+binds for is one it can actually decode.  Only the first of those was ever in
+doubt out loud; the second is the one that would fail silently.
 
 The three input protocols moved 1 -> 2 in the same release, each adding a
 `done' event this program does not listen for.  They used to bind at whatever

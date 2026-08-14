@@ -1202,7 +1202,8 @@ finds it~%"))))
 
 (defparameter *current-documents*
   '("README.org" "INSTALL.org" "doc/FINDINGS.org"
-    "doc/EXTENDING.org" "doc/latticewm.1" "doc/latticewm-config.5")
+    "doc/EXTENDING.org" "doc/ONBOARDING.org"
+    "doc/latticewm.1" "doc/latticewm-config.5")
   "Documents that describe the program as it is.  A false sentence here is a bug.
 
 FINDINGS.org is on this list and DESIGN.org is not, which is the distinction
@@ -2971,6 +2972,32 @@ should read VERSION, the way it already reads river's version out of PINNED"
                   problems)))
         (unless (line-containing "flake.nix" "./VERSION")
           (push "flake.nix never reads VERSION" problems)))
+      ;; AND THE CHANGELOG, WHICH SAID THIS GATE ALREADY HELD IT.
+      ;;
+      ;; CHANGELOG.md's own header reads "gate 19 holds the man pages and this
+      ;; file to the same number".  It held the man pages.  Nothing in this
+      ;; file had ever opened CHANGELOG.md, so the sentence describing the
+      ;; check was itself the thing no check could see -- which is gate 12's
+      ;; disease occurring inside gate 19's documentation.
+      ;;
+      ;; What is asked is the weakest thing worth asking: that the version in
+      ;; VERSION has a heading of its own.  Not that it is the first heading,
+      ;; because `## Unreleased' is above it by design, and not that the
+      ;; entries under it say anything in particular, because that is review's
+      ;; job and not a gate's.  The release procedure at the top of that file
+      ;; puts the heading in at step 2 and runs `make check' at step 3, so this
+      ;; fires exactly when a version has been bumped and not written down.
+      (when declared
+        (let ((heading (format nil "## ~a" declared)))
+          (cond
+            ((not (probe-file "CHANGELOG.md"))
+             (push "there is no CHANGELOG.md" problems))
+            ((not (line-containing "CHANGELOG.md" heading))
+             (push (format nil "VERSION says ~s and CHANGELOG.md has no ~s ~
+heading, so a version has been bumped without being written down -- see the ~
+release procedure at the top of that file"
+                           declared heading)
+                   problems)))))
       ;; And the two roff pages, which cannot read anything.
       (when declared
         (dolist (page '("doc/latticewm.1" "doc/latticewm-config.5"))
@@ -3018,8 +3045,13 @@ should read VERSION, the way it already reads river's version out of PINNED"
            ;; the reader who cannot tell a stale number from a true one, and
            ;; the number they are being told is how many ways their branch can
            ;; fail.
+           ;; doc/ONBOARDING.org is on this list for CONTRIBUTING.md's reason
+           ;; one step further in: it is the page somebody reads in their second
+           ;; week, when they have started to rely on the numbers in it and have
+           ;; not yet read enough of the tree to doubt one.
            (documents '("README.org" "INSTALL.org" "bootstrap.sh"
-                        "CONTRIBUTING.md" ".github/PULL_REQUEST_TEMPLATE.md"
+                        "CONTRIBUTING.md" "doc/ONBOARDING.org"
+                        ".github/PULL_REQUEST_TEMPLATE.md"
                         ".github/workflows/check.yml")))
       (format t "  gates that run~46t~d~%" total)
       (if (null word)

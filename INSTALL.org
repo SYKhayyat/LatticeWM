@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, twenty-two gates, 1300+ checks
+make                  # build, twenty-two gates, and the unit suite
 make image            # dump ./latticewm, one executable, 13 MB
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
@@ -80,6 +80,31 @@ Every current distribution is newer: Debian and Ubuntu LTS ship 2.2.9, Arch
 and Fedora ship current. =bootstrap.sh= prints the right install line for your
 distro if SBCL is missing.
 
+*One thing the version does not tell you.* Building the shipping image also
+needs an SBCL that was *compiled with core compression* — the
+=:sb-core-compression= feature. That is a build-time option of SBCL rather than
+a property of its version, so the number above is necessary and not sufficient.
+Distribution packages generally have it, which is why this is a footnote and
+not a section; the official binary tarballs on sbcl.org generally do not, which
+is unlucky in the one place it bites — they are what you install by hand when
+you want an old SBCL.
+
+You will not have to work this out. =make image= asks before it dumps and says
+so in a sentence, naming both ways on: install an SBCL that can compress, or
+set ~LATTICEWM_COMPRESS=0~ for an uncompressed image, which is about 52 MB
+instead of 13 and is fine for development. Everything except the image —
+=make build gates test=, the whole unit suite, =make surface= — works on an
+SBCL with no compression at all.
+
+*The bottom of that range is run rather than reasoned about.* The whole build
+— twenty-two gates, the unit suite and =make surface= — is green on SBCL
+2.2.6, on 2.2.9 and on 2.6.6, and the six generated documents come out
+byte-identical on all three. That last part is not a bonus: the documents are
+regenerated and diffed on every push, so a generator whose output depended on
+the compiler would be a check that could not pass on more than one of the
+compilers this page tells you to use. It did depend on it, once. See the
+=named-reader= comment in =src/policy/options.lisp= if you want the story.
+
 ** river, and the version that matters
 
 *LatticeWM needs river 0.4.5 or newer, and "or newer" has no upper end.*
@@ -113,13 +138,32 @@ earlier 0.4.x also carried 4 is not recorded here, so an older river may work
 and is untested.  The check is on the interface version, not on the release
 string, so if it starts it is because the protocol agreed.
 
-*The bottom of that range is exercised rather than assumed.*  =make
+*Both ends of that range are exercised rather than assumed.*  =make
 integration= — the suite that drives a real headless river as a client — runs
-green against river 0.4.5 on Fedora 44, which is a build vendored at interface
-version 5 talking to a compositor offering 4.  It binds at 4, receives no
-=capture_sessions= because that event arrived in 5, reports that as a version
-gap rather than a failure, and passes everything else.  That is the exact
-configuration the old equality check refused to start in.
+green against *both* rivers on Fedora 44:
+
+|---------------+------------+-------------------------------------------------|
+| river 0.4.5   | binds at 4 | A build vendored at interface version 5 talking |
+|               |            | to a compositor offering 4.  It receives no     |
+|               |            | =capture_sessions=, because that event arrived  |
+|               |            | in 5, and reports the two affected checks as a  |
+|               |            | *version gap* rather than a failure — a third   |
+|               |            | category beside "headless cannot do this" and   |
+|               |            | "that dependency is missing", because it is the |
+|               |            | only one of the three a person can fix by       |
+|               |            | upgrading.  This is the exact configuration the |
+|               |            | old equality check refused to start in.         |
+| river 0.4.6   | binds at 5 | No version gaps at all, and a few more checks   |
+|               |            | than 0.4.5 runs: the =capture_sessions= events  |
+|               |            | arriving for real, on the output and on the     |
+|               |            | window, with =:CAPTURE-CHANGED= firing carrying |
+|               |            | the two arguments it declares.                  |
+|---------------+------------+-------------------------------------------------|
+
+The floor is checked because a compositor below it would be sent requests it
+has never heard of.  The ceiling is checked because binding at a version is a
+promise to decode what that version sends, and a promise like that is not
+broken loudly.  Until both were run, one of them was an argument.
 
 If you want to know what a given build accepts, ask it:
 

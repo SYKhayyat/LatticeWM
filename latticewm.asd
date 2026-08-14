@@ -19,6 +19,24 @@
 ;;; LTS ship 2.2.9 and Arch ships current, so the spread is real and the
 ;;; question was empirical and unasked.
 ;;;
+;;; IT HAS BEEN ASKED NOW, AND THE ANSWER IS THE NUMBER BELOW.  The whole build
+;;; -- twenty-two gates, the unit suite, and `make surface' -- has been run on
+;;; SBCL 2.2.6, on 2.2.9 and on 2.6.6, and is green on all three.  The docstring
+;;; on *LATTICEWM-MINIMUM-SBCL* says "the oldest SBCL this project is known to
+;;; work on", and that sentence is now a report rather than an inference.
+;;;
+;;; It was false when it was written, and the way it was false is worth keeping.
+;;; Nothing about the *program* failed below 2.6: what failed was a macro in
+;;; tests/test-boundaries.lisp whose body referred to a variable bound only
+;;; after the body ran.  SBCL 2.6 deletes that reference because its value is
+;;; discarded and 2.2.9 does not, so four tests in the suite covering GUARDED,
+;;; BEST-EFFORT and WITH-ABANDON died on an UNBOUND-VARIABLE without reaching an
+;;; assertion.  The `plain' CI job was built to ask exactly this question, on
+;;; exactly that SBCL, and it answered "no" on thirty consecutive runs that
+;;; nobody read.  The instrument was right, was pointed at the right thing, and
+;;; was reporting a defect in the instrument -- which is the failure mode after
+;;; the one the gates were designed against.
+;;;
 ;;; What the floor rests on, named rather than guessed:
 ;;;
 ;;;   2.2.6  core compression became zstd, and its levels became 0..22.
@@ -27,6 +45,23 @@
 ;;;          not the build, the thing a user installs -- cannot be made at all
 ;;;          below this.  This is the binding constraint and it is why the
 ;;;          number is 2.2.6 rather than something older.
+;;;
+;;; AND THE NUMBER IS NECESSARY RATHER THAN SUFFICIENT, WHICH THIS COMMENT
+;;; ASSERTED THE OPPOSITE OF BY OMISSION.  Core compression is a build-time
+;;; option of SBCL -- :SB-CORE-COMPRESSION in *FEATURES* -- and the version
+;;; governs which algorithm it is, not whether it was compiled in at all.  The
+;;; official x86-64 binary tarballs for 2.2.6 and 2.2.9 have no compression
+;;; support, which is unlucky in the exact place it matters: they are what
+;;; somebody installs by hand when they need an old SBCL to check this floor
+;;; with.  Distribution packages generally do have it.
+;;;
+;;; Nothing above changes as a result -- the program *builds*, and passes
+;;; twenty-two gates and the whole unit suite, on an SBCL with no compression
+;;; at all; it is only `make image' that cannot run.  What changed is that
+;;; tools/image.lisp now asks before it dumps and says all of that in a
+;;; sentence, instead of failing inside SAVE-LISP-AND-DIE with an unhandled
+;;; SIMPLE-ERROR under eighteen frames of backtrace that name neither this
+;;; project nor the variable that turns compression off.
 ;;;
 ;;; Everything else this program uses is older than that and is listed so the
 ;;; floor can be lowered honestly if the compression ever moves: sb-introspect

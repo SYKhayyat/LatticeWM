@@ -14,7 +14,12 @@ you change any of it while it is running, without a restart and without a
 rebuild.
 
 #+begin_quote
-There has never been a Common Lisp Wayland window manager. This is one.
+A Lisp window manager is not a new idea, and this one does not pretend to be
+one. StumpWM has carried it on X11 for two decades, and Emacs made the case for
+a live, self-documenting system long before that. LatticeWM takes the idea to
+Wayland — to river specifically, whose window-management protocol hands layout
+to an outside program — and pushes on one thing the others leave fixed: *the
+layout model itself is replaceable, from outside, without editing the program.*
 #+end_quote
 
 * The one idea to read first
@@ -22,8 +27,10 @@ There has never been a Common Lisp Wayland window manager. This is one.
 *A pane may deliberately hold no window, and that is not a degenerate case —
 it is how you place slack.*
 
-This is genuinely unlike i3, sway, dwm or Hyprland, where a pane without a
-window does not exist. Here:
+In the tiling window managers most people arrive from — i3, sway, dwm,
+Hyprland — a pane is where a window is, so an empty one is a transient state on
+the way to being filled rather than something you can stand in. Here it is a
+thing you place on purpose:
 
 - you split a pane and leave one side empty, and the window occupies the rest.
   That is the resize idiom;
@@ -36,6 +43,38 @@ window does not exist. Here:
 
 Everything else in the model follows from that, including a few things that
 look surprising until you have read it. It is worth the thirty seconds.
+
+* What is new here, and what is not
+
+Worth being exact about, because "written in Lisp" describes the implementation
+and is not on its own a reason to use anything.
+
+*Not new.* Tiling, workspaces, tabs, floating, a live REPL attached to the
+running window manager, keybindings you change without restarting, commands
+carrying their own documentation. StumpWM has had all of that for years, and
+this project is downstream of that tradition rather than beside it.
+
+*What is actually different* is one structural decision, and the rest of this
+README follows from it: *the layout model is a policy layer with a published
+surface, and the shipped tiling behaviour is one implementation of that surface
+rather than the program itself.* Sixty-nine generic functions decide what
+happens; the shipped methods are the defaults; specialising one is how you
+change behaviour, live, without touching the core.
+
+#+CLAIM: (= 69 (length (policy-generics)))
+
+The test of that is =lattice/= — an infinite two-dimensional plane of cells,
+which is a different layout model with a container kind the core has never heard
+of. It lives in a separate ASDF system, depends only on the exported policy
+package, and *edits nothing under =src/=*. Two gates hold it there on every
+build: gate 3 fails if the extension reaches into the core, gate 4 fails if the
+core cannot load, start and lay out with the extension absent.
+
+That is the falsifiable version of "extensible". It is also why this section
+does not tell you how extensible the program is: gate 6 counts how many policy
+generics anybody outside =src/= has actually specialised and prints the number
+on every build, including the less flattering version with the flagship
+extension excluded.
 
 * Install
 
@@ -51,7 +90,7 @@ supported route, not a requirement. Per-distribution package names are in
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, twenty-two gates, 1300+ checks
+make               # build, twenty-two gates, and the unit suite
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -244,8 +283,10 @@ when it loaded.
 
 * Asking it things
 
-This is the half of Emacs that is not the keybindings. Every command is named,
-documented, and reachable:
+The half of Emacs worth copying is not the keybindings — it is that you can
+always ask, and the answer comes from the running system rather than from a
+manual. Every command here is named, documented and reachable, and every screen
+below is built by interrogating the live image:
 
 | =Super+/=   | the whole keymap, drawn from the live bindings              |
 | =Super+x=   | run any command by name — including ones that take arguments, which it asks for |
@@ -486,8 +527,8 @@ can drive it.
 
 ** A REPL inside your window manager, one form away
 
-This is the thing no other Wayland compositor can offer, so it is worth being
-exact about how little it costs. Press =Super+;= and type:
+Worth being exact about how little this costs, because it is the capability the
+rest of the design rests on. Press =Super+;= and type:
 
 #+begin_src lisp
 (start-swank 4005)
@@ -497,10 +538,9 @@ Then =M-x slime-connect= to =localhost 4005=, and you are at a REPL *inside*
 the running window manager: =C-c C-c= on a =defmethod= and the windows move.
 No restart, no configuration file, and nothing listening until you ask.
 
-StumpWM — the program this one is most like — asks for two forms and a
-Quicklisp load at its own eval prompt to reach the same place, and does not
-mention SWANK in its manual at all. This is the same idea with the loading
-already done.
+This is the StumpWM development loop, which is where the idea comes from, with
+the loading already done: SWANK is built into the shipped image, so reaching a
+REPL is one form rather than a Quicklisp install at an eval prompt.
 
 It is *off by default*, and it stays that way: a REPL on a TCP port is
 arbitrary code execution with no authentication step, in a program that starts
@@ -772,10 +812,22 @@ nothing in that build had ever connected to the river it pins.
 All six river protocols have been re-vendored from 0.4.6 rather than pinning
 river back to 0.4.5, because every 4 → 5 change is additive: two new
 =capture_sessions= events and five clarifications of prose, nothing removed and
-nothing renamed. The version check refuses in both directions, so pinning back
-would have left the program unable to start on any river a user installs today.
-=src/protocol/PINNED= carries the diff and the argument; [[file:doc/PLAN.org][PLAN.org §log8]] carries
-the decision. =nix build=, =nix-shell=, =make check= and CI are green.
+nothing renamed. The version check refused in *both* directions when that
+decision was made, so pinning back would have left the program unable to start
+on any river a user installs today; it is a floor and a ceiling now, and
+=INSTALL.org= has that half. =src/protocol/PINNED= carries the diff and the
+argument; [[file:doc/PLAN.org][PLAN.org §log8]] carries the decision.
+
+That paragraph used to end "=nix build=, =nix-shell=, =make check= and CI are
+green", and three quarters of that was true. *CI had never been green — not one
+run, ever* — and the sentence had been sitting here saying otherwise. What
+it was reporting was three real defects: a test helper that only worked on
+newer SBCL, a generated document whose content depended on the compiler that
+generated it, and an install check whose stated precondition was false on the
+only machine that ran it. All three are fixed and each has a changelog entry.
+The lesson is the cheap one and it is worth writing down where it happened: *a
+red instrument nobody reads is indistinguishable from no instrument*, and this
+project had spent a lot of effort building the instrument.
 
 Both of those new events are now handled, which they were not when that
 paragraph was written. The window manager knows how many screen capture
@@ -788,24 +840,65 @@ changes; being recorded is information, not a policy.
 
 * Documentation
 
-- [[file:INSTALL.org][INSTALL.org]] — installing on any distribution
-- [[file:doc/EXTENDING.org][doc/EXTENDING.org]] — how to change it, with worked examples
+*If you are here to use it:*
+
+- [[file:INSTALL.org][INSTALL.org]] — installing on any distribution, and the two version ranges that matter
+- =latticewm --list-keys=, =--list-options=, =--list-commands= — generated from the running image, so they cannot be out of date
+- =Super+/= — the whole keymap, on screen, built from the live keymap
+
+*If you are here to change your own window manager:*
+
+- [[file:doc/EXTENDING.org][doc/EXTENDING.org]] — the extension guide, in four tiers, with worked examples
+- [[file:examples/][examples/]] — five worked extensions, each loaded and exercised on every build
+- =latticewm --extension-surface= — every generic you can specialise, what its shipped method reads, and what overrides it
+
+*If you are here to change this repository:*
+
+- [[file:CONTRIBUTING.md][CONTRIBUTING.md]] — the short version: what will fail your branch, and why
+- [[file:doc/ONBOARDING.org][doc/ONBOARDING.org]] — the long version: the map, the five instruments, and what each kind of change obliges you to do
+
+*The record:*
+
 - [[file:doc/FINDINGS.org][FINDINGS.org]] — what building the lattice from outside the core actually cost
 - [[file:doc/DESIGN.org][DESIGN.org]] — the full design record and the reasoning behind every decision
 - [[file:doc/PLAN.org][PLAN.org]] — the execution plan and the log of what actually happened
 
+The last three are *historical* and deliberately not edited into agreement with
+what shipped. =DESIGN.org= contains a row reading /"Overturned by D22, in this
+document"/, which is what a record that has not been laundered looks like.
+
 * Status
 
 Working, and used on bare metal.
+
+*What the build now stands on, stated first because it is the part that was
+weakest.* The whole of =make build gates test surface= is green on SBCL 2.2.6 —
+the declared floor — and on 2.2.9 and 2.6.6, and the six generated documents
+come out *byte-identical on all three*. The integration suite is green against
+river at both ends of the supported range: 0.4.5, which carries interface
+version 4 and is the floor, and 0.4.6, which carries 5 and is what the vendored
+protocol was generated from. Those are four separate claims that used to be one
+claim and an assumption; [[file:INSTALL.org][INSTALL.org]] has the table and
+=src/protocol/PINNED= has the protocol half.
+
+None of that was true a release ago, and the way it was false is worth one
+sentence: there was a CI job built for the express purpose of asking whether
+the declared SBCL floor was real, it had answered *no* on thirty consecutive
+runs, and nobody had read it. The answer was a defect in a test helper rather
+than in the program — but a red instrument nobody reads is indistinguishable
+from no instrument, which is the failure mode after the one the gates were
+designed against.
 
 Verified on real hardware: keybindings including shifted keys, the minibuffer,
 spawning, closing, splits, floating, the empty-pane spawn, persistence, and
 the lattice — walking cell to cell across an infinite plane, carrying windows
 between cells, and zooming out to a grid.
 
-Verified against a *headless river* on every run of =make check= — a hundred
-and fifty-odd assertions in twenty-one sections, none of which can pass without
-a compositor having agreed: connecting and version negotiation; an output with
+Verified against a *headless river* on every run of =make check=. The suite
+prints its own section and assertion counts every run, which is why they are
+not written here — a number in prose that nothing checks is the failure this
+project has watched four times. None of these can pass without a compositor
+having agreed: connecting and version negotiation; an output with
 the name and size river gave it; the manage and render sequences; the
 shared-memory overlay path, its HiDPI arithmetic, and river releasing a buffer
 it has finished reading — which is the one event this program owed the

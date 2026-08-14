@@ -157,7 +157,24 @@ which characters are shifted on which layout is what makes this work on a
 Dvorak or a German keyboard.
 
 Two hundred-odd bindings sounds like a lot and is one round trip at startup;
-the alternative is not being able to read text at all."
+the alternative is not being able to read text at all.
+
+THE FOURTH GROUP IS HERE SO THAT `ANY KEY CLOSES THIS' IS TRUE.  It is printed
+across the top of the welcome screen, the keymap overlay, an apropos listing
+and the undo history, and this list is the whole of what an overlay can ever be
+handed: a key that is not here is not merely unbound, river never tells us it
+was pressed.  Making the dismissal reachable — see CAPTURE-ARMED-NOW-P and
+DISMISS-OVERLAY — closed the structural half of that; this closes the rest, and
+the two halves are worth keeping distinct because only the first was a defect.
+
+Function keys, Page Up and Page Down, Insert and Menu: the keys somebody
+plausibly presses at a help screen and which nothing else here would have asked
+for.  F1 because on every other program in the world it means help; Page Down
+because the keymap overlay is long enough to look scrollable.
+
+Bare modifiers are deliberately not on the list and `any key' does not include
+them.  An overlay that vanished when a finger came to rest on Shift would be
+obnoxious, and river has no binding for a modifier alone to give us anyway."
   (declare (ignore policy))
   (append
    (loop for code from #x20 to #x7e
@@ -165,6 +182,11 @@ the alternative is not being able to read text at all."
    ;; Backspace, Tab, Return, Escape, KP_Enter, Delete, and the six that move.
    (loop for keysym in '(#xff08 #xff09 #xff0d #xff1b #xff8d #xffff
                          #xff51 #xff52 #xff53 #xff54 #xff50 #xff57)
+         collect (cons keysym '()))
+   ;; Page_Up, Page_Down, Insert, Menu, and F1 through F12.
+   (loop for keysym in '(#xff55 #xff56 #xff63 #xff67)
+         collect (cons keysym '()))
+   (loop for keysym from #xffbe to #xffc9
          collect (cons keysym '()))
    (loop for letter across *readline-chords*
          collect (cons (char-code letter) '(:ctrl)))))

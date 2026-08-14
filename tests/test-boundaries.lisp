@@ -34,16 +34,42 @@ whether the log is any use.")
   (error "the policy method is broken"))
 
 (defmacro with-captured-log ((var) &body body)
-  "Run BODY with the log going to a string, and bind VAR to what it said."
-  `(let* ((stream (make-string-output-stream))
-          (p:*log-stream* stream)
-          (p:*log-level* :debug)
-          (p:*log-to-stderr* nil)
-          (p:*log-file* nil)
-          (p:*debug-on-error* nil))
-     ,@body
-     (let ((,var (get-output-stream-string stream)))
-       ,var)))
+  "Run BODY with the log going to a string; VAR is everything it has said.
+
+VAR IS A SYMBOL MACRO, AND IT USED TO BE A VARIABLE BOUND ONLY AFTER BODY RAN.
+Every call site below ends its body with VAR — naming the thing it is about to
+assert on — and under the old expansion that trailing form was a reference to
+a variable that did not exist yet.  SBCL 2.6 deletes it, because its value is
+discarded and the compiler can prove nothing depends on it; SBCL 2.2.9 does
+not, and four of the five tests in this file died on `The variable LOG is
+unbound' without reaching a single assertion.
+
+So the suite written to check the error boundaries was the suite that could not
+run on the oldest compiler this project claims to support, `plain' was the CI
+job built to ask exactly that question, and the answer went unread for thirty
+runs.  A test helper whose meaning depends on the compiler version is not a
+test helper.
+
+Reading VAR drains the stream into an accumulator, so it answers the same
+inside BODY and after it, and answers the same twice."
+  (let ((stream (gensym "STREAM"))
+        (seen (gensym "SEEN"))
+        (so-far (gensym "SO-FAR")))
+    `(let* ((,stream (make-string-output-stream))
+            (,seen (make-array 0 :element-type 'character
+                                 :adjustable t :fill-pointer 0))
+            (p:*log-stream* ,stream)
+            (p:*log-level* :debug)
+            (p:*log-to-stderr* nil)
+            (p:*log-file* nil)
+            (p:*debug-on-error* nil))
+       (flet ((,so-far ()
+                (loop for character across (get-output-stream-string ,stream)
+                      do (vector-push-extend character ,seen))
+                (coerce ,seen 'simple-string)))
+         (symbol-macrolet ((,var (,so-far)))
+           ,@body
+           ,var)))))
 
 (test guarded-returns-nil-and-names-the-frame-that-signalled
   "GUARDED swallows, and the backtrace is the error's rather than its own.

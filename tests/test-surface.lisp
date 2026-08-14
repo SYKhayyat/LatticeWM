@@ -1212,6 +1212,66 @@ layer is — says so in one method")
     (is-false (p:capture-wanted-p policy occupied)
               "and removing it restores the shipped answer")))
 
+(test an-overlay-is-dismissed-by-a-key-that-is-not-bound-to-anything
+  "`Welcome to LatticeWM -- any key closes this' was false, and it is the first
+sentence a new user reads.
+
+River delivers to the focused *window* everything the window manager did not
+ask for, so the dismiss branch in HANDLE-KEY -- which only ever sees bound keys
+-- meant `any Super chord closes this'.  Escape, space, Return, q and x each
+left the overlay exactly where it was.  The cause was structural rather than a
+missing clause: with an overlay up and nothing else pending, CAPTURE-ARMED-NOW-P
+answered NIL, so the capture bindings were *disabled* and the keystroke was
+never handed to the window manager at all.  A dismissal nothing can reach is
+not a dismissal.
+
+Both halves are asserted here, in the order they have to hold: the keys are
+armed, and then they take the overlay down.  The third half -- that the keys
+exist to be armed -- is in test-devices."
+  (let* ((occupied (c:make-world :root (leaf-with "a") :cursor '()))
+         (r::*world* occupied)
+         (p:*help-visible* nil)
+         (r::*prompt* nil)
+         (p:*pending-keymap* nil))
+    (is-false (r::capture-armed-now-p)
+              "nothing is reading, so an ordinary keystroke belongs to the
+window under it")
+    (setf p:*help-visible* t)
+    (is-true (r::capture-armed-now-p)
+             "an overlay is up, so the window manager has to be handed the key
+-- this answered NIL, which is why five natural keys did nothing")
+    ;; The keymap overlay, then a page put up by apropos or describe-command:
+    ;; one variable with three states, so that the rule can put away whatever
+    ;; is up without knowing what it is.
+    (r::handle-captured-key (char-code #\q) '())
+    (is-false p:*help-visible*
+              "q closes it, and q is bound to nothing")
+    (setf p:*help-visible* (cons "apropos" (list (cons "a" "b"))))
+    (is-true (r::capture-armed-now-p)
+             "a custom page is an overlay like any other")
+    (r::handle-captured-key #xff1b '())
+    (is-false p:*help-visible* "and Escape closes that one too")
+    (is-false (r::capture-armed-now-p)
+              "and with it gone the keys go back to the window")))
+
+(test a-prompt-drawn-over-an-overlay-keeps-its-keystrokes
+  "The one exception, and it is not symmetry: a prompt is something you are
+typing into, so Escape there means `leave the prompt' rather than `close the
+thing behind it'.  HANDLE-KEY's overlay branch carries the same guard."
+  (let* ((occupied (c:make-world :root (leaf-with "a") :cursor '()))
+         (r::*world* occupied)
+         (p:*help-visible* t)
+         (r::*prompt* "apropos: ")
+         (r::*input* "")
+         (r::*point* 0)
+         (r::*prompt-callback* nil))
+    (is-true (r::reading-p) "the prompt is up")
+    (r::handle-captured-key (char-code #\a) '())
+    (is-true p:*help-visible*
+             "the overlay stays, because the keystroke was typing")
+    (is (string= "a" r::*input*)
+        "and the keystroke went into the prompt rather than into closing it")))
+
 (test a-state-nobody-gave-a-colour-draws-a-plain-border
   "FONT-FOR's generosity, which is the half of the pattern that is easy to
 leave out: a role it has never heard of gets the default font rather than a

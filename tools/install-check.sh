@@ -33,8 +33,43 @@ cd "$root"
     exit 1
 }
 
-prefix=$(mktemp -d "${TMPDIR:-/tmp}/latticewm-install-check.XXXXXX")
-trap 'rm -rf "$prefix"' EXIT
+# WHERE THE SCRATCH PREFIXES GO, AND WHY IT IS NOT $TMPDIR.
+#
+# Every prefix below used to be `mktemp -d "${TMPDIR:-/tmp}/..."', under a
+# comment three lines down asserting the result is not inside $HOME.  On a
+# GitHub runner TMPDIR is /home/runner/work/_temp, so it is, and install.sh
+# reads exactly that to decide what kind of install this is:
+#
+#     if [ -z "$destdir" ] && [ -n "$home" ] && [ "${prefix#"$home"}" != "$prefix" ]
+#         sessions="$home/.local/share/wayland-sessions"; systemwide=no
+#
+# So the run took the *home* branch, wrote the session entry outside the scratch
+# prefix and into the runner's real home, and this script reported the session
+# entry missing -- a true statement about a check that had installed something
+# else somewhere else.  It failed that way on every CI run for the whole life of
+# the job, and the failure named the artifact rather than the assumption.
+#
+# The precondition is asserted rather than assumed now, which is the actual
+# lesson: this file's own comment already knew what it needed and nothing made
+# the knowing load-bearing.  A check whose stated premise is false on the only
+# machine that runs it is not a failing check, it is a check that is not running.
+scratch_root=/tmp
+case "${HOME:-}" in
+    "") ;;
+    /) ;;
+    *) case "$scratch_root/" in
+           "$HOME"/*)
+               echo "install-check: /tmp is inside \$HOME ($HOME), so every prefix
+  below would take install.sh's home branch and this check would be testing
+  something other than the packaged install it is named after." >&2
+               exit 2 ;;
+       esac ;;
+esac
+
+prefix=$(mktemp -d "$scratch_root/latticewm-install-check.XXXXXX")
+envcheck=$(mktemp -d "$scratch_root/latticewm-envriver-check.XXXXXX")
+staged=$(mktemp -d "$scratch_root/latticewm-destdir-check.XXXXXX")
+trap 'rm -rf "$prefix" "$envcheck" "$staged"' EXIT
 
 # A prefix that is not under $HOME, so this exercises the system-install branch
 # -- the one a package uses and the one nobody runs by hand.  --no-config keeps
@@ -97,9 +132,30 @@ present share/latticewm/protocol/PINNED
 #
 # The ceiling is generous on purpose.  It is not a size budget and it must not
 # become one; it is the difference between a compressed image and an
-# uncompressed one, which is fourteen times, and anything that trips it is a
-# packaging accident rather than a few kilobytes of growth.
-size_ceiling_mb=60
+# uncompressed one, and anything that trips it is a packaging accident rather
+# than a few kilobytes of growth.
+#
+# AND IT WAS SET FROM A GAP THAT HAS SINCE CLOSED, WHICH IS HOW A CEILING STOPS
+# BEING ONE.  60 was chosen when the two images were 13 MB and 190 MB -- a
+# fourteen-fold gap, with the ceiling sitting comfortably in the middle of it.
+# Measured today, on the same command, they are 12 MiB and 52 MiB.  The
+# compressed image barely moved; the uncompressed one lost two thirds of its
+# weight to SBCL and to the string-literal coalescing in tools/image.lisp.
+#
+# So the uncompressed image had quietly slid *under* the ceiling, and this
+# check -- which exists for exactly one bug, "somebody installed the output of
+# make image-fast" -- could no longer see that bug.  It would have passed the
+# thing it was written to fail, silently, in the currency a packager notices
+# last.  Nothing was wrong with the reasoning; the world moved underneath a
+# constant, which is what constants derived from measurements do.
+#
+# 30 restores the property rather than the number: two and a half times the
+# compressed image, so ordinary growth has room, and well under the
+# uncompressed one, so the accident still trips it.  If these two ever converge
+# far enough that no number separates them, the right answer is to assert the
+# compression *setting* rather than the size, and this comment is where to say
+# so.
+size_ceiling_mb=30
 if [ -f "$prefix/bin/latticewm" ]; then
     size_mb=$(( $(wc -c < "$prefix/bin/latticewm") / 1048576 ))
     if [ "$size_mb" -gt "$size_ceiling_mb" ]; then
@@ -145,7 +201,6 @@ fi
 # It survived because this file and flake.nix's installPhase both pass --river
 # explicitly, so nothing had ever taken the fallback.  These four lines are
 # the check that was missing, not the fix.
-envcheck=$(mktemp -d "${TMPDIR:-/tmp}/latticewm-envriver-check.XXXXXX")
 env_river=/nowhere/bin/river-from-the-environment
 RIVER=/nowhere/a-directory-shaped-value RIVER_BIN="$env_river" \
     ./install.sh --prefix "$envcheck" --no-config >/dev/null
@@ -159,7 +214,6 @@ rm -rf "$envcheck"
 if ./install.sh --prefix "$envcheck" --no-config --river /tmp >/dev/null 2>&1; then
     fail "install.sh accepted a directory as --river; that is the value the
   nix files' \$RIVER holds, and it becomes \`exec <directory> -c ...'"
-    rm -rf "$envcheck"
 fi
 
 # AND THE PACKAGING PATH, WHICH IS THE ONE NOBODY HERE HAS EVER RUN.
@@ -173,9 +227,6 @@ fi
 # staging root.  Getting the second wrong produces a package that installs
 # cleanly and fails at a login screen with a path that was correct on the build
 # machine, which is the worst shape a packaging bug has.
-staged=$(mktemp -d "${TMPDIR:-/tmp}/latticewm-destdir-check.XXXXXX")
-trap 'rm -rf "$prefix" "$staged"' EXIT
-
 fake_prefix=/usr
 DESTDIR="$staged" ./install.sh --prefix "$fake_prefix" --river "$river" >/dev/null
 

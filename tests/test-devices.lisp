@@ -284,8 +284,12 @@ an Emacs-shaped window manager's users ask for and was the exact thing the old
 
 (defmethod p:capture-keys ((policy modal-policy))
   (append (call-next-method)
-          ;; F1 through F12.
-          (loop for keysym from #xffbe to #xffc9 collect (cons keysym '()))))
+          ;; The twelve XF86 media keysyms, which is the modern shape of the
+          ;; example: F1 through F12 used to be it, and the core ships those
+          ;; now so that `any key closes this' is true of an overlay.  A key
+          ;; the core never heard of has to be a key the core never heard of.
+          (loop for keysym from #x1008ff11 to #x1008ff1c
+                collect (cons keysym '()))))
 
 (test capture-keys-is-the-whole-of-what-a-prompt-can-read
   "River delivers keys to the focused *window* and hands the window manager only
@@ -320,14 +324,33 @@ making at all -- the shape being checked is `the answer comes from a policy'."
         "the capture list has duplicates in it")))
 
 (test a-modal-layer-can-add-a-key-the-core-never-heard-of
-  "The failure this replaces: bind F5 in a keymap, press it, and river never
+  "The failure this replaces: bind a key in a keymap, press it, and river never
 delivers it -- with nothing anywhere to say why, because the keymap is right,
 the command exists, and the key was simply never requested."
   (let ((shipped (p:capture-keys (policy)))
         (modal (p:capture-keys (make-instance 'modal-policy))))
-    (is (not (member (cons #xffc2 '()) shipped :test #'equal))
-        "F5 is not readable by default, which is the premise")
-    (is (member (cons #xffc2 '()) modal :test #'equal)
+    (is (not (member (cons #x1008ff14 '()) shipped :test #'equal))
+        "XF86AudioPlay is not readable by default, which is the premise")
+    (is (member (cons #x1008ff14 '()) modal :test #'equal)
         "and one method makes it readable")
     (is (= (+ 12 (length shipped)) (length modal))
         "CALL-NEXT-METHOD kept everything the shipped answer had")))
+
+(test an-overlay-can-be-dismissed-by-the-keys-somebody-actually-presses
+  "`Any key closes this' is printed across the top of every overlay, and the
+five keys a new user reaches for did nothing at all.
+
+Half of that was structural and is asserted in test-surface; this is the other
+half, which is that the keys have to be *askable for* in the first place.  A
+key absent from CAPTURE-KEYS is not unbound, it is undeliverable: river hands
+the window manager only what it requested and gives the rest to the focused
+window, so no handler anywhere can rescue it."
+  (let ((keys (p:capture-keys (policy))))
+    (dolist (entry '((#xff1b . "Escape")   (#x20   . "space")
+                     (#xff0d . "Return")   (#x71   . "q")
+                     (#x78   . "x")        (#xff09 . "Tab")
+                     (#xffbe . "F1")       (#xff56 . "Page_Down")
+                     (#xff55 . "Page_Up")  (#xff63 . "Insert")))
+      (is (member (cons (car entry) '()) keys :test #'equal)
+          "~a cannot reach the window manager, so it cannot close an overlay"
+          (cdr entry)))))

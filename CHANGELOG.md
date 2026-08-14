@@ -4,9 +4,10 @@ All notable changes to LatticeWM.
 
 The version lives in one file, [`VERSION`](VERSION). Both `.asd` files read it
 with ASDF's `:read-file-line`, `flake.nix` reads it with `builtins.match`, and
-gate 19 holds the man pages and this file to the same number. Nothing else may
-hold a copy — that is what four disagreeing copies and a git tag matching none
-of them bought the last time.
+gate 19 holds the man pages and this file to the same number — this file since
+0.2.0, when it turned out that the sentence you are reading had been describing
+a check nobody had written. Nothing else may hold a copy: that is what four
+disagreeing copies and a git tag matching none of them bought the last time.
 
 ## Releasing
 
@@ -25,8 +26,43 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.2.0
+
+The release the grade said was three edits away, plus the three edits.
+
+Everything below was already here; what changed is that the things this project
+says about itself are now attached to something that runs. The declared minimum
+compiler has been run rather than inferred, the generated documents are
+byte-identical on every compiler the project supports, the integration suite
+drives both ends of the supported river range instead of one, and the first
+sentence a new user reads is true.
+
 ### Added
 
+- **`doc/ONBOARDING.org`**, the contributor guide for the second week:
+  the map of the tree, the five instruments and what each one structurally
+  cannot see, and what each kind of change — an option, a command, a generic, a
+  hook, a container kind, a protocol call — obliges you to do. `CONTRIBUTING.md`
+  stays the short version. It is a *current* document, so its sentences are
+  checked, and it is on gate 19's list so the gate count in it cannot rot.
+- **A "shipping it as a module" section in `doc/EXTENDING.org`.** The guide
+  covered tiers 0 through 3 and stopped at the edge of the user's own
+  configuration file; this is the step after, for somebody packaging an
+  extension other people install. The `.asd`, why to depend on `latticewm` and
+  nothing narrower, the enable/disable contract, not taking a key without
+  saying so, offering an option rather than a constant, testing, and what to do
+  about versions.
+- **The integration suite drives both ends of the supported river range.**
+  Against 0.4.5 (interface version 4, the floor) and 0.4.6 (version 5, which
+  the vendored XML was generated from). The two runs assert different things:
+  the floor run says every request this program sends is one an older river
+  understands, and the ceiling run says every event it binds for is one it can
+  actually decode. Only the first was ever in doubt out loud; the second is the
+  one that fails silently. `src/protocol/PINNED` said both `capture_sessions`
+  handlers were "covered by the unit suite and by nothing live", which was
+  honest and is no longer true.
 - **Motion crosses the screen boundary.** Walking off the edge of one monitor
   arrives on the next one, at the place you last stood there. Motion in this
   program is continuous across every other boundary — out of a split when the
@@ -102,6 +138,135 @@ be able to do before anyone else can depend on it.
   `wl_registry` to reach, so nothing had ever asked it a question.
 
 ### Fixed
+
+- **"Any key closes this" was false, and it is the first sentence a new user
+  reads.** The welcome overlay, the keymap overlay, an apropos listing and the
+  undo history all print it; `*help-visible*`'s own docstring calls the rule
+  "any key puts it away". The branch implementing it lived in `handle-key`,
+  which river only ever reaches for a key that is *bound* — a compositor
+  delivers to the focused window everything the window manager did not ask for
+  — so the rule meant "any Super chord closes this". On a genuine first run,
+  Escape, space, Return, `q` and `x` each left the overlay exactly where it
+  was, in the sixty seconds that decide whether somebody keeps the program.
+
+  The dismissal was not merely unwritten, it was *unreachable*: with an overlay
+  up and nothing else pending, `capture-armed-now-p` answered NIL, so the
+  capture bindings were disabled and river was never going to hand over the
+  keystroke at all. An overlay now arms them, `handle-captured-key` takes the
+  overlay down without consuming the key — so the keystroke still does its job,
+  which is the lesson "the first super return did not open term" already
+  bought once — and the shipped `capture-keys` gained the function keys, Page
+  Up, Page Down, Insert and Menu, so the sentence is true of every key a person
+  presses rather than of the ones that happened to be readable. Bare modifiers
+  are deliberately still excluded. Asserted in the unit suite, and against a
+  real compositor in `make integration`, which is the only place that can ask
+  whether river was actually told to enable the bindings.
+
+- **The declared minimum SBCL was not a version the project had ever been run
+  on.** `latticewm.asd` said 2.2.6 and its docstring said "the oldest SBCL this
+  project is known to work on". The `plain` CI job was built for the express
+  purpose of asking whether that was true, on Ubuntu's 2.2.9, under a comment
+  calling itself "this project's only empirical answer" — and it had answered
+  *no* on thirty consecutive runs, which nobody read.
+
+  The defect was in a test helper, not in the program: `with-captured-log` bound
+  its variable only *after* running its body, and every call site ended its body
+  with that variable. SBCL 2.6 deletes the reference because its value is
+  discarded; 2.2.9 does not, so four tests in the suite covering `guarded`,
+  `best-effort` and `with-abandon` — the error-handling substrate the whole
+  program rests on — died on an unbound variable without reaching an assertion.
+  The variable is a symbol macro now and reads the same inside the body and
+  after it. The floor turns out to be true: the whole build is green on 2.2.6,
+  2.2.9 and 2.6.6.
+
+  A new `floor` CI job runs the declared minimum rather than something above
+  it, reading the number out of `latticewm.asd` with the same `sed`
+  `bootstrap.sh` uses, so there is no second copy to go stale. A claim about a
+  version nothing runs is the shape this whole workflow exists to abolish.
+
+- **The generated documents were not reproducible across supported compilers,
+  so the `surface` gate could not go green on its own runner.** `make surface`
+  produced a byte-identical tree on 2.6.x and a different `EXTENSION-SURFACE.txt`
+  on 2.2.9. The difference was anonymous functions in the `read by:`
+  cross-reference lists — entries like `(lambda (condition17) in
+  emit-window-management-state)`, where `condition17` is a *gensym counter*:
+  a fact about how many times `gensym` had been called during compilation, not
+  a fact about the program. Newer SBCL records those inner lambdas and 2.2.9
+  does not record them at all.
+
+  `option-readers` now folds an anonymous reader to the named function
+  containing it, and drops it when there is none, so the list contains only
+  things a person can go and look at. The six documents are byte-identical on
+  2.2.6, 2.2.9 and 2.6.6. This is the third instance of the same class the
+  changelog already records twice — a generated document whose content depends
+  on the machine that generated it — and the first one where the dependency was
+  on the *compiler* rather than on the filesystem.
+
+- **`install-check` failed on CI because its own stated precondition was false
+  there, and the run wrote into the home directory it was written to protect.**
+  Every scratch prefix came from `mktemp -d "${TMPDIR:-/tmp}/..."` under a
+  comment asserting the result is not inside `$HOME`. GitHub Actions sets
+  `TMPDIR=/home/runner/work/_temp`, so it was, and `install.sh` reads exactly
+  that to choose between a system install and a home install — so the check
+  took the home branch, wrote a `wayland-sessions` entry outside the scratch
+  prefix and into the real home, and then correctly reported that the session
+  entry was missing from the prefix. The prefixes are rooted at `/tmp`, and the
+  precondition is asserted rather than assumed: a check whose premise is false
+  on the only machine that runs it is not a failing check, it is a check that is
+  not running.
+
+- **`make image` failed with eighteen frames of SBCL backtrace on an SBCL that
+  cannot compress a core, and the declared floor did not know that was
+  possible.** `latticewm.asd` reasons the 2.2.6 floor entirely from the release
+  at which core compression became zstd and its levels became 0..22 — correct,
+  and silently assuming an SBCL of that version can compress at all. It is a
+  *build-time option* of SBCL, so the version is necessary and was never
+  sufficient. Found by running the new `floor` CI job locally before trusting
+  it: the official x86-64 binary tarballs for 2.2.6 and 2.2.9 have no
+  compression support, which is unlucky in the exact place it matters, because
+  they are what a person installs by hand when they want an old SBCL to check
+  this floor with. Distribution packages generally do have it.
+
+  What arrived was an unhandled `SIMPLE-ERROR` — *"Unable to save compressed
+  core: this runtime was not built with zstd support"* — at the end of a build
+  that had otherwise passed every gate and every check, naming neither this
+  project, nor the variable that turns compression off, nor the fact that
+  everything except the dump had succeeded. `tools/image.lisp` asks before it
+  dumps now and says all of that in a sentence. It refuses rather than falling
+  back to an uncompressed image, because `make install` installs what `make
+  image` produced and `install-check` has a size ceiling for precisely that
+  accident. Nothing about the floor changes: the program builds and passes on
+  an SBCL with no compression at all.
+
+- **`install-check`'s size ceiling had stopped catching the one bug it exists
+  for.** It refuses an installed binary over 60 MB, on the reasoning that the
+  compressed image is 13 MB and the uncompressed one is 190 — a fourteen-fold
+  gap with the ceiling in the middle. Measured today, on the same command, they
+  are 12 MiB and 52 MiB: the compressed image barely moved and the uncompressed
+  one lost two thirds of its weight. So an uncompressed image had quietly slid
+  *under* the ceiling, and the check written for exactly one bug — "somebody
+  installed the output of `make image-fast`" — would have passed it silently.
+  The ceiling is 30 MB now, which restores the property rather than the number:
+  two and a half times the compressed image, and well under the uncompressed
+  one. Found by measuring rather than by reading, which is the only way this
+  class of staleness is ever found.
+
+- **This file's own header described a check nobody had written.** It said
+  "gate 19 holds the man pages and this file to the same number". It held the
+  man pages; nothing in `tools/gates.lisp` had ever opened `CHANGELOG.md`. That
+  is gate 12's disease — a sentence about the program that nothing can see —
+  occurring inside gate 19's documentation. Gate 19 now checks that the version
+  in `VERSION` has a heading of its own here, which fires exactly when a version
+  has been bumped without being written down.
+
+- **Gate 1 said "zero compiler warnings" and did not compile `examples/`**, so
+  the build printed `The variable COLUMNS is defined but never used` from
+  `examples/05-status-line.lisp` on every run, underneath a gate saying there
+  were none. The parameter is declared ignored, and gate 1 now compiles the
+  worked examples — globbed, so one added tomorrow is covered on the day it
+  lands. This is the fourth file the "compiled by nothing" hole has been found
+  in, and the one with the largest audience: `examples/` is what
+  `doc/EXTENDING.org` sends a stranger to read first.
 
 - **The shipped status-line example's clock showed the time of the last layout
   change.** `clock-segment`'s docstring said the time was "asked fresh every

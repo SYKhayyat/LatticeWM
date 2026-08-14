@@ -885,6 +885,158 @@ wrong context. The message names the request and what it needed. It is a
 *continuable* error, so at a REPL you can send it anyway and see what river
 does — which is how two of the bugs in this project's history were diagnosed.
 
+* Shipping it as a module
+
+Everything above happens in your configuration file. This section is about the
+step after that: turning what you wrote into something another person can
+install, which is a different job with about six decisions in it.
+
+** When it stops being a config file
+
+Move to a system when any of these is true. Before that, a file is better.
+
+- It is more than one file, or it wants its own package.
+- You want somebody else to run it.
+- It needs to be loadable *without* being enabled — which is the shape every
+  extension with an on/off switch has.
+- It has tests. A config file cannot have tests; a system can.
+
+** The .asd
+
+=lattice.asd= is the worked example and it is deliberately small. The whole
+shape, with the one line that carries the argument:
+
+#+begin_src lisp
+(defsystem "my-extension"
+  :description "One sentence a stranger can act on."
+  :depends-on ("latticewm")
+  :serial t
+  :components ((:module "my-extension"
+                :serial t
+                :components ((:file "package") (:file "policy")))))
+#+end_src
+
+*Depend on ~latticewm~ and on nothing else of this project's.* Not on
+~latticewm/runtime~, not on an internal package. The exported policy surface is
+the contract; anything you reach past it is a thing that will move under you
+without a deprecation, because it was never promised.
+
+The lattice holds itself to two rules that are worth adopting even though
+nothing outside this repository enforces them:
+
+1. Nothing in the extension edits anything in the core.
+2. The core loads, starts and runs with the extension absent.
+
+The first is what makes your module distributable at all. The second is what
+makes it *removable*, which is the property users actually check.
+
+** Getting loaded
+
+#+begin_src lisp
+(load-extension "my-extension")
+#+end_src
+
+Prefer this to a bare ~asdf:load-system~ in a configuration file. It knows
+where an installed LatticeWM keeps its systems, it does nothing when the system
+is already in the image, and — the part that matters — it reports a failure as
+a message in the echo area rather than as an error that stops the rest of the
+user's configuration from loading. A typo in your system name should not cost
+somebody their keybindings.
+
+For it to be findable, the =.asd= has to be somewhere ASDF looks:
+=~/.local/share/common-lisp/source/= is the ordinary answer, and an installed
+LatticeWM also searches its own data directory.
+
+** The enable/disable contract
+
+If your module has an on/off switch, it owes its users four things, and three
+of them are the composition rules from the previous section:
+
+- *~enable~ composes, it does not replace.* Mixin over the class in force,
+  ~change-class~ rather than ~make-instance~, composed class interned under a
+  derived name. The section above has the thirty lines.
+- *~enable~ twice is a no-op, not an error.* Configuration files get loaded
+  twice. The same mixin twice in one precedence list is not a class, and CLOS
+  reports that with an error naming neither your extension nor the second call.
+- *~disable~ restores what was underneath*, not a fresh default. A fresh
+  ~conventional-policy~ is a different object with none of anybody's state on
+  it.
+- *Enabling is live.* Nothing about this needs a restart, and if yours does,
+  say so loudly, because every other page here promises it does not.
+
+** Do not take a key without saying so
+
+The lattice did this and it is the reason =*warn-on-rebinding*= exists:
+enabling it rebound ~Super+/~ from ~help~ to its own status command, so loading
+an optional extension quietly deleted the one key that finds every other key —
+while the status line went on advising people to press it.
+
+Rebinding a key to a *different* command now says so. Do not turn that off in
+your own module; prefer a submap under one prefix of your own, and leave the
+core's keys where the user's fingers expect them.
+
+** Offer an option rather than a constant
+
+If your method makes a decision the user might reasonably want to change,
+register an option for it. This is the same rule the core holds itself to —
+gate 15 refuses a method that overrides away the only reader of an option
+without offering one of its own, so that there is always a knob even when it is
+not the original one.
+
+Give it a docstring that says what turning it off *costs*. That paragraph is
+what ~describe-option~ shows and it is the only documentation most users will
+read.
+
+** Testing it
+
+Give the system a =/tests= sibling, the way =lattice.asd= does:
+
+#+begin_src lisp
+(defsystem "my-extension/tests"
+  :depends-on ("my-extension" "latticewm/tests" "fiveam")
+  :components ((:module "tests" :components ((:file "test-my-extension")))))
+#+end_src
+
+Most of what you want to assert is constructible without a compositor: build a
+world, call your method, check the tree. That is where nearly all of this
+project's own checks live, and it is why they are fast enough to run on every
+build.
+
+The thing a constructed test *cannot* see is whether the compositor agrees, and
+that gap is real — this project found a whole feature dead that way, because
+pointer bindings had been enabled through the keyboard interface and the error
+was caught and logged and never seen. If your module talks to river at all,
+say in your README which half you have checked.
+
+** Versioning against the core
+
+The extension surface is a set of generics with docstrings, and it moves. Two
+practical rules:
+
+- *Name the core version you tested against* in your README. There is no
+  compatibility declaration mechanism here and inventing one for a handful of
+  extensions would be ceremony.
+- *Read =latticewm --extension-surface= after upgrading.* It is generated from
+  the running image, so it is the fastest way to see whether a generic you
+  specialise still has the arguments you think it has.
+
+The lattice deliberately does *not* carry a version of its own: it ships with
+the core, from the same =VERSION= file, because giving it a number that can
+drift from the core's would invent a compatibility question nobody has asked.
+Your module is not in that position and should have its own.
+
+** Where to publish it
+
+Right now: your own repository, and open an issue here saying what you built.
+
+That is not a satisfying answer and it is an honest one. A =latticewm-contrib=
+repository, with a low bar and no gates, in StumpWM's model — where the core is
+not feature-rich and the contrib collection is — is the intended shape and does
+not exist yet. =examples/= is not it and is not a substitute for it.
+
+The shape of the *second* extension is information this project does not have,
+and it is worth more to it than a patch.
+
 * The rules the core will not let you break
 
 Recorded so you do not spend an afternoon trying.

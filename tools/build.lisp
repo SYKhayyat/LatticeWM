@@ -49,7 +49,9 @@ system.
 COMPILED AND NOT LOADED, deliberately.  Loading it installs an ON-KEY method
 and four hooks into the image doing the checking, and a gate that changes the
 program it is inspecting is worse than the warning it is looking for.  Every
-undefined reference in the file is visible from the compile alone.")
+undefined reference in the file is visible from the compile alone.
+
+THE WORKED EXAMPLES ARE THE SAME CASE AND ARE ADDED BY EXAMPLE-FILES BELOW.")
 
 (defparameter *real* '())
 (defparameter *redefinitions* 0)
@@ -76,6 +78,33 @@ would take every dependency back."
          (let ((name (namestring file)))
            (and (eql 0 (search (namestring *root*) name))
                 (not (search "/.deps/" name)))))))
+
+(defun example-files ()
+  "Every worked example, which belongs to no system either.
+
+THE FOURTH INSTANCE OF THE HOLE *LOOSE-FILES* EXISTS FOR, and the one with the
+largest audience: examples/ is what EXTENDING.org sends a stranger to read
+first.  Gate 1 compiled latticewm and lattice and nothing else, so its own
+banner — `zero compiler warnings' — was true of the systems and was silently
+not a claim about the four files a new contributor opens before either of them.
+The build printed `The variable COLUMNS is defined but never used' from
+examples/05-status-line.lisp on every run, underneath a gate saying there were
+none.  A gate with an unstated scope is a gate people stop reading, and the
+distance between `zero warnings' and `zero warnings in the two directories we
+happened to list' is not visible from the banner.
+
+Gate 6 *loads* these, which is a stronger check in one direction — a rename in
+the core that breaks one of them fails the build — and no check at all in this
+one, because it muffles warnings to keep its own output readable.  Compiling
+here and loading there is the pair, and neither is redundant.
+
+Globbed rather than listed, so an example added tomorrow is covered on the day
+it lands rather than on the day somebody remembers this list.  Sorted, because
+the order files compile in is the order their warnings are reported in, and a
+gate whose output reorders itself per machine is a gate nobody can diff."
+  (sort (mapcar (lambda (path) (enough-namestring path *root*))
+                (directory (merge-pathnames "examples/*.lisp" *root*)))
+        #'string<))
 
 (defun record (condition)
   (cond
@@ -107,7 +136,7 @@ would take every dependency back."
           (progn
             (dolist (system *systems*) (asdf:load-system system))
             ;; After the systems, because these files use their packages.
-            (dolist (path *loose-files*)
+            (dolist (path (append *loose-files* (example-files)))
               (let ((file (merge-pathnames path *root*)))
                 (if (probe-file file)
                     (uiop:with-temporary-file (:pathname fasl :type "fasl")
