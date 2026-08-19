@@ -1,0 +1,28 @@
+# Nix-free dependency pinning for LatticeWM, managed by qlot.
+#
+# flake.nix pins these libraries through nixpkgs, which is exact but only
+# available where Nix is. This file is the equivalent pin for a plain SBCL on
+# any distribution: a Quicklisp dist version fixes every library in that dist
+# to one specific release, so the set resolved here does not drift.
+#
+# Every system flake.nix lists is present in this dist -- alexandria, cffi,
+# cffi-grovel, babel, closer-mop, plump, array-utils, documentation-utils,
+# trivial-indent, trivial-features, trivial-gray-streams, bordeaux-threads,
+# fiveam, swank (via the slime release), and wayflan. There is no out-of-dist
+# git dependency to track separately, so this one line covers all of them.
+#
+#   qlot install          -> installs the pinned set into .qlot/ and writes
+#                            qlfile.lock
+#   qlot exec sbcl        -> a REPL seeing exactly those versions
+#
+# qlfile.lock is NOT yet committed. Generating it requires a working `qlot
+# install', which failed in the environment where this file was written: SBCL
+# could not resolve beta.quicklisp.org through sb-bsd-sockets under WSL, dying
+# with "The value of SB-BSD-SOCKETS::ADDRESS is (NIL NIL)". curl reached the
+# same host, so this is an SBCL name-resolution problem rather than a fault in
+# this file. Run `qlot install' on a normal Linux machine and commit the
+# resulting qlfile.lock alongside this file.
+#
+# Bump deliberately by changing the date below and re-running `qlot install',
+# never by letting it float.
+dist quicklisp 2026-01-01
