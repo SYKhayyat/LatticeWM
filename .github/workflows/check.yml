@@ -98,6 +98,7 @@ jobs:
   check:
     name: build, gates, tests, headless river
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
@@ -131,6 +132,7 @@ jobs:
   plain:
     name: no nix, from bootstrap.sh, all the way to an install
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       # DELIBERATELY THE DISTRIBUTION'S SBCL, not a pinned one.  This job is
@@ -138,7 +140,7 @@ jobs:
       # somebody else chose, and "whether this builds on the older one" was an
       # empirical question nobody had asked.
       - name: install sbcl
-        run: sudo apt-get update && sudo apt-get install -y sbcl
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update && sudo apt-get install -y sbcl
       - name: sbcl version
         run: sbcl --version
       # .deps/ is the whole of what bootstrap.sh fetches, and the dist inside
@@ -192,6 +194,7 @@ jobs:
   floor:
     name: the declared minimum SBCL, actually run
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       # THE NUMBER IS NOT WRITTEN HERE.  It is read out of latticewm.asd with
@@ -281,6 +284,7 @@ jobs:
   flake:
     name: nix build, nix flake check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
@@ -294,10 +298,11 @@ jobs:
   surface:
     name: the generated documents are the ones in the tree
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: install sbcl
-        run: sudo apt-get update && sudo apt-get install -y sbcl
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update && sudo apt-get install -y sbcl
       - uses: actions/cache@v4
         with:
           path: .deps
