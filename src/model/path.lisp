@@ -90,9 +90,8 @@ It is O(tree), and the tree has tens of nodes, so the simplicity is free."
   (labels ((walk (node path)
              (when (eq node target) (return-from node-path-to (nreverse path)))
              (when (container-p node)
-               (dolist (address (container-addresses node))
-                 (let ((kid (child-at node address)))
-                   (when kid (walk kid (cons address path))))))))
+               (map-children node (lambda (address kid)
+                                    (walk kid (cons address path)))))))
     (walk root '())
     nil))
 
@@ -114,10 +113,26 @@ from a broken keyboard."
                        (first-leaf-path kid (path-append prefix address))
                        prefix)))))))
 
+(defun visible-addresses (container)
+  "The addresses of CONTAINER that a focusable walk should descend into.
+
+For an ordinary container this is every child; for an *alternatives* container
+(a stack — tabs, workspaces, the Z axis) it is only the currently selected one.
+Focus, focus-cycling and the jump labels must never reach a hidden tab: a
+cursor you cannot see is indistinguishable from a broken keyboard, which is the
+same reason FIRST-LEAF-PATH descends through DEFAULT-ADDRESS.  LEAF-PATHS and
+LAST-LEAF-PATH are built on this so all three agree about where focus may land;
+before they did, FOCUS-NEXT could walk out of the visible workspace and into a
+window on a hidden one."
+  (if (container-alternatives-p container)
+      (let ((selection (container-selection container)))
+        (if selection (list selection) '()))
+      (container-addresses container)))
+
 (defun last-leaf-path (root &optional prefix)
-  "The path to the last leaf at or under ROOT, prefixed by PREFIX."
+  "The path to the last *visible* leaf at or under ROOT, prefixed by PREFIX."
   (cond ((not (container-p root)) prefix)
-        (t (let ((addresses (container-addresses root)))
+        (t (let ((addresses (visible-addresses root)))
              (if (null addresses)
                  prefix
                  (let* ((address (car (last addresses)))
@@ -127,12 +142,15 @@ from a broken keyboard."
                        prefix)))))))
 
 (defun leaf-paths (root &optional prefix)
-  "Every leaf path at or under ROOT, in layout order.
+  "Every *visible* leaf path at or under ROOT, in layout order.
 
 Used by cycle-focus, by the ephemeral jump labels, and by anything that wants
-to enumerate places rather than windows."
+to enumerate places rather than windows.  Hidden alternatives (a stack's
+unselected tabs, every workspace but the current one) are not places focus may
+land, so the walk descends an alternatives container through its selection only
+-- see VISIBLE-ADDRESSES."
   (if (container-p root)
-      (loop for address in (container-addresses root)
+      (loop for address in (visible-addresses root)
             for kid = (child-at root address)
             when kid
               append (leaf-paths kid (path-append prefix address)))

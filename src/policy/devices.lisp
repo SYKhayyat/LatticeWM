@@ -284,7 +284,12 @@ rather than merely documented."
       (put :accel-speed *accel-speed*)
       (put :scroll-factor *scroll-factor*)
       (put :repeat-rate *repeat-rate*)
-      (put :repeat-delay *repeat-delay*))
+      (put :repeat-delay *repeat-delay*)
+      ;; :NUMLOCK travels the same per-device pipeline as everything else, so a
+      ;; rule can set it for one keyboard.  It is applied by the runtime's lock
+      ;; path, not sent as a libinput setting -- see SETTINGS-TO-SEND, which
+      ;; excludes it exactly as it excludes the two repeat halves.
+      (put :numlock *numlock*))
     out))
 
 (defun apply-input-rules (device settings &optional (rules *input-rules*))
@@ -310,7 +315,10 @@ and a line in the log that says nothing."
   (let ((settings (apply-input-rules device (option-settings))))
     (if (eq :keyboard (c:input-device-kind device))
         (list :repeat-rate (getf settings :repeat-rate)
-              :repeat-delay (getf settings :repeat-delay))
+              :repeat-delay (getf settings :repeat-delay)
+              ;; :NUMLOCK is a keyboard setting too; dropping it here filtered a
+              ;; per-device numlock rule out with the pointer-only options.
+              :numlock (getf settings :numlock))
         settings)))
 
 (defmethod keyboard-layout-for ((policy input-policy) device)

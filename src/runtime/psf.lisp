@@ -91,6 +91,16 @@ for."
                                            (pathname-name path)
                                            path)))))
     (multiple-value-bind (header width height count) (%psf-geometry bytes)
+      ;; The geometry fields are read straight off the file, and the allocation
+      ;; below is (min 95 count-32) * height * ceil(width/8).  A malformed or
+      ;; hostile font with a huge width or height forces a multi-gigabyte
+      ;; MAKE-ARRAY -- a denial of service (not an overrun: the glyph copy is
+      ;; clamped).  Refuse anything past a sane console font; Terminus, the
+      ;; largest anyone reaches for, tops out around 14x32.
+      (unless (and (integerp width) (integerp height) (integerp count)
+                   (<= 1 width 256) (<= 1 height 256) (<= 0 count 65536))
+        (error "~a: implausible PSF geometry (~sx~s, ~s glyphs); refusing to load."
+               name width height count))
       (let* ((stride (ceiling width 8))
              (charsize (* height stride))
              (wanted (- 127 32))          ; the printable ASCII this draws
@@ -98,8 +108,10 @@ for."
              (glyphs (make-array (* (min wanted available) charsize)
                                  :element-type '(unsigned-byte 8))))
         (when (< available wanted)
-          (logmsg :warn "~a covers only ~d glyphs; the rest will be blank"
-                  name count))
+          ;; AVAILABLE, not COUNT: COUNT includes the 32 control-character
+          ;; glyphs this never draws, so it overstated the printable coverage.
+          (logmsg :warn "~a covers only ~d printable glyph~:p; the rest will be blank"
+                  name available))
         ;; Start at code 32.  Everything drawn here is printable ASCII, and
         ;; copying the control-character glyphs would be thirty-two rows of
         ;; nothing sitting in front of every lookup.

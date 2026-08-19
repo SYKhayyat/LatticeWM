@@ -86,6 +86,10 @@
 (defvar *failures* '() "Failed check descriptions, newest first.")
 (defvar *missing* '() "Dependencies that were not installed.  Fatal under strict.")
 (defvar *skipped* '() "Things a headless backend cannot have.  Never fatal.")
+(defvar *uncovered* '() "Interesting paths this run could not exercise -- a
+coverage gap, distinct from a capability a headless backend simply lacks.  Fatal
+under strict, because the whole point of the harness comment below is that a
+green run which skipped the only question left is worse than a red one.")
 (defvar *older-river* '()
   "Things the river under test is too old to do.  Never fatal.
 
@@ -127,6 +131,19 @@ have."
   (let ((text (format nil "~?" format arguments)))
     (push (format nil "[~a] ~a" *section* text) *skipped*)
     (format t "  skip  ~a~%" text)
+    (force-output)
+    nil))
+
+(defun uncovered (format &rest arguments)
+  "Note an interesting path this run could not exercise.  Fatal under strict.
+
+Distinct from SKIP: SKIP is `this backend cannot have a seat/hardware', which
+is never a fault; UNCOVERED is `the assertion that was the point of this section
+did not get to run', which under LATTICEWM_REQUIRE_INTEGRATION is a run that
+went green having tested nothing -- exactly the state the report guards against."
+  (let ((text (format nil "~?" format arguments)))
+    (push (format nil "[~a] ~a" *section* text) *uncovered*)
+    (format t "  ~:[gap ~;UNCOV~]  ~a~%" (strict-p) text)
     (force-output)
     nil))
 
@@ -1845,8 +1862,13 @@ are what a person means by the arrangement, and both are copy-stable."
                            ((null placed)
                             (check nil "the window still has a placement"))
                            ((<= (c:rect-right placed) (c:rect-right area))
-                            (skip "the client took a size that fits inside the ~
-                                   plane's rect, so nothing overhangs to crop"))
+                            ;; UNCOVERED, not SKIP: cropping the overhang is the
+                            ;; only question this section exists to answer, and a
+                            ;; client that happened to fit means it went unasked.
+                            ;; Under strict that is a coverage hole, not a shrug.
+                            (uncovered "the client took a size that fits inside ~
+                                        the plane's rect, so the content-clip ~
+                                        crop path never ran"))
                            (t
                             (check t "the cell overhangs the plane by ~d pixels"
                                    (- (c:rect-right placed) (c:rect-right area)))
@@ -2187,6 +2209,12 @@ are what a person means by the arrangement, and both are copy-stable."
   (format t "~%~d dependenc~:@p that should have been installed:~%" (length *missing*))
   (format t "~{  ~a~%~}" (reverse *missing*)))
 
+(when *uncovered*
+  (format t "~%~d interesting path~:p this run could not exercise~
+             ~:[~; -- fatal, because strict is on~]:~%"
+          (length *uncovered*) (strict-p))
+  (format t "~{  ~a~%~}" (reverse *uncovered*)))
+
 (when *failures*
   (format t "~%~d failure~:p:~%" (length *failures*))
   (format t "~{  FAIL  ~a~%~}" (reverse *failures*)))
@@ -2195,7 +2223,7 @@ are what a person means by the arrangement, and both are copy-stable."
 ;;; LATTICEWM_REQUIRE_INTEGRATION a missing dependency is a failure, because the
 ;;; default state of a CI container is `no terminal emulator on PATH' and the
 ;;; sections that need one are most of this file.
-(let ((fatal (or *failures* (and (strict-p) *missing*))))
+(let ((fatal (or *failures* (and (strict-p) (or *missing* *uncovered*)))))
   (format t "~%~:[PASS~;FAIL~]~@[  (~a)~]~%"
           fatal
           (cond ((null fatal) nil)

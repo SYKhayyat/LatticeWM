@@ -28,7 +28,7 @@ The window manager's only way to talk to you.  Use it for anything a user
 would want to know and cannot otherwise see — which is most of what currently
 goes only to a log file nobody is reading."
   (let ((text (apply #'format nil format arguments)))
-    (setf *echo-message* (cons text (get-universal-time)))
+    (setf *echo-message* (cons text (get-internal-real-time)))
     (logmsg :info "~a" text)
     (mark-dirty)
     text))

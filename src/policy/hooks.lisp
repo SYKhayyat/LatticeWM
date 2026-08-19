@@ -150,6 +150,18 @@ guesses is one people learn to ignore."
       (and (<= (car arity) count)
            (or (null (cdr arity)) (<= count (cdr arity))))))
 
+(defun arity-covers-p (function-arity hook-arity)
+  "Can a function of FUNCTION-ARITY be called with every count HOOK-ARITY passes?
+
+Both are (MIN . MAX) with MAX NIL for unbounded, or NIL for `cannot be told' --
+in which case say yes, because this check exists to catch a definite mistake
+and one that guesses is one people learn to ignore."
+  (or (null function-arity) (null hook-arity)
+      (destructuring-bind (fmin . fmax) function-arity
+        (destructuring-bind (hmin . hmax) hook-arity
+          (and (<= fmin hmin)
+               (or (null fmax) (and hmax (>= fmax hmax))))))))
+
 (define-option *warn-on-undeclared-hooks* t
   "Complain when ADD-HOOK is given a name no DEFHOOK declared.
 
@@ -194,12 +206,17 @@ way out of it, so give it a name first."
   ;; per fire, from inside GUARDED, saying `invalid number of arguments'.
   (multiple-value-bind (arguments declared) (hook-arguments name)
     (when declared
-      (let ((wanted (length arguments))
+      ;; LAMBDA-LIST-ARITY, not (LENGTH ARGUMENTS): a hook declared with an
+      ;; &optional or &rest tail is run with a *range* of counts, and counting
+      ;; the raw list length counted the &-markers and the optionals as though
+      ;; they were always passed -- which flagged a perfectly good function on
+      ;; the first hook that had such a tail.
+      (let ((wanted (lambda-list-arity arguments))
             (arity (accepted-arity function)))
-        (unless (arity-accepts-p arity wanted)
-          (logmsg :warn "~s cannot be called with ~d argument~:p, so it will ~
-                         never run: ~s is run with (~{~(~a~)~^ ~})."
-                  function wanted name arguments)))))
+        (unless (arity-covers-p arity wanted)
+          (logmsg :warn "~s cannot be called the way hook ~s runs it ~
+                         (~{~(~a~)~^ ~}), so it will never run."
+                  function name arguments)))))
   (let ((existing (remove function (gethash name *hooks*))))
     (setf (gethash name *hooks*)
           (if append (append existing (list function)) (cons function existing))))

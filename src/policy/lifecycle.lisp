@@ -59,20 +59,41 @@ this."
                (and (typep target 'c:leaf) (c:leaf-empty-p target)))
            (c:tree-replace-at root path node))
           ((eq disposition :stack)
-           (let ((stack (c:make-stack (list target node) 1)))
-             (values (c:tree-replace-at root path stack)
-                     (c:path-append path 1))))
+           (let ((parent (and path (c:resolve-path root (c:parent-path path)))))
+             ;; NOT the root: the root's alternatives are *workspaces*, so
+             ;; joining it would spawn a new workspace rather than a tab.  Only
+             ;; a nested alternatives container is a tab bar to grow.  A pane
+             ;; that is a top-level child (parent = root) is turned into a
+             ;; tab-stack of its own, in place, as it was.
+             (if (and parent (not (eq parent root))
+                      (c:container-alternatives-p parent))
+                 ;; The pane is already a tab: add a tab to its bar rather than
+                 ;; nesting a stack inside the stack -- the same join-don't-nest
+                 ;; rule TREE-SPLIT-AT applies to same-axis splits.
+                 (let ((address (1+ (c:path-last path))))
+                   (c:insert-child parent address node)
+                   (setf (c:container-selection parent) address)
+                   (values root (c:path-append (c:parent-path path) address)))
+                 (let ((stack (c:make-stack (list target node) 1)))
+                   (values (c:tree-replace-at root path stack)
+                           (c:path-append path 1))))))
           (t
            (let ((axis (split-axis-for policy target (node-rect world target)))
                  (side (new-child-side policy target direction)))
              (c:tree-split-at root path node :axis axis :side side
                                              :join-p (split-join-predicate policy)))))
       (setf (c:world-root world) new-root)
-      ;; The cursor may now be pointing at the split we just created rather
-      ;; than at a place, because the node it named grew children.  Repairing
-      ;; it here rather than at each call site is the same argument as D18's
-      ;; single focus-repair rule: one place, or fifteen subtly different ones.
-      (repair-cursor policy world)
+      ;; Keep the cursor structurally valid: the node it named may have grown
+      ;; children and become a split, so it now points at a container rather
+      ;; than a place.  This is a *silent* repair, not REPAIR-CURSOR: every
+      ;; caller decides focus for itself the instant PLACE-NODE returns (spawn
+      ;; jumps to the new window when *FOCUS-NEW-WINDOWS*, restore jumps home),
+      ;; so announcing the intermediate reshape here fired ON-FOCUS-CHANGE and
+      ;; the :FOCUS-CHANGED hook a second time for a move that was the same
+      ;; window at a deeper path -- a doubled hook and MRU churn on the hottest
+      ;; path.  The caller's JUMP-CURSOR is the one and only announce.
+      (setf (c:world-cursor world)
+            (c:repair-path new-root (c:world-cursor world)))
       new-path)))
 
 ;;; ==================================================================
@@ -316,10 +337,23 @@ Every documented rule key is honoured here, which took three of them from
          ;; :WORKSPACE names a workspace by the number written on the key that
          ;; reaches it, so it counts from one like every other workspace in the
          ;; system.  Resolved before :PATH, which is absolute and wins.
-         (let* ((path (or (getf rule :path)
-                          (workspace-rule-path world (getf rule :workspace))
-                          path))
-                (disposition (if (or (getf rule :path) (getf rule :workspace))
+         (let* ((rule-path (or (getf rule :path)
+                               (workspace-rule-path world (getf rule :workspace))))
+                ;; A :PATH is absolute and hand-typed, so it can name nothing.
+                ;; Unlike the guarded calls around it this one reached surgery
+                ;; and errored out of ON-WINDOW-OPEN -- losing the window over a
+                ;; typo in a config.  Validate it and fall back to the computed
+                ;; spawn target, saying so, exactly as an unknown rule key does.
+                (path (cond ((null rule-path) path)
+                            ((c:resolve-path (c:world-root world) rule-path)
+                             rule-path)
+                            (t (logmsg :warn "window rule for ~a: :path ~s names ~
+                                             no place; using the default target."
+                                       (name-of-window window) rule-path)
+                               path)))
+                (rule-placed (and rule-path
+                                  (c:resolve-path (c:world-root world) rule-path)))
+                (disposition (if rule-placed
                                  (if (c:empty-pane-p (c:resolve-path
                                                       (c:world-root world) path))
                                      :fill
@@ -345,8 +379,17 @@ is the honest answer for a rule naming a workspace in a policy that has none."
     (let ((stack (c:world-workspaces world))
           (index (max 0 (1- number))))
       (when stack
+        ;; MAKE-WORKSPACE, not a bare leaf: a rule that reaches workspace 9
+        ;; before it exists must grow the same kind of workspace the rest of
+        ;; the system makes (a plane under the lattice, an empty pane under the
+        ;; default), or it silently ignores *NEW-WORKSPACE* and the override.
         (loop while (<= (c:container-count stack) index)
-              do (c:insert-child stack (c:container-count stack) (c:make-leaf)))
+              do (let ((new-index (c:container-count stack)))
+                   (c:insert-child stack new-index
+                                   (or (guarded "make-workspace"
+                                         (make-workspace (current-policy) world
+                                                         new-index))
+                                       (c:make-leaf)))))
         (c:first-leaf-path (c:child-at stack index) (list index))))))
 
 (defmethod on-window-close ((policy lifecycle-policy) world (window c:window)
@@ -395,8 +438,14 @@ where it was if that place still exists."
       (multiple-value-bind (removed new-root suggested)
           (c:tree-remove-at root path :focus-path (c:world-cursor world))
         (declare (ignore removed))
-        (setf (c:world-root world) new-root
-              (c:world-cursor world) (c:repair-path new-root suggested))))
+        ;; THROUGH REPAIR-CURSOR, NOT INTO THE SLOT -- exactly as ON-WINDOW-CLOSE
+        ;; does.  Writing WORLD-CURSOR directly skipped ON-FOCUS-CHANGE (so :MRU
+        ;; never recorded the window we left) and the :FOCUS-CHANGED hook, which
+        ;; made minimize/restore asymmetric: RESTORE announces, MINIMIZE did not,
+        ;; and the minimize -> look-elsewhere -> restore flow restore exists to
+        ;; serve corrupted the focus history it depends on.
+        (setf (c:world-root world) new-root)
+        (repair-cursor policy world suggested)))
     (setf (c:window-minimized-p window) t)
     (pushnew window (c:world-scratchpad world))
     window))

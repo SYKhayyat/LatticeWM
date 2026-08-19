@@ -2961,6 +2961,18 @@ so something is holding a copy again" declared core-version)
          (push (format nil "VERSION says ~s and lattice.asd resolves to ~s"
                        declared extension-version)
                problems)))
+      ;; The three comparisons above are the file against itself: both .asd
+      ;; files resolve :version by READING VERSION, so DECLARED and the resolved
+      ;; versions are always the same text and the STRING/= can never fire.  An
+      ;; .asd that hardcoded a stale literal would sail through.  So assert the
+      ;; thing that actually matters -- that each still reads the file rather
+      ;; than holding a copy -- exactly as the flake.nix check below does.
+      (dolist (asd '("latticewm.asd" "lattice.asd"))
+        (when (probe-file asd)
+          (unless (line-containing asd ":read-file-line")
+            (push (format nil "~a no longer reads VERSION with :read-file-line, ~
+so its version agrees with VERSION only by luck" asd)
+                  problems))))
       ;; flake.nix must *read* it rather than agree with it: a literal that
       ;; happens to match today is the state this was in yesterday.
       (when (probe-file "flake.nix")
@@ -3157,7 +3169,20 @@ table; add one, or the documents cannot be checked" total)
                   ~4tto tell a reader which.  The shipped answers go in~%~
                   ~4tconventional.lisp, as methods on CONVENTIONAL-POLICY."
               methods)
-        (format t "  the catalogue is a catalogue: no methods answer here~%"))))
+        (format t "  the catalogue is a catalogue: no methods answer here~%")))
+  ;; The positive half of the banner, which "no methods" alone does not cover:
+  ;; a protocol.lisp gutted to zero DEFGENERICs has no methods either and would
+  ;; pass green.  The file's reason to exist is the generics and the six
+  ;; protocol classes, so assert they are actually present.
+  (let ((generics (cdr (assoc "defgeneric" census :test #'string=)))
+        (classes (cdr (assoc "defclass" census :test #'string=))))
+    (when (zerop generics)
+      (fail 20 "src/policy/protocol.lisp declares no generic functions:~%~
+                ~4tan empty catalogue is a deleted protocol, not a passing one."))
+    (when (< classes 6)
+      (fail 20 "src/policy/protocol.lisp carries ~d protocol class~:p, fewer ~
+than the six~%~4tthe file promises to hold."
+            classes))))
 
 ;;; --------------------------------------------------------------- gate 21
 

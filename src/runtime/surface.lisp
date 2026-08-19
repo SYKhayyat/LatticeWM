@@ -102,8 +102,14 @@ CFFI; this needs nothing and works on every kernel."
          (template (format nil "~a/latticewm-XXXXXX" directory)))
     (multiple-value-bind (fd path) (sb-posix:mkstemp template)
       (ignore-errors (sb-posix:unlink path))
-      (sb-posix:ftruncate fd size)
-      fd)))
+      ;; Close the descriptor if FTRUNCATE fails, the way KEYMAP-FROM-TEXT
+      ;; guards its own mkstemp'd fd: near an fd or disk limit the truncate is
+      ;; exactly what fails, and returning through the error leaked one fd per
+      ;; failed overlay resize.
+      (let ((ok nil))
+        (unwind-protect
+             (progn (sb-posix:ftruncate fd size) (setf ok t) fd)
+          (unless ok (ignore-errors (sb-posix:close fd))))))))
 
 (defun make-canvas (shm width height &optional (scale 1))
   "A canvas WIDTH by HEIGHT *logical* pixels, at SCALE device pixels each.
@@ -673,7 +679,14 @@ a frame that is not going to happen."
           (setf (overlay-frame overlay) callback
                 (overlay-frame-asked overlay) (get-internal-real-time))
           (on-events (callback "wl_callback")
-            (:done (frame-arrived overlay))))))))
+            ;; Only the newest frame callback is authoritative.  A direct
+            ;; OVERLAY-COMMIT (one that bypasses DRAW-WHEN-READY) can request a
+            ;; second callback while the first is still outstanding; without
+            ;; this guard the stale one's :done nulled OVERLAY-FRAME early, and
+            ;; DRAW-WHEN-READY then drew into a surface the compositor was not
+            ;; yet ready for.
+            (:done (when (eq callback (overlay-frame overlay))
+                     (frame-arrived overlay))))))))) 
 
 (defun frame-arrived (overlay)
   "The compositor is ready for another frame on OVERLAY."
@@ -732,10 +745,17 @@ Forgetting our reference is the whole of what a client does here."
       (setf (overlay-rect overlay) rect)
       ;; Tell the compositor how many device pixels per logical one this buffer
       ;; carries, *before* attaching it.  Without this a 2x buffer is drawn at
-      ;; twice the size rather than at twice the resolution.
-      (when (> (canvas-scale canvas) 1)
-        (best-effort "set_buffer_scale"
-          (wl:wl-surface.set-buffer-scale surface (canvas-scale canvas))))
+      ;; twice the size rather than at twice the resolution.  Diffed against the
+      ;; scale of the buffer currently shown, like every other emission around
+      ;; it: buffer_scale is surface state that persists, so re-sending the same
+      ;; value on every frame was pure churn.  A NIL committed buffer (fresh,
+      ;; resized or hidden) re-establishes it, which is correct.
+      (let ((shown (overlay-committed overlay)))
+        (when (and (> (canvas-scale canvas) 1)
+                   (or (null shown)
+                       (/= (canvas-scale canvas) (canvas-scale shown))))
+          (best-effort "set_buffer_scale"
+            (wl:wl-surface.set-buffer-scale surface (canvas-scale canvas)))))
       (wl:wl-surface.attach surface (canvas-buffer canvas) 0 0)
       ;; Damage in *buffer* coordinates, which are device pixels — so the
       ;; logical rectangles the drawers work in are scaled here, in the one

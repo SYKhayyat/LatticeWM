@@ -28,7 +28,13 @@
 Falls back to the built-in table if a method answers NIL, because a window
 manager that draws nothing because a font is missing is worse than one that
 draws the wrong font."
-  (or (p:font-for (p:current-policy) role) p:*default-font*))
+  (or (p:font-for (p:current-policy) role)
+      p:*default-font*
+      ;; Last resort: any registered font at all.  The docstring's promise is
+      ;; the wrong font over nothing, and a NIL here reaches the blitter, which
+      ;; dereferences it -- so a missing *DEFAULT-FONT* must not be able to
+      ;; return NIL as long as a single font is registered.
+      (p:find-font (first (p:font-names)))))
 
 (defun glyph-row (character row &optional (font (current-font)))
   "Row ROW of CHARACTER, as a byte whose bit 7 is the leftmost pixel."

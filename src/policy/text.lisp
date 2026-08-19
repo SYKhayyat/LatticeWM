@@ -121,15 +121,21 @@ template with the hole still in it.  The difference between
     Super+h   Move the cursor one pane left.
 
 is the difference between a reference and a help screen."
-  (let ((result text))
-    (loop for parameter in (command-lambda-list command)
-          for argument in arguments
-          for name = (string parameter)
-          do (unless (char= #\& (char name 0))
-               (let ((position (search name result :test #'char-equal)))
-                 (when position
-                   (setf result
-                         (concatenate 'string (subseq result 0 position)
-                                      (string-downcase (princ-to-string argument))
-                                      (subseq result (+ position (length name)))))))))
-    result))
+  (let ((result text)
+        (remaining arguments))
+    (dolist (parameter (command-lambda-list command) result)
+      (let ((name (string parameter)))
+        ;; A lambda-list marker (&optional, &rest, &key ...) names no argument,
+        ;; so it must NOT advance the arguments pointer.  Walking parameters and
+        ;; arguments in lockstep consumed an argument for the `&' token, and
+        ;; every parameter after &optional then paired with the wrong argument
+        ;; -- the help text rendered with the placeholder still in it.
+        (unless (char= #\& (char name 0))
+          (when remaining
+            (let ((argument (pop remaining))
+                  (position (search name result :test #'char-equal)))
+              (when position
+                (setf result
+                      (concatenate 'string (subseq result 0 position)
+                                   (string-downcase (princ-to-string argument))
+                                   (subseq result (+ position (length name)))))))))))))

@@ -203,17 +203,24 @@ rather than signalled: a state file is untrusted input the moment somebody edits
 it by hand, which is the same ruling READ-NODE makes three functions up."
   (dolist (row saved)
     (when (consp row)
-      (destructuring-bind (identifier &key tags scratchpad minimized) row
-        (let ((window (gethash identifier index)))
-          (when window
-            ;; Reversed, so that a window with no tags yet comes back with
-            ;; them in the order they were given.  WINDOW-TAG-NAMES documents
-            ;; that order and the tag prompt lists them in it.
-            (dolist (tag (reverse tags)) (pushnew tag (c:window-tags window)))
-            (when scratchpad (setf (c:prop window :scratchpad) scratchpad))
-            (when (and minimized (not (c:window-minimized-p window)))
-              (guarded "restore minimized"
-                (p:on-minimize (p:current-policy) world window)))))))))
+      ;; PER ROW, not around the whole loop: the DESTRUCTURING-BIND signals on
+      ;; an odd-length plist tail or a key it does not expect -- both reachable
+      ;; the moment somebody hand-edits the file -- and a single bad row caught
+      ;; only by the outer LOAD-STATE guard abandoned the *entire* restore, not
+      ;; just that row.  The docstring promises the row is skipped; this keeps
+      ;; that promise for a malformed list, not only for a non-list.
+      (guarded "restore-window-fact"
+        (destructuring-bind (identifier &key tags scratchpad minimized) row
+          (let ((window (gethash identifier index)))
+            (when window
+              ;; Reversed, so that a window with no tags yet comes back with
+              ;; them in the order they were given.  WINDOW-TAG-NAMES documents
+              ;; that order and the tag prompt lists them in it.
+              (dolist (tag (reverse tags)) (pushnew tag (c:window-tags window)))
+              (when scratchpad (setf (c:prop window :scratchpad) scratchpad))
+              (when (and minimized (not (c:window-minimized-p window)))
+                (guarded "restore minimized"
+                  (p:on-minimize (p:current-policy) world window)))))))))) 
 
 (defun output-workspaces ()
   "Which workspace each output is showing, by output name.

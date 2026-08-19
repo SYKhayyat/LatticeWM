@@ -89,6 +89,17 @@ looked.")
   "Bytes written to the current log file, for rotation.  Approximate on
 purpose: FILE-LENGTH on every line would be a syscall per log line.")
 
+(defvar *log-lock* (bt:make-recursive-lock "latticewm-log")
+  "Serialises the whole write / rotate / open / close path.
+
+The design assumes a REPL attached to a running event loop -- two threads --
+and every one of those operations mutates shared state: the open stream, the
+byte counter, and the files on disk.  Without this, two threads can interleave
+a WRITE-STRING with its TERPRI (torn lines), race the INCF that drives
+rotation, or have one thread CLOSE the stream another is mid-write on.  It is
+recursive because LOG-LINE takes it and then calls ENSURE-LOG-FILE, which takes
+it again.")
+
 (defun default-log-file ()
   "$XDG_STATE_HOME/latticewm/latticewm.log — beside the saved layout.
 
@@ -129,9 +140,10 @@ reading the old file and nothing is ever half-written."
 
 (defun close-log-file ()
   "Close the log file, if one is open.  Safe to call at any time."
-  (let ((stream *log-file-stream*))
-    (setf *log-file-stream* nil *log-file-path* nil *log-bytes-written* 0)
-    (when stream (ignore-errors (close stream))))
+  (bt:with-recursive-lock-held (*log-lock*)
+    (let ((stream *log-file-stream*))
+      (setf *log-file-stream* nil *log-file-path* nil *log-bytes-written* 0)
+      (when stream (ignore-errors (close stream)))))
   nil)
 
 (defun ensure-log-file ()
@@ -139,7 +151,8 @@ reading the old file and nothing is ever half-written."
 
 Never signals: a log file that cannot be opened must degrade to stderr rather
 than take down the program that was trying to explain itself."
-  (let ((path (ignore-errors (resolved-log-file))))
+  (bt:with-recursive-lock-held (*log-lock*)
+   (let ((path (ignore-errors (resolved-log-file))))
     (cond
       ((null path) (when *log-file-stream* (close-log-file)) nil)
       (t
@@ -147,17 +160,22 @@ than take down the program that was trying to explain itself."
          (close-log-file)
          (ignore-errors
           (ensure-directories-exist path)
-          (let ((existing (ignore-errors
-                           (with-open-file (in path :if-does-not-exist nil)
-                             (and in (file-length in))))))
-            (when (and *log-max-bytes* existing (> existing *log-max-bytes*))
-              (rotate-log-file path))
+          (let* ((existing (ignore-errors
+                            (with-open-file (in path :if-does-not-exist nil)
+                              (and in (file-length in)))))
+                 (rotated (and *log-max-bytes* existing
+                               (> existing *log-max-bytes*))))
+            (when rotated (rotate-log-file path))
             (setf *log-file-stream*
                   (open path :direction :output :if-exists :append
                              :if-does-not-exist :create
                              :external-format :utf-8)
                   *log-file-path* path
-                  *log-bytes-written* (or existing 0)))))
+                  ;; After a rotate the file we just opened is empty, so the
+                  ;; counter is 0 -- inheriting the old oversized EXISTING here
+                  ;; made the second block below fire immediately and rotate a
+                  ;; whole generation off the ring on every cold start.
+                  *log-bytes-written* (if rotated 0 (or existing 0))))))
        (when (and *log-file-stream* *log-max-bytes*
                   (> *log-bytes-written* *log-max-bytes*))
          (close-log-file)
@@ -169,7 +187,7 @@ than take down the program that was trying to explain itself."
                            :external-format :utf-8)
                 *log-file-path* path
                 *log-bytes-written* 0)))
-       *log-file-stream*))))
+       *log-file-stream*)))))
 
 (defun log-timestamp ()
   "The current time as HH:MM:SS, which is the resolution a log of a window
@@ -188,18 +206,22 @@ nobody is reading.  T and NIL force it.")
 (defun log-line (text)
   "Write one already-formatted TEXT to wherever the log goes.  Never signals."
   (ignore-errors
+   (bt:with-recursive-lock-held (*log-lock*)
    (let ((file (ensure-log-file)))
      (when file
        (write-string text file)
        (terpri file)
        (force-output file)
-       (incf *log-bytes-written* (1+ (length text))))
+       ;; Count *bytes*, not code points: the stream is UTF-8, so a log full of
+       ;; non-ASCII window titles would otherwise under-count and rotate late.
+       (incf *log-bytes-written*
+             (1+ (length (sb-ext:string-to-octets text :external-format :utf-8)))))
      (when (or (null file)
                (eq *log-to-stderr* t)
                (and (eq *log-to-stderr* :auto)
                     (ignore-errors (interactive-stream-p *log-stream*))))
        (format *log-stream* "~&~a~%" text)
-       (force-output *log-stream*))))
+       (force-output *log-stream*)))))
   nil)
 
 (defun logmsg (level format &rest arguments)

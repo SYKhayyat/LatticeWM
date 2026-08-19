@@ -460,6 +460,24 @@ descent."
            address c (length (children c))))
   (setf (nth address (children c)) node))
 
+(defun map-children (container function)
+  "Call FUNCTION with (ADDRESS CHILD) for each child of CONTAINER, in order.
+
+The one structural walk primitive, a plain function rather than a protocol
+member (it is not something a kind must answer -- the general branch works for
+any container).  MAP-NODES and NODE-PATH-TO went through CONTAINER-ADDRESSES
+(which conses a fresh index list) paired with CHILD-AT (which is (NTH ADDRESS
+...) on a sequential container), making one pass over an N-child split O(N^2)
+plus a throwaway list.  A sequential container walks its child list directly in
+one linear pass; anything else keeps the general answer."
+  (if (typep container 'sequential-container)
+      (loop for address from 0
+            for kid in (children container)
+            when kid do (funcall function address kid))
+      (dolist (address (container-addresses container))
+        (let ((kid (child-at container address)))
+          (when kid (funcall function address kid))))))
+
 (defmethod container-count ((c sequential-container))
   (length (children c)))
 
@@ -712,9 +730,9 @@ this is structural traversal, not rendering."
   (labels ((walk (n)
              (when (eq order :pre) (funcall function n))
              (when (container-p n)
-               (dolist (addr (container-addresses n))
-                 (let ((kid (child-at n addr)))
-                   (when kid (walk kid)))))
+               (map-children n (lambda (addr kid)
+                                 (declare (ignore addr))
+                                 (walk kid))))
              (when (eq order :post) (funcall function n))))
     (walk root))
   root)

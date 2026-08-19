@@ -221,6 +221,19 @@ method."))
     (is (equal '(:stack 0 (:stack 1 (:leaf "a") (:leaf "b")))
                (shape (c:world-root world))))))
 
+(test spawn-mode-stack-grows-the-tab-bar-rather-than-nesting
+  ;; Spawning :STACK onto a pane that is already a tab must add a tab to its
+  ;; bar, not wrap it in a fresh stack -- a stack inside a stack.  The first
+  ;; two windows make the tab bar (the root's alternatives are workspaces, so
+  ;; that first stack is made in place); the third must join it.
+  (let ((world (fresh-world)) (pol (policy)) (p:*spawn-mode* :stack))
+    (p:on-window-open pol world (win "a"))
+    (p:on-window-open pol world (win "b"))
+    (p:on-window-open pol world (win "c"))
+    (is (equal '(:stack 0 (:stack 2 (:leaf "a") (:leaf "b") (:leaf "c")))
+               (shape (c:world-root world)))
+        "one tab bar of three, not a nest of stacks")))
+
 (test spawn-mode-fill-first-finds-a-hole
   (let ((world (fresh-world)) (pol (policy)) (p:*spawn-mode* :fill-first))
     (p:on-window-open pol world (win "a"))

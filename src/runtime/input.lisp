@@ -371,7 +371,11 @@ option rather than writing NIL for it, and *INPUT-RULES* says in as many words
 that a rule which does not mention a key does not set it.  Absent is `leave it
 alone'; present is a value, whatever the value is."
   (loop for (property value) on settings by #'cddr
-        unless (member property '(:repeat-rate :repeat-delay))
+        ;; :NUMLOCK rides in INPUT-SETTINGS so a per-device rule reaches the
+        ;; keyboard, but it is applied by APPLY-LOCK-STATE, not sent as a
+        ;; libinput setting -- excluded here for the same reason the repeat pair
+        ;; is, which SEND-DEVICE-SETTING would otherwise reject as unknown.
+        unless (member property '(:repeat-rate :repeat-delay :numlock))
           collect property and collect value))
 
 (defun apply-device-settings (device)
@@ -506,17 +510,53 @@ wrong guess is a `failure' event carrying the compiler's own message."
                    keymap)))
           (when (>= fd 0) (ignore-errors (sb-posix:close fd))))))))
 
+(defvar *keymap-pending* (make-hash-table :test #'equal)
+  "The keymap specs a worker is compiling right now, so we do not fork twice
+for the same one while the first is still running.  Touched only on the wm
+thread, like *KEYMAP-CACHE*.")
+
 (defun keymap-for (layout variant options model rules)
-  "The river_xkb_keymap_v1 for these names, compiled once and kept."
+  "The river_xkb_keymap_v1 for these names, compiled once and kept.
+
+Compiling is a fork, an exec of `xkbcli' and a file read, and it blocks -- and
+river waits on the window manager between messages, so doing it on the event
+loop stalls the whole dispatch and therefore input, which is the one thing the
+rest of this file works to keep non-blocking.  So the compile runs on a short
+worker thread, and its result -- which needs the server proxy -- is applied
+back on the wm thread through CALL-IN-WM-THREAD, the same primitive the IPC and
+SWANK layers marshal through.
+
+Until the compile lands KEYMAP-FOR answers NIL and the keyboard keeps the
+layout river gave it; when it lands MARK-INPUTS-DIRTY re-runs the input
+configuration, which now finds the keymap cached and applies it.  The new
+layout arrives a beat later rather than after a stall, and a failed compile
+caches NIL exactly as the synchronous version did -- so it is not retried and
+the keyboard is simply left alone.
+
+All of *KEYMAP-CACHE* and *KEYMAP-PENDING* are read and written on the wm
+thread only (KEYMAP-FOR runs there, and the worker touches neither -- it hands
+back through CALL-IN-WM-THREAD), so no lock is needed."
   (let ((key (list layout variant options model rules)))
     (multiple-value-bind (cached foundp) (gethash key *keymap-cache*)
-      (if foundp
-          cached
-          (setf (gethash key *keymap-cache*)
-                (let ((text (compile-xkb-keymap-text
-                             layout :variant variant :options options
-                                    :model model :rules rules)))
-                  (and text (keymap-from-text text))))))))
+      (cond
+        (foundp cached)
+        ((gethash key *keymap-pending*) nil)   ; a worker is already on it
+        (t
+         (setf (gethash key *keymap-pending*) t)
+         (bt:make-thread
+          (lambda ()
+            (let ((text (compile-xkb-keymap-text
+                         layout :variant variant :options options
+                                :model model :rules rules)))
+              (call-in-wm-thread
+               (lambda ()
+                 (unwind-protect
+                      (setf (gethash key *keymap-cache*)
+                            (and text (ignore-errors (keymap-from-text text))))
+                   (remhash key *keymap-pending*))
+                 (mark-inputs-dirty)))))
+          :name "latticewm-xkb-compile")
+         nil)))))
 
 (defun adopt-shift-map-for (layout)
   "Use the shift map called LAYOUT, if one is registered.
@@ -567,9 +607,16 @@ says so, because a wrong table is worse than the fallback."
                   t)))))))))
 
 (defun apply-lock-state (device)
-  "Turn num lock on where the configuration asks for it."
-  (let ((keyboard (c:input-device-keyboard device)))
-    (when (and keyboard p:*numlock*
+  "Turn num lock on where the configuration -- global or per-device -- asks.
+
+The wanted state is resolved through the same policy path as every other input
+setting, so a per-device *INPUT-RULES* entry that sets :NUMLOCK for one keyboard
+is honoured rather than overridden by the global *NUMLOCK* alone."
+  (let ((keyboard (c:input-device-keyboard device))
+        (wanted (let ((settings (guarded "input-settings"
+                                  (p:input-settings (p:current-policy) device))))
+                  (and (listp settings) (getf settings :numlock)))))
+    (when (and keyboard wanted
                (not (eq t (c:input-device-setting device :numlock))))
       (best-effort "numlock_enable" (w:xkb-keyboard-numlock-enable keyboard))
       (setf (c:input-device-setting device :numlock) t))))

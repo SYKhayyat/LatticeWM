@@ -181,7 +181,15 @@ overlay including an extension's; NIL keeps every buffer forever.")
     (cond ((eq setting t) t)
           ((null setting) nil)
           ((listp setting) (and (member kind setting) t))
-          (t t))))
+          ;; A setting that is none of the documented shapes (a bare keyword
+          ;; where a list was meant, say) keeps the buffers rather than
+          ;; releasing every overlay's -- the conservative reading of a typo,
+          ;; and it says so once instead of silently doing the opposite.
+          (t (note-once (list '*overlay-buffer-idle* setting)
+                        "*overlay-buffer-idle* is ~s, which is not T, NIL or a ~
+                         list of overlay kinds; keeping buffers."
+                        setting)
+             nil))))
 
 ;;; ==================================================================
 ;;; WHAT THE STATUS LINE SAYS
@@ -206,10 +214,16 @@ overlay including an extension's; NIL keeps every buffer forever.")
 (defvar *echo-message* nil "A cons of text and the time it was posted.")
 
 (defun current-message ()
-  "The message to show, or NIL once it has aged out."
+  "The message to show, or NIL once it has aged out.
+
+Timed on GET-INTERNAL-REAL-TIME, which is monotonic, rather than on
+GET-UNIVERSAL-TIME: an NTP correction or a DST step moves the wall clock, and a
+message timed against it either froze on screen (clock stepped back) or vanished
+the instant it was posted (clock stepped forward)."
   (let ((message *echo-message*))
     (when (and message
-               (< (- (get-universal-time) (cdr message)) *echo-message-seconds*))
+               (< (- (get-internal-real-time) (cdr message))
+                  (* *echo-message-seconds* internal-time-units-per-second)))
       (car message))))
 
 (define-option *keys-hint* t
@@ -461,10 +475,7 @@ informative thing available."
     (string (binding-description policy (list target)))
     (cons
      (let* ((command (find-command (first target)))
-            (text (summary-of (and command (command-documentation command))))
-            (arguments (remove-if #'keywordp (rest target)
-                                  :key (lambda (x) (and (keywordp x) x)))))
-       (declare (ignore arguments))
+            (text (summary-of (and command (command-documentation command)))))
        (cond
          ((null command) (format nil "~{~(~a~)~^ ~}" target))
          ((null text) (format nil "~{~(~a~)~^ ~}" target))

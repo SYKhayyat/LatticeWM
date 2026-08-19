@@ -340,4 +340,13 @@ without a compositor — which is the whole model."
      ;; anybody's machine had no test at all.
      (:file "test-versions")
      (:file "test-examples"))))
-  :perform (test-op (o c) (symbol-call :latticewm/tests :run-all)))
+  :perform (test-op (o c)
+             ;; Signal on a failing verdict rather than discarding it: RUN-ALL
+             ;; returns (values OK N), and dropping OK made asdf:test-system
+             ;; report success even when checks failed.  `make test' checks the
+             ;; verdict itself and exits non-zero, so CI was safe -- but the
+             ;; ASDF-native entry point lied, and someone will run that one.
+             (multiple-value-bind (ok n) (symbol-call :latticewm/tests :run-all)
+               (declare (ignore n))
+               (unless ok
+                 (error "latticewm: the test suite reported failures")))))

@@ -190,18 +190,32 @@ message and a working window manager rather than a broken session."
     (cond
       ((null command) (logmsg :warn "no such command: ~a" name) nil)
       (t
-       (let ((string (command-name command)))
-         (when (guarded "command-repeatable-p"
-                 (command-repeatable-p (current-policy) command arguments))
-           (setf *last-command* (cons string arguments)))
+       (let ((string (command-name command))
+             ;; Decide repeatability up front (it may only look at the command
+             ;; and its arguments) but do not *commit* the repeat target yet.
+             (repeatable (guarded "command-repeatable-p"
+                           (command-repeatable-p (current-policy) command
+                                                 arguments)))
+             (ran nil))
          (labels ((invoke (wrappers)
                     (if (null wrappers)
                         (guarded (format nil "command ~a" string)
-                          (apply (command-function command) arguments))
+                          ;; RAN is set only if the body returns normally, so an
+                          ;; error GUARDED swallows leaves it NIL.
+                          (multiple-value-prog1
+                              (apply (command-function command) arguments)
+                            (setf ran t)))
                         (guarded (format nil "wrapper around ~a" string)
                           (funcall (first wrappers) command arguments
                                    (lambda () (invoke (rest wrappers))))))))
-           (invoke *command-wrappers*)))))))
+           (multiple-value-prog1 (invoke *command-wrappers*)
+             ;; RECORD AFTER THE FACT, not before.  Committing *LAST-COMMAND*
+             ;; ahead of the run made `.'/repeat replay a command that a
+             ;; *COMMAND-WRAPPERS* veto stopped or a GUARDED error swallowed --
+             ;; an action that never happened.  A command is the repeat target
+             ;; only once it has actually run to completion and unvetoed.
+             (when (and repeatable ran)
+               (setf *last-command* (cons string arguments))))))))))
 
 ;;; -------------------------------------------------- interactive arguments
 ;;;

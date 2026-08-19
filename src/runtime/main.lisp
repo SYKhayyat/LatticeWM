@@ -224,19 +224,31 @@ was asleep for an hour comes back and runs each timer once, rather than
 discovering it owes sixty ticks and running them all."
   (let ((now (get-internal-real-time))
         (ran 0)
-        (expired '()))
+        (expired '())
+        (due '()))
+    ;; Snapshot the due timers before running any of them.  A timer thunk may
+    ;; ADD-TIMER or REMOVE-TIMER -- add-timer advertises re-registration as safe
+    ;; "between compositor events," and a timer firing is one -- and adding a
+    ;; key rehashes *TIMERS* mid-MAPHASH, which is undefined per CLHS.  Removal
+    ;; was already deferred to after the loop; the traversal itself now is too.
     (maphash (lambda (name timer)
                (when (>= now (timer-due timer))
-                 (incf ran)
-                 (guarded (format nil "timer ~a" name)
-                   (funcall (timer-function timer)))
-                 (if (timer-repeat timer)
-                     (setf (timer-due timer)
-                           (+ (get-internal-real-time)
-                              (* (timer-interval timer)
-                                 internal-time-units-per-second)))
-                     (push name expired))))
+                 (push (cons name timer) due)))
              *timers*)
+    (dolist (pair (nreverse due))
+      (destructuring-bind (name . timer) pair
+        ;; Still the registered timer for this name?  A thunk run earlier in
+        ;; this same batch may have removed or replaced it.
+        (when (eq timer (gethash name *timers*))
+          (incf ran)
+          (guarded (format nil "timer ~a" name)
+            (funcall (timer-function timer)))
+          (if (timer-repeat timer)
+              (setf (timer-due timer)
+                    (+ (get-internal-real-time)
+                       (* (timer-interval timer)
+                          internal-time-units-per-second)))
+              (push name expired)))))
     (dolist (name expired) (remhash name *timers*))
     ran))
 

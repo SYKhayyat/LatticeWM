@@ -131,8 +131,15 @@ verify() {
     elif command -v shasum >/dev/null 2>&1; then
         got=$(shasum -a 256 "$file" | cut -d' ' -f1)
     else
-        say "  (no sha256sum; skipping the checksum)"
-        return 0
+        if [ "${ALLOW_UNVERIFIED_DOWNLOAD:-}" = 1 ]; then
+            say "  (no sha256sum or shasum; proceeding UNVERIFIED because ALLOW_UNVERIFIED_DOWNLOAD=1)"
+            return 0
+        fi
+        die "no sha256sum or shasum is available to verify $file.
+Silently installing an unverified quicklisp dist is a supply-chain hole, so
+this now refuses rather than skipping.  Install coreutils (sha256sum) or perl
+(shasum), or -- if you have checked the file yourself -- re-run with
+  ALLOW_UNVERIFIED_DOWNLOAD=1 ./bootstrap.sh"
     fi
     [ "$got" = "$want" ] && return 0
     die "checksum mismatch on $file

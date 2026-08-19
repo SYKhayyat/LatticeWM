@@ -105,6 +105,24 @@ becoming an empty pane the user never asked for"))
     (is (equal '(1) (c:first-leaf-path root)))
     (is (equal "b" (app-at root (c:first-leaf-path root))))))
 
+(test leaf-enumeration-skips-hidden-alternatives
+  ;; The root of the shipped world is a stack of workspaces; enumerating leaves
+  ;; for focus-cycling must stay inside the visible one, or FOCUS-NEXT walks
+  ;; into a window on a workspace you cannot see.  First/last/next/previous must
+  ;; all agree with FIRST-LEAF-PATH, which already follows the selection.
+  (let ((root (c:make-stack
+               (list (leaf-with "visible")
+                     (c:make-split :horizontal
+                                   (list (leaf-with "hidden-1")
+                                         (leaf-with "hidden-2"))))
+               0)))
+    (is (equal '((0)) (c:leaf-paths root))
+        "only the selected workspace's leaves are places focus may land")
+    (is (equal '(0) (c:last-leaf-path root)) "last visible leaf, not a hidden one")
+    (is (equal '(0) (c:next-leaf-path root '(0)))
+        "next from the only visible leaf wraps to itself, never to a hidden workspace")
+    (is (equal '(0) (c:previous-leaf-path root '(0))))))
+
 (test repair-path-is-total
   (let ((root (c:make-split :horizontal (list (leaf-with "a") (leaf-with "b")))))
     (is (equal '(0) (c:repair-path root '(0))) "a valid path is unchanged")
@@ -173,6 +191,39 @@ becoming an empty pane the user never asked for"))
 
 (test remove-refuses-the-root
   (signals error (c:tree-remove-at (c:make-leaf) '())))
+
+(test replace-at-swaps-the-node-and-keeps-outside-focus
+  ;; The workhorse under split/swap/transplant, and the carrier of the
+  ;; :focus-path repair contract -- the "subtly wrong focus repair" class the
+  ;; suite header calls near-undebuggable -- yet it had no direct test.
+  (let ((root (c:make-split :horizontal
+                            (list (leaf-with "a") (leaf-with "b") (leaf-with "c")))))
+    (multiple-value-bind (new-root focus)
+        (c:tree-replace-at root '(1) (leaf-with "x") :focus-path '(2))
+      (is (equal '(:h (:leaf "a") (:leaf "x") (:leaf "c")) (shape new-root)))
+      (is (equal '(2) focus) "focus outside the replaced node is unchanged")
+      (is (equal "c" (app-at new-root focus))))))
+
+(test replace-at-repairs-focus-that-was-inside-the-replaced-node
+  (let ((root (c:make-split :horizontal
+                            (list (leaf-with "a")
+                                  (c:make-split :vertical
+                                                (list (leaf-with "b")
+                                                      (leaf-with "c")))))))
+    ;; Focus sat on (1 0); replacing (1) outright destroys the node it named,
+    ;; so the repair must land on a valid leaf at or near the old focus path.
+    (multiple-value-bind (new-root focus)
+        (c:tree-replace-at root '(1) (leaf-with "x") :focus-path '(1 0))
+      (is (equal '(:h (:leaf "a") (:leaf "x")) (shape new-root)))
+      (is (c:resolve-path new-root focus) "the repaired focus is a real place")
+      (is (equal '(1) focus) "and it is the nearest surviving node to the old one"))))
+
+(test replace-at-the-root-is-legal
+  (let ((root (leaf-with "a")))
+    (multiple-value-bind (new-root focus)
+        (c:tree-replace-at root '() (leaf-with "b") :focus-path '())
+      (is (equal '(:leaf "b") (shape new-root)) "the empty path replaces the root")
+      (is (equal '() focus)))))
 
 (test split-at-creates-a-split
   (let ((root (c:make-stack (list (leaf-with "a")))))
@@ -246,6 +297,22 @@ becoming an empty pane the user never asked for"))
     (multiple-value-bind (new-root path) (c:tree-move root '(0) '(1) :join :stack)
       (is (equal '(:stack 1 (:leaf "b") (:leaf "a")) (shape new-root)))
       (is (equal "a" (app-at new-root path))))))
+
+(test move-out-of-a-nested-split-joins-without-leaving-debris
+  ;; The destination join renumbers the source parent's siblings, so the
+  ;; source parent must be re-derived by identity before it is simplified --
+  ;; otherwise the emptied one-child split it left behind survives, which is
+  ;; the exact ladder-of-splits this whole file exists to prevent.
+  (let ((root (c:make-split :horizontal
+                            (list (leaf-with "a")
+                                  (c:make-split :vertical
+                                                (list (leaf-with "b")
+                                                      (leaf-with "c")))))))
+    (multiple-value-bind (new-root path) (c:tree-move root '(1 0) '(0)
+                                                      :axis :horizontal)
+      (is (equal '(:h (:leaf "a") (:leaf "b") (:leaf "c")) (shape new-root))
+          "b joins the horizontal root and the emptied vertical split collapses")
+      (is (equal "b" (app-at new-root path))))))
 
 (test move-refuses-into-its-own-descendant
   (let ((root (c:make-split :horizontal

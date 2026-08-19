@@ -281,7 +281,11 @@ else
     if [ -f "$config" ]; then
         say "kept your existing $config"
     else
-        "$dbin/latticewm" --write-config >/dev/null 2>&1 && say "wrote a starter $config"
+        if "$dbin/latticewm" --write-config >/dev/null 2>&1; then
+            say "wrote a starter $config"
+        else
+            say "could not write a starter $config (latticewm --write-config failed)"
+        fi
     fi
 fi
 

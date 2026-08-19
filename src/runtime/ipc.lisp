@@ -237,9 +237,16 @@ there can only be one of us on it."
                                        :type :stream)))
             (ignore-errors (delete-file path))
             (ensure-directories-exist path)
-            (sb-bsd-sockets:socket-bind socket (namestring path))
-            ;; Before anybody can connect: a socket that is briefly world
-            ;; writable is a socket that was briefly world writable.
+            ;; Restrict the mode BEFORE the bind, not only after.  A chmod after
+            ;; SOCKET-BIND leaves a window in which the node sits at whatever the
+            ;; umask allowed, and under a loose umask -- or the /tmp fallback --
+            ;; a local user can connect in that window and reach an eval socket.
+            ;; Binding under a 0177 umask makes the node 0600 from the instant it
+            ;; exists; the chmod below then stays as a second guarantee.
+            (let ((old-umask (sb-posix:umask #o177)))
+              (unwind-protect
+                   (sb-bsd-sockets:socket-bind socket (namestring path))
+                (sb-posix:umask old-umask)))
             (ignore-errors (sb-posix:chmod (namestring path) #o600))
             (sb-bsd-sockets:socket-listen socket 8)
             (setf *ipc-listener* socket

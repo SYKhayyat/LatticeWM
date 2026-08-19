@@ -553,15 +553,18 @@ a RENDER-ORDER method sees floats and tiles in one vocabulary."
                 (setf (c:window-rect window) placed)
                 (when-changed (window :shown t)
                   (best-effort "show" (w:window-show proxy)))
-                ;; Diffed like everything around it.  This was the one emission
-                ;; in the file that was not, so every float re-proposed identical
-                ;; dimensions on every relayout — and river processes every
-                ;; request we send before it can answer input, which is the whole
-                ;; reason the diff table exists.
-                (when-changed (window :float-dimensions
-                                      (list (c:rect-w placed) (c:rect-h placed)))
-                  (push (list window (c:rect-w placed) (c:rect-h placed))
-                        (server-pending-dimensions *server*)))
+                ;; Queue unconditionally and let EMIT-DIMENSION-WORK diff it
+                ;; at *drain* time, exactly where tiled work is diffed (on the
+                ;; :DIMENSIONS key).  Diffing here at *queue* time recorded the
+                ;; new size as sent the instant it was pushed -- but a render
+                ;; sequence does not drain the queue, and the next relayout
+                ;; overwrites it with tiled-only work (COLLECT-DIMENSION-WORK),
+                ;; discarding this entry while the diff still said "sent."  The
+                ;; float then stuck at the wrong size until something unrelated
+                ;; moved it.  Re-pushing every relayout is cheap and self-heals:
+                ;; the drain-time diff still sends each size at most once.
+                (push (list window (c:rect-w placed) (c:rect-h placed))
+                      (server-pending-dimensions *server*))
                 (let ((river-node (window-river-node window)))
                   (when river-node
                     (when-changed (window :position (list (c:rect-x placed)

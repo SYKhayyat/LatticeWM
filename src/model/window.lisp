@@ -79,11 +79,15 @@ gone."))
 
 (defmethod print-object ((w window) stream)
   (print-unreadable-object (w stream :type t :identity nil)
-    (format stream "~@[~a ~]~s~@[ ~dx~d~]~:[~; DEAD~]"
+    ;; The size is one pre-formatted argument, not two: ~@[ ~dx~d~] consumes a
+    ;; single arg only when it is NIL, so a width of 0 left one argument
+    ;; unconsumed and the trailing ~:[~; DEAD~] then read the height slot
+    ;; instead of the live flag -- a dead zero-width window never said so.
+    (format stream "~@[~a ~]~s~@[ ~a~]~:[~; DEAD~]"
             (window-app-id w)
             (or (window-title w) "")
-            (and (plusp (window-width w)) (window-width w))
-            (and (plusp (window-width w)) (window-height w))
+            (and (plusp (window-width w))
+                 (format nil "~dx~d" (window-width w) (window-height w)))
             (not (window-live-p w)))))
 
 (defun window-captured-p (window)

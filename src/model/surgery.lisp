@@ -250,7 +250,13 @@ destination path out from under us — the classic bug in this operation."
   (when (or (null from) (path-equal from to))
     (return-from tree-move (values root from)))
   (let ((moving (resolve-path root from))
-        (destination (resolve-path root to)))
+        (destination (resolve-path root to))
+        ;; Capture the source's parent *node* now, before the detach.  Its path
+        ;; is re-derived by identity after reinsertion (below): a same-axis join
+        ;; into an earlier index renumbers the destination's later siblings --
+        ;; the source's parent among them -- so the literal path would name the
+        ;; wrong node and %SIMPLIFY-UPWARDS would leave the one-child split behind.
+        (source-parent-node (resolve-path root (parent-path from))))
     (unless moving
       (return-from tree-move (values root (repair-path root from))))
     (when (and destination (node-path-to moving destination))
@@ -276,8 +282,15 @@ destination path out from under us — the classic bug in this operation."
                                                                 :simplify nil)
       (declare (ignore removed))
       (setf root after-remove)
-      (let* ((to (node-path-to root destination))
-             (source-parent (parent-path from)))
+      ;; Re-derive the source parent's path *from its node* at each point of
+      ;; use, because it is used only after a reinsertion has (possibly)
+      ;; renumbered it -- a same-axis join into an earlier index is exactly the
+      ;; case that moves it.  NODE-PATH-TO answers NIL when the node is the root
+      ;; or is gone, and %SIMPLIFY-UPWARDS treats a NIL path as the root, which
+      ;; is the right behaviour for both.
+      (flet ((source-parent () (and source-parent-node
+                                    (node-path-to root source-parent-node))))
+        (let ((to (node-path-to root destination)))
         (cond
           ;; The destination did not survive the detachment.  Put the subtree
           ;; back rather than dropping it on the floor.
@@ -287,7 +300,7 @@ destination path out from under us — the classic bug in this operation."
           ;; An empty pane simply becomes the thing.
           ((empty-pane-p destination)
            (setf root (tree-replace-at root to moving))
-           (setf root (%simplify-upwards root source-parent))
+           (setf root (%simplify-upwards root (source-parent)))
            (values root (or (node-path-to root moving) (repair-path root to))))
           (t
            (let ((landed
@@ -305,9 +318,9 @@ destination path out from under us — the classic bug in this operation."
                                     (if (eq side :after) 1 0))))
                         (setf root (tree-replace-at root to stack))
                         (path-append to (if (eq side :after) 1 0)))))))
-             (setf root (%simplify-upwards root source-parent))
+             (setf root (%simplify-upwards root (source-parent)))
              (values root (or (node-path-to root moving)
-                              (repair-path root landed))))))))))
+                              (repair-path root landed)))))))))))
 
 ;;; -------------------------------------------------------------- transplant
 
