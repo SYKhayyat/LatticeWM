@@ -15,13 +15,24 @@
 #                            qlfile.lock
 #   qlot exec sbcl        -> a REPL seeing exactly those versions
 #
-# qlfile.lock is NOT yet committed. Generating it requires a working `qlot
-# install', which failed in the environment where this file was written: SBCL
-# could not resolve beta.quicklisp.org through sb-bsd-sockets under WSL, dying
-# with "The value of SB-BSD-SOCKETS::ADDRESS is (NIL NIL)". curl reached the
-# same host, so this is an SBCL name-resolution problem rather than a fault in
-# this file. Run `qlot install' on a normal Linux machine and commit the
-# resulting qlfile.lock alongside this file.
+# qlfile.lock is NOT committed yet, and should be. `qlot install' (1.8.2, SBCL
+# 2.6.0, Ubuntu under WSL2) fails at the "Determining the distinfo URL" step
+# with:
+#
+#   The value of SB-BSD-SOCKETS::ADDRESS is (NIL NIL), which is not of type
+#   (OR NULL (CONS SEQUENCE (CONS (UNSIGNED-BYTE 16) T)))
+#
+# The cause is not established. Ruled out so far: name resolution works
+# (sb-bsd-sockets resolves beta.quicklisp.org to an address from the same
+# image), the host is reachable (curl returns 200 for the distinfo URL), no
+# proxy variables are set, and running with :jobs 1 fails identically, so it
+# is not the lparallel worker pool the backtrace passes through. It is most
+# likely specific to this WSL environment.
+#
+# Run `qlot install' on a normal Linux machine and commit the resulting
+# qlfile.lock next to this file. Until then this dist line is the pin, and it
+# is a real one -- a dist version resolves to fixed releases -- but it has not
+# been exercised end to end.
 #
 # Bump deliberately by changing the date below and re-running `qlot install',
 # never by letting it float.
