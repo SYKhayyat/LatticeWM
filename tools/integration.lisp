@@ -1301,7 +1301,13 @@ are what a person means by the arrangement, and both are copy-stable."
              (t
               (wm (lambda () (setf *help-visible* nil)))
               (settle)
-              (check (not (c:prop seat :capture-armed))
+              ;; POLL-UNTIL, not a bare check after one settle: disarming is
+              ;; lazy -- it happens on the next manage sequence ARM-CAPTURE runs
+              ;; on, not the instant *HELP-VISIBLE* clears -- so a single settle
+              ;; races it exactly the way the arm checks below already guard
+              ;; against by polling.  With the bare check this section flaked
+              ;; whenever the timing shifted.
+              (check (poll-until (lambda () (not (c:prop seat :capture-armed))) 10)
                      "with nothing on the overlay the keys belong to the ~
                       window under the cursor")
               (multiple-value-bind (result status)
