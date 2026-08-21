@@ -8,3 +8,5 @@
 /dist/
 # Per-checkout tooling state.  Not the project's business either way.
 /.claude/
+# Local audit scratch, not part of the shipped record.
+/AUDIT-*.md
