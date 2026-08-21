@@ -452,6 +452,10 @@ developed — and it cannot disturb the desktop you are already using.
 
 * When something goes wrong
 
+The six below are the ones that come up on a first install.  Everything else —
+the build gates, the running window manager, the extension surface, and what is
+and is not actually verified — is in [[file:doc/TROUBLESHOOTING.org][doc/TROUBLESHOOTING.org]].
+
 - *The build stops naming a system it cannot find.*  Run =./bootstrap.sh=.
 - *It starts and the screen is black.*  That is an empty pane and it is
   drawn — press =Super+Return= for a terminal, or =Super+/= for the keymap.

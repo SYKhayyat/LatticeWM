@@ -1,0 +1,424 @@
+#+TITLE: Troubleshooting LatticeWM
+#+OPTIONS: toc:2 num:nil
+
+Symptom first.  If you are here because something will not build, start at
+[[*Building][Building]]; if it built and will not run, [[*Starting up][Starting up]]; if it is running and
+behaving oddly, [[*Once it is running][Once it is running]].
+
+This is a *current* document, so its sentences are checked and a false one is a
+bug.  Where a claim here is generated rather than written, the command that
+generates it is given, because a manual can go stale and =latticewm
+--list-options= cannot.
+
+* Ask the program before you read anything
+
+Half of what follows can be skipped by asking the running window manager
+instead.  That is the point of the design, and it is the fastest route to an
+answer.
+
+| =Super+/=   | the whole keymap, drawn from the *live* bindings — includes anything you bound five minutes ago |
+| =Super+? k= | what does this key do?                                          |
+| =Super+? a= | is there a command for …? — searches every docstring             |
+| =Super+? c= | a command's documentation and the keys that run it               |
+| =Super+? o= | what is this setting, what did it ship as, and why               |
+| =Super+? s= | change a setting, now, without a file or a restart               |
+
+From a shell, against the running instance:
+
+#+begin_src sh
+latticewm --eval '(world-cursor *world*)'    # where does it think it is
+latticewm --list-keys
+latticewm --list-options
+latticewm --list-commands
+#+end_src
+
+The control socket that answers =--eval= is *on by default*.  Those listings are
+generated from the running image, so they cannot be out of date with the build
+you are actually using.
+
+* Building
+
+** The build stops naming a system it cannot find
+
+#+begin_src sh
+./bootstrap.sh      # fetches the Lisp dependencies into ./.deps/
+#+end_src
+
+Or =nix-shell=, if you would rather.  INSTALL.org has the options, including
+using your own Quicklisp or your distribution's Lisp packages.
+
+** =make -j= fails, or fails differently each time
+
+*Nothing here is safe under parallel make.*  The Makefile says so.  Use plain
+=make=.
+
+** A gate fails in a file I did not touch
+
+That is usually correct, and it usually means a document, an export or a
+generated file now disagrees with the program.  **Read the gate's own paragraph
+before assuming it is confused** — each one explains what it is asserting.
+
+The four that catch people, in the order they usually do:
+
+1. *Gate 16, on your first export.*  Export in the same commit as the caller.
+2. *Gate 12, on your first new document.*  Classify it in =tools/gates.lisp=.
+3. *Gate 22, on your first protocol call.*  Add a wrapper in =src/wire/= and
+   call that.
+4. *The generated documents.*  If you changed a docstring, an option or a
+   generic, run =make surface= and commit the diff.  CI regenerates and diffs
+   them, so forgetting shows up as a failure in a file you did not edit.
+
+** =make surface= produces a diff I did not expect
+
+Then a docstring, an option default or a generic signature moved.  The six
+generated documents are derived from the image, so the diff *is* the change you
+made, viewed from the documentation side.  Commit it.
+
+If the diff appears without you having changed anything, check your SBCL — the
+six documents are byte-identical on 2.2.6, 2.2.9 and 2.6.6, so a difference from
+a fourth compiler is worth reporting rather than committing.
+
+** Gate 1 passes and the build still printed a warning
+
+Gate 1 asserts *zero compiler warnings*, and it compiles =src/=, =lattice/= and
+=examples/=.
+
+If you add a directory of Lisp that nothing loads, **put it in front of gate 1
+the same way.**  This is not hypothetical: gate 1 compiled =src/= and
+=lattice/= and nothing else for a long time while the build printed a warning
+from =examples/= on every run.  *A gate whose scope is unstated is a gate people
+stop reading.*
+
+** =make check= fails where =make= passed
+
+By design.  =make= runs the twenty-two gates and the unit suite; =make check=
+adds a real river driven headlessly — and it *fails rather than skips* when
+river or a terminal is absent, deliberately.
+
+A skipped check that reports success is the failure mode the whole integration
+suite exists against.
+
+** Which SBCL?
+
+The declared floor is *2.2.6*.  The full build is green on 2.2.6, 2.2.9 and
+2.6.6, with byte-identical generated documents on all three.
+
+* Starting up
+
+** It refuses to start and names two version numbers
+
+Your river is below the floor.  *LatticeWM needs river 0.4.5 or newer.*
+
+#+begin_src sh
+river -version
+#+end_src
+
+The check is on the *interface version* of =river-window-management-v1=, not on
+the release string.  That protocol does not exist before river 0.4 at all.  Of
+the requests LatticeWM sends, the newest arrived in interface version 4
+(=exit_session=, =set_dimension_bounds=, =set_presentation_mode=), so 4 is the
+floor — below it LatticeWM would be sending requests the compositor has never
+heard of, and there is no degrading around that.
+
+river 0.4.5 carries interface version 4 and 0.4.6 carries 5.  Whether some
+earlier 0.4.x also carried 4 is not recorded, so an older river may work and is
+untested.
+
+** My distribution moved river ahead of this build
+
+*That is fine, and "or newer" has no upper end.*
+
+Wayland versions every interface, and a client says which version it wants when
+it binds; the compositor is then obliged to speak that version rather than the
+newest it knows.  LatticeWM binds at the version its vendored XML declares, so a
+river three releases ahead answers in the dialect this build was compiled for.
+
+**You lose the features added after your build, and nothing else.**  This is
+what used to mean a login screen that refused when a distribution moved river
+without asking.
+
+Both ends of the supported range are exercised rather than assumed: =make
+integration= runs green against 0.4.5 and 0.4.6, and against 0.4.5 it reports
+the checks that depend on a version-5 event as a *version gap* rather than as a
+failure.
+
+** Nothing responds to keys
+
+Check =river -version= first.  Below 0.4 the window management protocol is
+absent entirely and LatticeWM cannot bind anything.
+
+If river is new enough and keys still do nothing, ask the program:
+
+#+begin_src sh
+latticewm --list-keys
+#+end_src
+
+If that is empty, your =init.lisp= cleared the keymap.  Start with =--no-config=
+to confirm.
+
+** It starts and the screen is black
+
+*That is an empty pane, and it is drawn.*  Not a crash.
+
+An empty pane is a first-class thing here rather than a transient state — see
+the README's opening section, which is worth the thirty seconds.
+
+- =Super+Return= — a terminal
+- =Super+/= — the whole keymap
+- Standing in an empty pane, =t= opens a terminal and =e= an editor.  The empty
+  pane is a spawn menu with no menu.
+
+** A change to =init.lisp= broke it
+
+#+begin_src sh
+latticewm --no-config
+#+end_src
+
+An error in the file is *already logged rather than fatal*, so a broken
+=init.lisp= should not prevent startup.  =--no-config= skips it entirely, which
+is how you tell a logged error from something else.
+
+** It will not start after a crash
+
+#+begin_src sh
+latticewm --no-restore     # ignore the saved layout
+#+end_src
+
+The saved layout is written and read back with real window tags in it, and is
+covered against a real river — but if a crash left it in a state that will not
+load, this is the escape hatch.
+
+** LatticeWM does not appear at my login screen
+
+=install.sh= adds the =wayland-sessions= desktop entry.  If you built and ran
+without installing, there is no entry.
+
+#+begin_src sh
+./install.sh                        # binary, launcher, session entry, man pages
+./install.sh --prefix /usr/local    # system-wide
+./install.sh --uninstall            # take it back out
+#+end_src
+
+It **never overwrites an existing =init.lisp=**.  It is also the only installer
+— =nix build= runs this same script, so there is one list of what ships rather
+than two that drift.
+
+** I want to try it without touching my session
+
+#+begin_src sh
+make run
+# or, in a session already running river:
+river -c "$PWD/latticewm --log-level debug"
+#+end_src
+
+That runs it *nested inside your current session, in a window*.  It is a real
+compositor speaking the real protocol — nearly all of this was developed that
+way — and it cannot disturb the desktop you are already using.
+
+Try this before installing.
+
+* Once it is running
+
+** I want to see what it is doing
+
+#+begin_src sh
+latticewm --log-level debug
+latticewm --eval '(world-cursor *world*)'
+#+end_src
+
+** A key does something I did not expect
+
+=Super+? k= tells you what a key does, from the live binding.  The keymap
+overlay (=Super+/=) is built from the same source, so it cannot go stale.
+
+Both the vi letters and the arrow keys are always bound.  That is deliberate
+rather than indecisive: the arrows are what you use on your first day and the
+letters are what you use on your hundredth.
+
+Every binding is generated from =*modifier*=, which defaults to =Super=.
+**Change that one value and the whole keymap moves with it.**
+
+** I closed a pane and meant to empty it
+
+Two different verbs, and this is the consequence of the model rather than an
+inconsistency:
+
+- =close= — take the pane with it
+- =clear= — empty it, leave it standing
+
+=Super+? u= shows what undo would walk back through.
+
+** The welcome overlay keeps appearing
+
+It should not — any key dismisses it and it never appears again.  =M-x welcome=
+brings it back deliberately.
+
+To stop it appearing at all:
+
+#+begin_src lisp
+(setf *welcome-on-first-run* nil)   ; in ~/.config/latticewm/init.lisp
+#+end_src
+
+** A completion does not find the command I want
+
+Completion is *prefix, then substring, then subsequence* — so =wsp= finds
+=send-to-workspace=.  The prompt has a point, a history ring and the readline
+keys.
+
+=Super+? a= searches every docstring, which is the right tool when you do not
+know the command's name at all.
+
+** A bar or panel overlaps my windows
+
+The layer-shell exclusive zone is implemented and verified against a real
+waybar: usable area went =0,0 1280x696= → =0,30 1280x666= for a 30-pixel bar,
+the window under it moved by exactly that, and both returned when the bar
+exited.
+
+If yours does not, the panel may not be requesting an exclusive zone.  README's
+*Panels, bars and lockers* section covers configuration.
+
+** A screen locker
+
+=ext-session-lock-v1= is the protocol that is checked, against a real swaylock
+over a nested river: the lock is reported, the window manager stays alive, the
+tree keeps its windows, and commands still run.
+
+A *layer-shell* locker taking exclusive keyboard focus is a branch that exists
+and is **not checked** — the lockers that would exercise it have moved to
+=ext-session-lock-v1=.
+
+** Two monitors show the same workspace
+
+They should not — one workspace per output, no two the same, surviving repeated
+workspace switches, verified live on two real outputs.
+
+This was a real defect once and is written up in [[file:FINDINGS.org][FINDINGS.org]] beside how it was
+reproduced and fixed.  If it recurs, that is the place to start.
+
+** Super+drag does nothing
+
+Worth knowing what is and is not verified here, because the honest answer is
+"probably fine, and nobody has pressed a button".
+
+The two pointer bindings river makes are counted live and the drag arithmetic is
+unit-tested, but **no button is ever pressed** in any automated check.
+Synthesised input gets close and not there: =wlrctl= offers =click= with no
+separate press/release, so the displacement half of a drag cannot be produced at
+all, and a Super+click through a virtual pointer produced nothing observable —
+which does not distinguish "the binding did not fire" from "the synthetic press
+never reached the matcher".
+
+It is therefore reported as *untested*, not as a defect.
+
+There is precedent for taking this seriously: the first time the integration
+suite ran, it found that pointer bindings had been enabled through the *keyboard*
+interface — a type error inside a generated marshaller, caught, logged, and
+completely silent.  Super+drag had never worked.
+
+** Touchpad tap-to-click or acceleration does nothing
+
+This is the one thing that needs a machine rather than a better harness.
+libinput settings — tap-to-click, acceleration, click method, scroll method —
+are written and unit-tested *as decisions* and cannot be exercised without a
+device behind them.
+
+Device enumeration, key repeat, and compiling and installing a keyboard layout
+*are* verified against a real river running nested, which is where devices
+exist.
+
+** Scaling looks wrong on a HiDPI display
+
+The arithmetic is verified against a real =wl_shm= — a 2x canvas at twice the
+device size, logical coordinates for text and fills.
+
+What is **not** checked is *a physically scaled output*: the integration
+backend is 1x, so scaling is exercised as arithmetic and never as a display.
+That limitation is named in the suite's own output on every run rather than
+passed over quietly.
+
+** The lattice is not doing anything
+
+It is optional and *off by default*:
+
+#+begin_src lisp
+(load-extension "lattice")
+(lattice:enable)
+#+end_src
+
+in =~/.config/latticewm/init.lisp=.
+
+* Extending and configuring
+
+** My specialised method is not being called
+
+=latticewm --extension-surface= lists every generic you can specialise, what its
+shipped method reads, and what overrides it.
+
+Sixty-nine generic functions decide what happens; the shipped methods are the
+defaults.  Specialising one changes behaviour *live*, without touching the core.
+
+[[file:EXTENDING.org][EXTENDING.org]] is the guide, in four tiers with worked examples, and [[file:../examples/][examples/]]
+holds five worked extensions that are loaded and exercised on every build.
+
+** My extension edits something under =src/= and the build fails
+
+That is gate 3, and it is correct.  The flagship extension — =lattice/=, an
+infinite two-dimensional plane of cells with a container kind the core has never
+heard of — lives in a separate ASDF system, depends only on the exported policy
+package, and **edits nothing under =src/=**.
+
+Two gates hold that on every build:
+
+- *gate 3* fails if the extension reaches into the core;
+- *gate 4* fails if the core cannot load, start and lay out with the extension
+  *absent*.
+
+That is the falsifiable version of "extensible".  Gate 6 goes further and counts
+how many policy generics anybody outside =src/= has actually specialised,
+printing the number on every build — including the less flattering version with
+the flagship extension excluded.
+
+** Changing a setting without restarting
+
+=Super+? s=.  Or =Super+;= to evaluate a form inside the running window manager,
+and =Super+.= to do it again with the same arguments.
+
+=Super+? o= tells you what a setting is, what it shipped as, and why.
+
+* When you need to report something
+
+Include:
+
+#+begin_src sh
+latticewm --version
+river -version
+sbcl --version
+latticewm --log-level debug        # and the relevant lines
+#+end_src
+
+Say whether it happened nested (=make run=) or on bare metal, and on how many
+outputs.
+
+Before reporting a behaviour as broken, check the README's *How far each thing
+is actually checked* table — it distinguishes what was verified on real
+hardware, what was verified against a real headless river, and what is honestly
+untested.  The distinction that matters there is not tested/untested but **what
+kind of thing did the checking**, because *a suite that builds its own world can
+only ever confirm the builder.*
+
+[[file:FINDINGS.org][FINDINGS.org]] has the reliability work behind the current confidence — an orphaned
+window manager that spun a core when river went away, a flaky =quit= check, two
+monitors that could show the same workspace — each finding beside how it was
+reproduced and fixed.  It is where to look if you want the evidence rather than
+the claim.
+
+* See also
+
+- [[file:../INSTALL.org][INSTALL.org]] — installing on any distribution, and the two version ranges that
+  matter
+- [[file:ONBOARDING.org][ONBOARDING.org]] — the developer's long version: the map, the five instruments
+  and what each cannot see, and what each kind of change obliges you to do
+- [[file:../CONTRIBUTING.md][CONTRIBUTING.md]] — what will fail your branch, and why
+- [[file:EXTENDING.org][EXTENDING.org]] — the extension guide
+- [[file:FINDINGS.org][FINDINGS.org]] — what building the lattice from outside the core actually cost

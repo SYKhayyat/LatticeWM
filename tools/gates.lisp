@@ -1202,7 +1202,7 @@ finds it~%"))))
 
 (defparameter *current-documents*
   '("README.org" "INSTALL.org" "doc/FINDINGS.org"
-    "doc/EXTENDING.org" "doc/ONBOARDING.org"
+    "doc/EXTENDING.org" "doc/ONBOARDING.org" "doc/TROUBLESHOOTING.org"
     "doc/latticewm.1" "doc/latticewm-config.5")
   "Documents that describe the program as it is.  A false sentence here is a bug.
 

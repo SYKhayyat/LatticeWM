@@ -491,6 +491,11 @@ fix — the fix is in the diff and the bug is not.
    usually means a document, an export or a generated file now disagrees with
    the program. Read the gate's paragraph before assuming it is confused.
 
+That list is about *making a change*.  For something misbehaving — a build, a
+startup, or the running window manager — see [[file:TROUBLESHOOTING.org][TROUBLESHOOTING.org]], which is
+organised by symptom and carries the same distinction this page makes about
+what kind of thing did the checking.
+
 * If you change this page
 
 It is a *current* document, so its sentences are checked and a false one is a

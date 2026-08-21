@@ -647,6 +647,7 @@ witness to the screen being wrong. =doc/FINDINGS.org= has the rest.
 *If you are here to use it:*
 
 - [[file:INSTALL.org][INSTALL.org]] — installing on any distribution, and the two version ranges that matter
+- [[file:doc/TROUBLESHOOTING.org][doc/TROUBLESHOOTING.org]] — symptom first, and how far each answer is actually checked
 - =latticewm --list-keys=, =--list-options=, =--list-commands= — generated from the running image, so they cannot be out of date
 - =Super+/= — the whole keymap, on screen, built from the live keymap
 
