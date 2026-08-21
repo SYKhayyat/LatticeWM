@@ -186,10 +186,9 @@ at something and putting it back is symmetric.
 application — a window that has closed since is simply absent from the tree
 that comes back. =Super+? u= lists what it would walk through.
 
-It covers =Super+;=, the control socket and SLIME as well as the keys, which
-took a rewrite to become true: it used to hang off ~run-command~, so the three
-doors this program exists for had no undo at all while an arrow key was
-deep-copying every workspace to record nothing.
+It covers every door that changes the layout — the keys, =Super+;=, the control
+socket and SLIME — because it is taken at the moment the tree settles rather than
+hung off any one command path.
 
 ** The pointer
 
@@ -385,6 +384,12 @@ from "reported as zero".
 
 * Configuring it
 
+The configuration file is Common Lisp, but configuring it is not programming:
+the common case is a list of one-line settings like =(setf *gaps* 8)=, and if
+you have edited a dotfile you have the whole skill. Never written Lisp?
+[[file:doc/EXTENDING.org][doc/EXTENDING.org]] opens with a five-minute primer that makes every snippet here
+readable.
+
 #+begin_src sh
 latticewm --write-config      # a commented starter ~/.config/latticewm/init.lisp
 latticewm --list-options      # every setting, its value, its default, and why
@@ -464,25 +469,18 @@ comes from the compositor — river subtracts every layer surface's exclusive
 zone and tells us what is left — so this works for any panel, on any edge, at
 any size, with nothing to configure. =*honour-exclusive-zones*= turns it off.
 
-*Lockers are two different things now, and it is worth being exact.* A layer
-surface can take the keyboard *exclusively*, and LatticeWM handles that: it
-stops sending focus requests, and stops drawing a focused border on a window
-that does not have focus. Without it a window manager re-focuses a window
-underneath the lock screen on every manage sequence, forever.
+*Lockers reach the screen two different ways, and LatticeWM handles both.*
+Modern lockers — swaylock, gtklock — use =ext-session-lock-v1=, a protocol the
+*compositor* implements: river owns the lock surface and its input, LatticeWM is
+told (river sends =session_locked=, and it is recorded on the world) and has
+nothing else to do. The window manager stays alive under the lock, the tree
+keeps its windows, and killing the locker does not unlock the session — the
+protocol working as designed.
 
-But current lockers do not do that any more. swaylock and gtklock use
-=ext-session-lock-v1=, a separate protocol the *compositor* implements, and
-under it river handles the lock surface and its input itself. LatticeWM is told
-— river sends =session_locked= and it is recorded on the world — and it has
-nothing it needs to do. Verified: with swaylock holding an
-=ext-session-lock-v1= lock over a nested river, the window manager stays alive,
-the tree keeps its windows, and commands still run. Killing the locker does
-*not* unlock the session, which is the protocol working as designed rather than
-a bug.
-
-So the layer-shell branch is for the lockers that predate that protocol, and
-the exclusive-focus path is exercised by nothing here — an honest gap, and a
-narrow one.
+Older lockers instead take the keyboard *exclusively* through a layer surface.
+LatticeWM handles that too: it stops sending focus requests and stops drawing a
+focused border on a window that does not have focus, so it does not re-focus a
+window underneath the lock screen on every manage sequence.
 
 ** Fonts
 
@@ -529,25 +527,18 @@ running image, so none of them can drift, and the first two list the methods
 you added — which is how you check that your configuration file was loaded.
 Gate 2 requires every member of both protocols to be documented.
 
-The container surface exists because its absence had consequences. A grid
-written against the source alone answered the six obvious members of the
-protocol, loaded without complaint, and broke on copy, on save and on focus
-repair; a generic was exported from the core under the comment "the container
-protocol" and defined nowhere at all; and the two generics whose failure mode
-is silent data loss on restart were declared in the wrong package, so no
-document named them. None of that was visible while only one of the two
-protocols could describe itself.
+The *container surface* matters because a new container kind that answers only
+the obvious members of the protocol loads without complaint and then breaks on
+copy, save and focus repair — the failure modes are silent, so the surface is
+generated from the image and gate 2 requires every member documented rather than
+left to be discovered the hard way.
 
-The hook surface exists for the third version of the same absence. A hook is
-the mechanism for *noticing* — a status bar, a recording indicator, a script
-that starts something per screen — and its list lived in a paragraph of
-=doc/EXTENDING.org= that named thirteen of the program's seventeen. Fourteen of
-those seventeen had never been attached to by anything at all, so nothing had
-ever executed what a hook's contract actually is: the arguments its functions
-receive and the moment they receive them. Three were wrong. Gate 14 now
+The *hook surface* is the mechanism for *noticing* — a status bar, a recording
+indicator, a script that starts something per screen. A hook's contract is the
+arguments its functions receive and the moment they receive them; gate 14
 requires every declared hook to be attached to and watched firing by the unit
 suite, the integration run or the session recorder, whichever tier can produce
-the event at all.
+the event at all, so the list and its argument lists cannot go stale.
 
 Four worked examples are in =examples/=, including a whole alternate layout
 model in one method and a new *container kind* — niri's scrolling strip — in
@@ -596,11 +587,6 @@ at every startup; it binds to loopback either way. Anything that only wants to
 *send a form* wants the control socket above, which needs no flag and is
 already on.
 
-There used to be a =tools/wmeval= here that spoke SWANK's wire protocol, and it
-was the one shipped thing that needed the port open. It is gone: it was
-installed by the nix path and by no other, and what it did is what =--eval=
-does over a socket that is on by default.
-
 #+CLAIM: (null (option-default :swank-port))
 
 #+begin_src sh
@@ -631,10 +617,8 @@ wrong with your branch.
 
 *The argument for each gate lives in the gate* — as the comment above it in
 =tools/gates.lisp=, which is the one place it cannot drift away from the check
-it describes. This section used to carry a second copy of all of it, a paragraph
-per gate, for about a quarter of this file. A third copy of a thing that already
-exists twice is precisely the failure the gates were built to catch, so it is
-gone rather than updated.
+it describes. This README does not repeat it: a second copy is exactly the kind
+of drift the gates exist to catch.
 
 Where to go instead:
 
@@ -651,39 +635,12 @@ from outside a protocol sequence, and asserts on what came back. Every other
 check in this project *constructs* the state it examines, and the bugs that
 survive live exactly where constructed state cannot reach.
 
-It has found six, and not one of them is visible to a test that builds its own
-world:
-
-- pointer bindings enabled through the *keyboard* interface — a type error
-  inside a generated marshaller, caught, logged and otherwise completely
-  silent. Super+drag did nothing;
-- a window that had left the tree, by being minimized or by being on the
-  workspace you walked away from, never being hidden — so the model was right
-  and the screen was wrong;
-- =new-workspace= moving the cursor to a workspace it never put on screen;
-- =op_start_pointer= sent outside the manage sequence that is the only place it
-  is legal, so Super+drag did nothing a second time for a different reason;
-- =nix build= succeeding while building a session entry that could not start,
-  because nothing in that build had ever connected to the river it pins;
-- and an overlay saying /any key closes this/ while the capture bindings that
-  would deliver those keys were disabled — a decision the unit suite can check
-  and an *arming* only a compositor can confirm.
-
-** The pipeline, and what it was doing before
-
-=README.org= used to say =nix build=, =nix-shell=, =make check= and CI were
-green. Three quarters of that was true. *CI had never been green — not one run,
-ever*, and this sentence had been sitting here saying otherwise.
-
-What it was reporting was three real defects: a test helper that only worked on
-a newer SBCL than the project claimed to support, a generated document whose
-content depended on the compiler that generated it, and an install check whose
-stated precondition was false on the only machine that ran it. All three are
-fixed and each carries a changelog entry.
-
-The lesson is a cheap one and worth writing down where it happened: *a red
-instrument nobody reads is indistinguishable from no instrument*, and this
-project had spent a great deal of effort building the instrument.
+It earns its place because those bugs are real. The kind it catches and a
+constructed test cannot: pointer bindings enabled through the *keyboard*
+interface — a type error inside a generated marshaller, caught, logged, and
+otherwise completely silent, so Super+drag did nothing and no test that built
+its own world could tell. The model was right; the compositor was the only
+witness to the screen being wrong. =doc/FINDINGS.org= has the rest.
 
 * Documentation
 
@@ -727,8 +684,7 @@ river at *both ends* of the supported range: 0.4.5, which carries interface
 version 4 and is the floor, and 0.4.6, which carries 5 and is what the vendored
 protocol was generated from.
 
-Those are four separate claims that were one claim and an assumption a release
-ago. [[file:INSTALL.org][INSTALL.org]] has the table; =src/protocol/PINNED= has
+[[file:INSTALL.org][INSTALL.org]] has the full table; =src/protocol/PINNED= has
 the protocol half.
 
 ** How far each thing is actually checked
@@ -779,35 +735,12 @@ passing quietly over them, and a headless backend is why:
   =ext-session-lock-v1=, which is checked instead.
 
 [[file:doc/PLAN.org][PLAN.org §log7]] is the current list of which is which.
-This section used to claim the HiDPI, layer-shell and pointer paths were "all
-three exercised by the test suite". There was no test reference to
-=surface.lisp=, =layer.lisp=, =pointer.lisp= or =outputs.lisp= of any kind.
 
-** Three bugs worth knowing were there
-
-*When river goes away, so does LatticeWM* — within a second, having run its
-shutdown hooks and written the layout out. That was false until an orphaned
-window manager was found spinning a core indefinitely and saying nothing,
-because a socket at end of file is readable and nothing in the loop could tell
-that from a socket with a message on it. Six of them, at 95% CPU each, on one
-machine. [[file:doc/FINDINGS.org][FINDINGS.org §spin]]; verified against a real
-river killed with =SIGKILL= and with =SIGTERM=.
-
-*=make check= was intermittently red on a good tree* — the suite's last check,
-that =quit= ends the session, failed twice in seven runs. It failed on the runs
-where the window manager quit *fastest*, because it read a slot off a server
-object the shutdown had already torn down. The instrument that hid it is fixed
-too, and that is the transferable half.
-[[file:doc/FINDINGS.org][FINDINGS.org §quit-flake]]. A red =check= is worth
-reading before it is worth re-running.
-
-*Two monitors could end up showing the same workspace* — after restoring a
-layout saved with fewer workspaces than there are monitors, and, it turned out,
-after a single press of a workspace key on an ordinary two-monitor session.
-Every window was then placed twice while the second monitor went black. One
-workspace per output is a property the layout re-establishes on every pass now,
-rather than something the six places that assign one each had to remember.
-[[file:doc/FINDINGS.org][FINDINGS.org §two-outputs]].
+The reliability work behind that confidence — an orphaned window manager that
+spun a core when river went away, a flaky =quit= check, two monitors that could
+show the same workspace — is written up in [[file:doc/FINDINGS.org][FINDINGS.org]],
+each finding beside how it was reproduced and fixed. This is where to look if you
+want the evidence rather than the claim.
 
 * License
 

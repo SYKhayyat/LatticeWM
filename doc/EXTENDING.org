@@ -18,6 +18,48 @@ Nothing above needs a restart, a rebuild, or a plugin manifest. Everything can
 be evaluated into the *running* window manager and takes effect on the next
 frame.
 
+* New to Lisp? Start here
+
+You do not need to know Common Lisp to configure this. Tier 0 is a list of
+one-line settings like =(setf *gaps* 8)= in a file, and most people never leave
+it. If you have ever edited a dotfile you already have the whole skill. This section is the
+five minutes of vocabulary that make the rest of the page readable when you do
+want more; skip it if you write Lisp already.
+
+- *Parentheses are a function call, and the verb comes first.* =(setf *gaps* 8)=
+  is "call ~setf~ with ~*gaps*~ and ~8~", the way another language writes
+  =setGaps(8)=. =(relayout)= is a call with no arguments. Nesting is just an
+  argument that is itself a call: =(spawn (string-downcase name))=.
+- *=setf= sets something.* =(setf *terminal* "alacritty")= assigns a value.
+  Names wrapped in asterisks — ~*gaps*~, ~*terminal*~ — are the settings, and the
+  asterisks are only a naming convention (Lispers call them "earmuffs"), not
+  syntax you have to get right.
+- *A quote =' = means "the literal thing, do not run it".* =:float= and
+  =:app-id= are keywords, plain constant labels; a ='(...)= is a literal list.
+  That is why window rules are quoted — they are data you are handing over, not
+  code to run now.
+- *=defmethod= teaches the window manager one new answer for one situation.* It
+  already has a default answer for everything (its "shipped methods"); yours is
+  more *specific*, so it wins only in the case you name and the default stands
+  everywhere else. That is the whole of tier 1, and it is why there is no plugin
+  API to learn: you are adding to the program's own decision table, not calling
+  one from outside.
+- *=call-next-method= means "and also do the normal thing".* Inside your method
+  it runs the answer that would have applied if you had written nothing — so you
+  extend the default instead of replacing it. Leave it out and you have replaced
+  it; that is occasionally what you want and usually not.
+
+Where does any of this go? A file — =~/.config/latticewm/init.lisp=, which
+=latticewm --write-config= will start for you — read once at startup. Or, once
+you are set up, straight into the running window manager from a REPL, where you
+see the effect on the next frame. Both are described further down. You will not
+break anything experimenting: a mistake logs a line and the desktop keeps
+running, and you fix it from the same prompt.
+
+If a Lisp word later in this page is unfamiliar, the running program is the
+fastest glossary there is — =(describe 'should-float-p)= prints what a name is
+and what it is for, and =(apropos "float")= finds every name with "float" in it.
+
 * The words, once
 
 Every document in this project uses these nine words as though you already had
