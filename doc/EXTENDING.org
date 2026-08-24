@@ -1069,12 +1069,19 @@ Your module is not in that position and should have its own.
 
 ** Where to publish it
 
-Right now: your own repository, and open an issue here saying what you built.
+In this repository, under =extensions/<your-extension>/= — one directory, one
+=.asd= defining the extension and its =/tests= system together, the shape
+=lattice.asd= uses. Gate 1 compiles every extension on every build, and a
+suite that registers itself with
+~(latticewm/tests:register-extension-suite)~ runs under =make test=. The first
+resident is =extensions/focus-follows-mouse/=.
 
-That is not a satisfying answer and it is an honest one. A =latticewm-contrib=
-repository, with a low bar and no gates, in StumpWM's model — where the core is
-not feature-rich and the contrib collection is — is the intended shape and does
-not exist yet. =examples/= is not it and is not a substitute for it.
+Until recently the answer here was "your own repository, and open an issue",
+and a =latticewm-contrib= repository in StumpWM's model remains the intended
+shape *for third parties* once there are any. An out-of-tree module works
+today: =load-extension= accepts anything on ASDF's registry, including
+=~/.config/latticewm/= and an =extensions/= subdirectory of either that or the
+build tree.
 
 The shape of the *second* extension is information this project does not have,
 and it is worth more to it than a patch.

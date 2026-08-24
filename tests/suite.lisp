@@ -27,7 +27,8 @@
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
            #:container #:hooks #:minibuffer #:devices #:capture #:boundaries
-           #:pixels #:versions))
+           #:pixels #:versions
+           #:*extension-suites* #:register-extension-suite))
 
 (in-package #:latticewm/tests)
 
@@ -72,6 +73,24 @@ draw into and what changed since the last one.")
   :description "Reading a line, which needs no compositor either — the prompt
 is a string, a point and a table of what keys mean.")
 
+(defparameter *extension-suites* '()
+  "Suites belonging to extensions under extensions/, as (PACKAGE SUITE-NAME).
+
+An extension's tests file registers itself here when it loads, by
+REGISTER-EXTENSION-SUITE below, and RUN-ALL runs everything on this list after
+the core's own suites.  The lattice is deliberately NOT on it: its suite is
+probed by name below because it predates the registry and because gate 4's
+argument -- the core runs with the extension absent -- is worth restating in
+the one place that would notice if the flagship stopped being optional.  The
+promoted examples have no such seniority.")
+
+(defun register-extension-suite (package name)
+  "Put (PACKAGE NAME) on *EXTENSION-SUITES*, once.
+
+Called at load time from an extension's tests file.  PUSHNEW rather than PUSH,
+because a configuration file gets loaded twice and so does an extension."
+  (pushnew (list package name) *extension-suites* :test #'equal))
+
 (defun run-all ()
   "Run every suite that is loaded, and return T when they all pass.
 
@@ -85,7 +104,9 @@ about it.  A hand-maintained list of suites is exactly the thing that goes
 stale, and this is the third place in the project where that has been true."
   (let ((results (append (run 'model)
                          (run-optional-suite "LATTICEWM/TESTS/EXAMPLES" "EXAMPLES")
-                         (run-optional-suite "LATTICE/TESTS" "PLANE"))))
+                         (run-optional-suite "LATTICE/TESTS" "PLANE")
+                         (loop for (package suite) in *extension-suites*
+                               nconcing (run-optional-suite package suite)))))
     (explain! results)
     (values (results-status results) (length results))))
 

@@ -188,11 +188,16 @@ extension point* and the option is its default — so a policy that overrides
 the method stops reading the option, and setting it does nothing.  That is the
 whole answer to `is *GAPS* or GAPS in charge', and it is a fact about the
 image rather than a sentence somebody has to remember to keep true."
-  (if (and (consp reader)
-           (symbolp (first reader))
-           (search "METHOD" (symbol-name (first reader))))
-      (format nil "~(~a ~a~)" (second reader) (or (third reader) '()))
-      (format nil "~(~a~)" (shorten-source-paths reader))))
+  (multiple-value-bind (name qualifiers specializers)
+      (method-reference-parts reader)
+    (if name
+        ;; A qualifier is part of what you would have to write, so a method
+        ;; that has one says so -- otherwise an :AROUND and the primary method
+        ;; underneath it print as the same line.
+        (if qualifiers
+            (format nil "~(~a ~{~a~^ ~} ~a~)" name qualifiers specializers)
+            (format nil "~(~a ~a~)" name specializers))
+        (format nil "~(~a~)" (shorten-source-paths reader)))))
 
 ;;; ------------------------------------------- and who takes the answer away
 ;;;
@@ -230,19 +235,51 @@ image rather than a sentence somebody has to remember to keep true."
 ;;; This function stops at what the image knows, and the document says exactly
 ;;; that much and no more.
 
-(defun option-reader-method (reader)
-  "The method object READER names, or NIL when READER is a plain function."
+(defun method-reference-parts (reader)
+  "A who-reference naming a method, as (VALUES NAME QUALIFIERS SPECIALIZERS).
+
+NIL when READER names a plain function rather than a method.
+
+SBCL writes a primary method as
+
+  (SB-PCL::FAST-METHOD GAPS (LAYOUT-POLICY T))
+
+and a qualified one with the qualifiers between the name and the specializers:
+
+  (SB-PCL::FAST-METHOD POINTER-FOCUS :AROUND (CONVENTIONAL-POLICY T T T))
+
+THE QUALIFIERS WERE INVISIBLE HERE UNTIL THE FIRST :AROUND METHOD ON AN
+OPTION-READING GENERIC ARRIVED, and the arrival was the promoted
+focus-follows-mouse module.  Everything below read (THIRD READER) as the
+specializers, which for an :AROUND is the qualifier itself -- so
+(LENGTH :AROUND) signalled, five surface tests died with it, and every
+extension to come that wrapped a shipped answer in an :AROUND would have died
+the same way on its first load.  The specializers are whatever follows the
+qualifiers; both halves are computed, never assumed."
   (when (and (consp reader)
              (symbolp (first reader))
              (search "METHOD" (symbol-name (first reader)))
-             (fboundp (second reader)))
-    (let ((gf (fdefinition (second reader))))
-      (when (typep gf 'generic-function)
-        (find-if (lambda (method)
-                   (let ((specializers (closer-mop:method-specializers method)))
-                     (and (= (length specializers) (length (third reader)))
-                          (every #'specializer-named-p specializers (third reader)))))
-                 (closer-mop:generic-function-methods gf))))))
+             (second reader))
+    (let* ((rest (cddr reader))
+           (specializers (car (last rest)))
+           (qualifiers (butlast rest)))
+      (values (second reader) qualifiers specializers))))
+
+(defun option-reader-method (reader)
+  "The method object READER names, or NIL when READER is a plain function."
+  (multiple-value-bind (name qualifiers specializers)
+      (method-reference-parts reader)
+    (when (and name (fboundp name))
+      (let ((gf (fdefinition name)))
+        (when (typep gf 'generic-function)
+          (find-if (lambda (method)
+                     (let ((method-specializers
+                             (closer-mop:method-specializers method)))
+                       (and (= (length method-specializers) (length specializers))
+                            (equal (method-qualifiers method) qualifiers)
+                            (every #'specializer-named-p
+                                   method-specializers specializers))))
+                   (closer-mop:generic-function-methods gf)))))))
 
 (defun specializer-named-p (specializer name)
   "True when NAME is how SBCL writes SPECIALIZER in a method's function name."

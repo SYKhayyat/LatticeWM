@@ -16,8 +16,38 @@
 (require :asdf)
 (require :sb-introspect)
 
+(defun extension-systems ()
+  "Every extension under extensions/, as (NAME DIRECTORY) pairs.
+
+PROMOTION MADE THIS A GATE-1 CONCERN RATHER THAN A COURTESY.  EXTENSION-IDEAS.org
+promotes the worked examples to modules \"held to gate 3 and gate 4\", and the
+lattice's own history says what holding a module to those gates means in
+practice: nothing anywhere *compiled* the lattice until it was put on this
+list, and a rename in the core broke it while every gate passed.  An extension
+that ships beside the core compiles beside the core.
+
+Globbed rather than listed, for the same reason EXAMPLE-FILES below is: an
+extension added tomorrow is covered on the day it lands.  One .asd per
+extension directory, which defines both the extension and its /tests system --
+the shape lattice.asd uses -- so this list needs no second entry for tests,
+which gate 1 has never compiled and does not start compiling here."
+  (sort (loop for asd in (directory (merge-pathnames "extensions/*/*.asd" *root*))
+              collect (cons (pathname-name asd) (directory-namestring asd)))
+        #'string< :key #'car))
+
+(defun register-extension-systems ()
+  "Put every extension directory on ASDF's central registry, once."
+  (dolist (entry (extension-systems))
+    (let ((dir (cdr entry)))
+      (unless (member dir asdf:*central-registry* :test #'equal)
+        (push dir asdf:*central-registry*)))))
+
+(register-extension-systems)
+
 (defparameter *systems*
-  (or (rest (rest sb-ext:*posix-argv*)) '("latticewm" "lattice"))
+  (or (rest (rest sb-ext:*posix-argv*))
+      (append '("latticewm" "lattice")
+              (mapcar #'car (extension-systems))))
   "Every system gate 1 compiles.
 
 THE LATTICE WAS NOT ON THIS LIST AND SHOULD ALWAYS HAVE BEEN.  Gate 3 checks
@@ -25,7 +55,11 @@ that it touches no core, textually.  Gate 4 loads the core *without* it, on
 purpose.  Nothing anywhere compiled it -- so a rename in the core broke
 lattice/map.lisp, and seven gates and 779 checks passed over a shipped feature
 that would not load.  It was found by a user's config file failing at startup,
-which is the worst place to find it.")
+which is the worst place to find it.
+
+The extensions under extensions/ are appended by EXTENSION-SYSTEMS above, for
+the same reason: promotion to a module that gate 3 holds to the boundary rules
+is not worth anything if the boundary check is the only check it gets.")
 (defparameter *loose-files*
   '("tools/hardware-check.lisp" "tools/bench.lisp")
   "Files a *user* is told to load, which belong to no system.

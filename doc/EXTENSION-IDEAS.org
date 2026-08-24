@@ -16,6 +16,11 @@ file updated to say so.
 
 * Promotions — examples that should be modules
 
+STATUS, updated as they land: ~focus-follows-mouse~ has graduated — it is
+now a module under =extensions/focus-follows-mouse/=, loadable with
+=(load-extension "focus-follows-mouse")=, with its own tests in the build.
+The other three are still only examples.
+
 The four files under =examples/= exist to teach the extension surface. Three
 of them are also things users ask for on every tiling window manager, and a
 user should not have to copy lisp out of a teaching directory to get it.
@@ -24,7 +29,7 @@ Each becomes its own ASDF system beside =lattice=, loadable with
 =(load-extension "...")=, held to gate 3 (no reaching into src/) and gate 4
 (core loads and lays out with the extension absent):
 
-- ~focus-follows-mouse~ — one hook consumer.
+- ~focus-follows-mouse~ — one hook consumer. BUILT; see above.
 - ~master-stack~ — a second layout model; one method. Its value as a module
   is evidentiary: every additional layout model outside src/ is another data
   point for the claim that the conventional policy is not privileged.

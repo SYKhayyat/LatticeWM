@@ -135,15 +135,32 @@ because it is where somebody actually installs things:
   ~/.config/latticewm/     a user's own systems, alongside their init.lisp
   ../share/latticewm/      relative to the binary: a relocatable install
   $PREFIX/share/latticewm/ the two conventional system prefixes
-  $LATTICEWM_ROOT          the build tree, for `make run' and for a REPL"
+  $LATTICEWM_ROOT          the build tree, for `make run' and for a REPL
+
+Two subdirectories ride along with entries that have them, because an
+extension's .asd sits beside its sources rather than at a registry root:
+
+  <dir>/extensions/        under the build tree, and under ~/.config/latticewm/
+
+This file knows about the directory named \"extensions\" and nothing else about
+what lives in it -- the same altitude as EXAMPLES in tools/build.lisp.  Which
+extensions exist, and which of them a session enables, is the configuration
+file's business and nobody else's."
   (remove nil
-          (list (uiop:getenv-absolute-directory "LATTICEWM_DATA")
-                (config-directory)
-                (let ((bin (executable-directory)))
-                  (when bin (merge-pathnames "../share/latticewm/" bin)))
-                #p"/usr/local/share/latticewm/"
-                #p"/usr/share/latticewm/"
-                (uiop:getenv-absolute-directory "LATTICEWM_ROOT"))))
+          (append (list (uiop:getenv-absolute-directory "LATTICEWM_DATA")
+                        (config-directory)
+                        (let ((bin (executable-directory)))
+                          (when bin (merge-pathnames "../share/latticewm/" bin)))
+                        #p"/usr/local/share/latticewm/"
+                        #p"/usr/share/latticewm/")
+                  (let ((root (uiop:getenv-absolute-directory "LATTICEWM_ROOT")))
+                    (when root
+                      (list root (merge-pathnames "extensions/" root))))
+                  ;; And the extensions/ subdirectory of the two places a user
+                  ;; actually puts their own things.
+                  (let ((home (config-directory)))
+                    (when home
+                      (list (merge-pathnames "extensions/" home)))))))
 
 (defun register-data-registry ()
   "Put every existing data directory on ASDF's central registry.

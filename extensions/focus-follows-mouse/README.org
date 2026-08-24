@@ -1,0 +1,43 @@
+#+TITLE: focus-follows-mouse
+#+OPTIONS: toc:nil num:nil
+
+Focus follows the pointer, but a floating window keeps its focus.
+
+The shipped =*focus-follows-mouse*= option moves focus wherever the pointer
+goes.  This module adds the two refinements people want after a day of it:
+
+- The pointer passing over the tiled panes *underneath* a floating window
+  does not steal focus from the float.
+- When focus moves by keyboard, the pointer is warped along to the newly
+  focused pane, so the next accidental mouse twitch cannot undo a deliberate
+  motion.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "focus-follows-mouse")
+(focus-follows-mouse:enable)
+#+end_src
+
+=disable= turns it off live; nothing restarts, nothing is lost.  Both forms
+work equally well evaluated into a running session over the control socket.
+
+=enable= also sets =*focus-follows-mouse*= itself, because without it the
+runtime never asks where the pointer is and the first refinement refines a
+question nobody asked.  =disable= deliberately leaves that option alone — it
+is the core's knob, not this module's.
+
+* What it is made of
+
+Two =:around= methods on =conventional-policy= and one switch.  With the
+switch off both methods pass straight through, which is what makes enable
+idempotent, disable exact, and the whole thing inspectable with
+=(describe 'pointer-focus)= like any other surface citizen.
+
+Tested against core 0.2.0.  The pointer-focus half is fully exercised by the
+constructed suite (extensions/focus-follows-mouse/tests/); the warp half's
+=warp-pointer= call reaches river only under a real seat, so it is covered by
+the guard regression (focus before the first frame must not error) but its
+effect on screen is verified by use, not by CI — the same honesty
+doc/EXTENDING.org asks of every module that talks to the compositor.

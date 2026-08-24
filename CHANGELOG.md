@@ -26,7 +26,23 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- `extensions/` — promoted extension modules beside the lattice, starting with
+  `focus-follows-mouse`: focus follows the pointer except over a floating
+  window, and keyboard motion warps the pointer along. Loaded with
+  `(load-extension "focus-follows-mouse")` and enabled live with
+  `(focus-follows-mouse:enable)`. Gate 1 compiles every directory under
+  `extensions/`, `make test` runs their suites through a registry the suites
+  join at load time, and the runtime searches an `extensions/` subdirectory of
+  the build tree and of `~/.config/latticewm/`.
+
+### Fixed
+
+- The option-surface machinery read SBCL method references assuming every
+  method was primary; the first `:around` method on an option-reading generic
+  (the new module's) crashed five surface tests with `(length :around)`.
+  Qualifiers are now parsed as part of the reference and printed with it.
 
 ## 0.2.0
 
