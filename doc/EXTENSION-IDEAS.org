@@ -173,6 +173,88 @@ core dump as a backup strategy. Listed because it is the most
 concept-changing idea in this file, flagged because it may be the least
 worth the cost.
 
+* Sessions from a file — declared, not remembered
+
+The problem with restore-style persistence is that it answers "what was
+open when I left" rather than "what should be open". This extension is the
+declarative direction: a text file that names workspaces, the applications
+that belong in them, and their placement, and a loader that builds the whole
+arrangement from it at startup or on demand.
+
+The format question answers itself in CL: the manifest is Lisp. Where a
+YAML schema needs a loop construct, this has ~loop~; "four terminals tiled
+on workspace 3" is one form; conditionals and variables cost nothing:
+
+#+begin_src lisp
+(workspace 1
+  (split :horizontal
+         (app "emacsclient -c")
+         (app "foot")))
+#+end_src
+
+The loader may be close to free: =--eval= already exists, so loading is
+reading a file of forms into the running image.
+
+What makes it more than dotfile plumbing is the symmetry with the command
+journal (above): the journal *records* sessions backward, the manifest
+*declares* them forward — same machinery pointed both ways. A journal can be
+edited into a manifest; a manifest replay produces a journal-shaped log.
+Deciding early that both share one notion of "a session's state changes"
+keeps them from growing two formats.
+
+Placement half vs spawn half matters: the core already reads saved layouts,
+so arranging existing windows is mostly done. Spawning applications into
+declared places is the new part, and it wants care around windows that fail
+to start or arrive late.
+
+* Floating-only — a policy, not a hack
+
+Some users do not want tiling at all: every window floats, drag-and-resize
+everywhere, nothing snaps. The README positions floating as one verb among
+many; this extension makes it the whole model.
+
+It belongs on this list because of what it would prove. If the layout model
+is genuinely a replaceable policy, then "no layout" must be expressible as a
+policy — a placement method that declines to tile — rather than a pile of
+=~float= rules bolted onto a tiler that still wants to tile. One class, a
+few methods answering "where does a new window go" (nowhere; center it) and
+"what does resize mean" (the pointer's answer), and the conventional tree is
+never entered.
+
+If it turns out floating-only cannot be written without reaching past the
+published surface, that refutes part of the architecture claim and belongs
+in FINDINGS.org either way.
+
+* Nested compositor cells — other WMs as panes
+
+Not as ridiculous as it sounds, because LatticeWM does it to itself daily:
+~make run~ starts river nested inside the current session as an ordinary
+Wayland client. Any compositor that supports nested operation becomes just
+another window in the tree.
+
+A nested cell would be a pane owning a child process (the inner compositor)
+and its socket; closing the cell kills the process; the inner WM's windows
+are invisible to LatticeWM, which sees one client. Uses even without the
+lattice: testing a WM change without leaving the session; a workspace that
+is a whole different desktop.
+
+Feasibility by inner WM: river nested is proven (the development loop).
+Hyprland nests via ~WLR_BACKENDS=wayland~. niri is Smithay-based and whether
+it runs as a Wayland client at all is unverified — test before promising
+anything.
+
+Costs, stated plainly: keybinding collisions (both WMs want Super chords;
+the outer grabs first, so the inner needs a different modifier or an escape
+hatch), double compositing overhead, and focus routing across two keyboard
+grabbers stacked at one boundary. Lifecycle and cleanup are the deep part;
+spawning a process into a pane is mostly spawn-table work.
+
+In the lattice extension this becomes what it sounds like: each plane of
+the infinite grid hosting an entire foreign window manager. Listed under
+the CL tier not because Lisp is required but because the container surface —
+a new kind of cell content — is exactly the mechanism gate 2 documents for
+adding kinds of things panes can hold.
+
 * Ordering
 
 If forced to sequence: promote the four examples first (housekeeping, and it
