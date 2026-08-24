@@ -1,0 +1,46 @@
+#+TITLE: kbd-overview
+#+OPTIONS: toc:nil num:nil
+
+Zoom out to a keyboard of windows; type to navigate.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "kbd-overview")
+(kbd-overview:enable)
+(define-key *keymap* "Super+k" '("toggle-kbd-overview"))
+#+end_src
+
+=Super+k= zooms out: every tiled window in the session rearranges into
+QWERTY rows on the workspace you started from, each wearing a big letter
+badge at its top-left.  Then:
+
+- plain letter -- GO: focus jumps to that window's workspace and pane, and
+  the normal layout snaps back
+- SHIFT+letter -- PULL: the window is marked (the echo area counts); keep
+  picking; SHIFT+letter again unmarks
+- RET -- gather: snap back, pulling every marked window into the workspace
+  you started on
+- ESC -- cancel: snap back having decided nothing
+
+Letters are dealt home-row-first (=asdfghjkl=, then =qwertyuiop=, then
+=zxcvbnm=) over windows in stable workspace-and-position order, so your
+most-reachable letters land where muscle memory can find them.  The layout
+string is =*letter-layout*=; the physical row geometry is
+=*keyboard-rows*=; both are yours to change, independently -- one decides
+which window gets which letter, the other decides where letters sit.
+
+Snap-back restores the exact prior trees by reference -- the original nodes
+are swapped back, not rebuilt -- so undo history stays coherent and ESC is
+a perfect no-op.  Gathering moves marked windows with the shipped
+send-to-workspace verb, the same move you could have made by hand.
+
+* What is verified vs compositor-only
+
+Verified headlessly: letter dealing order, physical row geometry, keyboard
+tree construction (every window gets a pane, no empty filler), gather-onto-
+entry including windows from other workspaces, reference-exact snap-back,
+mode arming/disarming through the real submap machinery, and keymap bindings
+for go/pull/gather/cancel.  The badge overlay draws only against a live
+compositor; the key capture while armed rides river's own chord machinery.

@@ -346,3 +346,17 @@ tier as interest dictates. The CL tier ideas share a prerequisite worth
 building deliberately when the first of them lands: a single, documented
 notion of "every door through which state changes" — undo and the journal
 want the same list, and finding it once serves both.
+
+* Keyboard overview — the keyboard is the overview
+
+A mode: zoom out and every window rearranges into QWERTY rows under letter
+badges; press a letter to go to that window, shift+letter to pull-mark
+several, RET gathers them where you started, ESC cancels. Expose, but the
+spatial map is one your hands already know.
+
+STATUS: BUILT, as =extensions/kbd-overview/=.  No new input plumbing — the
+mode arms river's own chord capture by pushing a keymap of per-window
+closures, re-arming itself after each pull-mark so multi-pick works.  Snap-
+back swaps the saved original nodes back by reference.  Letter priority and
+physical geometry are separate options, so either can change without the
+other caring.

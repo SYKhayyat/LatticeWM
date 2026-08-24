@@ -28,6 +28,11 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/kbd-overview/` — zoom out to a keyboard of windows: the
+  session rearranges into QWERTY rows under letter badges; plain letters
+  go to their window, shift+letters pull-mark, RET gathers the marked ones
+  where you started. Letters dealt home-row-first; snap-back restores the
+  exact prior trees.
 - `extensions/session-dump/` — the session as a dumped image: dump-session
   saves the layout, writes the whole running image (extensions, options,
   defined rules and macros) and exits; resuming that core re-runs startup
