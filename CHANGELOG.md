@@ -28,6 +28,12 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/projects/` — workspaces bound to directories: define a project,
+  switch to it, and everything spawned on its workspace starts in its
+  directory. The binding is the workspace label, so nothing owns a workspace
+  and rearranging cannot go stale. Backed by one new runtime seam:
+  `r:*spawn-directory*`, consulted by the single `spawn` command every spawn
+  path funnels through.
 - `extensions/transient-rules/` — one-shot window rules: arm
   "the next window matching X" with `add-rule` or the `float-next` /
   `workspace-next` commands; the entry is consumed by the placement it

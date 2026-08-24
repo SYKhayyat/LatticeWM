@@ -614,6 +614,17 @@ otherwise."
 
 ;;; ================================================================ system
 
+(defvar *spawn-directory* nil
+  "The directory children of SPAWN start in, or NIL for wherever the
+compositor itself was started.
+
+A dynamic variable rather than an argument to SPAWN because the code that
+knows the directory -- a project workspace, a file manager integration -- is
+rarely the code that spells out the command line, and because every path into
+a program (SPAWN itself, TERMINAL, EDITOR, a key on an empty pane) funnels
+through this one command.  Bound around the call by whoever knows; left alone
+by everybody else.")
+
 (defcommand spawn (&rest command)
   "Run COMMAND as a detached process.
 
@@ -624,12 +635,26 @@ From M-x this is the run-a-program prompt, and what you type is split on
 spaces the way a shell would split it.
 
 The child is detached and its output goes nowhere, so a program that writes to
-stderr cannot fill a pipe nobody is reading and block."
+stderr cannot fill a pipe nobody is reading and block.
+
+When *SPAWN-DIRECTORY* is bound, the child starts there.  The directory is
+changed and put back around RUN-PROGRAM because neither it nor anything under
+it takes a working directory; the window manager is single-threaded where
+commands run, so the window in which another thread could observe the moved
+directory does not exist."
   (:interactive :shell-command)
   (best-effort "spawn"
-    (sb-ext:run-program (first command) (rest command)
-                        :search t :wait nil
-                        :output nil :error nil :input nil))
+    (if *spawn-directory*
+        (let ((previous (sb-posix:getcwd)))
+          (sb-posix:chdir (namestring *spawn-directory*))
+          (unwind-protect
+               (sb-ext:run-program (first command) (rest command)
+                                   :search t :wait nil
+                                   :output nil :error nil :input nil)
+            (sb-posix:chdir previous)))
+        (sb-ext:run-program (first command) (rest command)
+                            :search t :wait nil
+                            :output nil :error nil :input nil)))
   (logmsg :info "spawned ~{~a~^ ~}" command)
   nil)
 

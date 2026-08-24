@@ -1,0 +1,55 @@
+#+TITLE: projects
+#+OPTIONS: toc:nil num:nil
+
+Workspaces bound to directories.  A project is a folder; the workspace that
+wears its name is where everything spawned starts -- terminal in it, editor
+on it -- and switching projects switches everything at once.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "projects")
+(projects:enable)
+
+(projects:define-project "lattice" "~/src/latticewm")
+(projects:define-project "mail"    "~/src/mail")
+#+end_src
+
+Then =M-x switch-to-project= (with completion), or
+=(projects:switch-to-project "lattice")= from Lisp.  While the cursor is on
+a project's workspace every spawned program -- =spawn= itself, =terminal=,
+=editor=, an unbound key on an empty pane -- runs with that project's
+directory as its working directory.
+
+The binding /is/ the label.  Any workspace you have already named after a
+registered project becomes that project's home without being asked;
+=redefine= moves the project rather than duplicating it; rearranging or
+rebuilding workspaces cannot stale the registry because nothing here owns a
+workspace.  =remove-project= forgets the registration and leaves the
+workspace alone -- by then it holds windows, and they were never ours to
+take back.
+
+A project must name a directory that exists when it is defined: refused at
+define time rather than failing quietly at spawn time.
+
+* How it works
+
+Every path into a program funnels through the one =spawn= command, which
+consults the runtime's =r:*spawn-directory*=.  This module installs a single
+command wrapper that binds that variable to the current project's directory
+for the duration of any command, and to =NIL= off any project.  It is one
+seam, used once.
+
+=disable= uninstalls the wrapper; the registry survives, because switching a
+module off is not permission to lose what was registered.
+
+* What is verified vs compositor-only
+
+Verified headlessly: registration and idempotence, refusal of missing
+directories, adoption of pre-labelled workspaces, current-project resolution
+through the label from both sides, the wrapper's binding on and off the
+project, disable semantics, and a real child process writing its working
+directory down and the compositor's own directory coming back unchanged.
+The =switch-to-project= command goes through the shipped =workspace=
+command, whose output half only exists against a live compositor.

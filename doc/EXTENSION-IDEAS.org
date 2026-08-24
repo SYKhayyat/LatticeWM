@@ -88,6 +88,11 @@ Natural in Lisp for the same reason buffers are: a project is a small object
 with a hook into spawn and workspace creation, not a feature of the
 compositor. Touches the spawn table and one or two placement generics.
 
+STATUS: BUILT, as =extensions/projects/=.  The seam it needed was one dynamic
+variable, =*spawn-directory*=, consulted by the single =spawn= command every
+spawn path funnels through; the binding between project and workspace is the
+workspace's label, so nothing here owns a workspace and nothing can go stale.
+
 * Transient rules — "the next window matching X"
 
 Permanent rules say pavucontrol always floats. A transient rule says: the

@@ -597,7 +597,7 @@ keybindings, the command registry, and the session loop.")
    ;; the loop
    #:start #:quit #:relayout #:mark-dirty #:compute-layout #:output-contents
    #:do-windows
-   #:spawn #:notify #:*log-level* #:logmsg #:*server*
+   #:spawn #:notify #:*log-level* #:logmsg #:*server* #:*spawn-directory*
    #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
    #:overlay-drew #:canvas-drawn #:surface-damage
