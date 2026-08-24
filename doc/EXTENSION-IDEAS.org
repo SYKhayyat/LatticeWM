@@ -1,0 +1,185 @@
+#+TITLE: Extension Ideas
+#+SUBTITLE: Things the policy layer could become, collected before they were built
+#+OPTIONS: toc:2 num:nil
+
+This document is a backlog, not a plan. Nothing here is promised, nothing
+here is scheduled, and nothing here has been argued to the standard DESIGN.org
+holds decisions to. Each entry states the behavior a user would see, what
+makes it natural in Common Lisp specifically, and which part of the surface
+it would touch — so that whoever picks it up (including a future version of
+the author) can tell quickly whether it is still worth doing.
+
+Ideas graduate out of this file by being built or by being refuted in
+writing. They do not rot silently: if an idea here becomes impossible because
+the core changed, that is a finding and belongs in FINDINGS.org with this
+file updated to say so.
+
+* Promotions — examples that should be modules
+
+The four files under =examples/= exist to teach the extension surface. Three
+of them are also things users ask for on every tiling window manager, and a
+user should not have to copy lisp out of a teaching directory to get it.
+
+Each becomes its own ASDF system beside =lattice=, loadable with
+=(load-extension "...")=, held to gate 3 (no reaching into src/) and gate 4
+(core loads and lays out with the extension absent):
+
+- ~focus-follows-mouse~ — one hook consumer.
+- ~master-stack~ — a second layout model; one method. Its value as a module
+  is evidentiary: every additional layout model outside src/ is another data
+  point for the claim that the conventional policy is not privileged.
+- ~scrolling-columns~ — same argument, stronger example: niri's whole model
+  in sixty lines.
+- ~window-rules~ — a friendlier front over the built-in table; lowest value
+  of the four, since =(setf *window-rules*)= already covers most of it.
+
+* Buffers — windows you call by name
+
+The problem: today a window lives in exactly one pane. To look at it
+somewhere else you move it there. If it is minimized it is gone until
+restored to the same place.
+
+The behavior: every window gets a name. Any pane can display any window by
+name, from anywhere. Standing in a pane and asking for ~chat~ shows the chat
+window right there. The window was never moved or closed; panes are views,
+windows are objects.
+
+What exists already, and what does not:
+
+- *Tabs* are a stack of windows in one pane showing one at a time. What they
+  lack is exactly the buffer idea: tabs are anonymous and local to their
+  pane. Buffers are named and global.
+- *Minimize* already preserves identity and position across hide/show. That
+  is the mechanism the buffer layer hides clients with.
+- The *prompt machinery* already does prefix/substring/subsequence completion
+  with a history ring. Buffer switching is one prompt away.
+
+The genuinely new surface is small: a global registry (name → window), a
+display verb a pane delegates to, and answers for the questions tabs never
+face — focus repair when a named window moves panes mid-operation, whether
+layout undo crosses a buffer swap, what bury means when two panes show the
+same name (or whether that state is representable at all).
+
+Roughly a hundred and fifty lines against the container surface, and it would
+be the first extension that changes how the tree is *thought about* rather
+than what keys do.
+
+* Projects — workspaces bound to directories
+
+A project is a folder. This extension binds a workspace to one: spawning a
+terminal there starts in it, the editor opens it, and switching projects
+switches everything at once. Switch-by-name from the prompt.
+
+Natural in Lisp for the same reason buffers are: a project is a small object
+with a hook into spawn and workspace creation, not a feature of the
+compositor. Touches the spawn table and one or two placement generics.
+
+* Transient rules — "the next window matching X"
+
+Permanent rules say pavucontrol always floats. A transient rule says: the
+NEXT window matching this opens floating, once, then expires. Useful for
+applications whose second window differs from their first — installers,
+dialogs that follow a main window, anything where a permanent rule would be
+too broad.
+
+Implementation shape: a queue consulted at manage time before the permanent
+table, entries consumed on first match. One hook (~:manage~-adjacent) plus a
+prompt verb ("next matching window floats"). Small, and it closes a real
+expressiveness gap river's own protocol leaves open.
+
+* Idle and lock — a native session policy
+
+hypridle-equivalent behavior using the hook surface: dim after N minutes,
+lock via ext-session-lock-v1, DPMS off after M. The lock half is already
+described in README.org's locker section — the WM knows a lock is held and
+behaves correctly under it. What is missing is the timer side and a config
+surface for the thresholds. Replaces an external daemon for this session and
+exercises hooks nobody has used for anything timing-shaped yet.
+
+* Layout persistence — arrangements that survive logout
+
+The core already saves layouts and reads them back. This extension makes
+that automatic per-workspace: save on change or on exit, restore at session
+start, with the honest caveat README.org already carries — undo restores
+arrangements, not applications; windows that closed while logged out are
+absent from the restored tree. Worth deciding early whether restore is best
+effort (missing windows skipped) or exact (refuses when the tree cannot be
+honored).
+
+* Ideas that need Common Lisp to make sense
+
+These are the ones the reminder "this is CL" is pointing at — features that
+are either unnatural or impossible in a C/Rust WM, because they depend on
+the program being a live image of generic functions rather than a fixed
+binary.
+
+** Restarts for broken windows — the condition system, applied
+
+When an application exits unexpectedly, or a client misbehaves at manage
+time, signal a condition instead of printing a log line. Attach restarts:
+=~RETRY= re-spawn the application, =~UNDO= revert whatever layout change was
+in flight, =~DISMISS= ignore. Restarts are selectable from the keyboard, in
+an echo-area menu, exactly like an SLDB buffer.
+
+No other WM offers this because no other WM has restarts. It converts "my
+app crashed and now my layout is weird" from a debugging session into a
+menu pick.
+
+** Window rules as methods — EQL specializers
+
+The rule table maps properties to behaviors. But the policy layer is generic
+functions, which means a rule *is* a method waiting to happen:
+
+#+begin_src lisp
+(defmethod p:placement :around ((policy conventional-policy)
+                                (window (eql-app-id "pavucontrol")))
+  (call-next-method :float t))
+#+end_src
+
+A rules module could store rules in exactly this form: listable (each rule
+is inspectable source), removable (remove-method), ordered by specificity
+(CLOS computes it), and live-patchable from the prompt. The table stops
+being a parallel mini-language and becomes the language itself. Whether the
+ergonomics beat a plain list for non-programmers is the open question —
+examples/02 exists because the table is usually enough — but for the tier-2+
+user this dissolves the boundary between configuring and programming.
+
+** Command journal and replay
+
+Record every command that changes state — keys, socket forms, SLIME — into
+a replayable journal (undo already walks the same doors for layouts). Then:
+replay a journal into a fresh session and reproduce yesterday's arrangement
+and settings exactly; diff two journals to answer "what did I change since
+it worked"; ship a journal as a bug report. The capture points all exist;
+the journal is storage discipline over them.
+
+** Keyboard macros
+
+Wrap command dispatch: start/stop recording, replay, name. Because every
+user action routes through one command path, recording is interception at a
+single choke point rather than input synthesis. Ten lines of state around
+dispatch, and the WM has vim-style repeatable sequences over arbitrary
+commands including prompts.
+
+** Save-world sessions
+
+SBCL can dump a running image. A session could too: extensions loaded,
+settings changed, journals attached — ~save-session~ writes a core; the next
+login resumes that image instead of booting the default one and re-reading
+init.lisp. Sessions stop being configuration applied at startup and become
+state that persists. The hard problems are reconnecting to a fresh river
+(the image must survive its sockets dying) and the temptation to treat a
+core dump as a backup strategy. Listed because it is the most
+concept-changing idea in this file, flagged because it may be the least
+worth the cost.
+
+* Ordering
+
+If forced to sequence: promote the four examples first (housekeeping, and it
+hardens the extension path for everything else); then buffers (highest ratio
+of conceptual change to code); then transient rules and idle/lock (small,
+independent, immediately useful); then projects, persistence, and the CL
+tier as interest dictates. The CL tier ideas share a prerequisite worth
+building deliberately when the first of them lands: a single, documented
+notion of "every door through which state changes" — undo and the journal
+want the same list, and finding it once serves both.
