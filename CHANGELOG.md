@@ -28,6 +28,11 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/window-restarts/` — when a window exits unexpectedly (a close
+  you did not just ask for), a `broken-window` condition is signalled and
+  the echo area offers the menu: retry respawns the application, undo walks
+  back the retile, dismiss carries on. Bind the exported `*menu*` keymap
+  behind any chord.
 - `extensions/layout-persistence/` — named workspace layouts saved as files
   and keyed by application id, so an arrangement means the same thing after
   a reboot. Restore is `:best-effort` (empty panes for absent applications)

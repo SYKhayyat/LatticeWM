@@ -160,6 +160,11 @@ No other WM offers this because no other WM has restarts. It converts "my
 app crashed and now my layout is weird" from a debugging session into a
 menu pick.
 
+STATUS: BUILT, as =extensions/window-restarts/=.  A window that vanishes
+unasked-for is a BROKEN-WINDOW condition and an echo-area notice; the three
+answers are ordinary commands and a keymap you bind behind your own chord.
+"Asked for" is decided by whether a close command ran half a second ago.
+
 ** Window rules as methods — EQL specializers
 
 The rule table maps properties to behaviors. But the policy layer is generic

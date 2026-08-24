@@ -1,0 +1,52 @@
+#+TITLE: window-restarts
+#+OPTIONS: toc:nil num:nil
+
+The condition system, applied to broken windows.  When a window goes away
+without your having closed it, the module says so and offers the three
+answers an SLDB buffer would: /retry/ (spawn the application again), /undo/
+(revert the last layout change), /dismiss/ (carry on).
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "window-restarts")
+(window-restarts:enable)
+
+;; Put the menu behind whatever key you like:
+(define-key *keymap* "Super+Escape" window-restarts:*menu*)
+#+end_src
+
+When something exits unexpectedly, the echo area says which application and
+what the choices are; =Super+Escape r= respawns it, =u= walks back the
+retile, =d= carries on.  Any key the menu does not bind leaves the menu
+cleanly rather than leaking into an application -- river's
+ensure_next_key_eaten does that part.
+
+What counts as "unexpectedly": a window closed within half a second of you
+running =close= was asked for, however much it may resemble a crash.
+=*user-close-commands*= lists the commands that arm that suppression.
+
+* For Lisp code
+
+Every offered choice is also a BROKEN-WINDOW condition with app-id attached,
+signalled where the crash is noticed:
+
+#+begin_src lisp
+(handler-bind ((window-restarts:broken-window
+                (lambda (c) (log :crash (window-restarts:broken-app-id c)))))
+  ...)
+#+end_src
+
+A handler that intervenes first wins, which is what a condition is for.
+The three commands -- =retry-broken-window=, =undo-for-broken-window=,
+=dismiss-broken-window= -- are ordinary commands, bindable individually.
+
+* What is verified vs compositor-only
+
+Verified headlessly: unexpected exits are recorded and signalled, a
+requested close is suppressed, retry respawns and forgets, retry without a
+crash declines, dismissal clears, the menu binds what it says it binds, and
+enable/disable wire and unwire the hook.  The menu's behaviour as a submap
+-- clean exit on unbound keys -- is river's own chord machinery, already
+exercised by the core's keyboard suite.
