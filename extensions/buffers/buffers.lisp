@@ -51,7 +51,12 @@ cannot put a window back where a switch took it from.")
             (make-hash-table :test #'equal))))
 
 (defun buffer-name (window &optional (world r:*world*))
-  "The name WINDOW carries, or NIL."
+  "The name WINDOW carries, or NIL.
+
+WORLD is accepted for symmetry with the rest of the registry API and ignored:
+a name lives on the window itself, so it answers the same whatever world you
+hand it."
+  (declare (ignore world))
   (c:prop window :buffers/name))
 
 (defun buffer-names (&optional (world r:*world*))
