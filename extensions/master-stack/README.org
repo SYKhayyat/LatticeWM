@@ -1,0 +1,42 @@
+#+TITLE: master-stack
+#+OPTIONS: toc:nil num:nil
+
+The master-and-stack layout -- one large pane on the left, everything else
+stacked beside it -- composed over whatever policy you already have.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "master-stack")
+(master-stack:enable)
+#+end_src
+
+or, live, the same two forms over the control socket.  =disable= changes back
+to whatever was underneath; nothing restarts, no window moves.
+
+Commands (bind them wherever you like): =master-wider=, =master-narrower=,
+=more-masters=, =fewer-masters=.  Knobs: =master-ratio= (default 3/5) and
+=master-count= (default 1), readable off the policy once enabled.
+
+* What it is made of
+
+A mixin (=master-stack-mixin=) over =policy=, not a subclass of
+=conventional-policy=.  ENABLE composes it in front of the installed policy by
+CHANGE-CLASS under an interned derived name, so:
+
+- it composes with *any* policy, including the lattice's;
+- enabling twice finds the interned class instead of minting a second;
+- disabling restores the exact class object that was underneath, state intact.
+
+Two methods do the work: =layout-children= imposes master-and-stack on every
+split, and =step-address= makes motion follow the drawing rather than the
+split's stored axis.  The tree is never touched -- switching layouts moves no
+window, which is the point of arrangement living in the policy at all.
+
+* What is verified where
+
+Geometry, motion, tree-untouchedness, composition, double-enable and disable
+are all exercised headlessly in =tests/=.  Composition is verified against
+=conventional-policy=; composition *under the lattice* follows the same CLOS
+mechanism but is verified by use, not by CI -- say so if you find it wrong.
