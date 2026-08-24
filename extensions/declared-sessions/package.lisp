@@ -17,6 +17,8 @@
 The skeleton is built as empty panes; applications are spawned into the
 panes that wait for them.")
   (:export #:*sessions-directories*
+           #:*spawn-function*
+           #:*pending-arrivals*
            #:load-session
            #:session-file
            #:all-session-names

@@ -146,13 +146,23 @@ left is to stop promising the pane to the next window of the same kind."
                              (build-node spec (list index)))
              (spawn-apps spec))))))))
 
+(defvar *spawn-function* nil
+  "How :APP commands are run, or NIL for R:SPAWN.
+
+A function of one argument, the argv list.  NIL means the real thing --
+detached, output discarded.  Bound by tests, which must not open actual
+windows on the user's desktop just because a manifest says (app \"foot\").")
+
 (defun spawn-apps (spec)
   "Spawn every :APP in SPEC.  The command string splits on spaces, which is
 what the manifest promised."
   (when (consp spec)
     (case (first spec)
-      (:app (apply #'r:spawn
-                   (uiop:split-string (string-trim " " (second spec)))))
+      (:app
+       (let ((argv (uiop:split-string (string-trim " " (second spec)))))
+         (if *spawn-function*
+             (funcall *spawn-function* argv)
+             (apply #'r:spawn argv))))
       (:split (mapc #'spawn-apps (cddr spec))))))
 
 (defun read-manifest (file)

@@ -36,9 +36,16 @@
       (write-string text out))
     name))
 
+(defvar *spawned* '())
+
 (defmacro with-sessions (&body body)
   `(let ((ds::*sessions-directories* (fresh-sessions-directory))
          (ds::*pending-arrivals* '())
+         ;; Tests must never run a manifest's commands for real: the spawn
+         ;; seam records what WOULD have been launched.
+         (ds::*spawn-function* (lambda (argv)
+                                 (push (copy-list argv) *spawned*)))
+         (*spawned* '())
          (p:*hooks* (make-hash-table :test #'eq))
          (r:*world* (c:make-world))
          (p:*policy* (make-instance 'p:conventional-policy)))
@@ -46,6 +53,22 @@
 
 ;;; ---------------------------------------------------------------- tests
 
+(test manifests-spawn-through-the-seam
+  "A loaded session records exactly what it WOULD launch -- and in tests,
+records instead of launching, because a test suite has no business opening
+windows on anybody's desktop."
+  (with-sessions
+    (write-session "work"
+                   "(workspace 1
+                      (split :horizontal
+                             (app \"emacsclient -c\")
+                             (app \"foot\")))")
+    (is (equal "work" (ds:load-session "work")))
+    (is (= 2 (length *spawned*)))
+    (is (member '("emacsclient" "-c") *spawned* :test #'equal)
+        "the emacsclient command was recorded")
+    (is (member '("foot") *spawned* :test #'equal)
+        "and so was the foot command")))
 (test skeleton-is-built-before-the-windows-exist
   "Loading a session grows the workspace list and builds the declared split
 as empty panes -- the panes wait for the windows, not the other way round."
