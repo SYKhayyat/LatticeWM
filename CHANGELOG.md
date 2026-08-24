@@ -28,6 +28,12 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/rules-as-methods/` — window rules as eql-specialized methods
+  on a `rule-overrides` generic: listable, removable, live-redefinable,
+  ordered by CLOS. Bridges into placement through the new `:window-rule`
+  hook, so no `:around` methods compete for identical specializers.
+- `src/policy/hooks.lisp` — the `:window-rule` hook: consulted after the
+  declarative rule table, first non-NIL answer wins.
 - `extensions/keyboard-macros/` — record command sequences between
   `start-macro` and `stop-macro`, play them back with an optional count,
   and save them under names. Recording is a single wrapper on the command

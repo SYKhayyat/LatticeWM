@@ -184,6 +184,12 @@ ergonomics beat a plain list for non-programmers is the open question —
 examples/02 exists because the table is usually enough — but for the tier-2+
 user this dissolves the boundary between configuring and programming.
 
+STATUS: BUILT, as =extensions/rules-as-methods/= — with the honest
+mechanical answer to the specializer question: a rule is a method on a
+generic eql-specialized on the app-id STRING, not on the window, and the
+bridge into placement is the runtime's =:window-rule= hook, so no :AROUND
+methods fight over identical specializers.
+
 ** Command journal and replay
 
 Record every command that changes state — keys, socket forms, SLIME — into

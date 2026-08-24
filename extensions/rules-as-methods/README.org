@@ -1,0 +1,53 @@
+#+TITLE: rules-as-methods
+#+OPTIONS: toc:nil num:nil
+
+Window rules as eql-specialized methods, not table rows.
+
+The rule table is a parallel mini-language.  This module dissolves it: a
+rule IS a method on a generic whose specializer is the application id
+itself.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "rules-as-methods")
+(rules-as-methods:enable)
+
+(rules-as-methods:define-app-id-rule "pavucontrol" :float t)
+(rules-as-methods:define-app-id-rule "thunderbird" :workspace 3 :focus nil)
+#+end_src
+
+Each =define-app-id-rule= expands to an ordinary =defmethod= on
+=rule-overrides=, eql-specialized on the app-id string:
+
+- redefining replaces live, from a REPL or by reloading your init file;
+- =(rules-as-methods:all-rules)= reads the generic's own methods, so the
+  listing and the truth are the same object;
+- =(rules-as-methods:remove-app-id-rule "pavucontrol")= removes the method,
+  and CLOS forgets it.
+
+Overrides are whatever the shipped rule language understands: =:float=,
+=:workspace=, =:focus=, appearance keys, all of it -- placement cannot tell
+the difference, because the answer arrives through the same =window-rule-for=
+consultation either way.
+
+* How it composes
+
+The bridge into placement is the runtime's =:window-rule= hook: one function,
+attached once, returning whatever the eql-specialized method says.  No
+=:around= methods are created here, so there is nothing for other modules'
+methods to silently replace -- see transient-rules' README for why that
+sentence exists.  The declarative table in the core and window-rules'
+predicate table are consulted first; this module answers only what neither
+of them claimed.
+
+=disable= unhooks the bridge; the defined methods survive, because stopping
+consulting is not forgetting.
+
+* What is verified vs compositor-only
+
+Verified headlessly: define produces a method placement actually consults,
+unmatched applications fall through cleanly, redefinition replaces, removal
+removes, the listing matches the truth, and disable stops consulting without
+forgetting.

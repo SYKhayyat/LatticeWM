@@ -436,3 +436,13 @@ sees does not fire it.  For anything that wants to know whether the session
 has gone quiet: idle timers, screen dimming and locking, presence indicators.
 Run from the seat's event path, so anything expensive belongs behind a timer
 that reads a timestamp, not here.")
+
+(defhook :window-rule (window) "Run when placement asks what should become of
+WINDOW.  Return an overrides plist -- (:float t), (:workspace 3 :focus nil)
+-- to answer for it, or NIL to pass; the first non-NIL answer wins, after
+the declarative table has had its say.
+
+This is the seam between a table of rules and a set of methods: a module that
+stores rules as methods on its own generic needs exactly one way to be asked,
+and a list-composing hook is that way without anybody's :AROUND methods
+having to agree on specializers.")

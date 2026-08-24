@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM hooks
-19 hooks.  Generated from the running image.
+20 hooks.  Generated from the running image.
 ============================================================================
 
 A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,
@@ -264,6 +264,20 @@ been repaired.
 Run after WINDOW has been placed in the tree
 or floated.  Too late to change the placement — for that, specialize
 SPAWN-TARGET or ON-WINDOW-OPEN.
+
+
+----------------------------------------------------------------------------
+:WINDOW-RULE (window)
+----------------------------------------------------------------------------
+Run when placement asks what should become of
+WINDOW.  Return an overrides plist -- (:float t), (:workspace 3 :focus nil)
+-- to answer for it, or NIL to pass; the first non-NIL answer wins, after
+the declarative table has had its say.
+
+This is the seam between a table of rules and a set of methods: a module that
+stores rules as methods on its own generic needs exactly one way to be asked,
+and a list-composing hook is that way without anybody's :AROUND methods
+having to agree on specializers.
 
 
 ----------------------------------------------------------------------------

@@ -189,10 +189,18 @@ are supported and this one requires no Lisp beyond a quoted list.")
                       nil)))))
 
 (defmethod window-rule-for ((policy lifecycle-policy) (window c:window))
-  "The first rule in *WINDOW-RULES* whose match clause fits WINDOW."
-  (loop for entry in *window-rules*
-        when (and (consp entry) (window-matches-rule-p window (first entry)))
-          return (check-window-rule (rest entry) window)))
+  "The first rule in *WINDOW-RULES* whose match clause fits WINDOW.
+
+If no declarative rule answers, the :WINDOW-RULE hooks are asked -- first
+non-NIL answer wins.  The table is what most people want and it is consulted
+first; the hooks are how a module that stores rules some other way (methods,
+say) gets into the same conversation without an :AROUND arms race."
+  (or (loop for entry in *window-rules*
+            when (and (consp entry) (window-matches-rule-p window (first entry)))
+              return (check-window-rule (rest entry) window))
+      (first (remove-if #'null
+                        (guarded "window-rule hooks"
+                          (run-hooks :window-rule window))))))
 
 (defun apply-window-rule-appearance (rule window)
   "Put a rule's *appearance* overrides where the appearance generics find them.

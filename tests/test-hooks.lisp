@@ -227,6 +227,30 @@ it has a writable state directory."
   (declare (ignore ignored))
   (error "a hook function that signals"))
 
+(defun rule-hook-floats-for-test (window)
+  (when (equal "rule-hook-test-app" (c:window-app-id window))
+    '(:float t)))
+
+(test window-rule-hooks-answer-after-the-table
+  ;; :WINDOW-RULE is the one hook whose answer changes a decision, and the
+  ;; decision it changes is placement.  The table is consulted first -- the
+  ;; declarative answer wins while it exists -- and the first non-NIL hook
+  ;; answer after that takes the window nobody in the table claimed.
+  (let ((pol (policy)))
+    (p:add-hook :window-rule 'rule-hook-floats-for-test)
+    (unwind-protect
+         (let ((other (make-instance 'c:window :app-id "something-else")))
+           ;; No hook answer for this window: NIL, and no crash.
+           (is-false (p:window-rule-for pol other)))
+      (p:remove-hook :window-rule 'rule-hook-floats-for-test)))
+  (let ((pol (policy)))
+    (p:add-hook :window-rule 'rule-hook-floats-for-test)
+    (unwind-protect
+         (let ((win (make-instance 'c:window :app-id "rule-hook-test-app")))
+           (is (equal '(:float t) (p:window-rule-for pol win))
+               "the hook answered for its application"))
+      (p:remove-hook :window-rule 'rule-hook-floats-for-test))))
+
 (test a-hook-that-signals-does-not-take-the-others-with-it
   ;; RUN-HOOKS guards each function separately, which is right and is also why
   ;; an arity mistake is silent — hence the two checks above.
