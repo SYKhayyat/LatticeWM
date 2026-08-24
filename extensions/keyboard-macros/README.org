@@ -1,0 +1,39 @@
+#+TITLE: keyboard-macros
+#+OPTIONS: toc:nil num:nil
+
+Record a sequence of commands; play it back.  Vim-style repeat over
+arbitrary commands, prompts included -- the prompt's answer is part of the
+arguments the command was given, so it replays too.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "keyboard-macros")
+(keyboard-macros:enable)
+
+(define-key *keymap* "Super+x (" '(("start-macro")))
+(define-key *keymap* "Super+x )" '(("stop-macro")))
+(define-key *keymap* "Super+x p" '("play-macro"))
+#+end_src
+
+Do things between the parens; =Super+x p= does them again.  =play-macro=
+takes an optional count: =(play-macro "3")=.  A sequence worth keeping gets
+a name with =M-x save-macro=; named macros live as files under =macros/= in
+the data directory and are listed for completion by =all-macro-names=.
+
+Starting a new macro discards the last un-saved one -- saving is how a
+sequence says it means to be kept.
+
+Not recorded: the macro's own verbs (recording the recording is a fixed
+point nobody wants), =undo=, =redo=, and =repeat= -- what =.= repeated
+already happened under its own name, which is what belongs in the macro.
+The same ruling command-journal makes, for the same reason.
+
+* What is verified vs compositor-only
+
+Verified headlessly: capture through the real wrapper chain, ordered replay
+through RUN-COMMAND, counts, exclusions, fresh-start semantics, save under
+a name and delete.  Playing against a live compositor exercises only
+commands you already have; a step that fails is skipped rather than
+stopping the sequence.

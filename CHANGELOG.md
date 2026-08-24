@@ -28,6 +28,10 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/keyboard-macros/` — record command sequences between
+  `start-macro` and `stop-macro`, play them back with an optional count,
+  and save them under names. Recording is a single wrapper on the command
+  path; prompts are included because their answers arrive as arguments.
 - `extensions/command-journal/` — record every command run while recording
   is on, as plain `(command . arguments)` forms; save journals to files,
   load them into any session, and replay through the ordinary command path

@@ -206,6 +206,10 @@ single choke point rather than input synthesis. Ten lines of state around
 dispatch, and the WM has vim-style repeatable sequences over arbitrary
 commands including prompts.
 
+STATUS: BUILT, as =extensions/keyboard-macros/= — the ten lines grew a
+little saving named macros beside the journals, and the exclusion list
+learned from command-journal's lesson about what =.= repeats.
+
 ** Save-world sessions
 
 SBCL can dump a running image. A session could too: extensions loaded,
