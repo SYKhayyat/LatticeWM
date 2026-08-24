@@ -1,0 +1,53 @@
+#+TITLE: declared-sessions
+#+OPTIONS: toc:nil num:nil
+
+Sessions declared forward, not remembered backward.
+
+Restore-style persistence answers "what was open when I left".  This module
+answers "what should be open": a text file -- Lisp, because the manifest is
+code when you want it and data when you don't -- naming workspaces,
+applications, and placement.
+
+* Using it
+
+Write a manifest, e.g. =~/.config/latticewm/sessions/work.lisp=:
+
+#+begin_src lisp
+(workspace 1
+  (split :horizontal
+         (app "emacsclient -c")
+         (app "foot")))
+
+(workspace 2
+  (app "firefox" :as "firefox"))
+#+end_src
+
+Then =M-x load-session= (with completion), or
+=(declared-sessions:load-session "work")= from Lisp or your init file.
+
+The skeleton is built FIRST as empty panes; each application is spawned and,
+when its window arrives, placed by a pending =:path= rule into the pane that
+was waiting for it.  A window that never starts leaves an honest empty pane;
+a workspace that already holds windows is left alone entirely -- the
+declaration describes what should be open, not permission to drop what IS.
+
+=app= takes the command to spawn; the app-id it waits for is guessed as the
+command's first word, overridden per application with =(app "cmd" :as
+"real-app-id")=.  The command string splits on spaces; no shell.
+
+* Symmetry with the command journal
+
+The journal records sessions backward; the manifest declares them forward.
+A journal can be hand-edited into a manifest; a replay produces a
+journal-shaped log.  Both speak the same currency: commands and their
+arguments.
+
+* What is verified vs compositor-only
+
+Verified headlessly: skeleton construction before any window exists,
+per-arrival paths that distinguish siblings in a split, one consumption per
+arriving window, unknown applications consuming nothing, occupied
+workspaces left alone, unreadable and truncated manifests declining without
+half-loading, and missing sessions declining.  Spawning real applications
+and watching windows arrive is compositor territory; the arrival mechanism
+itself rides the shipped =:window-rule= hook, verified by its own suite.

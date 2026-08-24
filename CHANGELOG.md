@@ -28,6 +28,11 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/declared-sessions/` — sessions from a Lisp manifest:
+  `(workspace 1 (split :horizontal (app "foot") ...))` builds the skeleton
+  as empty panes, spawns each application, and places arrivals by pending
+  `:path` rules. Occupied workspaces are left alone; unreadable manifests
+  decline rather than half-load.
 - `extensions/floating-only/` — "no layout" as a policy: one class overriding
   `should-float-p` to an unconditional yes, so placement never enters the
   tree. Enable rides change-class over whatever policy is installed and

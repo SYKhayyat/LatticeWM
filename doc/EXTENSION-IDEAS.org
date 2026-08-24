@@ -262,6 +262,12 @@ so arranging existing windows is mostly done. Spawning applications into
 declared places is the new part, and it wants care around windows that fail
 to start or arrive late.
 
+STATUS: BUILT, as =extensions/declared-sessions/=.  The manifest is Lisp,
+read with the keyword package so bare tags just work; the skeleton is built
+first as empty panes and each application is spawned into the pane waiting
+for it — arrivals ride the =:window-rule= hook, one consumption per window.
+A workspace that already holds windows is never dropped for a declaration.
+
 * Floating-only — a policy, not a hack
 
 Some users do not want tiling at all: every window floats, drag-and-resize
