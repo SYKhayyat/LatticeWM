@@ -41,6 +41,14 @@ Each becomes its own ASDF system beside =lattice=, loadable with
 
 * Buffers — windows you call by name
 
+STATUS: BUILT, as =extensions/buffers/=.  The registry is a hash on the world;
+switching recalls through the minimize/restore doors so the displaced window
+remembers its spot; the three open questions below were settled as follows --
+focus after a recall is configurable and defaults to following; undo ignores
+switches by default (the switch resets undo's baseline instead of recording)
+with an opt-in to record; two panes never show one window, because a live
+Wayland window has exactly one rectangle, so an on-screen buffer jumps instead.
+
 The problem: today a window lives in exactly one pane. To look at it
 somewhere else you move it there. If it is minimized it is gone until
 restored to the same place.

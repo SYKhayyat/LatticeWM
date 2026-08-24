@@ -1,0 +1,42 @@
+#+TITLE: buffers
+#+OPTIONS: toc:nil num:nil
+
+Windows you call by name; panes are views.
+
+A window can carry a name in a session-wide registry.  A pane asks for a
+buffer by name and shows it there -- wherever the window was -- and the
+window that was in the pane goes to the scratchpad remembering that spot, so
+switching back returns both to where each was.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "buffers")
+#+end_src
+
+Commands: =name-buffer= names the focused window (deriving a unique name from
+its app-id if you give none), =switch-to-buffer= shows a named buffer in the
+current pane with completion over every name, and =buffers= echoes what is
+named.  Everything works live over the control socket too.
+
+* The three decisions, as settled
+
+- *Focus after a recall is configurable.* =*focus-follows-recall*=, default
+  T: the cursor follows the recalled window.  NIL leaves the cursor alone,
+  for scripts that rearrange panes while you are working elsewhere.
+- *Undo ignores switches by default.* =*undo-includes-swaps*=, default NIL: a
+  switch is a change of view rather than an edit to walk back through, so it
+  resets undo's baseline instead of landing on the ring.  T records every
+  switch like any other tree change.
+- *Two panes never show one window.* A live Wayland window has exactly one
+  rectangle; cloning is not representable.  Asking for a buffer already on
+  screen jumps to the pane showing it.  Seeing one document twice is a job
+  for the application opening two windows, not for the window manager.
+
+* What it is made of
+
+A registry on the world (=:buffers/registry=) plus a name prop per window; a
+=:window-closed= hook keeps the registry honest; two verbs and two argument
+types.  No policy methods, no core edits: loadable without being enabled is
+trivially true, because nothing happens until you name something.

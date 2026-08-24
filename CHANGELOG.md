@@ -28,6 +28,18 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/buffers/` — named windows and pane-as-view switching:
+  `name-buffer`, `switch-to-buffer` with completion, and `buffers`. Focus
+  after a recall is configurable (`*focus-follows-recall*`, default follow);
+  whether a switch records an undo step is configurable
+  (`*undo-includes-swaps*`, default no); a buffer already on screen is jumped
+  to rather than cloned, because a live Wayland window has one rectangle.
+- `extensions/master-stack/`, `extensions/scrolling-columns/`,
+  `extensions/window-rules/` — the remaining promoted examples, each with its
+  own tests in the build. master-stack composes as a policy mixin over
+  whatever is installed instead of replacing it; scrolling-columns answers
+  the persistence half of the container protocol for its scroll state;
+  window-rules matches predicates and honours `:workspace`.
 - `extensions/` — promoted extension modules beside the lattice, starting with
   `focus-follows-mouse`: focus follows the pointer except over a floating
   window, and keyboard motion warps the pointer along. Loaded with
