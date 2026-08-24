@@ -1,0 +1,52 @@
+#+TITLE: layout-persistence
+#+OPTIONS: toc:nil num:nil
+
+Named workspace layouts, matched across restarts by application id.
+
+The core already saves the session's layout automatically and reads it back
+at startup -- but it keys windows by river identifier, which survives a
+window manager restart and not a reboot.  This module adds what outlives
+identifiers: layouts with names, saved as files, matched by app-id.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "layout-persistence")
+(layout-persistence:enable)
+#+end_src
+
+Then arrange a workspace the way you want it and =M-x save-layout=; bring it
+back any time, on any workspace, with =M-x restore-layout= (both prompt with
+completion over saved names).  From Lisp:
+=(layout-persistence:save-layout "writing")= and
+=(layout-persistence:restore-layout "writing")=.
+
+Restore strictness is =*mode*=:
+
+- =:best-effort= (the default) places every application that is live and
+  leaves an empty pane keeping the place of one that is not.
+- =:exact= refuses the whole restore unless every named application is live
+  and nothing unexpected sits in the workspace -- half a remembered layout
+  is worse than none, if you say so.
+
+Either way, a window that was on the workspace but is not named by the
+arrangement comes back as an extra pane after it.  Losing a window is not
+any mode's price.
+
+With =*save-on-change*= (the default), every layout change also asks for a
+session save immediately rather than waiting for the periodic pass; the core
+coalesces those asks, so a burst of changes costs one write.
+
+Layouts are kept under =layouts/= in the first data directory that has one;
+=delete-layout= removes one, =all-layout-names= lists them sorted.
+
+* What is verified vs compositor-only
+
+Verified headlessly: the file carries app-ids rather than identifiers,
+restore matches fresh windows across a simulated reboot, best-effort keeps
+an empty pane for the absent, exact refuses and changes nothing, unnamed
+windows survive as extra panes, delete/list behave, and enable/disable wire
+and unwire the save-on-change hook.  What cannot be verified here is only
+the feel of it: the relayout and cursor repair run through the same shipped
+surfaces every other command uses.

@@ -135,6 +135,12 @@ absent from the restored tree. Worth deciding early whether restore is best
 effort (missing windows skipped) or exact (refuses when the tree cannot be
 honored).
 
+STATUS: BUILT, as =extensions/layout-persistence/=, in both modes —
+=:best-effort= keeps an empty pane where an application has not come back,
+=:exact= refuses whole rather than half-honour — and keyed by application id
+rather than river identifier, so a named layout means the same thing after a
+reboot.  Save-on-change rides the core's own coalesced save.
+
 * Ideas that need Common Lisp to make sense
 
 These are the ones the reminder "this is CL" is pointing at — features that

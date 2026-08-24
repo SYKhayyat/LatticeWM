@@ -28,6 +28,13 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/layout-persistence/` — named workspace layouts saved as files
+  and keyed by application id, so an arrangement means the same thing after
+  a reboot. Restore is `:best-effort` (empty panes for absent applications)
+  or `:exact` (refuses whole rather than half-honour); windows on the
+  workspace that the arrangement does not name come back as extra panes.
+  With `*save-on-change*`, every layout change asks the core for a save,
+  coalesced as always.
 - `extensions/idle-lock/` — idle timers on the new `:user-activity` hook:
   `(seconds . command)` steps fire once per quiet period (dim, lock, DPMS
   off), resume commands undo them when presence returns, and a locked
