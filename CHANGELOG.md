@@ -28,6 +28,10 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/session-dump/` — the session as a dumped image: dump-session
+  saves the layout, writes the whole running image (extensions, options,
+  defined rules and macros) and exits; resuming that core re-runs startup
+  against the fresh river without re-reading init.lisp.
 - `extensions/nested-cells/` — named, supervised child compositors: open a
   cell running any nested-capable compositor (river proven daily), close it
   to stop the child, re-open to replace without orphaning. Placement of the

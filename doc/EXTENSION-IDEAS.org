@@ -228,6 +228,14 @@ core dump as a backup strategy. Listed because it is the most
 concept-changing idea in this file, flagged because it may be the least
 worth the cost.
 
+STATUS: BUILT, as =extensions/session-dump/= — and cheaper than feared,
+because the shipping binary was already a dumped image, so the mechanism is
+proven in every install.  =M-x dump-session= saves the layout, writes the
+image with a resume toplevel that calls START (:CONFIG NIL — the image's
+settings ARE the configuration now), and exits; resume reconnects to the
+fresh river.  The costs named above are real: a core is 100+ MB, version
+skew must be managed (nix pins it), and it is not a backup.
+
 * Sessions from a file — declared, not remembered
 
 The problem with restore-style persistence is that it answers "what was

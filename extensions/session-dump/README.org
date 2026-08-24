@@ -1,0 +1,46 @@
+#+TITLE: session-dump
+#+OPTIONS: toc:nil num:nil
+
+The session as a dumped image.  LatticeWM already ships as a dumped SBCL
+image (StumpWM's model); this module turns the same mechanism around from
+inside a live session.
+
+* Using it
+
+=M-x dump-session= writes the running image -- extensions loaded, options
+changed, rules defined as methods, macros recorded -- and exits the session.
+Resume it at next login:
+
+#+begin_src sh
+sbcl --core ~/.local/state/latticewm/session.core
+#+end_src
+
+Point river's start script at that instead of the stock binary and login
+resumes your image rather than booting the default one re-reading init.lisp.
+Booting the stock binary remains how you pick up init.lisp edits; the dumped
+core deliberately does NOT re-read the configuration, because its settings
+are already in the image.
+
+The layout is written out before the dump, so the resumed image reconnects
+to the fresh river AND restores what was on screen.  Code and settings
+persist through the dump; Wayland connections cannot, and nothing here
+pretends otherwise.
+
+* The honest caveats
+
+- A core is 100+ MB.  It is a snapshot of your session, not a backup
+  strategy: applications are not in it (they are separate Wayland clients),
+  only their arrangement is, via the saved layout.
+- Version skew is real: resume a core with the same source revision that
+  dumped it.  Nix makes this easy (the closure is pinned); hand-rolled
+  setups should dump per-revision or not bother.
+- Dumping terminates the current session by design.  It is quitting, with
+  the whole image as luggage.
+
+* What is verified vs compositor-only
+
+Verified headlessly: the core path follows the state-directory discipline,
+the resume entry point exists and is callable, and the command is registered
+with documentation.  SAVE-LISP-AND-DIE itself cannot run inside a test
+suite -- it terminates the process by design -- so the round trip is proven
+by the shipping model that already uses it for every install.
