@@ -1213,9 +1213,17 @@ three commits and said so afterwards.  DESIGN is a record of what was decided
 before the code existed, and half its value is showing where that was wrong.")
 
 (defparameter *historical-documents*
-  '("doc/DESIGN.org" "doc/PLAN.org" "doc/ASSESSMENT.org" "doc/SPIKE-WEEK0.org")
+  '("doc/DESIGN.org" "doc/PLAN.org" "doc/ASSESSMENT.org" "doc/SPIKE-WEEK0.org"
+    "doc/EXTENSION-IDEAS.org")
   "Dated records.  Correct when written, frozen on purpose, not to be edited
 into agreement with whatever shipped.
+
+EXTENSION-IDEAS.org is here by its own declaration: \"a backlog, not a plan.
+Nothing here is promised.\"  Its sentences describe extensions that do not
+exist yet, so checking them against the image could only fail twice -- once
+when the idea is unbuilt and once more when it ships and the backlog line
+goes stale.  Ideas leave that file by being built or refuted in writing,
+and either way the file stays a record of what was argued beforehand.
 
 PLAN.org is the awkward one: its front half is a live specification and its
 back half is a session log, and the two want opposite treatment.  It is
