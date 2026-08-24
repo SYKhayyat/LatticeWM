@@ -28,6 +28,10 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/nested-cells/` — named, supervised child compositors: open a
+  cell running any nested-capable compositor (river proven daily), close it
+  to stop the child, re-open to replace without orphaning. Placement of the
+  cell's window composes with the rule modules.
 - `extensions/declared-sessions/` — sessions from a Lisp manifest:
   `(workspace 1 (split :horizontal (app "foot") ...))` builds the skeleton
   as empty panes, spawns each application, and places arrivals by pending

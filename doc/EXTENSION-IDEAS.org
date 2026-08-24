@@ -321,6 +321,13 @@ the CL tier not because Lisp is required but because the container surface —
 a new kind of cell content — is exactly the mechanism gate 2 documents for
 adding kinds of things panes can hold.
 
+STATUS: BUILT (supervision half), as =extensions/nested-cells/= — named
+cells with a supervised child inheriting the session's =WAYLAND_DISPLAY=,
+close/reopen semantics, and a sweep that forgets children who died on their
+own.  Placement of the cell's window composes with the rule modules rather
+than duplicating them; whether a given inner compositor nests cleanly is
+that compositor's business.
+
 * Ordering
 
 If forced to sequence: promote the four examples first (housekeeping, and it

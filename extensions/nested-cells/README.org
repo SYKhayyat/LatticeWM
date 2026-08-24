@@ -1,0 +1,49 @@
+#+TITLE: nested-cells
+#+OPTIONS: toc:nil num:nil
+
+Other compositors as panes.  LatticeWM runs nested inside river every day
+of development; any compositor that nests is just another Wayland client.
+This module makes that a managed object: a NAMED CELL with a supervised
+child process.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "nested-cells")
+(nested-cells:enable)
+
+;; From Lisp:
+(nested-cells:open-cell "river" '("river"))
+
+;; Or M-x open-cell-command, typing the command line; the cell is named
+;; after the command's first word.
+#+end_src
+
+The child inherits this session's =WAYLAND_DISPLAY= -- exactly how the
+development loop has always nested river -- so its windows arrive here as
+ordinary clients and ordinary placement decides where they go.  To send one
+to a particular pane or workspace, compose with the modules that own those
+questions (transient-rules, window-rules); this module deliberately does
+not duplicate placement.
+
+=close-cell= terminates the child (TERM, then KILL) and forgets the cell;
+re-opening an existing name stops the old child first.  A child that dies
+on its own is reported by the supervision timer and then forgotten --
+death is not an error, compositors crash -- but it is worth saying out
+loud once.  =disable= stops supervising without killing anything: it is
+not permission to destroy somebody's running desktop.
+
+Stated costs of the whole idea: keybinding collisions (the outer grabs
+Super first, so the inner needs a different modifier), double compositing,
+and focus routing across two keyboard grabbers at one boundary.  Those are
+properties of nesting itself, not of this module.
+
+* What is verified vs compositor-only
+
+Verified headlessly: children actually start and run detached, aliveness
+tracking works, close terminates the child, re-open replaces rather than
+orphaning, the supervision sweep forgets dead cells while keeping live
+ones, and names come out sorted.  Whether a given inner compositor nests
+cleanly is that compositor's business -- river is proven daily; test
+anything else before promising it a cell.
