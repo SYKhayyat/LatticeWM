@@ -1,0 +1,36 @@
+#+TITLE: window-rules
+#+OPTIONS: toc:nil num:nil
+
+Window rules where a match may be any predicate of the window, plus
+:WORKSPACE placement.
+
+The built-in =*window-rules*= table matches on app-id and title strings and
+covers most of what a declarative list can express.  This module is the front
+for the rest: the match may also be a /function of the window/, so a rule can
+look at anything about it -- preferred size, tags, whatever -- and consult
+anything else on the machine while deciding.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "window-rules")
+(window-rules:enable)
+
+;; Most specific first; the first match wins.
+(setf window-rules:*rules*
+      (list (cons "pavucontrol" '(:float t))
+            (cons (lambda (win)            ; small fixed-size dialogs float
+                    (multiple-value-bind (w h) (window-preferred-size win)
+                      (and w h (< (* w h) (* 400 300)))))
+                  '(:float t))
+            (cons "thunderbird" '(:workspace 2 :focus nil))))
+#+end_src
+
+Overrides: =:float=, =:workspace=, =:focus=.  An unmatched window is placed
+exactly as the shipped policy would place it, so the module composes with
+whatever rules you already have in the built-in table rather than shadowing
+them.  A workspace rule grows the workspace list if needed and puts the cursor
+back afterwards unless the rule says =:focus t=.
+
+=disable= stops the table being consulted without touching it.
