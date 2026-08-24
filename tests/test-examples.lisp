@@ -57,12 +57,24 @@
           (p:all-options)))
 
 (defun restore-methods (census)
-  "Remove every method that was not there when CENSUS was taken."
-  (dolist (generic (method-census))
-    (let ((was (cdr (assoc (car generic) census :test #'eq))))
-      (dolist (method (cdr generic))
-        (unless (member method was :test #'eq)
-          (remove-method (car generic) method))))))
+  "Put every generic back the way CENSUS found it.
+
+Removing what the example added is not enough: a DEFMETHOD whose qualifiers and
+specializers match a method that already exists REPLACES that method rather
+than joining it, so an example can silently evict something that was loaded
+before it -- and taking the example's copy back off afterwards leaves the
+generic one method short, with nothing anywhere saying so. Whatever the census
+recorded and can no longer find goes back on; whatever it does not recognise
+comes off."
+  (dolist (row census)
+    (let ((generic (car row)))
+      (dolist (method (cdr row))
+        (unless (member method (sb-mop:generic-function-methods generic)
+                        :test #'eq)
+          (add-method generic method)))
+      (dolist (method (sb-mop:generic-function-methods generic))
+        (unless (member method (cdr row) :test #'eq)
+          (remove-method generic method))))))
 
 (defun restore-options (census)
   (dolist (row census)

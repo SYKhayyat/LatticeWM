@@ -101,6 +101,11 @@ table, entries consumed on first match. One hook (~:manage~-adjacent) plus a
 prompt verb ("next matching window floats"). Small, and it closes a real
 expressiveness gap river's own protocol leaves open.
 
+STATUS: BUILT, as =extensions/transient-rules/=.  The queue is consulted by
+a PRIMARY method on =window-rule-for= — primary, not another ~:around~,
+because two methods with identical qualifiers and specializers replace
+rather than compose, and window-rules already owns an ~:around~ there.
+
 * Idle and lock — a native session policy
 
 hypridle-equivalent behavior using the hook surface: dim after N minutes,

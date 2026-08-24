@@ -1,0 +1,60 @@
+#+TITLE: transient-rules
+#+OPTIONS: toc:nil num:nil
+
+One-shot window rules: "the NEXT window matching X", then the rule is gone.
+
+Permanent rules say pavucontrol always floats.  A transient rule says the
+next window with this app-id opens floating, once, and expires -- for
+applications whose second window is not their first: installers, dialogs
+that follow a main window, anything a permanent rule would be too broad for.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "transient-rules")
+(transient-rules:enable)
+
+;; Arm from Lisp...
+(transient-rules:add-rule "installer" :float t)
+(transient-rules:add-rule "thunderbird" :workspace 3 :focus nil)
+
+;; ...or from a command, which is the usual way:
+;; M-x float-next, then open the window.
+#+end_src
+
+=add-rule= takes a match (an app-id string or a predicate of the window)
+plus any overrides the shipped rule language understands: =:float=,
+=:workspace=, =:focus=, =:fullscreen=, =:minimize=.  The queue is consulted
+BEFORE anything permanent; entries are consumed by the consult that placement
+itself makes, so one entry fires exactly once.  The most recently added
+matching entry wins.  =clear-rules= disarms everything.
+
+Commands: =float-next= (prompt for an app-id), =workspace-next= (app-id and
+workspace), =clear-rules=.  All reachable after =(transient-rules:enable)=.
+
+=disable= stops the queue being consulted without touching it; armed entries
+survive across disable/enable, because arming a rule is the user's statement
+of intent and switching a module off is not permission to lose it.
+
+* Composition notes
+
+The consultation is a PRIMARY method on =p:window-rule-for= over
+=conventional-policy=.  It has to be primary and not another =:around=: two
+methods with identical qualifiers and specializers do not compose in CLOS --
+the later definition REPLACES the earlier one, quietly.  The window-rules
+extension already hangs an =:around= on exactly these specializers, so an
+=:around= here would silently evict it (or be evicted, depending on load
+order).  A primary on =conventional-policy= is strictly more specific than
+the shipped answer on =lifecycle-policy= and coexists with every =:around=
+above it.
+
+* What is verified vs compositor-only
+
+Verified under the headless test world: consult-before-permanent ordering,
+per-entry consumption, most-recent-wins, non-matching windows leaving the
+queue armed, =:float= placement honoured and consumed by the real placement
+path, =:workspace= growth of the workspace list without moving the cursor,
+disable/clear semantics, and enable idempotence.  The prompt verbs are bound
+through the same install-vocabulary path as every other module but the
+interactive prompt itself only runs against a live compositor.

@@ -28,6 +28,12 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/transient-rules/` — one-shot window rules: arm
+  "the next window matching X" with `add-rule` or the `float-next` /
+  `workspace-next` commands; the entry is consumed by the placement it
+  causes and never fires twice. The consultation is a primary method on
+  `window-rule-for`, because a second `:around` on identical specializers
+  replaces rather than composes — see the module README.
 - `extensions/buffers/` — named windows and pane-as-view switching:
   `name-buffer`, `switch-to-buffer` with completion, and `buffers`. Focus
   after a recall is configurable (`*focus-follows-recall*`, default follow);
