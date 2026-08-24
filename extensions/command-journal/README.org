@@ -1,0 +1,47 @@
+#+TITLE: command-journal
+#+OPTIONS: toc:nil num:nil
+
+Every state-changing command, recorded and replayable.
+
+Every user action -- keys, socket forms, SLIME -- routes through one command
+path, so recording is interception at a single choke point.  The journal is
+storage discipline over it.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "command-journal")
+(command-journal:enable)
+#+end_src
+
+Then =M-x start-journal=, do things, =M-x stop-journal=.  Replay now with
+=M-x replay-journal=, or =save-journal-as= and replay into a future session:
+
+#+begin_src lisp
+(command-journal:load-journal "yesterday")
+(command-journal:replay-journal)
+#+end_src
+
+Journals are plain lists of =(command . arguments)= forms under
+=journals/= in the first data directory that has one -- readable, editable,
+diffable, which is how you answer "what did I change since it worked".
+
+* What gets recorded
+
+Commands run while recording is on, as you asked for them.  Deliberately
+looked straight through: the journal's own verbs (replaying a recording is
+not part of what the recording did), =undo= and =redo= (a journal replays
+actions, not retractions of actions), and =repeat= (what =.= repeated was
+already journaled under its own name).
+
+An entry whose command fails on replay is reported and skipped: a journal is
+a list of intentions, and the world they meet has moved on.
+
+* What is verified vs compositor-only
+
+Verified headlessly: capture through the real wrapper chain, arming matters,
+exclusions, stop-without-forgetting, ordered replay through RUN-COMMAND with
+failure tolerance, save/load roundtrip across sessions, refusal of unreadable
+files.  Replaying against a live compositor exercises only commands you
+already have; nothing here knows how to drive a prompt.

@@ -193,6 +193,11 @@ and settings exactly; diff two journals to answer "what did I change since
 it worked"; ship a journal as a bug report. The capture points all exist;
 the journal is storage discipline over them.
 
+STATUS: BUILT, as =extensions/command-journal/= — one wrapper on the one
+command path, entries as plain =(command . arguments)= lists saved beside the
+layouts.  Replay goes through RUN-COMMAND so every other extension's wrapper
+sees it; undo, redo and repeat are looked straight through.
+
 ** Keyboard macros
 
 Wrap command dispatch: start/stop recording, replay, name. Because every

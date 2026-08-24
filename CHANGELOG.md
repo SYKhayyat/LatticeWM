@@ -28,6 +28,11 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/command-journal/` — record every command run while recording
+  is on, as plain `(command . arguments)` forms; save journals to files,
+  load them into any session, and replay through the ordinary command path
+  with per-entry failure tolerance. Undo/redo/repeat and the journal's own
+  verbs are excluded.
 - `extensions/window-restarts/` — when a window exits unexpectedly (a close
   you did not just ask for), a `broken-window` condition is signalled and
   the echo area offers the menu: retry respawns the application, undo walks
