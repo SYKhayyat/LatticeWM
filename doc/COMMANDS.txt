@@ -447,6 +447,12 @@ LatticeWM commands.
   
   The child is detached and its output goes nowhere, so a program that writes to
   stderr cannot fill a pipe nobody is reading and block.
+  
+  When *SPAWN-DIRECTORY* is bound, the child starts there.  The directory is
+  changed and put back around RUN-PROGRAM because neither it nor anything under
+  it takes a working directory; the window manager is single-threaded where
+  commands run, so the window in which another thread could observe the moved
+  directory does not exist.
 
 (split &optional axis (side after))
   Split the focused pane, leaving an *empty* pane beside it.
