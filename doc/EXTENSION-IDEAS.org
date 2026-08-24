@@ -120,6 +120,11 @@ behaves correctly under it. What is missing is the timer side and a config
 surface for the thresholds. Replaces an external daemon for this session and
 exercises hooks nobody has used for anything timing-shaped yet.
 
+STATUS: BUILT, as =extensions/idle-lock/=, on the =:user-activity= hook the
+runtime grew for it.  Thresholds are a list of (seconds . command) steps that
+fire once per quiet period, with resume commands for when presence returns;
+a session already locked stands down rather than fighting its locker.
+
 * Layout persistence — arrangements that survive logout
 
 The core already saves layouts and reads them back. This extension makes

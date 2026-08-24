@@ -28,6 +28,13 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/idle-lock/` — idle timers on the new `:user-activity` hook:
+  `(seconds . command)` steps fire once per quiet period (dim, lock, DPMS
+  off), resume commands undo them when presence returns, and a locked
+  session stands down. `lock-now` on demand.
+- `src/policy/hooks.lisp` — the `:user-activity` hook: fired on every bound
+  key, every key that reaches the window manager at all, and every pointer
+  move; no arguments, cheap by contract.
 - `extensions/projects/` — workspaces bound to directories: define a project,
   switch to it, and everything spawned on its workspace starts in its
   directory. The binding is the workspace label, so nothing owns a workspace

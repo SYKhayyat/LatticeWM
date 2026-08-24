@@ -1,0 +1,52 @@
+#+TITLE: idle-lock
+#+OPTIONS: toc:nil num:nil
+
+Idle timers on the =:user-activity= hook: after N seconds of nothing -- no
+bound key, no pointer move -- run a command; when presence returns, run the
+commands that put things back.  hypridle-equivalent behaviour with no daemon.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "idle-lock")
+(idle-lock:enable)
+
+(setf idle-lock:*idle-steps*
+      '((600  . ("brightnessctl" "--set" "30%"))   ; dim at ten minutes
+        (1200 . ("swaylock" "-f"))                 ; lock at twenty
+        (1500 . ("wlopm" "--off" "*"))))           ; DPMS off at twenty-five
+
+(setf idle-lock:*resume-commands*
+      '(("wlopm" "--on" "*")
+        ("brightnessctl" "--restore")))
+#+end_src
+
+Commands are program-and-arguments lists -- no shell, so no quoting layer.
+Steps fire in ascending order, each exactly once per quiet period; the
+resume commands run only if at least one step actually fired, so waking from
+a quiet period that never dimmed anything does not flash the backlight.
+
+While a locker holds an =ext-session-lock-v1= lock the timer stands down:
+the screen belongs to the locker then, and a locker plus a dimmer is two
+programs fighting over one brightness key.
+
+=M-x lock-now= runs =*lock-command*= on demand.
+
+* What counts as presence
+
+A bound key, an unbound key that reached the window manager at all, or a
+pointer move -- that is the whole of it, delivered by the runtime's
+=:user-activity= hook, which fires with no arguments and promises nothing
+finer.  An application reading its own keystrokes through the compositor's
+keybindings looks identical to one typing into a document; both are presence,
+which is the correct answer for everything this module is for.
+
+* What is verified vs compositor-only
+
+Verified headlessly: threshold respect, fire-once-per-quiet-period across
+many ticks, independent steps firing together, resume only after something
+fired and re-arming afterwards, stand-down while locked, inertness when
+disabled, and enable/disable wiring of the timer and the hook.  The real
+=:user-activity= firings are driven against a live headless river by the
+integration suite.
