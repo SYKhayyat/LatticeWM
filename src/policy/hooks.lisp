@@ -426,3 +426,13 @@ change to learn the state.")
 layout changes, whether we asked for it or the user pressed the xkb toggle.
 NAME is the layout's own name, e.g. \"German\".  For a status bar showing which
 layout is live, which is the one thing a two-layout user needs on screen.")
+
+(defhook :user-activity () "Run whenever the user does something that could
+count as being present: a bound key fires or the pointer moves.
+
+Deliberately coarse and deliberately cheap -- it is not a keystroke stream,
+it carries no arguments, and an unbound key that the window manager never
+sees does not fire it.  For anything that wants to know whether the session
+has gone quiet: idle timers, screen dimming and locking, presence indicators.
+Run from the seat's event path, so anything expensive belongs behind a timer
+that reads a timestamp, not here.")

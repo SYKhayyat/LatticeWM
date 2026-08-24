@@ -696,11 +696,11 @@ latticewm --hooks    # every hook, what it is called with, and when it fires
 thirteen of the program's seventeen, missing ~:layout-restored~ — which is the
 hook the lattice itself uses — and the three that report input devices, with
 "~(all-hooks)~ is authoritative" underneath, which is a true sentence that only
-helps somebody already at a REPL. There are eighteen, and the list is generated
+helps somebody already at a REPL. There are nineteen, and the list is generated
 from the running image now, like the other two surfaces, and installed beside
 them as =HOOKS.txt=.
 
-#+CLAIM: (= 18 (length (all-hooks)))
+#+CLAIM: (= 19 (length (all-hooks)))
 #+CLAIM: (every (lambda (row) (stringp (second row))) (all-hooks))
 
 Two are worth naming here. ~:capture-changed~ is the only fact in the list your

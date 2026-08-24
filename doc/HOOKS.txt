@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM hooks
-18 hooks.  Generated from the running image.
+19 hooks.  Generated from the running image.
 ============================================================================
 
 A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,
@@ -235,6 +235,20 @@ which for the one thing a startup hook reliably does, acquiring something,
 means leaking it on the one path where that is least recoverable.  The call is
 inside the UNWIND-PROTECT now, so the pairing is structural rather than
 remembered.
+
+
+----------------------------------------------------------------------------
+:USER-ACTIVITY ()
+----------------------------------------------------------------------------
+Run whenever the user does something that could
+count as being present: a bound key fires or the pointer moves.
+
+Deliberately coarse and deliberately cheap -- it is not a keystroke stream,
+it carries no arguments, and an unbound key that the window manager never
+sees does not fire it.  For anything that wants to know whether the session
+has gone quiet: idle timers, screen dimming and locking, presence indicators.
+Run from the seat's event path, so anything expensive belongs behind a timer
+that reads a timestamp, not here.
 
 
 ----------------------------------------------------------------------------

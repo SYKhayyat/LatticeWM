@@ -2061,6 +2061,18 @@ are what a person means by the arrangement, and both are copy-stable."
                 "and QUIT ends the session"))
 
        ;; ------------------------------------------------------------------
+       ;; :USER-ACTIVITY is fired from the seat's own event path, and a
+       ;; headless backend has no pointer to move and no key to press -- the
+       ;; same shape as :POINTER-OP, which this file already drives directly
+       ;; for exactly that reason.  What is under test is the contract: no
+       ;; arguments, one firing per call, watchers see what was declared.
+       (section "user activity"
+         (let ((saw (wm (lambda () (run-hooks :user-activity) t))))
+           (check saw "the hook runs against a live session")
+           (check (fired :user-activity)
+                  "and the watcher on it was handed nothing, as declared")))
+
+       ;; ------------------------------------------------------------------
        ;; LAST, because it reads the whole run.  Every declared hook has had a
        ;; recorder on it since before START was called; this asks what each one
        ;; was handed and when, which is the half of a hook's contract that no

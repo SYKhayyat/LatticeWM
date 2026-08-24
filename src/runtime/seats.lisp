@@ -34,6 +34,12 @@
                  ;; The spec is explicit that a pointer move alone must not
                  ;; start a manage sequence, so focus-follows-mouse cannot be
                  ;; driven from here without asking for one.
+                 ;;
+                 ;; A pointer move is also the plainest evidence of a user
+                 ;; being present, and :user-activity exists so that idle
+                 ;; timers do not have to guess.  It runs before the focus
+                 ;; work because it must run even when focus does not change.
+                 (run-hooks :user-activity)
                  (when p:*focus-follows-mouse* (pointer-moved seat)))
                 ;; River tells us which window the pointer is over, including
                 ;; the borders it draws and the input regions of decoration
@@ -174,7 +180,8 @@ window-management state."
                           (declare (ignore arguments))
                           (with-abandon
                             (case event
-                              (:pressed (when (handle-key key) (after-command)))
+                              (:pressed (run-hooks :user-activity)
+                                        (when (handle-key key) (after-command)))
                               (t nil))))))
                     (wl:wl-proxy-hooks binding))
               (best-effort "enable binding" (w:binding-enable binding)))))))
@@ -321,6 +328,8 @@ state — which is the sort of `works on the second try' that costs an afternoon
 
 (defun handle-captured-key (keysym modifiers)
   "A key arrived because we had asked for it.  Decide what it meant."
+  ;; A key the user typed is evidence of presence, bound or not.
+  (run-hooks :user-activity)
   (let ((character (when (<= #x20 keysym #x7e)
                      (let ((base (code-char keysym)))
                        ;; River sends the *unshifted* keysym with Shift in the
