@@ -1,0 +1,39 @@
+#+TITLE: scrolling-columns
+#+OPTIONS: toc:nil num:nil
+
+niri and PaperWM, as a container kind: an unbounded horizontal strip of
+columns, of which a window's worth is on screen at a time, scrolling sideways
+as you move.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "scrolling-columns")
+#+end_src
+
+then, live or at startup:
+
+#+begin_src lisp
+(scrolling-columns:scrolling)      ; current workspace becomes a strip
+(scrolling-columns:scrolling 3)    ; three columns visible at once
+#+end_src
+
+Every window that was in the workspace becomes a column, in the order it was
+laid out -- nothing is lost, nothing is reordered.  =strip-width= changes the
+visible count afterwards; it is the strip's zoom.  Moving left or right past
+the edge of the viewport scrolls by one rather than refusing, which is what
+makes the strip unbounded instead of merely wide.
+
+* What it is made of
+
+=strip= subclasses =sequential-container=, which supplies addressing,
+insertion and removal; the module answers how the strip is drawn, how motion
+crosses it, and where you land arriving at it.
+
+Unlike the example it was promoted from, it also answers the state half of the
+container protocol: =copy-node-slots=, =node-signature=, =serialize-node= and
+=deserialize-node= carry the scroll position and visible count through undo,
+through snapshots, and through save/restore of the session.  EXTENDING.org's
+container-surface table names what skipping those costs; this module does not
+skip them.
