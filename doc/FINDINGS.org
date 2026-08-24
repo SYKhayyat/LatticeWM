@@ -1308,3 +1308,32 @@ It does not pin the two numbers in this table, and the reason is worth saying:
 they are facts about *files*, and a claim may only ask the running program,
 because a claim that can read the source could be satisfied by the source. Gate
 3 counts them on every build instead. Believe =make gates= over this table.
+
+* The extension era, measured against the claim it started with
+:PROPERTIES:
+:CUSTOM_ID: extensions-era
+:END:
+
+The extension work began under an architectural bet: that the interesting
+features were policies and hooks, not forks of the layout engine, and that a
+module could be a directory beside the lattice rather than a change to it.
+Twelve modules later the bet has been tested from both ends, and the two ends
+are worth naming together.
+
+The strongest proof is =extensions/floating-only/=: "no layout at all" — the
+position most hostile to everything the tree exists for — written as one class
+overriding one method (=should-float-p= answers yes), with zero core changes.
+If the least-tiling configuration a user could want had required reaching past
+the published surface, the claim "the layout model is genuinely replaceable"
+would have been refuted by its own test case. It was not; placement already
+knew what to do with a window that should float (never enter the tree), which
+is what "placement is a policy decision" was claiming all along.
+
+The sharpest lesson is the opposite kind of result: CLOS composes methods by
+specializer, and *two methods with identical qualifiers and specializers do
+not compose — the later definition replaces the earlier one, quietly*. Three
+modules wanted into =window-rule-for=. The fixes are structural, not local: a
+census-and-restore harness that notices replacement rather than only addition,
+a primary-method convention documented where the trap bit, and eventually a
+list-composing hook (=:window-rule=) as the sanctioned way for any number of
+modules to answer the same question without agreeing on specializers.

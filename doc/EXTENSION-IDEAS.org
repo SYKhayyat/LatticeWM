@@ -276,6 +276,11 @@ few methods answering "where does a new window go" (nowhere; center it) and
 "what does resize mean" (the pointer's answer), and the conventional tree is
 never entered.
 
+STATUS: BUILT, as =extensions/floating-only/=, and the proof went through:
+one class, ONE overridden method (=should-float-p= answers yes), zero core
+changes.  Placement already knew what to do with a window that should float.
+See FINDINGS.org's extensions-era section.
+
 If it turns out floating-only cannot be written without reaching past the
 published surface, that refutes part of the architecture claim and belongs
 in FINDINGS.org either way.

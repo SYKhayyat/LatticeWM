@@ -1,0 +1,36 @@
+#+TITLE: floating-only
+#+OPTIONS: toc:nil num:nil
+
+A policy, not a hack: no layout at all.  Every window floats,
+drag-and-resize everywhere, nothing snaps -- expressed as a policy rather
+than a pile of =:float= rules bolted onto a tiler that still wants to tile.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "floating-only")
+(floating-only:enable)
+#+end_src
+
+The whole policy is one method: =should-float-p= answered with an
+unconditional yes.  Placement already knows what to do with a floated
+window -- never enter the tree -- so the conventional layout is simply never
+reached.  No windows tile, the workspace tree stays empty, and resize means
+the pointer's answer, because floats resize by pointer everywhere already.
+
+=enable= uses change-class on the installed policy rather than replacing it,
+so anything the current instance carries (a master-stack mixin) stays
+carried; the previous class is remembered and =disable= puts back exactly
+that class.
+
+An explicit rule can still tile a window on purpose: a declarative
+=(:float nil)= wins over the guess, which is precisely the exception hatch
+the architecture promises.
+
+* What this proves
+
+If floating-only could not be written without reaching past the published
+surface, part of the architecture claim would be refuted.  It was written
+with one class, one method, and zero core changes -- see FINDINGS.org's
+architecture section; the claim holds.

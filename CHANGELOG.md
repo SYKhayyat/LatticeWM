@@ -28,6 +28,10 @@ be able to do before anyone else can depend on it.
 
 ### Added
 
+- `extensions/floating-only/` — "no layout" as a policy: one class overriding
+  `should-float-p` to an unconditional yes, so placement never enters the
+  tree. Enable rides change-class over whatever policy is installed and
+  disable restores exactly that class.
 - `extensions/rules-as-methods/` — window rules as eql-specialized methods
   on a `rule-overrides` generic: listable, removable, live-redefinable,
   ordered by CLOS. Bridges into placement through the new `:window-rule`
