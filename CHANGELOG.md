@@ -26,6 +26,10 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- `extensions/tabs/` — tab groups inside a pane: TAB-HERE, TAB-ADD (pull a
+  live window in), TAB-NEXT/TAB-PREV with wraparound, UNTAB to pop the
+  visible window back beside the group. Hidden members are simply unplaced;
+  switching is not an undo step by default.
 - `extensions/declared-sessions/` — sessions from a Lisp manifest:
   `(workspace 1 (split :horizontal (app "foot") ...))` builds the skeleton
   as empty panes, spawns each application, and places arrivals by pending

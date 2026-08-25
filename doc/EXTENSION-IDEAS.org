@@ -360,3 +360,16 @@ closures, re-arming itself after each pull-mark so multi-pick works.  Snap-
 back swaps the saved original nodes back by reference.  Letter priority and
 physical geometry are separate options, so either can change without the
 other caring.
+
+* Tabs — many windows in one pane
+
+A tab group is a pane holding several windows and showing one at a time,
+cycled like editor tabs. Works in any split or cell because a group is a
+leaf wearing a list; hidden members are simply unplaced, which the runtime
+already renders as invisible.
+
+STATUS: BUILT, as =extensions/tabs/=.  Switching is not an undo step by
+default (the buffers ruling again); closed windows are pruned from groups
+with survivor promotion; untab pops the visible window back beside the
+group, wrapping the workspace in a split when the group IS the workspace.
+Groups are session state — the saved-layout format does not carry them yet.

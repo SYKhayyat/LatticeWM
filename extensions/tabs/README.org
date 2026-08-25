@@ -1,0 +1,53 @@
+#+TITLE: tabs
+#+OPTIONS: toc:nil num:nil
+
+A tab group is a pane that holds several windows and shows one at a time --
+browser/editor tabs for the tree.  Works in any split, and inside lattice
+cells, because a group is just a leaf wearing a list.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "tabs")
+(tabs:enable)
+(define-key *keymap* "Super+t" '("tab-add"))
+(define-key *keymap* "Super+Left" '("tab-prev"))
+(define-key *keymap* "Super+Right" '("tab-next"))
+(define-key *keymap* "Super+d" '("untab"))
+#+end_src
+
+=TAB-HERE= makes the focused pane a group (its window becomes the first
+tab).  =TAB-ADD= prompts for a live window by application id and pulls it
+in -- out of another workspace, out of the scratchpad -- and shows it.
+=TAB-NEXT= / =TAB-PREV= cycle with wraparound.  =UNTAB= pops the visible
+window back into the tree as an ordinary pane beside the group.
+
+Hidden members are simply unplaced, which the runtime already renders as
+invisible; no scratchpad is involved, so your minimize/restore flow never
+meets a hidden tab.
+
+Switching tabs is not an undo step by default (*undo-includes-tab-switches*
+= NIL): a change of view is not a change of arrangement, the same ruling
+the buffers module made.  Set it T if you want every switch walkable.
+
+Closed windows are pruned from their groups automatically; if the visible
+one dies, the next survivor is promoted, and a group of one dissolves --
+one window does not need tabs.
+
+* Honest caveats
+
+Groups are session state on the leaf nodes: the saved-layout format does
+not carry them yet, so a dumped/restored session reopens the windows but
+not their tabbing.  A group follows its pane through tree edits around it,
+and dies with the pane.
+
+* What is verified vs compositor-only
+
+Verified headlessly: group creation and idempotence, pulling tiled windows
+from other workspaces (their old spot empties cleanly), cycle with
+wraparound in both directions, pruning on close including promotion of a
+survivor and dissolution at one, untab beside a split AND the
+whole-workspace wrap case, and switch-not-an-undo-step.  The visual
+tab-line (if you want badges like kbd-overview's) is compositor work this
+module deliberately does not do.
