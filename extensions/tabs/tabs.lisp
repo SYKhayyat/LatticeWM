@@ -64,8 +64,13 @@ not need tabs."
 (defun note-window-closed (window)
   "Prune WINDOW from every group in the world.
 
+WINDOW itself is not consulted: the walk visits every group anyway, and a
+dead window in any of them is dead all the same.  The parameter stays --
+the hook passes it, and the signature documents what the event offers.
+
 The named function behind :window-closed, because ADD-HOOK keeps what it is
 given and a fresh closure per call would accumulate rather than replace."
+  (declare (ignore window))
   (labels ((walk (node)
              (when (and (typep node 'c:leaf) (group-of node))
                (prune-group node))
@@ -182,9 +187,9 @@ SEND-TO-WORKSPACE would have moved it, minus the workspace."
 
 (defun cycle-tab (leaf step)
   "Move STEP places through LEAF's group, wrapping."
-  (let* ((group (prune-group leaf))
-         (group (group-of leaf))
-         (n (length group)))
+  (let* ((n (progn (prune-group leaf)
+                   (length (group-of leaf))))
+         (group (group-of leaf)))
     (when (> n 1)
       (let* ((visible (position (visible-window leaf) group))
              (next (mod (+ (or visible 0) step) n)))
