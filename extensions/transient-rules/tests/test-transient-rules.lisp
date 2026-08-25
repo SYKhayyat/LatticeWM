@@ -40,13 +40,13 @@ WINDOW-RULE-FOR first -- asking first would BE the consumption."
     (let ((first (make-instance 'c:window :app-id "installer")))
       (p:on-window-open p:*policy* r:*world* first)
       (is-true (c:window-floating-p first))
-      (is (= 0 (length tr::*queue*)) "consumed by the first placement")))
+      (is (= 0 (length tr::*queue*)) "consumed by the first placement"))
     (let ((second (make-instance 'c:window :app-id "installer")))
       (is-false (p:window-rule-for p:*policy* second)
                 "the entry was consumed")
       (p:on-window-open p:*policy* r:*world* second)
       (is-false (c:window-floating-p second)
-                "and the second window tiles like anything else")))
+                "and the second window tiles like anything else"))))
 
 (test non-matching-windows-leave-the-queue-alone
   "An entry waits for ITS window; other windows pass through and the rule

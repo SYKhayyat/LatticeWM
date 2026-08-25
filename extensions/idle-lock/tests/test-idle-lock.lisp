@@ -22,12 +22,18 @@
     (explain! results)
     (values (results-status results) (length results))))
 
+(defvar *marker-tag* ""
+  "Unique per WITH-IDLE invocation, so a marker left by one run cannot be
+mistaken for a fresh one by the next -- which is exactly the failure a
+repeat-run gauntlet exists to catch.")
+
 (defmacro with-idle (&body body)
   `(let ((il::*enabled* nil)
          (il::*idle-steps* '())
          (il::*resume-commands* '())
          (il::*last-activity* (get-universal-time))
          (il::*fired-steps* '())
+         (*marker-tag* (write-to-string (random (expt 2 30))))
          (r:*world* (c:make-world))
          (p:*policy* (make-instance 'p:conventional-policy)))
      ,@body))
@@ -38,18 +44,25 @@
 
 (defun touch-marker (name)
   "A command that leaves a file behind, so a fired step is observable
-without pretending the test can see processes."
-  (list "sh" "-c" (format nil "touch ~a" (namestring
-                                          (merge-pathnames
-                                           name (uiop:temporary-directory))))))
+without pretending the test can see processes.  The file name carries the
+invocation tag -- the same one WAIT-FOR-MARKER checks -- so a marker left
+by an earlier run cannot masquerade as this run's."
+  (list "sh" "-c"
+        (format nil "touch ~a"
+                (namestring
+                 (merge-pathnames
+                  (concatenate 'string *marker-tag* "-" name)
+                  (uiop:temporary-directory))))))
 
 (defun marker-exists (name)
-  (probe-file (merge-pathnames name (uiop:temporary-directory))))
+  (probe-file (merge-pathnames (concatenate 'string *marker-tag* "-" name)
+                               (uiop:temporary-directory))))
 
 (defun wait-for-marker (name)
   "Steps go through SPAWN, which detaches; give the child its moment
 rather than pretending a write was synchronous."
-  (let ((file (merge-pathnames name (uiop:temporary-directory))))
+  (let ((file (merge-pathnames (concatenate 'string *marker-tag* "-" name)
+                               (uiop:temporary-directory))))
     (loop repeat 50
           unless (probe-file file) do (sleep 0.1)
           finally (return (probe-file file)))))
