@@ -73,13 +73,86 @@ override per app with (:as \"real-id\") where they differ."
        (symbolp (first form))
        (string= (symbol-name (first form)) "WORKSPACE")))
 
+;;; ===================================================== any kind, one DSL
+;;;
+;;; A manifest child may be :SPLIT, :APP -- or ANY serialized node form the
+;;; image understands: (:LEAF ...), (:STACK ...), the lattice's
+;;; (:LATTICE/GRID :CELLS ((0 0 ...) ...) ...), a kind from an extension not
+;;; loaded yet.  The core's deserializer already knows every kind and degrades
+;;; gracefully for the ones it does not; this module's job is only to keep its
+;;; own two pieces of sugar working ANYWHERE inside such a form, which is what
+;;; the placeholder walk below does.
+
+(defvar *placeholder-prefix* "␟app:"
+  "Marks leaves that stand in for a declared :APP while the structure is
+being built.  Chosen to be something no human label would start with.")
+
+(defun tagged-p (form name)
+  "Is FORM a serialized node tagged NAME (case-insensitive)?"
+  (and (consp form)
+       (symbolp (first form))
+       (string= (symbol-name (first form)) name)))
+
+(defun substitute-apps (form path)
+  "Replace every (:APP ...) anywhere inside serialized FORM with an empty
+leaf, registering each arrival at the PATH it will occupy.
+
+Recurses through :CHILDREN lists (the sequential-container shape) and
+:CELLS triples (the grid shape), so the sugar works at every depth of every
+kind.  Anything else passes through untouched -- kinds this module has
+never heard of keep their own internals their own."
+  (cond
+    ((atom form) form)
+    ((tagged-p form "APP")
+     (destructuring-bind (command &key ((:as declared-id)))
+         (rest form)
+       (let ((id (or declared-id (guess-app-id command))))
+         (push (cons id (copy-list path)) *pending-arrivals*)
+         (r:logmsg :info "session: waiting for ~a at ~s" id path)))
+     `(:leaf))
+    ((tagged-p form "SPLIT")
+     (destructuring-bind (axis . children) (rest form)
+       `(:split ,axis
+                ,@(let ((out '()) (i 0))
+                    (dolist (child children (nreverse out))
+                      (push (substitute-apps child (append path (list i)))
+                            out)
+                      (incf i))))))
+    (t
+     ;; A serialized form of some real kind: rebuild its plist, walking
+     ;; only the two places children can hide.
+     (let ((new-plist
+            (loop for (key value) on (rest form) by #'cddr
+                  append (list key
+                               (cond
+                                 ((eq key :children)
+                                  (let ((out '()) (i 0))
+                                    (dolist (child value (nreverse out))
+                                      (push (substitute-apps
+                                             child (append path (list i)))
+                                            out)
+                                      (incf i))))
+                                 ((eq key :cells)
+                                  (let ((out '()))
+                                    (dolist (triple value (nreverse out))
+                                      (destructuring-bind (x y child) triple
+                                        (push (list x y
+                                                    (substitute-apps
+                                                     child
+                                                     (append path (list x y))))
+                                              out)))))
+                                 (t value))))))
+       `(,(first form) ,@new-plist)))))
+
 (defun build-node (spec &optional (path '(0)))
   "Turn a manifest form into tree structure, registering arrivals.
 
-:SPLIT becomes a split; :APP becomes an empty leaf -- the pane that waits --
-plus a pending arrival so the window knows where to go when it shows up.
-PATH is the absolute path of SPEC in the workspace, which is what the
-arrival rule will name."
+:SPLIT and :APP are this module's sugar.  Any OTHER keyword-tagged form is
+passed verbatim to the core's DESERIALIZE-NODE -- which knows every node
+kind this image has (leaf, split, stack, the lattice's grids with their
+cells, viewport and column widths, kinds from extensions) and degrades
+gracefully for kinds it does not.  Declarative Lisp reaches as far as the
+container protocol does, because they are the same mechanism."
   (case (first spec)
     (:split
      (destructuring-bind (axis . children) (rest spec)
@@ -96,7 +169,11 @@ arrival rule will name."
          (push (cons id (copy-list path)) *pending-arrivals*)
          (r:logmsg :info "session: waiting for ~a at ~s" id path)
          leaf)))
-    (t (error "session: cannot interpret ~s" spec))))
+    (t
+     ;; Everything else: a serialized form of some real kind.
+     (r:deserialize-node (first spec)
+                         (rest (substitute-apps spec path))
+                         (make-hash-table :test #'equal)))))
 
 (defun fill-arrived-window (window)
   "Retire the arrival a window has just filled.

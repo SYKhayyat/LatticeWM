@@ -35,6 +35,28 @@ declaration describes what should be open, not permission to drop what IS.
 command's first word, overridden per application with =(app "cmd" :as
 "real-app-id")=.  The command string splits on spaces; no shell.
 
+* Declarative everything
+
+=SPLIT= and =APP= are sugar.  Any OTHER keyword-tagged form in a manifest is
+handed verbatim to the core's deserializer -- which knows every node kind
+this image has: leaves, splits, stacks, the lattice's grids with their
+cells, viewport and column widths, and kinds from extensions not written
+yet.  So this works:
+
+#+begin_src lisp
+(workspace 1
+  (:lattice/grid
+   :cells ((0 0 (:leaf :label "notes"))
+           (1 0 (:split :horizontal
+                        (:app "foot")
+                        (:leaf))))))
+#+end_src
+
+=:app= sugar composes at every depth inside such forms (children lists and
+grid cells both), registering arrivals at their real paths.  An unknown tag
+degrades to keeping its windows rather than erroring -- the same forward
+compatibility the saved-layout format has always had.
+
 * Symmetry with the command journal
 
 The journal records sessions backward; the manifest declares them forward.
@@ -48,6 +70,9 @@ Verified headlessly: skeleton construction before any window exists,
 per-arrival paths that distinguish siblings in a split, one consumption per
 arriving window, unknown applications consuming nothing, occupied
 workspaces left alone, unreadable and truncated manifests declining without
-half-loading, and missing sessions declining.  Spawning real applications
-and watching windows arrive is compositor territory; the arrival mechanism
-itself rides the shipped =:window-rule= hook, verified by its own suite.
+half-loading, missing sessions declining, serialized forms of arbitrary
+kinds passing through to the core deserializer (proven with a private kind
+declared in the test), =:app= sugar composing at depth inside such forms,
+and labels surviving manifests.  Spawning real applications and watching
+windows arrive is compositor territory; the arrival mechanism itself rides
+the shipped =:window-rule= hook, verified by its own suite.

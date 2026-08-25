@@ -174,3 +174,71 @@ catches it."
   "Asking for a session nobody wrote says so and changes nothing."
   (with-sessions
     (is-false (ds:load-session "never-written"))))
+
+;;; ====================================================== any kind, one DSL
+;;;
+;;; A manifest may embed ANY serialized node form -- the core's
+;;; deserializer knows every kind this image has and degrades gracefully
+;;; for kinds it does not.  To prove it without depending on the lattice,
+;;; declare a private container kind exactly the way an extension would:
+;;; one DESERIALIZE-NODE method is the whole contract.
+
+(defmethod r:deserialize-node ((tag (eql :ds-tests/box)) plist index)
+  (declare (ignore index))
+  (let ((children (mapcar (lambda (child-form)
+                            (r:deserialize-node (first child-form)
+                                                (rest child-form)
+                                                (make-hash-table
+                                                 :test #'equal)))
+                          (getf plist :children))))
+    (cond ((rest children)
+           (c:make-split :horizontal children nil))
+          (children (first children))
+          (t (c:make-leaf)))))
+
+(defun box-children-of (node)
+  "The child forms of a :DS-TESTS/BOX manifest form."
+  (getf (rest node) :children))
+
+(test serialized-forms-pass-through-to-the-deserializer
+  "A keyword-tagged form this module has no sugar for is handed to the
+core's deserializer verbatim -- which is how every node kind this image has
+(or ever gains) becomes declarable without this module growing a case for
+it."
+  (with-sessions
+    (write-session
+     "boxes"
+     "(workspace 1
+        (:ds-tests/box :children ((:leaf) (:leaf))))")
+    (ds:load-session "boxes")
+    (is (= 2 (length (c:node-leaves
+                      (c:child-at (c:world-workspaces r:*world*) 0))))
+        "the custom kind built two panes")
+    ;; And the spawn seam saw nothing: a box declares no applications.
+    (is (= 0 (length *spawned*)))))
+
+(test app-sugar-works-inside-serialized-forms
+  "(:APP ...) nested anywhere inside a passthrough form still registers an
+arrival at its real path -- the sugar and the kinds compose."
+  (with-sessions
+    (write-session
+     "boxed-app"
+     "(workspace 1
+        (:ds-tests/box :children ((:app \"foot\")
+                                  (:leaf))))")
+    (ds:load-session "boxed-app")
+    (is (= 1 (length (ds:pending-arrivals))))
+    (is (equal '(("foot" . (0 0))) ds::*pending-arrivals*)
+        "foot waits at the first pane of the box")))
+
+(test labels-survive-in-manifests
+  "A leaf may be declared with a label, the way the serialization format
+already carries them."
+  (with-sessions
+    (write-session
+     "labelled"
+     "(workspace 1 (:leaf :label \"notes\"))")
+    (ds:load-session "labelled")
+    (is (equal "notes"
+               (c:node-label (c:child-at (c:world-workspaces r:*world*) 0)))
+        "the label came back")))

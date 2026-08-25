@@ -26,8 +26,13 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
-### Added
-
+- `extensions/declared-sessions/` — sessions from a Lisp manifest:
+  `(workspace 1 (split :horizontal (app "foot") ...))` builds the skeleton
+  as empty panes, spawns each application, and places arrivals by pending
+  `:path` rules. Occupied workspaces are left alone; unreadable manifests
+  decline rather than half-load. Any serialized node form is also
+  declarable verbatim — lattice grids with cells, labels, kinds from
+  extensions — with `:app` sugar composing at every depth.
 - `extensions/kbd-overview/` — zoom out to a keyboard of windows: the
   session rearranges into QWERTY rows under letter badges; plain letters
   go to their window, shift+letters pull-mark, RET gathers the marked ones
@@ -41,11 +46,6 @@ be able to do before anyone else can depend on it.
   cell running any nested-capable compositor (river proven daily), close it
   to stop the child, re-open to replace without orphaning. Placement of the
   cell's window composes with the rule modules.
-- `extensions/declared-sessions/` — sessions from a Lisp manifest:
-  `(workspace 1 (split :horizontal (app "foot") ...))` builds the skeleton
-  as empty panes, spawns each application, and places arrivals by pending
-  `:path` rules. Occupied workspaces are left alone; unreadable manifests
-  decline rather than half-load.
 - `extensions/floating-only/` — "no layout" as a policy: one class overriding
   `should-float-p` to an unconditional yes, so placement never enters the
   tree. Enable rides change-class over whatever policy is installed and
