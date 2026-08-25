@@ -141,3 +141,82 @@ per-window GO work without any new input plumbing."
       ;; Toggle again: exit.
       (is-false (ko:toggle-kbd-overview))
       (is-false (ko:active-p)))))
+
+(test twenty-seven-windows-the-extras-wait-at-home
+  "More windows than letters: the first twenty-six take the keyboard and
+the rest simply stay home -- their workspaces are untouched by the
+rearrangement, because a window without a letter was never moved.  Nothing
+vanishes; something waits for the next zoom."
+  (with-overview
+    (let ((windows (loop repeat 14 collect (make-window "left")))
+          (windows2 (loop repeat 14 collect (make-window "right"))))
+      ;; 28 windows across two workspaces: 14 and 14, each workspace a
+      ;; horizontal split of its own leaves.
+      (let ((stack (c:world-workspaces r:*world*)))
+        (loop while (< (c:container-count stack) 3)
+              do (c:insert-child stack
+                                 (c:container-count stack)
+                                 (c:make-leaf)))
+        (c:remove-child stack 1)
+        (c:insert-child stack 1
+                        (c:make-split :horizontal
+                                      (mapcar #'c:make-leaf windows)
+                                      nil))
+        (c:remove-child stack 2)
+        (c:insert-child stack 2
+                        (c:make-split :horizontal
+                                      (mapcar #'c:make-leaf windows2)
+                                      nil)))
+      (setf ko::*windows-function*
+            (lambda () (append windows windows2)))
+      (ko:enter-overview)
+      ;; The keyboard holds exactly 26 panes -- every letter dealt.
+      (is (= 26 (length (c:node-leaves
+                         (c:child-at (c:world-workspaces r:*world*) 0)))))
+      (is (= 26 (length (ko:assignments))))
+      ;; Snap back: all 28 come home.
+      (ko:exit-overview)
+      (is (= 14 (length (c:node-windows (c:child-at
+                                         (c:world-workspaces r:*world*) 1)))))
+      (is (= 14 (length (c:node-windows (c:child-at
+                                         (c:world-workspaces r:*world*) 2))))))))
+
+(test repeated-zoom-cycles-are-stable
+  "Ten zoom-out/snap-back cycles in a row leave the world exactly as it
+started -- the mode must be a round trip, not a ratchet."
+  (with-overview
+    (let ((w1 (make-window "editor"))
+          (stack (c:world-workspaces r:*world*)))
+      (put-window-at 1 w1)
+      (setf ko::*windows-function* (lambda () (list w1)))
+      (dotimes (i 10)
+        (ko:enter-overview)
+        (is (= 1 (length (c:node-windows (c:child-at stack 0))))
+            "cycle ~d: window on the keyboard" i)
+        (ko:exit-overview)
+        (is (= 1 (length (c:node-windows (c:child-at stack 1))))
+            "cycle ~d: window home again" i))
+      (is (= 2 (c:container-count stack)) "workspace count never drifted")
+      (is-false ko::*saved-workspaces* "no saved trees leaked"))))
+
+(test marking-then-cancelling-moves-nothing
+  "Mark three windows, then cancel: marks are forgotten and the snap-back
+is the same perfect no-op it always is."
+  (with-overview
+    (let ((w1 (make-window "one"))
+          (w2 (make-window "two"))
+          (w3 (make-window "three")))
+      (put-window-at 1 w1)
+      (setf ko::*windows-function* (lambda () (list w3 w2 w1)))
+      (ko:enter-overview)
+      (ko::toggle-marked w1)
+      (ko::toggle-marked w2)
+      (ko::toggle-marked w3)
+      (is (= 3 (length ko::*marked*)) "three marked")
+      (ko:exit-overview)              ; the ESC path, minus the submap
+      (is (= 0 (length ko::*marked*)) "marks forgotten on exit")
+      ;; And every window is back where it started.
+      (is (member w1 (c:node-windows
+                      (c:child-at (c:world-workspaces r:*world*) 1))))
+      (is-false (member w2 (c:node-windows
+                            (c:child-at (c:world-workspaces r:*world*) 1)))))))
