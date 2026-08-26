@@ -140,6 +140,46 @@ gate whose output reorders itself per machine is a gate nobody can diff."
                 (directory (merge-pathnames "examples/*.lisp" *root*)))
         #'string<))
 
+(defun forget-our-fasls ()
+  "Delete every fasl the systems in *SYSTEMS* could load from.
+
+GATE 1 CAN ONLY JUDGE A FILE THAT COMPILED.  ASDF compiles a source only when
+its fasl is stale beside it, so on a warm cache the gate's silence about a
+file means \"did not look\", not \"clean\" -- and OURS-P above exists because
+the gate once ran almost exclusively against cached fasls and missed real
+warnings in files that did not happen to recompile.
+
+THE CACHE RESTORE IS WHAT MAKES THAT SILENCE NONDETERMINISTIC.  tabs shipped
+two unused variables in exactly this blind spot on 2026-08-25 -- the third
+module to do it, by its own commit message's count.  CI's `check' and `plain'
+jobs keep a fasl cache keyed on the hash of every source and fall back to
+RESTORE-KEYS on a miss; the restored archive comes back stamped after the
+just-checked-out sources, ASDF believes it, and the one file whose warning
+matters is the one file that does not recompile.  Same tree: cold builds
+fail, warm ones pass.  The floor job drops the cache outright for this
+reason and says so in the workflow; a developer's machine hides the same way
+whenever a build runs against fasls older than they look.
+
+FORGETTING RATHER THAN CLEARING.  CLEAR-SYSTEM drops the component from this
+image and the next load consults the disk again, where the stale fasl still
+stands.  Deleting the output is the one act ASDF cannot second-guess: a
+missing fasl compiles, in dependency order, exactly as a cold build would.
+Dependencies are deliberately untouched -- their warnings are not a gate
+this project can pass, and recompiling them on every push is the cost the
+cache exists to avoid -- so the price is one pass over first-party sources,
+a few seconds, paid where the verdict is issued and nowhere else."
+  (dolist (system *systems*)
+    (labels ((walk (component)
+               (typecase component
+                 (asdf:cl-source-file
+                  (ignore-errors
+                   (delete-file (asdf:output-file
+                                 (asdf:make-operation 'asdf:compile-op)
+                                 component))))
+                 (asdf:component
+                  (map nil #'walk (asdf:component-children component))))))
+      (walk (asdf:find-system system)))))
+
 (defun record (condition)
   (cond
     ((typep condition 'sb-kernel:redefinition-warning) (incf *redefinitions*))
@@ -168,6 +208,9 @@ gate whose output reorders itself per machine is a gate nobody can diff."
     (handler-bind ((warning (lambda (c) (record c) (muffle-warning c))))
       (handler-case
           (progn
+            ;; Judge this tree, not whichever files a warm cache left
+            ;; uncompiled.  See FORGET-OUR-FASLS.
+            (forget-our-fasls)
             (dolist (system *systems*) (asdf:load-system system))
             ;; After the systems, because these files use their packages.
             (dolist (path (append *loose-files* (example-files)))
