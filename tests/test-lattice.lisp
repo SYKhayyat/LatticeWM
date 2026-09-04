@@ -349,6 +349,172 @@ always keeps")
     (is (equal "b" (at grid (list (l:cell 0 0)))))
     (is (equal "a" (at grid (list (l:cell 2 1)))))))
 
+;;; ============================= the cell verbs: split, combine, swap
+;;;
+;;; Issue #2's concrete minimum, as first-class commands: the coordinate-space
+;;; analogues of the pane verbs SPLIT, close and SWAP.  They change the *tree*,
+;;; so each is an ordinary tree undo step — the plane ring (issue #26) never
+;;; sees them.
+
+(test split-cell-creates-an-empty-cell-beside-and-steps-into-it
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:split-cell :horizontal)
+      (is (equal '(:leaf nil) (t*::shape (c:child-at grid (l:cell 1 0))))
+          "a new empty cell appeared to the right")
+      (is (equal (list (l:cell 1 0)) (c:world-cursor world))
+          "and the cursor stepped into it, so the next window lands there")
+      (l:split-cell :vertical)
+      (is-true (c:child-at grid (l:cell 1 1))
+               "and splitting again made one above that")
+      (is (equal (list (l:cell 1 1)) (c:world-cursor world))))))
+
+(test split-cell-refuses-an-occupied-neighbour-and-enters-an-empty-one
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:split-cell :horizontal)
+      (is (equal (list (l:cell 0 0)) (c:world-cursor world))
+          "an occupied neighbour refuses, and the cursor does not move")
+      (is (equal "b" (at grid (list (l:cell 1 0))))
+          "and nothing changed")))
+  ;; An existing empty neighbour is the half already made: step into it.
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (c:make-leaf))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:split-cell :horizontal)
+      (is (equal (list (l:cell 1 0)) (c:world-cursor world))
+          "an empty neighbour is entered, not created over"))))
+
+(test combine-cells-absorbs-an-empty-neighbour
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (c:make-leaf))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:combine-cells :right)
+      (is (null (c:child-at grid (l:cell 1 0)))
+          "the empty neighbour simply goes away")
+      (is (equal "a" (at grid (list (l:cell 0 0))))
+          "and the current cell survives intact"))))
+
+(test combine-cells-joins-an-occupied-neighbour-as-a-split
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:combine-cells :right)
+      (is (null (c:child-at grid (l:cell 1 0)))
+          "the neighbour cell is gone")
+      (is (equal '(:h (:leaf "a") (:leaf "b"))
+                 (t*::shape (c:child-at grid (l:cell 0 0))))
+          "its window joined the current cell as a horizontal split, on the
+side the neighbour was on"))))
+
+(test combine-cells-refuses-with-no-neighbour
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:combine-cells :right)
+      (is (equal "a" (at grid (list (l:cell 0 0))))
+          "nothing changes when there is nothing to combine with"))))
+
+(test swap-cell-exchanges-two-cells-contents
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:swap-cell :right)
+      (is (equal "b" (at grid (list (l:cell 0 0))))
+          "the neighbour's window is now here")
+      (is (equal "a" (at grid (list (l:cell 1 0))))
+          "and the focused window went the other way")
+      (is (equal (list (l:cell 1 0)) (c:world-cursor world))
+          "the cursor followed the window, as pane SWAP does"))))
+
+(test swap-cells-swaps-with-a-named-coordinate
+  (let* ((grid (grid-of '(0 0 nil) '(2 1 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 2 1)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:swap-cells 2 1)
+      (is (equal "b" (at grid (list (l:cell 0 0)))))
+      (is (equal "a" (at grid (list (l:cell 2 1))))))))
+
+(test swap-cell-moves-whole-subtrees-not-just-windows
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0))
+          (c:make-split :horizontal (list (leaf "a") (leaf "b")))
+          (c:child-at grid (l:cell 1 0)) (leaf "c"))
+    (setf (c:world-cursor world) (list (l:cell 0 0) 1))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:swap-cell :right)
+      (is (equal '(:h (:leaf "a") (:leaf "b"))
+                 (t*::shape (c:child-at grid (l:cell 1 0))))
+          "the whole split subtree traded places, splits and all")
+      (is (equal "c" (at grid (list (l:cell 0 0))))))))
+
+(test the-cell-verbs-are-tree-steps
+  ;; They change the tree, so they land on the tree ring and not the plane
+  ;; ring — the two-ring split from issue #26, checked for these three.
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (r::note-layout-settled "baseline")
+      (setf (l::plane-baseline) (l:collect-planes grid))
+      (l:swap-cell :right)
+      (r::note-layout-settled "swap")
+      (is (= 1 (length (r::undo-ring)))
+          "a swap is a tree step")
+      (is (zerop (length (l::plane-ring)))
+          "and not a plane step")
+      (p:run-command "undo")
+      (is (equal "a" (at (c:world-root world) (list (l:cell 0 0))))
+          "and undo puts the windows back"))))
+
+(test removing-a-cell-takes-its-size-with-it
+  (let ((grid (grid-of '(0 0 nil) '(1 0 nil))))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (l:cell-scale grid (l:cell 1 0)) 3)
+    (c:remove-child grid (l:cell 1 0))
+    (is (null (c:child-at grid (l:cell 1 0))))
+    (is (= 1 (l:cell-scale grid (l:cell 1 0)))
+        "a removed cell does not leave its size behind, which is what keeps
+REMOVE-CHILD and TIDY-GRID agreeing")))
+
 ;;; ================================ THE INTEROP: workspaces of planes
 
 (test workspaces-of-planes-one-behind-another

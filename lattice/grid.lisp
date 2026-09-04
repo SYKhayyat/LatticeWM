@@ -191,8 +191,11 @@ Automatic shifting would move things you were not touching."
 
 D6 made the lattice infinite, so there is no scarcity to compact *for*, and
 D3's skip motion already exists to cross gaps cheaply.  COMPACT is an explicit
-command for when you want it."
+command for when you want it.  A cell that goes away takes its size with it —
+the scale is part of the cell, so the removal paths agree with TIDY-GRID and
+FORGET-EMPTY-CELL."
   (let ((node (gethash address (grid-cells grid))))
+    (unset-cell-scale grid address)
     (remhash address (grid-cells grid))
     node))
 

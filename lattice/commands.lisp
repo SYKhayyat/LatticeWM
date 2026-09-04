@@ -237,6 +237,122 @@ and the only one that never destroys structure."
                     (- (c:direction-sign direction)) 0)))
         (move-to-cell (+ (cell-x from) dx) (+ (cell-y from) dy) :follow follow)))))
 
+(defun cell-step (address direction)
+  "The address one step from ADDRESS in DIRECTION, on the plane (+Y up)."
+  (cell (+ (cell-x address)
+           (if (c:direction-horizontal-p direction)
+               (c:direction-sign direction) 0))
+        (+ (cell-y address)
+           (if (c:direction-vertical-p direction)
+               (- (c:direction-sign direction)) 0))))
+
+(defun combine-side (direction)
+  "Which side of the current cell the DIRECTION neighbour joins on when it is
+folded into a split: LEFT and UP go before, RIGHT and DOWN after."
+  (if (member direction '(:left :up)) :before :after))
+
+(r:defcommand split-cell (axis)
+  "Subdivide the current cell into two real cells: an empty one beside it.
+
+The coordinate-space analogue of the pane SPLIT.  A pane split stays inside
+one cell; the lattice's answer to 'put a second window next to this one' is a
+second cell.  :HORIZONTAL puts the new empty cell to the right, :VERTICAL
+above it, and the cursor moves into it so the next window you open lands
+there.  An existing *empty* neighbour is treated as the half already made —
+the cursor just steps into it — and an occupied one refuses, because there is
+nothing to subdivide and somebody is already standing there."
+  (with-grid (grid)
+    (let ((here (current-cell)))
+      (when here
+        (let* ((horizontal (eq axis :horizontal))
+               (next (if horizontal
+                         (cell (1+ (cell-x here)) (cell-y here))
+                         (cell (cell-x here) (1+ (cell-y here)))))
+               (occupant (c:child-at grid next)))
+          (cond
+            ((and occupant (not (c:node-empty-p occupant)))
+             (r:notify "already a cell ~a" (if horizontal "to the right" "above")))
+            (t
+             (ensure-cell grid next)
+             (p:jump-cursor (p:current-policy) r:*world*
+                            (cell-path next))
+             next)))))))
+
+(r:defcommand combine-cells (direction)
+  "Merge the current cell with its DIRECTION neighbour into one cell.
+
+The inverse of SPLIT-CELL.  The current cell survives and absorbs the
+neighbour: an empty neighbour simply goes away, and an occupied one joins as
+a split inside the current cell — the same ':join :split' answer MOVE-TO-CELL
+ships for moving onto an occupied cell, and the only one that never destroys
+structure.  Refuses when there is no neighbour cell at all."
+  (with-grid (grid)
+    (let ((here (current-cell)))
+      (when here
+        (let ((other (cell-step here direction))
+              (base (grid-path)))
+          (if (null (c:child-at grid other))
+              (r:notify "no cell to combine with")
+              (let ((other-node (c:child-at grid other)))
+                (cond
+                  ((c:node-empty-p other-node)
+                   (c:remove-child grid other))
+                  (t
+                   (multiple-value-bind (root ignored)
+                       (c:tree-move (c:world-root r:*world*)
+                                    (append base (list other))
+                                    (append base (list here))
+                                    :axis (c:direction-axis direction)
+                                    :side (combine-side direction)
+                                    :join :split)
+                     (declare (ignore ignored))
+                     (setf (c:world-root r:*world*) root))
+                   (c:remove-child grid other)))
+                (p:repair-cursor (p:current-policy) r:*world*
+                                 (append base (list here)))
+                t)))))))
+
+(r:defcommand swap-cell (direction)
+  "Exchange the contents of the current cell and its DIRECTION neighbour.
+
+The coordinate-space analogue of the pane SWAP: two subtrees trade places and
+nothing else moves.  The cursor follows the window.  Refuses when there is no
+neighbour cell to swap with."
+  (with-grid (grid)
+    (let ((here (current-cell)))
+      (when here
+        (let ((other (cell-step here direction))
+              (base (grid-path)))
+          (if (null (c:child-at grid other))
+              (r:notify "no cell to swap with")
+              (multiple-value-bind (root focus)
+                  (c:tree-swap (c:world-root r:*world*)
+                               (append base (list here))
+                               (append base (list other)))
+                (setf (c:world-root r:*world*) root)
+                (p:repair-cursor (p:current-policy) r:*world* focus)
+                t)))))))
+
+(r:defcommand swap-cells (x y)
+  "Exchange the contents of the current cell and the cell at X, Y.
+
+The coordinate version of SWAP-CELL: SWAP-CELL works on the neighbour in a
+direction, this on a named coordinate.  Refuses when there is no cell at X, Y."
+  (with-grid (grid)
+    (let ((here (current-cell))
+          (other (cell x y)))
+      (when here
+        (let ((base (grid-path)))
+          (if (null (c:child-at grid other))
+              (r:notify "no cell at ~a to swap with" (cell-string other))
+              (multiple-value-bind (root focus)
+                  (c:tree-swap (c:world-root r:*world*)
+                               (append base (list here))
+                               (append base (list other)))
+                (setf (c:world-root r:*world*) root)
+                (p:repair-cursor (p:current-policy) r:*world* focus)
+                t)))))))
+
 ;;; ==================================================================
 ;;; SPREADSHEET GEOMETRY — D8 and D12
 ;;; ==================================================================

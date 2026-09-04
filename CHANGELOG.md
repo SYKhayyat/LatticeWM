@@ -38,6 +38,11 @@ be able to do before anyone else can depend on it.
   longer carries the plane state, so a zoom is not a tree step and undoing a
   tree change does not drag the camera along with it. The camera is captured
   and put back around every tree restore.
+- `lattice/` cell verbs — coordinate-space analogues of the pane verbs: split
+  a cell to make an empty neighbour beside it, combine (absorb an empty
+  neighbour or join an occupied one as a split), and swap to exchange the
+  focused cell with a neighbour or a named coordinate.  The whole subtree
+  trades places; each verb is a tree undo step.
 - `extensions/tabs/` — tab groups inside a pane: TAB-HERE, TAB-ADD (pull a
   live window in), TAB-NEXT/TAB-PREV with wraparound, UNTAB to pop the
   visible window back beside the group. Hidden members are simply unplaced;
