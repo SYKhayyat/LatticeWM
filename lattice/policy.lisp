@@ -212,6 +212,24 @@ clause here and a division somewhere else."
                             (if horizontal *cell-width* *cell-height*)
                             *cell-gap*)))))
 
+(defun scale-rect (rect scale)
+  "RECT scaled about its centre by SCALE, to whole pixels.
+
+The per-cell escape hatch of DESIGN D8, in one place: a cell's rectangle is its
+track's rectangle composed with its own scale.  Scaling about the centre rather
+than a corner is what keeps the address meaningful — the cell still *names* the
+same place on the plane, because the centre does not move, and only the size is
+allowed to disagree with the track grid."
+  (if (= 1 scale)
+      (c:copy-rect rect)
+      (let* ((w (c:rect-w rect))
+             (h (c:rect-h rect))
+             (nw (max 1 (round (* w scale))))
+             (nh (max 1 (round (* h scale)))))
+        (c:make-rect (+ (c:rect-x rect) (floor (- w nw) 2))
+                     (+ (c:rect-y rect) (floor (- h nh) 2))
+                     nw nh))))
+
 (defun cell-rects (policy grid rect)
   "Rectangles for every visible cell, as an alist of (ADDRESS . RECT).
 
@@ -239,13 +257,16 @@ nothing is ever dropped."
                        ;; +Y is up, so the *last* band on screen is the
                        ;; *lowest* row number.  This is the inversion.
                        for band = (nth (- rows 1 row) bands)
+                       for address = (cell (+ ox col) (+ oy row))
                        for box = (and column band
                                       (c:make-rect (c:rect-x column)
                                                    (c:rect-y band)
                                                    (c:rect-w column)
                                                    (c:rect-h band)))
-                       when (and box (c:rect-intersect box rect))
-                         collect (cons (cell (+ ox col) (+ oy row)) box)))))
+                       for placed = (and box
+                                         (scale-rect box (cell-scale grid address)))
+                       when (and placed (c:rect-intersect placed rect))
+                         collect (cons address placed)))))
 
 (defun fixed-tracks (rect axis weights size gap)
   "One track per weight along AXIS, each WEIGHT * SIZE pixels, from RECT's edge.

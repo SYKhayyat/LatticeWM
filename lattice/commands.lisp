@@ -266,8 +266,33 @@ integer coordinates describe anything real."
         (setf (row-height grid (cell-y address))
               (+ (row-height grid (cell-y address)) amount))))))
 
+(r:defcommand resize-cell (&optional (amount 1/10))
+  "Make the current cell bigger by AMOUNT on both axes, and nothing else.
+
+D8's escape hatch, as a verb: a column width still spans every row and a row
+height every column, but this cell may deviate from its own track box.  The box
+scales about its centre, so the cell still names the same place on the plane —
+only its size disagrees with the track grid.  That is the one layout the
+spreadsheet cannot express, a cell wider than its same-column neighbours."
+  (with-grid (grid)
+    (let ((address (current-cell)))
+      (when address
+        (warn-about-pan-resize grid)
+        (setf (cell-scale grid address)
+              (+ (cell-scale grid address) amount))))))
+
+(r:defcommand reset-cell-size ()
+  "Put the current cell back at its track size: scale 1, on both axes.
+
+The inverse of RESIZE-CELL, for undoing one cell without running
+EQUALIZE-CELLS and flattening every column and row you had set."
+  (with-grid (grid)
+    (let ((address (current-cell)))
+      (when address
+        (unset-cell-scale grid address)))))
+
 (defun warn-about-pan-resize (grid)
-  "Say, once, what the first column resize costs under :FIT zoom.
+  "Say, once, what the first resize costs under :FIT zoom.
 
 PLAN.org's Delta 3 is right that :FIT makes a column's rendered width depend
 on which columns are beside it, so panning across a *non-uniform* lattice
@@ -279,16 +304,17 @@ incur."
              (not *warned-about-pan-resize*))
     (setf *warned-about-pan-resize* t)
     (r:logmsg :info "~
-This is the first column or row you have resized.  Under :FIT zoom, a~%~
+This is the first column, row or cell you have resized.  Under :FIT zoom, a~%~
 column's width now depends on which other columns are beside it, so panning~%~
 will resize the windows on screen.  If that turns out to be intolerable:~%~
   (setf lattice:*zoom-mode* :fixed)")))
 
 (r:defcommand equalize-cells ()
-  "Give every column and row an equal share again."
+  "Give every column and row an equal share again, and every cell scale 1."
   (with-grid (grid)
     (clrhash (grid-col-widths grid))
-    (clrhash (grid-row-heights grid))))
+    (clrhash (grid-row-heights grid))
+    (clrhash (grid-cell-scales grid))))
 
 ;;; ==================================================================
 ;;; HOUSEKEEPING

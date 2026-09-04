@@ -1430,6 +1430,15 @@ coordinates describe anything real, and with it the entire spatial-memory argume
 that justifies the lattice over a continuous plane. Spreadsheet geometry keeps every
 address exactly where the user left it no matter what has been resized.
 
+*Escape hatch (added with RESIZE-CELL): a cell may deviate from its own track box.*
+A column width still belongs to the column and spans every row, and a row height to
+the row and every column — but a single cell can scale its own box about its centre
+(issue #31's "one unusual cell" layout, which the spreadsheet said was impossible by
+construction). The ruling that makes the escape hatch safe is that it moves *size*
+and never *position*: the box scales about the track centre, so the address still
+names the same place on the plane, and nothing shifts to the right or up. Only size
+is allowed to disagree with the grid.
+
 *** D9 — Cells contain recursive split trees (Emacs-style)
 
 Flagged here because Shaul identifies it as critical *from the user's perspective*, not

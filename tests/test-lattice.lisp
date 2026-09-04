@@ -757,6 +757,210 @@ is exactly when to switch *ZOOM-MODE* to :FIXED"))))
       (is-true (l:map-mode-p grid rect)
                "and a genuinely tiny :FIXED cell still gets the map"))))
 
+;;; ================================================== per-cell sizing
+
+(test a-cell-can-be-wider-than-its-same-column-neighbours
+  ;; D8's escape hatch, in the exact shape the issue names: in a uniform 2x2
+  ;; plane every track box is 400x300, and scaling (0,0) by three makes it
+  ;; 1200x900 while its same-column and same-row neighbours keep their track
+  ;; sizes.  That is the layout the spreadsheet says is impossible by
+  ;; construction.
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (l:*cell-gap* 0)
+         (l:*zoom-mode* :fit))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 2
+          (l:viewport-rows (l:grid-viewport grid)) 2)
+    (dolist (address (list (l:cell 0 0) (l:cell 1 0) (l:cell 0 1) (l:cell 1 1)))
+      (setf (c:child-at grid address) (leaf (l:cell-string address))))
+    (setf (l:cell-scale grid (l:cell 0 0)) 3)
+    (let* ((rects (l:cell-rects policy grid (c:make-rect 0 0 800 600)))
+           (scaled (cdr (assoc (l:cell 0 0) rects :test #'equal)))
+           (above (cdr (assoc (l:cell 0 1) rects :test #'equal)))
+           (right (cdr (assoc (l:cell 1 0) rects :test #'equal))))
+      (is (= 1200 (c:rect-w scaled)) "the cell is three track-widths wide")
+      (is (= 900 (c:rect-h scaled)) "and three track-heights tall")
+      (is (= 400 (c:rect-w above))
+          "its same-column neighbour kept its track width")
+      (is (= 300 (c:rect-h above)) "and its track height")
+      (is (= 400 (c:rect-w right))
+          "its same-row neighbour kept its track width")
+      (is (= -400 (c:rect-x scaled))
+          "the box scaled about the track centre, which is what keeps the
+address meaningful: centre was at 200, and 200 - 1200/2 is -400")
+      (is (= 0 (c:rect-y scaled)) "and 450 - 900/2 is 0")
+      (multiple-value-bind (cx cy) (c:rect-center scaled)
+        (is (= 200 cx) "the scaled centre is the track centre")
+        (is (= 450 cy) "on both axes")))))
+
+(test a-cell-scale-is-its-own-fact-and-uniform-p-knows-it
+  ;; The escape hatch is a *fourth* table, not a rewrite of the first two:
+  ;; columns and rows can stay uniform while one cell deviates.  UNIFORM-P has
+  ;; to see the deviation, because it is what decides the :FIT pan cost.
+  (let ((grid (grid-of)))
+    (is-true (l:uniform-p grid))
+    (setf (l:cell-scale grid (l:cell 0 0)) 2)
+    (is-false (l:uniform-p grid) "a sized cell is a non-uniform lattice")
+    (is (= 1 (l:col-width grid 0)) "but no column track was touched")
+    (is (= 1 (l:row-height grid 0)) "and no row track was touched")
+    (l:unset-cell-scale grid (l:cell 0 0))
+    (is-true (l:uniform-p grid)
+             "dropping the entry restores uniformity, as EQUALIZE-CELLS does
+for all of them at once")
+    (is (= 1 (l:cell-scale grid (l:cell 0 0)))
+        "and an absent entry reads as scale 1")))
+
+(test resize-cell-grows-only-the-cell-you-are-in
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil) '(0 1 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b")
+          (c:child-at grid (l:cell 0 1)) (leaf "c"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world))
+      (l:resize-cell 1/10)
+      (is (= 11/10 (l:cell-scale grid (l:cell 0 0)))
+          "the cell under the cursor grew")
+      (is (= 1 (l:cell-scale grid (l:cell 1 0)))
+          "its same-row neighbour did not move")
+      (is (= 1 (l:cell-scale grid (l:cell 0 1)))
+          "nor its same-column neighbour")
+      (is (= 1 (l:col-width grid 0)) "and no column track was touched")
+      (l:resize-cell -1/10)
+      (is (= 1 (l:cell-scale grid (l:cell 0 0)))
+          "a second call with the opposite sign undoes it"))
+    ;; RESET-CELL-SIZE is the explicit inverse, for the case where the addition
+    ;; did not land exactly on 1.
+    (setf (l:cell-scale grid (l:cell 1 0)) 3)
+    (setf (c:world-cursor world) (list (l:cell 1 0)))
+    (let ((r:*world* world))
+      (l:reset-cell-size)
+      (is (= 1 (l:cell-scale grid (l:cell 1 0)))
+          "RESET-CELL-SIZE puts a cell back at its track size"))))
+
+(test per-cell-scale-composes-with-fixed-zoom
+  ;; :FIXED tracks are absolute — weight times *CELL-WIDTH* — and the cell
+  ;; scale multiplies the absolute size on top, so RESIZE-CELL means the same
+  ;; thing in both zoom modes, which RESIZE-COLUMN cannot claim.
+  (let* ((policy (pol))
+         (grid (grid-of))
+         (l:*zoom-mode* :fixed)
+         (l:*cell-width* 400)
+         (l:*cell-height* 300)
+         (l:*cell-gap* 0)
+         (rect (c:make-rect 0 0 1200 600)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 2
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (l:cell-scale grid (l:cell 0 0)) 2)
+    (let* ((rects (l:cell-rects policy grid rect))
+           (wide (cdr (assoc (l:cell 0 0) rects :test #'equal)))
+           (right (cdr (assoc (l:cell 1 0) rects :test #'equal))))
+      (is (= 800 (c:rect-w wide)) "a 400px track scaled by two")
+      (is (= 600 (c:rect-h wide)) "and a 300px track scaled by two")
+      (is (= 400 (c:rect-w right)) "the neighbour is untouched")
+      (is (= 300 (c:rect-h right)) "on either axis"))))
+
+(test equalize-cells-clears-cell-scales-with-the-tracks
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (l:col-width grid 0) 3
+          (l:row-height grid 0) 2
+          (l:cell-scale grid (l:cell 0 0)) 5/2)
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world))
+      (l:equalize-cells)
+      (is (zerop (hash-table-count (l:grid-col-widths grid))))
+      (is (zerop (hash-table-count (l:grid-row-heights grid))))
+      (is (zerop (hash-table-count (l:grid-cell-scales grid)))
+          "EQUALIZE-CELLS restores the uniform lattice, cell scales included")
+      (is-true (l:uniform-p grid)))))
+
+(test a-cell-scale-round-trips-through-the-state-file
+  (let ((grid (grid-of))
+        (index (make-hash-table :test #'equal)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (l:cell-scale grid (l:cell 1 0)) 5/2)
+    (let* ((form (r:serialize-node grid))
+           (back (r:read-node form index)))
+      (is (= 5/2 (l:cell-scale back (l:cell 1 0)))
+          "the sized cell came back sized")
+      (is (= 1 (l:cell-scale back (l:cell 0 0)))
+          "and the plain one came back plain")
+      (let ((*package* (find-package :keyword)))
+        (is (equal form (read-from-string (prin1-to-string form)))
+            "the form is readable, because the state file is a file")))))
+
+(test a-copy-carries-the-cell-scales
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 2 -1)) (leaf "b"))
+    (setf (l:cell-scale grid (l:cell 2 -1)) 7/4)
+    (let ((copy (c:copy-node grid)))
+      (is (= 7/4 (l:cell-scale copy (l:cell 2 -1)))
+          "the scale came across the copy")
+      (is (= 1 (l:cell-scale copy (l:cell 0 0)))
+          "and the untouched cell stayed plain"))))
+
+(test a-cell-scale-changes-the-node-signature
+  ;; NODE-SIGNATURE is what makes an operation a distinct undo step, and undo
+  ;; compares the same live root before and after a command.  The signature's
+  ;; own docstring names the five verbs that had to be taught it — zoom, pan,
+  ;; resize-column, resize-row and name-cell — and a sixth, resize-cell, would
+  ;; otherwise change the plane and record nothing.
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (let ((base (c:node-signature grid)))
+      (setf (l:cell-scale grid (l:cell 0 0)) 5/2)
+      (is (not (equal base (c:node-signature grid)))
+          "resizing a cell is invisible to undo")
+      (let ((once (c:node-signature grid)))
+        (setf (l:cell-scale grid (l:cell 0 0)) 5/2)
+        (is (equal once (c:node-signature grid))
+            "and writing the same scale again is the same arrangement"))))
+  ;; Sorted, so hash iteration order never makes two equal states look
+  ;; different.  The realistic variant is a table rebuilt in a different order
+  ;; on the same grid, which is what a snapshot of an unchanged plane is.
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (loop for x in '(5 -3 0 12) do (setf (l:cell-scale grid (l:cell x 0)) 2))
+    (let ((before (c:node-signature grid)))
+      (clrhash (l:grid-cell-scales grid))
+      (loop for x in '(12 0 -3 5) do (setf (l:cell-scale grid (l:cell x 0)) 2))
+      (is (equal before (c:node-signature grid))
+          "the signature sorts the scales, because hash iteration order is not
+specified"))))
+
+(test the-broom-leaves-a-sized-cell-alone
+  ;; FORGET-EMPTY-CELL runs behind the user's back, so it declines to touch a
+  ;; cell somebody did something to — a name is one such act, and a deliberate
+  ;; size is another.  The size is part of the cell, so the refusal has to
+  ;; keep them together.
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (c:make-leaf)
+          (c:child-at grid (l:cell 2 0)) (c:make-leaf))
+    (setf (l:cell-scale grid (l:cell 1 0)) 3)
+    (is-false (l:forget-empty-cell grid (l:cell 1 0))
+              "a sized cell is somebody's, so the broom leaves it")
+    (is (= 3 (l:cell-scale grid (l:cell 1 0)))
+        "and the size survives the refusal")
+    (is-true (l:forget-empty-cell grid (l:cell 2 0))
+             "while the one nobody did anything to goes"))
+  (let ((grid (grid-of)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (c:make-leaf))
+    (setf (l:cell-scale grid (l:cell 1 0)) 3)
+    (is (= 1 (l:tidy-grid grid :keep (list (l:cell 0 0))))
+        "TIDY-GRID, being explicit rather than automatic, takes the empty cell")
+    (is (= 1 (l:cell-scale grid (l:cell 1 0)))
+        "but the scale goes with it rather than lingering on a cell that is
+not there anymore")))
+
 ;;; ======================================================== housekeeping
 
 (test tidy-drops-empty-cells-but-not-the-one-you-are-in

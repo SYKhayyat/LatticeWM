@@ -99,6 +99,16 @@ alignment that makes integer coordinates describe anything real, and with it
 the whole spatial-memory argument for a lattice over a continuous plane.")
    (row-heights :initform (make-hash-table) :accessor grid-row-heights
                 :documentation "Y -> relative height.  As above, per row.")
+   (cell-scales :initform (make-hash-table :test #'equal)
+                :accessor grid-cell-scales
+                :documentation
+                "(X . Y) -> relative size.  DESIGN D8's escape hatch: the
+column/row track is still the default, and a cell that wants to be the one
+unusual cell scales its own track box about its centre.  Positions stay on the
+track grid — nothing shifts, so every address still names the place a person
+put it — and only the *size* deviates.  That is the one layout the spreadsheet
+cannot express: a cell wider than its same-column neighbours, by construction
+rather than by absence of a binding.")
    (names :initform (make-hash-table :test #'equal) :accessor grid-names
           :documentation "NAME -> (X . Y).  DESIGN D1 layer 3: durable names
 are the layer humans actually remember."))
@@ -255,6 +265,7 @@ so nothing here has to know that a cell address is a coordinate."
   (setf (grid-viewport new) (copy-viewport (grid-viewport old))
         (grid-col-widths new) (copy-table (grid-col-widths old))
         (grid-row-heights new) (copy-table (grid-row-heights old))
+        (grid-cell-scales new) (copy-table (grid-cell-scales old))
         (grid-names new) (copy-table (grid-names old))))
 
 (defun sorted-table (table)
@@ -295,6 +306,7 @@ failure, and a ring that fills up with identical trees."
          (viewport-rows (grid-viewport grid))
          (sorted-table (grid-col-widths grid))
          (sorted-table (grid-row-heights grid))
+         (sorted-table (grid-cell-scales grid))
          (sorted-table (grid-names grid))
          (call-next-method)))
 
@@ -319,6 +331,16 @@ of this file is that a human can open it."
                 (maphash (lambda (y h) (push (list y h) out))
                          (grid-row-heights grid))
                 (sort out #'< :key #'first))
+        :cell-scales (let ((out '()))
+                       (maphash (lambda (address scale)
+                                  (push (list (cell-x address) (cell-y address)
+                                              scale)
+                                        out))
+                                (grid-cell-scales grid))
+                       (sort out (lambda (a b)
+                                   (or (< (first a) (first b))
+                                       (and (= (first a) (first b))
+                                            (< (second a) (second b)))))))
         :cells (let ((out '()))
                  (dolist (address (c:container-addresses grid))
                    (let ((child (c:child-at grid address)))
@@ -351,6 +373,12 @@ result is a valid grid — at least one cell — whatever came out of the file."
     (loop for entry in (getf plist :rows)
           when (and (consp entry) (realp (first entry)) (realp (second entry)))
             do (setf (row-height grid (first entry)) (second entry)))
+    (loop for entry in (getf plist :cell-scales)
+          when (and (consp entry) (= 3 (length entry))
+                    (realp (first entry)) (realp (second entry))
+                    (realp (third entry)))
+            do (setf (cell-scale grid (cell (first entry) (second entry)))
+                     (third entry)))
     (loop for entry in (getf plist :cells)
           when (and (consp entry) (= 3 (length entry)))
             do (destructuring-bind (x y form) entry
@@ -398,7 +426,9 @@ reason nothing else here is automatic."
                           (not (member address keep :test #'cell-equal)))
                  (push address doomed)))
              (grid-cells grid))
-    (dolist (address doomed) (remhash address (grid-cells grid)))
+    (dolist (address doomed)
+      (unset-cell-scale grid address)
+      (remhash address (grid-cells grid)))
     (c:simplify-node grid)
     (length doomed)))
 
@@ -423,15 +453,18 @@ container is finite *and small*; this is the one place the lattice fights that,
 and it used to pay at a cost proportional to how long the session had been
 running.
 
-Refuses three things, and each of them is somebody's cell rather than litter: a
-cell with anything in it, a cell somebody named, and the last cell standing —
-a plane with no cells at all is a shape nothing downstream is written for."
+Refuses four things, and each of them is somebody's cell rather than litter: a
+cell with anything in it, a cell somebody named, a cell somebody sized, and the
+last cell standing — a plane with no cells at all is a shape nothing downstream
+is written for."
   (let ((node (gethash address (grid-cells grid))))
     (when (and node
                (typep node 'c:leaf)
                (c:leaf-empty-p node)
                (> (hash-table-count (grid-cells grid)) 1)
-               (not (cell-named-p grid address)))
+               (not (cell-named-p grid address))
+               (not (nth-value 1 (gethash address (grid-cell-scales grid)))))
+      (unset-cell-scale grid address)
       (remhash address (grid-cells grid))
       t)))
 
@@ -451,10 +484,31 @@ a plane with no cells at all is a shape nothing downstream is written for."
 (defun (setf row-height) (value grid y)
   (setf (gethash y (grid-row-heights grid)) (max 1/100 value)))
 
+(defun cell-scale (grid address)
+  "The scale of the cell at ADDRESS relative to its track box.  1 unless resized.
+
+The escape hatch from the spreadsheet, deliberately smaller than the track
+accessors: a width still belongs to a column and spans every row, and a height
+to a row and every column — this one cell is allowed to disagree, about both at
+once, and nothing else is."
+  (gethash address (grid-cell-scales grid) 1))
+
+(defun (setf cell-scale) (value grid address)
+  (setf (gethash address (grid-cell-scales grid)) (max 1/100 value)))
+
+(defun unset-cell-scale (grid address)
+  "Return ADDRESS's cell to its track size, dropping the entry entirely.
+
+Dropping rather than writing 1 keeps the plane's own state tables as small as
+the facts that are not defaults, which is the same reason EQUALIZE-CELLS clears
+rather than writes."
+  (remhash address (grid-cell-scales grid)))
+
 (defun uniform-p (grid)
-  "True when no column or row has been resized away from 1.
+  "True when no column, row or cell has been resized away from 1.
 
 Worth knowing, because it decides whether panning can resize anything.  See
 CELL-RECTS."
   (and (zerop (hash-table-count (grid-col-widths grid)))
-       (zerop (hash-table-count (grid-row-heights grid)))))
+       (zerop (hash-table-count (grid-row-heights grid)))
+       (zerop (hash-table-count (grid-cell-scales grid)))))
