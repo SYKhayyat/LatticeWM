@@ -30,8 +30,14 @@ be able to do before anyone else can depend on it.
   centre while its column and row keep their sizes; `reset-cell-size` puts it
   back, and `equalize-cells` clears cell scales with the tracks. D8's escape
   hatch, exactly scoped: size may deviate from the grid, position never does.
-  The scale survives copy, undo (via the node signature) and the state file,
-  and composes with both `:fit` and `:fixed` zoom.
+  The scale survives copy, undo (via the plane ring) and the state file, and
+  composes with both `:fit` and `:fixed` zoom.
+- `lattice/` lattice-aware undo — the plane and the tree have their own undo
+  rings now. `undo-plane` / `redo-plane` walk back what zoom, pan, resize and
+  `name-cell` did, independently of `undo`/`redo`; the grid's node signature no
+  longer carries the plane state, so a zoom is not a tree step and undoing a
+  tree change does not drag the camera along with it. The camera is captured
+  and put back around every tree restore.
 - `extensions/tabs/` — tab groups inside a pane: TAB-HERE, TAB-ADD (pull a
   live window in), TAB-NEXT/TAB-PREV with wraparound, UNTAB to pop the
   visible window back beside the group. Hidden members are simply unplaced;

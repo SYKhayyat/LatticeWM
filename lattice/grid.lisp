@@ -276,38 +276,22 @@ so nothing here has to know that a cell address is a coordinate."
         #'string< :key (lambda (entry) (princ-to-string (car entry)))))
 
 (defmethod c:node-signature ((grid grid))
-  "Identity, every cell, *and the plane's own state* — viewport, tracks, names.
+  "Identity and every cell — and deliberately *not* the plane's own state.
 
-FOUND BY GENERATING THE CONTAINER-PROTOCOL SURFACE AND READING IT.  The grid
-answered thirteen of the protocol's nineteen members and this was the one it
-should have answered and did not; nothing anywhere listed the nineteen, so
-nothing could say so.  NODE-SIGNATURE's own docstring names this exact case:
+This used to add the viewport, the track sizes, the cell scales and the names,
+so that zoom, pan, resize-column, resize-row, resize-cell and name-cell would
+be recorded at all by layout undo.  That worked and it was the wrong altitude:
+a tree snapshot carries the plane state along with it, so undo after a tree
+change silently reverted whatever the camera had done since the snapshot was
+taken, and there was no way to undo just the camera.
 
-    A container kind that keeps state of its own — a viewport, a set of track
-    sizes — should add it here, or its users will find that undo skips straight
-    past the operation they wanted back.
-
-Which is what happened.  Undo records a snapshot only when the signature
-changed, so zoom, pan, resize-column, resize-row and name-cell — five verbs
-that change the plane and not the tree — recorded nothing at all.  Pressing
-undo after any of them jumped to a *previous tree* and, because COPY-NODE-SLOTS
-does its job correctly, silently reverted the zoom and the tracks along with
-it.  The one visible symptom was undo appearing to skip a step, which reads as
-an undo bug rather than as a missing method.
-
-The tables are sorted so that two grids with equal state compare EQUAL: hash
-table iteration order is not specified, and a signature that varied by
-iteration order would make every snapshot look like a change — the opposite
-failure, and a ring that fills up with identical trees."
+The plane state is its own fact now, tracked by the plane ring and walked back
+by UNDO-PLANE (lattice/undo.lisp).  Keeping it out of this signature is what
+makes the two rings independent: the tree ring sees only the tree, a zoom is
+not a tree step, and undoing a tree change does not drag the camera with it.
+Two grids with the same cells and the same node identities compare EQUAL here,
+which is exactly the comparison the tree ring needs to make."
   (list* :lattice/grid
-         (cell-x (viewport-origin (grid-viewport grid)))
-         (cell-y (viewport-origin (grid-viewport grid)))
-         (viewport-cols (grid-viewport grid))
-         (viewport-rows (grid-viewport grid))
-         (sorted-table (grid-col-widths grid))
-         (sorted-table (grid-row-heights grid))
-         (sorted-table (grid-cell-scales grid))
-         (sorted-table (grid-names grid))
          (call-next-method)))
 
 (defmethod r:serialize-node ((grid grid))
@@ -512,3 +496,79 @@ CELL-RECTS."
   (and (zerop (hash-table-count (grid-col-widths grid)))
        (zerop (hash-table-count (grid-row-heights grid)))
        (zerop (hash-table-count (grid-cell-scales grid)))))
+
+;;; ------------------------------------------------------ the plane state
+;;;
+;;; What a GRID is as a *view* rather than a tree: where the camera is, what
+;;; has been resized and what has been named.  CAPTURE-PLANES and APPLY-PLANES
+;;; make that set of facts a value that can be put on a ring and walked back by
+;;; UNDO-PLANE — and because they are the whole of the plane, they are also what
+;;; keeps a tree undo from dragging the camera along with it.
+
+(defun plane-state (grid)
+  "GRID's plane facts as a fresh plist: the camera, every size and every name.
+
+A plist rather than the live tables, so a snapshot cannot be invalidated by a
+later mutation and two equal planes compare EQUAL.  SORTED-TABLE is reused so
+that two states built in a different hash iteration order still compare EQUAL,
+which is the same guarantee the old signature made and the one the plane ring
+needs."
+  (list :origin (cell (cell-x (viewport-origin (grid-viewport grid)))
+                      (cell-y (viewport-origin (grid-viewport grid))))
+        :cols (viewport-cols (grid-viewport grid))
+        :rows (viewport-rows (grid-viewport grid))
+        :columns (sorted-table (grid-col-widths grid))
+        :row-heights (sorted-table (grid-row-heights grid))
+        :cell-scales (sorted-table (grid-cell-scales grid))
+        :names (sorted-table (grid-names grid))))
+
+(defun apply-plane-state (grid state)
+  "Make GRID's plane facts those in STATE, which PLANE-STATE produced.
+
+The tables are cleared and refilled rather than replaced, so a live handle to
+GRID-COL-WIDTHS or a sibling is not invalidated by a restore — the same reason
+COPY-NODE-SLOTS copies rather than swaps."
+  (let ((origin (getf state :origin)))
+    (setf (viewport-origin (grid-viewport grid))
+          (cell (cell-x origin) (cell-y origin))
+          (viewport-cols (grid-viewport grid)) (max 1 (getf state :cols))
+          (viewport-rows (grid-viewport grid)) (max 1 (getf state :rows))))
+  (flet ((refill (table entries)
+           (clrhash table)
+           (loop for (key . value) in entries
+                 do (setf (gethash key table) value))))
+    (refill (grid-col-widths grid) (getf state :columns))
+    (refill (grid-row-heights grid) (getf state :row-heights))
+    (refill (grid-cell-scales grid) (getf state :cell-scales))
+    (refill (grid-names grid) (getf state :names)))
+  grid)
+
+(defun collect-planes (root)
+  "Every plane reachable from ROOT as (PATH . PLANE-STATE), in tree order.
+
+PATH is the address list from ROOT to the grid, which is what lets
+APPLY-PLANES put a captured state back on the *same* grid after a restore has
+replaced the tree — the grid is a copy, its path in the tree is not."
+  (let ((out '()))
+    (labels ((walk (node path)
+               (when (typep node 'grid)
+                 (push (cons path (plane-state node)) out))
+               (when (c:container-p node)
+                 (dolist (address (c:container-addresses node))
+                   (walk (c:child-at node address)
+                         (append path (list address)))))))
+      (walk root '()))
+    (nreverse out)))
+
+(defun apply-planes (root captures)
+  "Put each captured plane state back on the grid at its path in ROOT.
+
+Silent about a path that no longer names a grid: a restore that reshaped the
+tree out from under a plane leaves that plane's camera where the restore put
+it rather than guessing.  Degrades, like every other reader of the state
+file."
+  (dolist (capture captures)
+    (let ((node (c:resolve-path root (car capture))))
+      (when (typep node 'grid)
+        (apply-plane-state node (cdr capture)))))
+  root)

@@ -35,6 +35,7 @@ motion runs straight through the cell boundary as though it were not there.")
    #:grid #:make-grid #:grid-cells #:grid-viewport #:grid-names
    #:grid-col-widths #:grid-row-heights #:grid-cell-scales
    #:col-width #:row-height #:cell-scale #:unset-cell-scale #:uniform-p
+   #:plane-state #:apply-plane-state #:collect-planes #:apply-planes
    #:ensure-cell #:occupied-cells #:tidy-grid #:forget-empty-cell #:cell-named-p
    ;; the viewport
    #:viewport #:viewport-origin #:viewport-cols #:viewport-rows

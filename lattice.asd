@@ -46,6 +46,7 @@ edits nothing under src/."
      (:file "grid")
      (:file "policy")
      (:file "commands")
+     (:file "undo")
      (:file "map")
      (:file "overlay")))))
 

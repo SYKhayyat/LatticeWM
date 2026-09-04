@@ -906,34 +906,31 @@ for all of them at once")
       (is (= 1 (l:cell-scale copy (l:cell 0 0)))
           "and the untouched cell stayed plain"))))
 
-(test a-cell-scale-changes-the-node-signature
-  ;; NODE-SIGNATURE is what makes an operation a distinct undo step, and undo
-  ;; compares the same live root before and after a command.  The signature's
-  ;; own docstring names the five verbs that had to be taught it — zoom, pan,
-  ;; resize-column, resize-row and name-cell — and a sixth, resize-cell, would
-  ;; otherwise change the plane and record nothing.
+(test a-cell-scale-is-a-plane-fact-and-not-a-tree-fact
+  ;; RESIZE-CELL'S undo step lives on the plane ring (UNDO-PLANE), exactly like
+  ;; zoom and pan: the scale is part of the plane state and deliberately *not*
+  ;; part of the node signature, so a cell resize is not a tree step and the
+  ;; plane ring walks it back.  This is the split the two-rings design stands
+  ;; on, and it is tested here for the sixth plane verb.
   (let ((grid (grid-of)))
     (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
     (let ((base (c:node-signature grid)))
       (setf (l:cell-scale grid (l:cell 0 0)) 5/2)
-      (is (not (equal base (c:node-signature grid)))
-          "resizing a cell is invisible to undo")
-      (let ((once (c:node-signature grid)))
-        (setf (l:cell-scale grid (l:cell 0 0)) 5/2)
-        (is (equal once (c:node-signature grid))
-            "and writing the same scale again is the same arrangement"))))
-  ;; Sorted, so hash iteration order never makes two equal states look
-  ;; different.  The realistic variant is a table rebuilt in a different order
-  ;; on the same grid, which is what a snapshot of an unchanged plane is.
-  (let ((grid (grid-of)))
-    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
-    (loop for x in '(5 -3 0 12) do (setf (l:cell-scale grid (l:cell x 0)) 2))
-    (let ((before (c:node-signature grid)))
-      (clrhash (l:grid-cell-scales grid))
-      (loop for x in '(12 0 -3 5) do (setf (l:cell-scale grid (l:cell x 0)) 2))
-      (is (equal before (c:node-signature grid))
-          "the signature sorts the scales, because hash iteration order is not
-specified"))))
+      (is (equal base (c:node-signature grid))
+          "resizing a cell is not a tree step")
+      (let ((state (l:plane-state grid)))
+        (is (equal '((0 . 0) . 5/2)
+                   (find-if (lambda (entry) (equal (car entry) (l:cell 0 0)))
+                            (getf state :cell-scales)))
+            "the scale is a plane fact"))))
+  ;; Two grids with the same scales entered in a different order have the same
+  ;; plane state, which is the guarantee the ring's equality check needs.
+  (let ((a (grid-of)) (b (grid-of)))
+    (loop for x in '(5 -3 0 12) do (setf (l:cell-scale a (l:cell x 0)) 2))
+    (loop for x in '(0 12 -3 5) do (setf (l:cell-scale b (l:cell x 0)) 2))
+    (is (equal (l:plane-state a) (l:plane-state b))
+        "the plane state sorts the scales, because hash iteration order is not
+specified")))
 
 (test the-broom-leaves-a-sized-cell-alone
   ;; FORGET-EMPTY-CELL runs behind the user's back, so it declines to touch a
@@ -1180,66 +1177,212 @@ third addressing layer and the one humans actually remember")
       (is (equal '("a") (mapcar #'c:window-app-id (c:node-windows node)))
           "the window survived a container kind this image has never heard of"))))
 
-(test the-plane-s-own-state-is-part-of-its-signature
-  "UNDO SKIPPED EVERY VERB THAT CHANGES THE PLANE AND NOT THE TREE.
+(test the-plane-s-state-is-not-part-of-its-signature
+  "THE SPLIT THE TWO UNDO RINGS STAND ON.
 
-Layout undo records a snapshot only when C:NODE-SIGNATURE changed, and the grid
-did not answer that generic — so zoom, pan, resize-column, resize-row and
-name-cell recorded nothing.  Pressing undo after any of them jumped back to a
-*previous tree* and, because COPY-NODE-SLOTS does its job, silently reverted
-the zoom and the tracks along with it.  The visible symptom was undo appearing
-to skip a step, which reads as an undo bug rather than as a missing method.
-
-It was found by generating the container-protocol surface and reading it: the
-grid answered thirteen of the nineteen members, and nothing before that had
-ever stated that there are nineteen."
+NODE-SIGNATURE is what the tree ring compares at a settle, so the plane state
+has to be *out* of it: a zoom is not a tree step, and undoing a tree change
+does not drag the camera with it.  It used to be in — this is the five-verb
+history, inverted — and the cost was exactly the issue's report: undo after a
+tree change silently reverted whatever the camera had done since the snapshot
+was taken, and there was no way to undo just the plane.  UNDO-PLANE (the plane
+ring) is that way now, and this signature is what keeps the two rings from
+treading on each other."
   (let ((grid (grid-of)))
     (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
-    ;; Start on a rung of the ladder, since that is what SET-ZOOM moves between.
     (l:set-zoom grid 0 :focus (l:cell 0 0))
     (let ((base (c:node-signature grid)))
-      ;; Zoom.  Recorded with its origin, because SET-ZOOM re-anchors the
-      ;; viewport around the focused cell -- so returning to the same rung is
-      ;; the same arrangement only when the origin came back too.
       (l:set-zoom grid 4 :focus (l:cell 0 0))
-      (is (not (equal base (c:node-signature grid)))
-          "a zoom is invisible to undo")
-      (l:set-zoom grid 0 :focus (l:cell 0 0))
       (is (equal base (c:node-signature grid))
-          "and zooming back to where you started is the same arrangement"))
-    ;; Pan.
-    (let ((before (c:node-signature grid)))
+          "a zoom is not a tree step")
       (setf (l:viewport-origin (l:grid-viewport grid)) (l:cell 3 -2))
-      (is (not (equal before (c:node-signature grid)))
-          "a pan is invisible to undo"))
-    ;; Tracks.
-    (let ((before (c:node-signature grid)))
+      (is (equal base (c:node-signature grid)) "a pan is not a tree step")
       (setf (l:col-width grid 0) 5/2)
-      (is (not (equal before (c:node-signature grid)))
-          "resizing a column is invisible to undo"))
-    (let ((before (c:node-signature grid)))
+      (is (equal base (c:node-signature grid))
+          "a column resize is not a tree step")
       (setf (l:row-height grid 0) 3)
-      (is (not (equal before (c:node-signature grid)))
-          "resizing a row is invisible to undo"))
-    ;; Names.
-    (let ((before (c:node-signature grid)))
+      (is (equal base (c:node-signature grid))
+          "a row resize is not a tree step")
+      (setf (l:cell-scale grid (l:cell 0 0)) 2)
+      (is (equal base (c:node-signature grid))
+          "a cell resize is not a tree step")
       (setf (gethash "mail" (l:grid-names grid)) (l:cell 0 0))
-      (is (not (equal before (c:node-signature grid)))
-          "naming a cell is invisible to undo")))
-  ;; And the signature must not vary with hash table iteration order, or every
-  ;; snapshot looks like a change and the ring fills with identical trees.
+      (is (equal base (c:node-signature grid))
+          "naming a cell is not a tree step"))
+    (let ((base (c:node-signature grid)))
+      (setf (c:child-at grid (l:cell 1 0)) (leaf "b"))
+      (is (not (equal base (c:node-signature grid)))
+          "a tree change still is")))
+  ;; And the plane state itself is order-independent, which is the guarantee
+  ;; the plane ring needs: two states entered in a different hash iteration
+  ;; order must compare EQUAL, or every step would look like a change and the
+  ;; ring would fill with identical planes.
   (let ((a (grid-of)) (b (grid-of)))
-    (dolist (g (list a b))
-      (setf (c:child-at g (l:cell 0 0)) (c:make-leaf)))
     (loop for x in '(5 -3 0 12) do (setf (l:col-width a x) 2))
     (loop for x in '(0 12 -3 5) do (setf (l:col-width b x) 2))
-    ;; The first eight elements are the plane's own state; everything after
-    ;; them is the container method's answer, which carries node ids that are
-    ;; deliberately unique per node and so can never compare equal.
-    (is (equal (subseq (c:node-signature a) 0 8)
-               (subseq (c:node-signature b) 0 8))
-        "two grids with the same tracks entered in a different order must
-compare equal")))
+    (loop for x in '(5 -3 0 12) do (setf (l:cell-scale a (l:cell x 0)) 2))
+    (loop for x in '(0 12 -3 5) do (setf (l:cell-scale b (l:cell x 0)) 2))
+    (is (equal (l:plane-state a) (l:plane-state b))
+        "the plane state sorts its tables, because hash iteration order is not
+specified")))
+
+;;; ================================================== the plane's own undo
+
+;;; The tree ring and the plane ring share one ruling, tested twice.  The tree
+;;; ring records a snapshot only when the *tree* changed; the plane ring
+;;; records one only when the *plane* changed.  A zoom is not a tree step and a
+;;; move is not a plane step, and the second half of the bargain is that
+;;; undoing one kind never drags the other kind along with it.
+
+(defun live-grid (world)
+  "The grid the world root is, which after a restore is a *new* grid."
+  (c:world-root world))
+
+(test plane-verbs-record-only-on-the-plane-ring
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (setf (l::plane-baseline) (l:collect-planes grid))
+      (p:run-command "pan" :left)
+      (is (equal (l:cell -1 0)
+                 (l:viewport-origin (l:grid-viewport (live-grid world))))
+          "the pan took effect")
+      (is (= 1 (length (l::plane-ring)))
+          "a pan recorded a plane step")
+      (is (zerop (length (r::undo-ring)))
+          "and no tree step at all")
+      (p:run-command "undo-plane")
+      (is (equal (l:cell 0 0)
+                 (l:viewport-origin (l:grid-viewport (live-grid world))))
+          "undo-plane walked the pan back")
+      (p:run-command "redo-plane")
+      (is (equal (l:cell -1 0)
+                 (l:viewport-origin (l:grid-viewport (live-grid world))))
+          "redo-plane put it forward again"))))
+
+(test undo-of-a-tree-change-does-not-drag-the-camera
+  "The issue's headline, stated as a test: zoom out, move a window, undo the
+move — and the camera is still zoomed out.  It used to be that a tree snapshot
+carried the plane state along, so the undo restored the move-time viewport and
+threw the zoom away."
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 1
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (r::note-layout-settled "baseline")
+      (setf (l::plane-baseline) (l:collect-planes grid))
+      ;; The camera moves first.
+      (p:run-command "zoom-to" 3 1)
+      (is (= 3 (l:viewport-cols (l:grid-viewport (live-grid world))))
+          "the camera is zoomed out")
+      (is (= 1 (length (l::plane-ring))) "the zoom is a plane step")
+      (is (zerop (length (r::undo-ring))) "and not a tree step")
+      ;; Then the tree changes, and its settle records a tree step.
+      (setf (c:child-at (live-grid world) (l:cell 2 0)) (leaf "c"))
+      (r::note-layout-settled "add cell")
+      (is (= 1 (length (r::undo-ring))) "the tree step is on the tree ring")
+      ;; Undo the tree change.
+      (p:run-command "undo")
+      (is (null (c:child-at (live-grid world) (l:cell 2 0)))
+          "the tree change is undone")
+      (is (= 3 (l:viewport-cols (l:grid-viewport (live-grid world))))
+          "but the camera is still where the user left it"))))
+
+(test undo-plane-walks-back-each-plane-verb-in-order
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid)))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 1
+          (l:viewport-rows (l:grid-viewport grid)) 1)
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (setf (l::plane-baseline) (l:collect-planes grid))
+      (p:run-command "pan" :left)
+      (p:run-command "resize-column")
+      (p:run-command "zoom-to" 2 1)
+      (is (= 3 (length (l::plane-ring)))
+          "three plane verbs are three steps")
+      (p:run-command "undo-plane")
+      (is (= 1 (l:viewport-cols (l:grid-viewport (live-grid world))))
+          "undo-plane walked the zoom back")
+      (p:run-command "undo-plane")
+      (is (= 1 (l:col-width (live-grid world) 0))
+          "and the column resize")
+      (p:run-command "undo-plane")
+      (is (equal (l:cell 0 0)
+                 (l:viewport-origin (l:grid-viewport (live-grid world))))
+          "and the pan, in the order they happened"))))
+
+(test repeated-plane-verbs-coalesce-into-one-step
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root grid))
+         (r:*undo-coalesce-seconds* 10))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (setf (c:world-cursor world) (list (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (setf (l::plane-baseline) (l:collect-planes grid))
+      (p:run-command "pan" :left)
+      (p:run-command "pan" :left)
+      (p:run-command "pan" :left)
+      (is (= 1 (length (l::plane-ring)))
+          "three pans inside the coalesce window are one step")
+      (p:run-command "undo-plane")
+      (is (equal (l:cell 0 0)
+                 (l:viewport-origin (l:grid-viewport (live-grid world))))
+          "and one undo-plane walks all three back"))))
+
+(test plane-state-round-trips-through-a-copy
+  (let ((grid (grid-of '(0 0 nil))))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (let ((copy (c:copy-node grid)))
+      (setf (l:viewport-origin (l:grid-viewport grid)) (l:cell 3 -2)
+            (l:col-width grid 0) 5/2
+            (l:cell-scale grid (l:cell 0 0)) 7/4)
+      (setf (gethash "mail" (l:grid-names grid)) (l:cell 0 0))
+      (l:apply-plane-state copy (l:plane-state grid))
+      (is (equal (l:plane-state grid) (l:plane-state copy))
+          "the copy now sees the same plane")
+      (is (eq (c:leaf-window (c:child-at grid (l:cell 0 0)))
+              (c:leaf-window (c:child-at copy (l:cell 0 0))))
+          "and the window in it is still the same one, because there is only
+one of those"))))
+
+(test collect-planes-and-apply-planes-round-trip
+  "A plane inside a plane is two captures, and APPLY-PLANES puts both back by
+path — which is exactly what a tree restore needs, because after the restore
+the grids are copies and only their paths in the tree survive."
+  (let* ((outer (grid-of '(0 0 nil)))
+         (inner (grid-of '(1 1 nil)))
+         (world (c:make-world :root outer)))
+    (setf (c:child-at outer (l:cell 0 0)) inner)
+    (setf (c:child-at outer (l:cell 1 0)) (leaf "b"))
+    (setf (c:child-at inner (l:cell 1 1)) (leaf "deep"))
+    (setf (l:col-width outer 0) 2
+          (l:row-height inner 1) 3
+          (l:cell-scale inner (l:cell 1 1)) 5/2
+          (l:viewport-cols (l:grid-viewport inner)) 3)
+    (let ((captures (l:collect-planes outer)))
+      (is (= 2 (length captures)) "both planes are captured")
+      ;; Mutate both planes, then put the captures back.
+      (setf (l:col-width outer 0) 9
+            (l:viewport-cols (l:grid-viewport inner)) 1)
+      (setf (gethash "x" (l:grid-names inner)) (l:cell 1 1))
+      (l:apply-planes outer captures)
+      (is (equal captures (l:collect-planes outer))
+          "applying the captures put every plane back where it was"))))
 
 ;;; ================================================ composing with a peer
 
