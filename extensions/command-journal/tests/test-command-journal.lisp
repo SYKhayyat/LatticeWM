@@ -31,7 +31,8 @@
   label)
 
 (defun fresh-journals-directory ()
-  (let ((dir (merge-pathnames (format nil "cj-test-~d/" (random (expt 2 30)))
+  (let ((dir (merge-pathnames (format nil "cj-test-~d-~d/"
+                                      (sb-posix:getpid) (random (expt 2 30)))
                               (uiop:temporary-directory))))
     (ensure-directories-exist dir)))
 

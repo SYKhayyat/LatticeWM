@@ -27,15 +27,41 @@
 mistaken for a fresh one by the next -- which is exactly the failure a
 repeat-run gauntlet exists to catch.")
 
+(defun fresh-marker-tag ()
+  "A tag no other run can produce.
+
+RANDOM alone is not enough: SBCL seeds deterministically on hosts whose
+entropy is quiet, so a bare RANDOM tag is the same string in every process
+run and a marker left by one run is read as a fresh one by the next.  The
+PID, which differs from process to process, is what makes the tag a fact
+about this run rather than a guess."
+  (format nil "~d-~d-~d"
+          (get-universal-time)
+          (sb-posix:getpid)
+          (random (expt 2 30))))
+
+(defun clean-stale-markers ()
+  "Forget every marker this tag could ever name.
+
+A leftover from a prior run -- same tag, same temp dir -- would otherwise
+satisfy a 'nothing has fired yet' check it had no part in.  With a fresh tag
+this matches nothing; it exists so the check cannot depend on /tmp having
+been tidy all along."
+  (dolist (file (directory (merge-pathnames
+                            (concatenate 'string *marker-tag* "-*")
+                            (uiop:temporary-directory))))
+    (ignore-errors (delete-file file))))
+
 (defmacro with-idle (&body body)
   `(let ((il::*enabled* nil)
          (il::*idle-steps* '())
          (il::*resume-commands* '())
          (il::*last-activity* (get-universal-time))
          (il::*fired-steps* '())
-         (*marker-tag* (write-to-string (random (expt 2 30))))
+         (*marker-tag* (fresh-marker-tag))
          (r:*world* (c:make-world))
          (p:*policy* (make-instance 'p:conventional-policy)))
+     (clean-stale-markers)
      ,@body))
 
 (defun age-quiet-period-by (seconds)
@@ -59,13 +85,11 @@ by an earlier run cannot masquerade as this run's."
                                (uiop:temporary-directory))))
 
 (defun wait-for-marker (name)
-  "Steps go through SPAWN, which detaches; give the child its moment
-rather than pretending a write was synchronous."
-  (let ((file (merge-pathnames (concatenate 'string *marker-tag* "-" name)
-                               (uiop:temporary-directory))))
-    (loop repeat 50
-          unless (probe-file file) do (sleep 0.1)
-          finally (return (probe-file file)))))
+  "Steps go through SPAWN, which detaches; give the child its moment rather
+than pretending a write was synchronous.  The budget is wall clock, not an
+iteration count -- a fixed number of polls gives up after whatever a loaded
+host actually took."
+  (t*:wait-until (lambda () (marker-exists name))))
 
 ;;; ================================================================ tests
 

@@ -28,10 +28,9 @@
      ,@body))
 
 (defun wait-unless (predicate)
-  "Poll PREDICATE for up to ~5s; SPAWN detaches, so children need a moment."
-  (loop repeat 50
-        unless (funcall predicate) do (sleep 0.1)
-        finally (return (funcall predicate))))
+  "Poll PREDICATE until it comes true; SPAWN detaches, so children need a
+moment.  The budget is wall clock, not an iteration count."
+  (t*:wait-until predicate))
 
 ;;; ================================================================ tests
 

@@ -23,7 +23,8 @@
     (values (results-status results) (length results))))
 
 (defun fresh-sessions-directory ()
-  (let ((dir (merge-pathnames (format nil "ds-test-~d/" (random (expt 2 30)))
+  (let ((dir (merge-pathnames (format nil "ds-test-~d-~d/"
+                                      (sb-posix:getpid) (random (expt 2 30)))
                               (uiop:temporary-directory))))
     (ensure-directories-exist dir)))
 

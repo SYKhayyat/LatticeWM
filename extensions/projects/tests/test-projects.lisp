@@ -31,10 +31,13 @@
 
 (defun temp-directory ()
   "A directory that exists, for projects to live in, as a namestring --
-the form a config file would write."
+the form a config file would write.  Unique per run: RANDOM alone is
+deterministic on hosts whose entropy is quiet, and a shared directory would
+let one run's leftover files satisfy another run's waits."
   (namestring
    (ensure-directories-exist
-    (merge-pathnames (format nil "prj-test-~d/" (random (expt 2 30)))
+    (merge-pathnames (format nil "prj-test-~d-~d/"
+                             (sb-posix:getpid) (random (expt 2 30)))
                      (uiop:temporary-directory)))))
 
 (defun goto-workspace (index)
@@ -176,9 +179,8 @@ directory exactly where it was."
       ;; SPAWN detaches, so the child may still be starting; give it a
       ;; moment rather than pretending the write was synchronous.
       (let ((file (merge-pathnames "where-am-i" dir)))
-        (loop repeat 50
-              unless (probe-file file) do (sleep 0.1)
-              finally (is (probe-file file) "the child wrote something"))
+        (is (t*:wait-until (lambda () (probe-file file)))
+            "the child wrote something")
         (let ((answer (with-open-file (in file) (read-line in))))
           ;; PWD says the directory without the trailing slash; compare
           ;; truenames so symlink and spelling differences cannot bite.

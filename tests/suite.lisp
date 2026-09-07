@@ -27,7 +27,7 @@
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
            #:container #:hooks #:minibuffer #:devices #:capture #:boundaries
-           #:pixels #:versions
+           #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite))
 
 (in-package #:latticewm/tests)
@@ -90,6 +90,20 @@ promoted examples have no such seniority.")
 Called at load time from an extension's tests file.  PUSHNEW rather than PUSH,
 because a configuration file gets loaded twice and so does an extension."
   (pushnew (list package name) *extension-suites* :test #'equal))
+
+(defun wait-until (predicate &key (timeout 30))
+  "Poll PREDICATE until it returns true, or TIMEOUT seconds elapse.
+
+A detached child takes a moment to land on a loaded host, and 'a moment' is
+a wall-clock fact, not an iteration count: a loop that polls a fixed number
+of times gives up after whatever the host actually took, which is exactly the
+flake a generous deadline exists to prevent.  PREDICATE is called at least
+once, and its final value is returned."
+  (let ((deadline (+ (get-universal-time) timeout)))
+    (loop while (and (not (funcall predicate))
+                     (< (get-universal-time) deadline))
+          do (sleep 0.05))
+    (funcall predicate)))
 
 (defun run-all ()
   "Run every suite that is loaded, and return T when they all pass.

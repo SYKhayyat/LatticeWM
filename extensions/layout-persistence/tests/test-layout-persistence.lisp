@@ -24,8 +24,11 @@
     (values (results-status results) (length results))))
 
 (defun fresh-layouts-directory ()
-  "A directory that exists and holds nobody else's layouts."
-  (let ((dir (merge-pathnames (format nil "lp-test-~d/" (random (expt 2 30)))
+  "A directory that exists and holds nobody else's layouts.  Unique per run:
+RANDOM alone is deterministic on hosts whose entropy is quiet, and a shared
+directory would let one run's leftover files answer another run's questions."
+  (let ((dir (merge-pathnames (format nil "lp-test-~d-~d/"
+                                      (sb-posix:getpid) (random (expt 2 30)))
                               (uiop:temporary-directory))))
     (ensure-directories-exist dir)))
 
