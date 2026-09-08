@@ -206,6 +206,148 @@ method."))
     (is (equal '(:stack 0 (:leaf nil)) (shape (c:world-root world)))
         "the rule floated it, so the tree is untouched")))
 
+;;; ------------------------------------------------------ the rules engine
+;;;
+;;; The table beyond exact/substring: ?/* patterns on app-id and title, the
+;;; parent's app-id as a match dimension, and :priority ordering that leaves
+;;; the pre-priority list order intact as the tie-break.
+
+(test glob-prepare-pins-and-frees-the-ends
+  (is (equal "*firefox-*" (p::prepare-glob "firefox-"))
+      "no anchors: free at both ends, a plain substring match")
+  (is (equal "firefox-" (p::prepare-glob "^firefox-$"))
+      "both anchors pinned")
+  (is (equal "firefox-*" (p::prepare-glob "^firefox-"))
+      "a start anchor leaves the end free")
+  (is (equal "*terminal" (p::prepare-glob "terminal$"))
+      "an end anchor leaves the start free"))
+
+(test glob-match-is-a-whole-string-match
+  (is-true (p::glob-match-p "abc" "abc"))
+  (is-false (p::glob-match-p "abc" "abcd"))
+  (is-false (p::glob-match-p "abcd" "abc"))
+  (is-false (p::glob-match-p "abc" "abx")))
+
+(test glob-star-matches-any-run-including-none
+  (is-true (p::glob-match-p "a*c" "abc"))
+  (is-true (p::glob-match-p "a*c" "ac"))
+  (is-true (p::glob-match-p "*abc*" "xyzabcdef"))
+  (is-false (p::glob-match-p "a*c" "abx")))
+
+(test glob-question-mark-matches-exactly-one-character
+  (is-true (p::glob-match-p "g?mp" "gimp"))
+  (is-false (p::glob-match-p "g?mp" "giimp"))
+  (is-false (p::glob-match-p "g?mp" "gm")))
+
+(test glob-matching-is-case-insensitive
+  (is-true (p::glob-match-p (p::prepare-glob "^firefox-") "Firefox-Beta"))
+  (is-true (p::glob-match-p (p::prepare-glob "*youtube*")
+                            "Some YouTube video")))
+
+(test glob-handles-many-stars-without-backtracking-blowup
+  (is-true (p::glob-match-p "***a*a*a*a*a*a*a*a*"
+                            (make-string 64 :initial-element #\a)))
+  (is-false (p::glob-match-p "***a*a*a*a*a*a*a*a*b"
+                             (make-string 64 :initial-element #\a))))
+
+(test app-id-glob-matches-a-prefix
+  (is-true (p:window-matches-rule-p (win "firefox-beta")
+                                    '(:app-id-glob "^firefox-")))
+  (is-true (p:window-matches-rule-p (win "firefox-beta")
+                                    '(:app-id-glob "firefox-*")))
+  (is-false (p:window-matches-rule-p (win "foofirefox-x")
+                                     '(:app-id-glob "^firefox-"))
+            "the anchor refuses a match that begins later in the string")
+  (is-false (p:window-matches-rule-p (win "firefox")
+                                     '(:app-id-glob "firefox-*"))))
+
+(test title-glob-matches-a-substring
+  (let ((w (win)))
+    (setf (c:window-title w) "Some YouTube video")
+    (is-true (p:window-matches-rule-p w '(:title-glob "*YouTube*")))))
+
+(test title-glob-matches-a-suffix
+  (let ((w (win)))
+    (setf (c:window-title w) "email -- mutt")
+    (is-true (p:window-matches-rule-p w '(:title-glob "mutt$")))
+    (is-false (p:window-matches-rule-p w '(:title-glob "mail$")))))
+
+(test parent-app-id-matches-the-parents-app
+  (is-true (p:window-matches-rule-p
+            (let ((dialog (win "gimp")))
+              (setf (c:window-parent-window dialog) (win "gimp"))
+              dialog)
+            '(:parent-app-id "gimp")))
+  (is-false (p:window-matches-rule-p (win "gimp")
+                                     '(:parent-app-id "gimp"))
+            "a window with no parent has no parent app-id to match"))
+
+(test a-glob-rule-floats
+  (let ((world (fresh-world)) (pol (policy)))
+    (let ((p:*window-rules* '(((:app-id-glob "^firefox") :float t))))
+      (p:on-window-open pol world (win "firefox-beta"))
+      (is (equal '(:stack 0 (:leaf nil)) (shape (c:world-root world)))
+          "the glob floated it, so the tree is untouched"))))
+
+(test a-glob-rule-can-send-to-a-workspace
+  (let ((world (fresh-world)) (pol (policy)))
+    (let ((p:*window-rules* '(((:title-glob "*terminal*") :workspace 2))))
+      (let ((w (win "foot")))
+        (setf (c:window-title w) "user@host: LatticeWM — terminal")
+        (p:on-window-open pol world w)
+        (is (equal '(:stack 0 (:leaf nil) (:leaf "foot"))
+                   (shape (c:world-root world)))
+            "the terminal landed in workspace two")))))
+
+(test parent-app-id-rule-floats-dialogs-of-an-app
+  (let* ((world (fresh-world)) (pol (policy))
+         (parent (win "gimp"))
+         (dialog (win "gimp")))
+    (setf (c:window-parent-window dialog) parent)
+    (let ((p:*window-rules* '(((:parent-app-id "gimp") :float t))))
+      (p:on-window-open pol world parent)
+      (p:on-window-open pol world dialog)
+      (is-true (c:window-floating-p dialog)
+               "the dialog floated")
+      (is (equal '(:stack 0 (:leaf "gimp")) (shape (c:world-root world)))
+          "and the parent tiled exactly as it would have"))))
+
+(test priority-orders-rules-before-list-order
+  (let ((pol (policy)))
+    (let ((p:*window-rules*
+           '(((:app-id "x") :float t)
+             ((:app-id "x") :priority 10 :workspace 2)
+             ((:app-id "x") :priority 5 :fullscreen t))))
+      (is (equal '(:workspace 2) (p:window-rule-for pol (win "x")))
+          "the highest priority wins, wherever it sits in the list"))))
+
+(test equal-priorities-keep-list-order
+  (let ((pol (policy)))
+    (let ((p:*window-rules*
+           '(((:app-id "x") :priority 1 :float t)
+             ((:app-id "x") :priority 1 :fullscreen t))))
+      (is (equal '(:float t) (p:window-rule-for pol (win "x")))
+          "the earlier rule in the list wins the tie, and :priority never
+          leaks into the returned overrides"))))
+
+(test no-priority-rules-stay-in-list-order
+  (let ((pol (policy)))
+    (let ((p:*window-rules*
+           '(((:app-id "x") :float t)
+             ((:app-id "x") :fullscreen t))))
+      (is (equal '(:float t) (p:window-rule-for pol (win "x")))
+          "a list with no priorities reads exactly as it always has"))))
+
+(test priority-lets-a-later-rule-beat-an-earlier-one
+  (let ((world (fresh-world)) (pol (policy)))
+    (let ((p:*window-rules*
+           '(((:app-id "firefox") :float t)
+             ((:app-id-glob "^firefox-") :priority 10 :workspace 2))))
+      (p:on-window-open pol world (win "firefox-beta"))
+      (is (equal '(:stack 0 (:leaf nil) (:leaf "firefox-beta"))
+                 (shape (c:world-root world)))
+          "the later, higher-priority glob rule placed it, not the float rule"))))
+
 (test empty-pane-keys-only-fire-on-an-empty-pane
   (let ((world (fresh-world)) (pol (policy)))
     (is (equal "terminal" (p:key-unbound pol world #\t))

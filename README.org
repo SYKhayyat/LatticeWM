@@ -257,8 +257,12 @@ people want to change:
         ((:parent t)                    :float t)))   ; dialogs
 #+end_src
 
-Match on =:app-id=, =:title=, either of those as a substring, or =:parent= for
-what river reports as a child window; the first rule that matches wins. To find
+Match on =:app-id=, =:title=, either of those as a substring, a =?/*= glob
+against either (=:app-id-glob=, =:title-glob=, with =^= and =$= pinning the
+ends — so =^firefox-= is "starts with", =*YouTube*= is "contains", and a
+=:priority= number orders rules, higher first, before list order breaks the
+tie), or =:parent= for what river reports as a child window; the first rule
+that matches wins. To find
 out what to write, ask the running program — =(mapcar #'window-app-id
 (all-windows))= at =Super+;= is the same list a rule is matched against.
 

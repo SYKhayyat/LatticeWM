@@ -115,8 +115,13 @@ this."
 
 (defparameter +window-rule-keys+
   '(:float :workspace :path :focus :fullscreen :minimize
-    :border-color :border-width :decoration :capabilities :tags :label)
-  "Every key a window rule may set.  Anything else is a typo, said out loud.")
+    :border-color :border-width :decoration :capabilities :tags :label
+    :priority)
+  "Every key a window rule may set.  Anything else is a typo, said out loud.
+
+:PRIORITY is the exception to \"set\": it is consumed for ordering by
+WINDOW-RULE-FOR and never applied to the window, but it is a recognised key
+so that a rule that names it is not complained about as a typo.")
 
 (defun check-window-rule (rule window)
   "Complain about any key of RULE that means nothing, and return RULE.
@@ -150,11 +155,22 @@ MATCH keys:
     :app-id-contains  a substring of it
     :title            the title, exactly, ignoring case
     :title-contains   a substring of it
+    :app-id-glob      a ?/* pattern against it, case-insensitive
+    :title-glob       a ?/* pattern against the title
+    :parent-app-id    the app id of the window's parent, if it has one
     :parent           T for windows river reports as having a parent
 
-OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+: :float, :workspace, :path,
-:focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
-:capabilities, :tags and :label.
+A glob pattern is a whole-string match with ? for any one character and *
+for any run, and ^ and $ pin the ends: \"^firefox-\" means *starts with
+firefox-*, \"*YouTube*\" means *contains YouTube*, \"*terminal$\" means
+*ends with terminal*.  A pattern with no anchor may match anywhere.
+
+OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+ — :float, :workspace,
+:path, :focus, :fullscreen, :minimize, :border-color, :border-width,
+:decoration, :capabilities, :tags and :label — plus :priority, which is not
+an override at all: it orders the rules, higher first, with the list order
+breaking ties.  Rules with no :priority are 0 and stay in list order, so the
+line above reads exactly as it always has.
 
 :LABEL IS WHAT THIS PROGRAM CALLS THE WINDOW when it has to name it -- in the
 status line, on the drawn map, in a notification, in the tag and scratchpad
@@ -165,6 +181,66 @@ WINDOW-NAME, which is the generic every one of those places asks.
 This is the tier-0 half of window placement.  The tier-1 half is a method on
 WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
 are supported and this one requires no Lisp beyond a quoted list.")
+
+(defun prepare-glob (pattern)
+  "Canonicalise PATTERN for GLOB-MATCH-P: pin the ends it pins itself.
+
+A ^ at the start demands the match begin at the start of the string, and a
+$ at the end demands it end there; an end with no anchor is free, expressed
+as an implicit wildcard.  So \"^firefox-\" means *starts with firefox-*,
+\"*YouTube*\" means *contains YouTube*, and \"*terminal$\" means *ends with
+terminal*.  Matching is case-insensitive, so this downcases once."
+  (let* ((p (string-downcase pattern))
+         (len (length p))
+         (start (if (and (plusp len) (char= (char p 0) #\^)) 1 0))
+         (end (if (and (plusp len) (char= (char p (1- len)) #\$)) (1- len) len))
+         (core (subseq p start end)))
+    (concatenate 'string
+                 (if (plusp start) "" "*")
+                 core
+                 (if (= end len) "*" ""))))
+
+(defun glob-match-p (pattern string)
+  "True when STRING matches PATTERN, a whole-string glob.
+
+* matches any run of characters, ? matches any single character, and every
+other character matches itself, case-insensitively.  Memoised so a rule
+cannot turn a long window title into exponential backtracking: the cost is
+at most the product of the two lengths, whatever the pattern does."
+  (let* ((pl (length pattern))
+         (sl (length string))
+         (memo (make-hash-table :test #'equal)))
+    (labels ((match (pp ss)
+               (multiple-value-bind (cached found) (gethash (cons pp ss) memo)
+                 (if found
+                     cached
+                     (setf (gethash (cons pp ss) memo)
+                           (cond
+                             ((= pp pl) (= ss sl))
+                             ((char= (char pattern pp) #\*)
+                              (or (match (1+ pp) ss)
+                                  (and (< ss sl) (match pp (1+ ss)))))
+                             ((< ss sl)
+                              (and (or (char= (char pattern pp) #\?)
+                                       (char-equal (char pattern pp)
+                                                   (char string ss)))
+                                   (match (1+ pp) (1+ ss))))
+                             (t nil)))))))
+      (match 0 0))))
+
+(defun window-rule-priority (rule)
+  "The :PRIORITY of a rule's OVERRIDES, or 0 when it names none.
+
+Higher numbers are consulted earlier, and rules with the same priority keep
+their place in *WINDOW-RULES*, so a rule's position still breaks ties.  The
+default of 0 puts every rule written before this key existed exactly where
+it sits today."
+  (or (getf rule :priority) 0))
+
+(defun rule-overrides-without (rule key)
+  "RULE with KEY removed from the plist, pairing intact."
+  (loop for (k v) on rule by #'cddr
+        unless (eq k key) append (list k v)))
 
 (defun window-matches-rule-p (window match)
   "True when WINDOW satisfies every clause of MATCH."
@@ -182,6 +258,18 @@ are supported and this one requires no Lisp beyond a quoted list.")
                   (and (c:window-title window)
                        (search value (c:window-title window) :test #'char-equal)
                        t))
+                 (:app-id-glob
+                  (and (c:window-app-id window)
+                       (glob-match-p (prepare-glob value)
+                                     (c:window-app-id window))))
+                 (:title-glob
+                  (and (c:window-title window)
+                       (glob-match-p (prepare-glob value)
+                                     (c:window-title window))))
+                 (:parent-app-id
+                  (let ((parent (c:window-parent-window window)))
+                    (and parent (c:window-app-id parent)
+                         (string-equal value (c:window-app-id parent)))))
                  (:parent (eq (and (c:window-parent-window window) t)
                               (and value t)))
                  (t (progn
@@ -191,13 +279,22 @@ are supported and this one requires no Lisp beyond a quoted list.")
 (defmethod window-rule-for ((policy lifecycle-policy) (window c:window))
   "The first rule in *WINDOW-RULES* whose match clause fits WINDOW.
 
+Rules are consulted highest :PRIORITY first, then in list order — a rule's
+position in the list is the tie-break, exactly as it was before :PRIORITY
+existed, and a list with no priorities reads in the order it is written.
+
 If no declarative rule answers, the :WINDOW-RULE hooks are asked -- first
 non-NIL answer wins.  The table is what most people want and it is consulted
 first; the hooks are how a module that stores rules some other way (methods,
 say) gets into the same conversation without an :AROUND arms race."
-  (or (loop for entry in *window-rules*
+  (or (loop for entry in (stable-sort (copy-list *window-rules*) #'>
+                                      :key (lambda (entry)
+                                             (window-rule-priority
+                                              (rest entry))))
             when (and (consp entry) (window-matches-rule-p window (first entry)))
-              return (check-window-rule (rest entry) window))
+              return (check-window-rule (rule-overrides-without (rest entry)
+                                                                :priority)
+                                        window))
       (first (remove-if #'null
                         (guarded "window-rule hooks"
                           (run-hooks :window-rule window))))))

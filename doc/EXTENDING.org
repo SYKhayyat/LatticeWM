@@ -240,7 +240,11 @@ question it answers is per-application rather than global: what happens when
 
 Each rule is ~(MATCH . OVERRIDES)~ and the first match wins, so specific rules
 go first. Match on ~:app-id~, ~:title~, ~:app-id-contains~, ~:title-contains~,
-or ~:parent~ for what river reports as a child window. Override ~:float~,
+a ~?/*~ glob against either (~:app-id-glob~, ~:title-glob~, with ~^~ and ~$~
+pinning the ends — ~^firefox-~ is "starts with", ~*YouTube*~ is "contains"),
+the parent's app id (~:parent-app-id~), or ~:parent~ for what river reports as
+a child window. A ~:priority~ number orders the rules, higher first, with the
+list order breaking ties. Override ~:float~,
 ~:workspace~, ~:path~, ~:focus~, ~:fullscreen~, ~:minimize~, ~:border-color~,
 ~:border-width~, ~:decoration~, ~:capabilities~, ~:tags~ and ~:label~.
 

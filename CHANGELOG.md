@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- `src/policy` window rules engine — the declarative `*window-rules*` table
+  grows pattern matching and ordering: `:app-id-glob` / `:title-glob` match a
+  `?`/`*` pattern with `^` and `$` pinning the ends (`^firefox-` means starts
+  with, `*YouTube*` means contains), `:parent-app-id` matches by the parent
+  window's app id, and a `:priority` number orders the rules higher-first with
+  the list order breaking ties. The exact, contains, `:parent` and hook/method
+  surfaces are untouched, and a rule with no `:priority` reads exactly as it
+  always has.
 - `lattice/` per-cell sizing — `resize-cell` scales one cell about its track
   centre while its column and row keep their sizes; `reset-cell-size` puts it
   back, and `equalize-cells` clears cell scales with the tracks. D8's escape
