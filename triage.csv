@@ -1,0 +1,67 @@
+number,title,url,D,R,why,risk
+1,[Module] Infinite Workspaces,https://github.com/SYKhayyat/LatticeWM/issues/1,3,2,verbs.lisp wrap-vs-grow + status item + Z mapping; wrong nav is reversible mis-jump,Reversible mis-jump
+3,[Module] Promote Examples to Modules,https://github.com/SYKhayyat/LatticeWM/issues/3,1,2,Delete/wrap 4 stale examples + decide 05-status-line; drifted docs only,Docs drift
+5,[Module] Layout Recording and Playback,https://github.com/SYKhayyat/LatticeWM/issues/5,2,2,Thin layout UI over macros/journal wrappers; duplicate recorder risk only,Duplicate risk
+6,[Module] Invisible Windows (Buffer-style),https://github.com/SYKhayyat/LatticeWM/issues/6,3,3,Scratchpad + buffers + picker/list-hidden; hidden set invisible breaks recall visibly,Visible recall break
+7,[Module] Window Groups,https://github.com/SYKhayyat/LatticeWM/issues/7,4,3,Decide persistent groups vs tags+marks; dup #24 wrong grouping breaks move-together,Breaks move-together
+8,[Module] Multi-Monitor Improvements,https://github.com/SYKhayyat/LatticeWM/issues/8,5,4,Per-output vs global numbering + mirror in model/output; wrong mirror corrupts output state,Corrupts output state
+9,[Module] Window Animation,https://github.com/SYKhayyat/LatticeWM/issues/9,4,1,river-control fades via on-open/move-cell hooks; cosmetic globally disableable,Cosmetic
+10,[Module] Layout Templates,https://github.com/SYKhayyat/LatticeWM/issues/10,4,3,apply-template naming vs layout-persistence/sessions; wrong apply rearranges visibly,Visible rearrange
+11,[Module] Global Shortcuts,https://github.com/SYKhayyat/LatticeWM/issues/11,4,5,wlroots-global-shortcuts bypassing grabs; wrong scope is security bypass,Security bypass
+12,[Module] Profile System,https://github.com/SYKhayyat/LatticeWM/issues/12,5,4,Live keybind/extension/rule switching + profiles JSON; bad load corrupts session silently,Silent session corruption
+13,[Module] Window Stacking Control,https://github.com/SYKhayyat/LatticeWM/issues/13,3,3,raise/lower/pin over tree + float order; wrong order mis-stacks visibly,Visible mis-stack
+14,[Module] Window Snapping,https://github.com/SYKhayyat/LatticeWM/issues/14,3,3,Snaps to grid ops + edge-drag threshold; wrong rect misplaces float visibly,Visible misplace
+15,[Module] Scratchpad Persistence,https://github.com/SYKhayyat/LatticeWM/issues/15,4,4,buffers + session-dump JSON + sync conflicts; bad restore loses scratchpad silently,Silent window loss
+16,[Module] Gesture Support,https://github.com/SYKhayyat/LatticeWM/issues/16,3,2,wlroots-gesture swipe/pinch to commands; mis-mapped gesture is reversible wrong action,Reversible wrong action
+17,[Module] Window History,https://github.com/SYKhayyat/LatticeWM/issues/17,2,2,on-focus hook + world history cap 50; wrong back/forward is reversible mis-focus,Reversible mis-focus
+18,[Module] Window Tags (i3-style),https://github.com/SYKhayyat/LatticeWM/issues/18,2,2,Window mark slot + focus/move/swap-mark; wrong mark is reversible mistarget,Reversible mistarget
+19,[Module] Focus Stealing Prevention,https://github.com/SYKhayyat/LatticeWM/issues/19,4,3,on-window-open whitelist/Notify/Queue/Block modes; over-block breaks legit focus visibly,Visible focus break
+20,[Module] Workspace Sharing,https://github.com/SYKhayyat/LatticeWM/issues/20,5,4,Mirror/Extend/Sync shared window lists across outputs; corrupts per-output state,Corrupts output state
+23,[Module] Window Preview,https://github.com/SYKhayyat/LatticeWM/issues/23,5,2,Compositor thumbnails + overlay cache group; wrong preview is cosmetic/perf only,Cosmetic/perf
+25,[Module] Window State Machine,https://github.com/SYKhayyat/LatticeWM/issues/25,5,4,Unify booleans+lifecycle + tree membership + home-path invariants; bad transition corrupts layout,Corrupts layout
+27,[Module] Live focus-mode toggle (follows-mouse to click-to-focus),https://github.com/SYKhayyat/LatticeWM/issues/27,2,3,Toggle focus modes defcommand; wrong mode breaks focus visibly,Visible focus break
+28,[Module] Drag windows between lattice cells with the pointer,https://github.com/SYKhayyat/LatticeWM/issues/28,3,3,pointer cell-target drag to move-to-cell; bad drop misplaces window visibly,Visible misplace
+29,[Module] Pointer-driven zoom and pan on the lattice,https://github.com/SYKhayyat/LatticeWM/issues/29,3,3,Super+scroll/pan to zoom/pan; wrong anchor mis-zooms camera visibly,Visible mis-zoom
+30,[Module] Interactive drawn-map navigation,https://github.com/SYKhayyat/LatticeWM/issues/30,2,2,cell-rects to goto-cell click decode; wrong decode is reversible mis-jump,Reversible mis-jump
+32,[Module] Whole-cell subtree operations,https://github.com/SYKhayyat/LatticeWM/issues/32,3,4,surgery tree-move/copy on cell node; wrong reparent corrupts cell subtree silently,Silent subtree corruption
+33,[Module] Targeted spawn (next new window goes here),https://github.com/SYKhayyat/LatticeWM/issues/33,2,3,target-here latch consulted by place-node lifecycle; wrong latch misroutes spawn visibly,Visible misroute
+34,[Module] Focus any window by name across all workspaces,https://github.com/SYKhayyat/LatticeWM/issues/34,2,3,Enumerate node-windows via name + jump-cursor; wrong match mis-jumps visibly,Visible mis-jump
+35,[Module] Bulk workspace verbs (close-others close-workspace minimize),https://github.com/SYKhayyat/LatticeWM/issues/35,2,5,Bulk close/minimize loop over verbs; wrong set irreversibly closes windows,Irreversible close
+36,[Module] Tab lifecycle: reorder rename move tabs between groups,https://github.com/SYKhayyat/LatticeWM/issues/36,2,4,Reorder/rename/send on leaf member list; wrong op duplicates/loses tab silently,Silent tab loss
+37,[Module] Send window to a named cell on another workspace,https://github.com/SYKhayyat/LatticeWM/issues/37,3,4,send-to-workspace + move-to-cell via grid-names; wrong cell empties source silently,Silent source empty
+38,[Module] Hold-to-peek at the lattice map,https://github.com/SYKhayyat/LatticeWM/issues/38,4,2,modifiers_watch hold + map-mode-p no-reflow design; broken peek is cosmetic overlay only,Cosmetic
+39,[Module] Persist tab-grouping across restart,https://github.com/SYKhayyat/LatticeWM/issues/39,3,4,serialize-node member order+selection with compat fallback; bad form corrupts restores,Corrupts restores
+40,[Module] Batch window selection and operations,https://github.com/SYKhayyat/LatticeWM/issues/40,4,4,New persistent selection + batch-send/close with focus repair; wrong batch corrupts many wins,Corrupts many windows
+41,[Module] Auto-respawn session restore (pick up where I left off),https://github.com/SYKhayyat/LatticeWM/issues/41,5,4,Record spawn argv per app-id + wait-place reuse; Wayland no-argv guess launches wrong app,Launches wrong app
+42,[Release] lattice/ per-cell sizing,https://github.com/SYKhayyat/LatticeWM/issues/42,1,1,Move CHANGELOG Unreleased entry to release heading; docs-only reversible,Docs-only
+43,[Release] extensions/tabs/,https://github.com/SYKhayyat/LatticeWM/issues/43,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+44,[Release] extensions/declared-sessions/,https://github.com/SYKhayyat/LatticeWM/issues/44,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+45,[Release] extensions/kbd-overview/,https://github.com/SYKhayyat/LatticeWM/issues/45,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+46,[Release] extensions/session-dump/,https://github.com/SYKhayyat/LatticeWM/issues/46,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+47,[Release] extensions/nested-cells/,https://github.com/SYKhayyat/LatticeWM/issues/47,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+48,[Release] extensions/floating-only/,https://github.com/SYKhayyat/LatticeWM/issues/48,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+49,[Release] extensions/rules-as-methods/,https://github.com/SYKhayyat/LatticeWM/issues/49,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+50,[Release] src/policy/hooks.lisp,https://github.com/SYKhayyat/LatticeWM/issues/50,1,1,Move CHANGELOG window-rule hook entry to release; docs-only,Docs-only
+51,[Release] extensions/keyboard-macros/,https://github.com/SYKhayyat/LatticeWM/issues/51,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+52,[Release] extensions/command-journal/,https://github.com/SYKhayyat/LatticeWM/issues/52,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+53,[Release] extensions/window-restarts/,https://github.com/SYKhayyat/LatticeWM/issues/53,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+54,[Release] extensions/layout-persistence/,https://github.com/SYKhayyat/LatticeWM/issues/54,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+55,[Release] extensions/idle-lock/,https://github.com/SYKhayyat/LatticeWM/issues/55,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+56,[Release] src/policy/hooks.lisp user-activity,https://github.com/SYKhayyat/LatticeWM/issues/56,1,1,Move CHANGELOG user-activity hook entry to release; docs-only,Docs-only
+57,[Release] extensions/projects/,https://github.com/SYKhayyat/LatticeWM/issues/57,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+58,[Release] extensions/transient-rules/,https://github.com/SYKhayyat/LatticeWM/issues/58,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+59,[Release] extensions/buffers/,https://github.com/SYKhayyat/LatticeWM/issues/59,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+60,[Release] extensions/master-stack extensions/scrolling-columns/,https://github.com/SYKhayyat/LatticeWM/issues/60,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+61,[Release] extensions/ focus-follows-mouse,https://github.com/SYKhayyat/LatticeWM/issues/61,1,1,Move CHANGELOG entry to release; docs-only reversible,Docs-only
+62,[Release] Fixed: option-surface SBCL method references,https://github.com/SYKhayyat/LatticeWM/issues/62,1,1,Move CHANGELOG fix entry to release; docs-only reversible,Docs-only
+85,[Low/bug] IPC timeout leaves wedged thunk (local self-DoS),https://github.com/SYKhayyat/LatticeWM/issues/85,2,4,ipc call-in-wm-thread-sync no with-timeout; loop via --eval wedges WM silently,Silent WM wedge
+87,[Low/bug] normalize-tag interns unbounded keywords,https://github.com/SYKhayyat/LatticeWM/issues/87,1,4,tags intern typo keywords never GC; silent memory exhaustion over time,Memory exhaustion
+88,[Low/bug] save-state truncates in place,https://github.com/SYKhayyat/LatticeWM/issues/88,2,5,state :supersede no tmp+rename; truncated file clobbers session irreversibly,Irreversible session loss
+89,[Low/bug] make-canvas leaks fd/mmap on wire error,https://github.com/SYKhayyat/LatticeWM/issues/89,2,4,surface no unwind-protect after shm create-pool; silent leak to EMFILE,FD exhaustion
+90,[Info] Focus primary-seat only (multi-seat ignored),https://github.com/SYKhayyat/LatticeWM/issues/90,4,3,Per-seat focus-target + float map in world/server; second seat unfocused visibly,Visible unfocused
+91,[Info] No int32 clamp before node-set-position,https://github.com/SYKhayyat/LatticeWM/issues/91,2,4,geometry/emit bignum to Wayland int32; overflow fatals inside best-effort silently,Silent fatal
+92,[Info/perf] Per-relayout sort + linear scans,https://github.com/SYKhayyat/LatticeWM/issues/92,3,2,grid sort + emit hide-unplaced O(n*m); wrong cache is perf/test-only regression,Perf regression
+93,[Low/bug] Unbounded IPC threads (local only),https://github.com/SYKhayyat/LatticeWM/issues/93,2,3,ipc per-accept thread no cap; flood exhausts FD/threads visibly,Visible exhaustion
+95,Undo granularity for lattice/viewport operations is coarse,https://github.com/SYKhayyat/LatticeWM/issues/95,3,4,node-signature viewport/tracks share undo ring; pan undo reverts tree too silently,Silent tree revert
+96,Ship workspace sharing (share-workspace mirror),https://github.com/SYKhayyat/LatticeWM/issues/96,4,3,share/unshare/list-shared plane across outputs; wrong share breaks monitors visibly,Visible monitor break
+97,[Module] Searchable Launcher,https://github.com/SYKhayyat/LatticeWM/issues/97,4,4,XDG/PATH fuzzy launcher exec in WM process; untrusted shell string risks wrong exec,Wrong exec risk
