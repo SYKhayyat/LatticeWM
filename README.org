@@ -259,7 +259,7 @@ people want to change:
 
 Match on =:app-id=, =:title=, either of those as a substring, a =?/*= glob
 against either (=:app-id-glob=, =:title-glob=, with =^= and =$= pinning the
-ends — so =^firefox-= is "starts with", =*YouTube*= is "contains", and a
+ends — so =^firefox-= is "starts with", a star at each end is "contains", and a
 =:priority= number orders rules, higher first, before list order breaks the
 tie), or =:parent= for what river reports as a child window; the first rule
 that matches wins. To find

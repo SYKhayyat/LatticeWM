@@ -1,0 +1,57 @@
+#+TITLE: auto-respawn
+#+OPTIONS: toc:nil
+
+=auto-respawn= makes "pick up where I left off" a fact of the machine rather
+than a thing you rebuild by hand: it *records* the command that launched each
+window, saves that beside the per-workspace arrangement (keyed by application
+id, which unlike a river identifier means the same thing every morning), and
+=r:respawn-session= runs them again into the panes they left.
+
+#+begin_src lisp
+(load-extension "auto-respawn")
+(auto-respawn:enable)
+#+end_src
+
+* What records, and how it knows
+
+Enabling installs a command wrapper over the launchers — =spawn=, =terminal=,
+=editor=, =browser=, =files= — that remembers each command's argv. When a
+window opens, its app-id is matched against the most recent spawn whose first
+word agrees. That covers the common case; the rest is a guess table:
+
+#+begin_src lisp
+(setf auto-respawn:*window-command-guesses*
+      '(("emacs" . "emacsclient -c")
+        ("ranger" . "alacritty -e ranger")))
+#+end_src
+
+A window whose launch was never seen — opened by an application, not by a
+spawn — is simply absent from the record, and respawn leaves its pane empty
+rather than inventing a command. That is the honest outcome: a guess is a
+promise, a record is a fact.
+
+* What saves, and when
+
+The arrangement and the launchers are written to
+=<data>/respawn/session.lisp= — debounced while the session changes, and once
+more at shutdown. It is a readable Lisp form, like the core's own state file.
+
+* What respawns
+
+=r:respawn-session= builds the recorded arrangement as empty panes, spawns
+each recorded command (through =*spawn-function*=, the seam tests use), and
+places each window as it arrives by the pane it was promised. A command whose
+window never arrives leaves an empty pane; a workspace that already holds
+windows is left alone.
+
+To have it happen by itself at login, set =*respawn-on-startup*= before
+=enabling= — the respawn fires on =:layout-restored=, after the core has put
+the saved layout back.
+
+* What it is not
+
+It respawns the *arrangement*, best-effort. It does not restore a window's
+minimized state, its tags or its terminal's scrollback — those are the core's
+session file and =tmux='s, respectively. It also does not write the
+=declared-sessions= manifest for you; recording and declaring are two answers
+to two questions, and this one answers "what was I running?"

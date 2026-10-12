@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- `extensions/auto-respawn/` — pick up where you left off. `enable` wraps every
+  launcher command so the recorder learns what launched each window (the spawn's
+  argv matched to the window's app-id, with the `*window-command-guesses*` alist
+  as the fallback for launchers whose first word is not the app-id), debounces a
+  save on every layout change, and writes a final one at shutdown. The session
+  file names windows by app-id rather than the river identifier, so it outlives
+  the compositor, and `respawn-session` runs the recorded launchers again into
+  the arrangement they left, holding an empty pane for a command whose window
+  never comes back. `*respawn-on-startup*` respawns automatically on restore.
+
 - `src/policy` window rules engine — the declarative `*window-rules*` table
   grows pattern matching and ordering: `:app-id-glob` / `:title-glob` match a
   `?`/`*` pattern with `^` and `$` pinning the ends (`^firefox-` means starts
