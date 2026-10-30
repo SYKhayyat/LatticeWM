@@ -7,13 +7,16 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - #2==#4 (keep #4), #7==#24 (keep #7).
 
 ## Phase 1 — Runtime safety foundations (before any module)
-- [ ] #85 IPC timeout wedged thunk (local self-DoS). (Critical)
+- [x] #85 IPC timeout wedged thunk (local self-DoS). (Critical)
 - [ ] #86 watchdog desyncs Wayland stream (closed — VERIFY fix held). (Critical)
 - [ ] #88 save-state truncates in place → temp+rename. (High)
 - [ ] #87 normalize-tag unbounded keyword interning. (High)
 - [ ] #89 make-canvas fd/mmap leak. (High)
 - [ ] #90 single-seat focus, #91 int32 clamp, #93 unbounded IPC threads, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
 - [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)
+- [ ] #98 split axis missing from node-signature, so undo skips an orientation change. (Low)
+- [ ] #99 a form that times out waiting for the WM thread still runs later. (Low)
+- [ ] #100 --eval silently ignores everything after the first form on a line. (Low)
 
 ## Phase 2 — Closed module work (verify, already shipped)
 - #21, #22, #24, #26, #31, #63–#83 — verify each held; check off.

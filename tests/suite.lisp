@@ -26,8 +26,8 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:hooks #:minibuffer #:devices #:capture #:boundaries
-           #:pixels #:versions #:wait-until
+           #:container #:hooks #:minibuffer #:ipc #:devices #:capture
+           #:boundaries #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite))
 
 (in-package #:latticewm/tests)
@@ -72,6 +72,12 @@ draw into and what changed since the last one.")
 (def-suite minibuffer :in model
   :description "Reading a line, which needs no compositor either — the prompt
 is a string, a point and a table of what keys mean.")
+
+(def-suite ipc :in model
+  :description "The control socket: one form in, one line out, and what
+happens to the form that never returns.  Needs no compositor and gets none,
+because the interesting half — which thread waits, which thread runs, and
+whether the second is still alive afterwards — is a property of threads.")
 
 (defparameter *extension-suites* '()
   "Suites belonging to extensions under extensions/, as (PACKAGE SUITE-NAME).
