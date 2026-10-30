@@ -323,6 +323,13 @@ without a compositor — which is the whole model."
      ;; where focus went.
      (:file "test-hooks")
      (:file "test-minibuffer")
+     ;; The control socket, after anything it answers *about*.  It was the
+     ;; one surface this program advertises on with no unit test at all,
+     ;; because answering a form from a second thread needs a second thread
+     ;; and the fixtures here construct state rather than run it.  #85 lived
+     ;; in exactly that gap: a form that never returned was answered, kept
+     ;; running, and wedged every form behind it.
+     (:file "test-ipc")
      (:file "test-devices")
      ;; The three error boundaries.  Nothing had ever asked them a question,
      ;; which is how all three came to be built on HANDLER-CASE -- so the one

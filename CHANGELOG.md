@@ -158,6 +158,17 @@ be able to do before anyone else can depend on it.
 
 ### Fixed
 
+- **A form that never returned answered the control socket and then kept
+  running in the window manager thread.** The deadline guarded the *wait*, not
+  the form, so `latticewm --eval '(loop)'` printed "the window manager did not
+  answer within 10 seconds" and left that form in the event loop: every later
+  form queued behind it and the only recovery was a restart. The deadline now
+  wraps the form (`run-with-deadline`), an interrupted form is answered as
+  `abandoned` rather than as a stuck thread, and the caller waits one second
+  past the form's budget so the two answers cannot race. `tests/test-ipc.lisp`
+  covers the fake-thread half and the integration suite's control-socket
+  section now covers the real event loop.
+
 - The option-surface machinery read SBCL method references assuming every
   method was primary; the first `:around` method on an option-reading generic
   (the new module's) crashed five surface tests with `(length :around)`.

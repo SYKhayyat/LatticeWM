@@ -48,11 +48,18 @@ reachable only by the user who owns the session, which is the same boundary the
 Wayland socket beside it draws.  It is what SWANK should have been and is not.")
 
 (p:define-option *ipc-timeout-seconds* 10
-  "How long a single form may run before the socket gives up waiting.
+  "How long a single form may run before it is abandoned.
 
 The client gets an answer either way, which is the point: a form that wedges
 the window manager should produce a message on the terminal that asked, rather
-than a shell that hangs forever with no indication of which side is stuck.")
+than a shell that hangs forever with no indication of which side is stuck.
+
+It is the FORM's budget, not the caller's patience — RUN-WITH-DEADLINE starts
+its clock when the form starts, and a form that finishes in nine seconds is
+never abandoned however busy the window manager was in front of it.  The
+caller waits a second longer, which is +IPC-WAIT-GRACE-SECONDS+.  NIL means
+no budget at all, and then nothing is abandoned: the form runs until it
+returns, which is the behaviour of a REPL and not of a socket.")
 
 (defvar *ipc-thread* nil "The accepting thread, or NIL.")
 (defvar *ipc-listener* nil "The listening socket, or NIL.")
@@ -79,10 +86,65 @@ the development loop — do not fight over one socket."
 
 ;;; ------------------------------------------- running things in the right thread
 
+(defconstant +ipc-wait-grace-seconds+ 1
+  "How much longer the caller waits than the form's own budget.
+
+A FORM THAT OUTRAN ITS BUDGET AND A THREAD THAT NEVER GOT TO IT ARE DIFFERENT
+FAILURES and used to produce the same message, which is the bug this number
+exists to keep fixed.  Both clocks start together, both expire at TIMEOUT, so
+the form's cleanup and its semaphore land a hair *after* the caller's wait
+would have expired — and a caller that gives up a hair early answers `the
+window manager did not answer', which is about the thread, when what happened
+is that the form outran its deadline, which is about the form.  So the caller
+waits past the deadline it is waiting on.  A tiny number, not worth an option:
+there is nothing here a user would want to tune.")
+
+(defun run-with-deadline (thunk seconds)
+  "Run THUNK, abandoning it if it runs past SECONDS.
+
+Returns (values RESULT STATUS), STATUS :OK, :ERROR or :ABANDONED — where
+:ABANDONED means THUNK started, ran past SECONDS, and was interrupted where it
+stood.  SECONDS of NIL runs THUNK outright and can only answer :OK or :ERROR.
+
+THE SAME TRADE CALL-WITH-WATCHDOG MAKES FOR A MANAGE SEQUENCE, and the same
+reason: a body that never returns is the worst failure this program has, and
+unwinding out of it mid-flight can leave the world half-changed.  It is a
+*better* trade here, because the manage watchdog guards code a policy method
+called and the user did not invoke, while this guards a form the user typed on
+a terminal and can watch.
+
+SBCL's timeout interrupts the thread at a safe point, which a tight `(loop)'
+reaches — measured, not assumed, because a deadline that cannot interrupt
+`(loop)' is a deadline that only guards polite code.  `sb-ext:timeout' extends
+SERIOUS-CONDITION rather than ERROR, which is why it has its own handler here
+and would slip through a plain ERROR handler if it did not."
+  (if (null seconds)
+      (handler-case (values (funcall thunk) :ok)
+        (error (condition) (values condition :error)))
+      (handler-case
+          (sb-ext:with-timeout seconds (values (funcall thunk) :ok))
+        ;; Signal the timeout before an ERROR clause could: a TIMEOUT is not an
+        ;; ERROR, so order does not decide it, but the reader should not have to
+        ;; know that.
+        (sb-ext:timeout () (values nil :abandoned))
+        (error (condition) (values condition :error)))))
+
 (defun call-in-wm-thread-sync (thunk &key (timeout *ipc-timeout-seconds*))
   "Run THUNK in the window manager thread and wait for its value.
 
-Returns (values RESULT :OK), (values CONDITION :ERROR) or (values NIL :TIMEOUT).
+Returns (values RESULT :OK), (values CONDITION :ERROR), (values NIL
+:ABANDONED) or (values NIL :TIMEOUT).  THE LAST TWO ARE DIFFERENT FAILURES AND
+USED TO BE THE SAME ONE.  :TIMEOUT means the window manager thread never got
+to THUNK at all — it is stuck somewhere earlier, and no amount of waiting
+mints time for it.  :ABANDONED means THUNK ran and ran past TIMEOUT and was
+interrupted in place by RUN-WITH-DEADLINE, so the thread is free and the next
+form will run.  Before that function existed the second case produced the
+first case's answer and then left THUNK running: `--eval (loop)' answered `the
+window manager did not answer within 10 seconds', and every form after it
+queued behind a loop that never ended — a control surface that echoed its own
+timeout message forever, on a desktop that had no event loop either, because
+the event loop is on that thread too.  One form, one shell command, no
+recovery but a restart.
 
 The wait is what distinguishes this from CALL-IN-WM-THREAD, and it is why the
 timeout is not optional: the window manager thread can be inside a manage
@@ -94,18 +156,19 @@ evaluated over the socket itself uses this — it simply runs, because queueing
 work for the thread you are on and then waiting for it is a deadlock with a
 long name."
   (if (in-wm-thread-p)
-      (handler-case (values (funcall thunk) :ok)
-        (error (condition) (values condition :error)))
+      (run-with-deadline thunk timeout)
       (let ((semaphore (bt:make-semaphore))
             (result nil)
             (status :timeout))
         (call-in-wm-thread
          (lambda ()
            (unwind-protect
-                (handler-case (setf result (funcall thunk) status :ok)
-                  (error (condition) (setf result condition status :error)))
+                (multiple-value-setq (result status)
+                  (run-with-deadline thunk timeout))
              (bt:signal-semaphore semaphore))))
-        (if (bt:wait-on-semaphore semaphore :timeout timeout)
+        (if (bt:wait-on-semaphore
+             semaphore
+             :timeout (and timeout (+ timeout +ipc-wait-grace-seconds+)))
             (values result status)
             (values nil :timeout)))))
 
@@ -159,12 +222,60 @@ that says what to do instead."
                (#\Return nil)
                (t (write-char character out))))))
 
+;;;; ------------------------------------------------------------ the shape of one form
+
+(defun ipc-abandoned-message ()
+  "What a terminal is told when its own form outran the deadline.
+
+The three things a person needs from this line, in order: that the failure is
+theirs and not the window manager's, what the budget was, and that the window
+manager is answering again — because the session was wedged by definition a
+moment ago, and the difference between `stuck' and `gone' is most of what the
+line is for.  The fourth is a warning, not a comfort: the form was interrupted
+where it stood, so whatever it had already done is still done."
+  (format nil "the form ran for ~a seconds and was abandoned -- it was ~@
+               interrupted where it stood, so whatever it had already done is~@
+               still done.  The window manager is answering again.  Raise ~a ~@
+               for a form that legitimately needs longer."
+          *ipc-timeout-seconds* :*ipc-timeout-seconds*))
+
+;;;; ---------------------------------------------------------- what is evaluated
+
+(defun ipc-form-thunk (form)
+  "FORM as the thunk CALL-IN-WM-THREAD-SYNC runs in the window manager thread.
+
+THE UNWIND-PROTECT IS NOT DECORATION.  `evaluate, then push the consequences'
+is the ordinary order — it used to be a PROG1, which is the same thing until
+the first form does not return.  The deadline interrupts a form where it stood,
+and a signalled form unwinds through whatever it had already done; in both
+cases the emitter is never asked whether the tree still fits, so a half-moved
+window sits on the screen until some *other* change happens to dirty it.  A
+cleanup form runs on every exit, which is exactly once per form and exactly
+what that order wanted.
+
+GUARDED because this runs during an unwind that is already in progress.  A
+second failure there is not information the user typed a form to get, and a
+cleanup that signals would replace a useful answer with an unhelpful one."
+  (lambda ()
+    (let ((*package* (find-package '#:latticewm/user)))
+      (unwind-protect (eval form)
+        (guarded "pushing the consequences of a form"
+          (after-command))))))
+
 (defun evaluate-for-ipc (text)
   "Read one form from TEXT, evaluate it in the window manager thread, answer.
 
 Returns a single line.  Every failure mode produces one — an unreadable form, a
 form that signals, a form that never returns — because a control socket whose
-answer to a bad question is silence is a control socket nobody can debug."
+answer to a bad question is silence is a control socket nobody can debug.
+
+AND A FORM THAT NEVER RETURNS IS ONE OF THE FAILURE MODES IT NAMES, BECAUSE IT
+COST THE SESSION.  This used to answer the timeout that comes from TEXT's own
+clock and nothing else, and the form it had abandoned kept running: the socket
+stayed readable, the desktop stayed dead, and every later form joined the queue
+behind it.  Now one of the two answers is `your form was abandoned', the other
+is `the window manager is stuck somewhere that is not you', and only the second
+one means the session is in trouble."
   (let ((form (handler-case
                   (let ((*package* (find-package '#:latticewm/user))
                         (*read-eval* nil))
@@ -174,10 +285,7 @@ answer to a bad question is silence is a control socket nobody can debug."
                     (one-line (format nil "(:error ~s)"
                                       (princ-to-string condition))))))))
     (multiple-value-bind (result status)
-        (call-in-wm-thread-sync
-         (lambda ()
-           (let ((*package* (find-package '#:latticewm/user)))
-             (prog1 (eval form) (after-command)))))
+        (call-in-wm-thread-sync (ipc-form-thunk form))
       (ecase status
         (:ok (let ((*package* (find-package '#:latticewm/user))
                    (*print-readably* nil)
@@ -193,7 +301,11 @@ answer to a bad question is silence is a control socket nobody can debug."
          (one-line
           (format nil "(:error ~s)"
                   (format nil "the window manager did not answer within ~a seconds"
-                          *ipc-timeout-seconds*))))))))
+                          *ipc-timeout-seconds*))))
+        (:abandoned
+         (one-line
+          (format nil "(:error ~s)"
+                  (ipc-abandoned-message))))))))
 
 ;;; ------------------------------------------------------------ the server
 

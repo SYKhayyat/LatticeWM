@@ -431,7 +431,10 @@ time."
 (defun wm (thunk &key (timeout 10))
   "Run THUNK on the window manager thread and wait for its value.
 
-Returns (values RESULT STATUS), STATUS being :OK, :ERROR or :TIMEOUT."
+Returns (values RESULT STATUS), STATUS being :OK, :ERROR, :ABANDONED or
+:TIMEOUT.  The last two are distinct: :TIMEOUT is the thread never reaching
+THUNK, :ABANDONED is THUNK outrunning TIMEOUT and being interrupted, which
+leaves the thread free."
   (call-in-wm-thread-sync thunk :timeout timeout))
 
 (defvar *relayouts* 0
@@ -1709,7 +1712,36 @@ are what a person means by the arrangement, and both are copy-stable."
                       "and so does a form that does not even read"))
              (let ((answer (ask "(list 1 2 3)")))
                (check (= 1 (count #\Newline (concatenate 'string answer (string #\Newline))))
-                      "and every answer is exactly one line")))
+                      "and every answer is exactly one line"))
+             ;; THE FAILURE MODE THE PARAGRAPH ABOVE PROMISES AND DID NOT CHECK:
+             ;; a form that never returns.  Before #85 it answered and then
+             ;; kept running in the window manager thread — which is the event
+             ;; loop — so the next form queued behind a loop that never ended.
+             ;; tests/test-ipc.lisp checks the same thing against a fake
+             ;; thread; this is the end-to-end half, and it is the only place
+             ;; that can show the *real* event loop running again.
+             (let ((saved *ipc-timeout-seconds*))
+               (unwind-protect
+                    (progn
+                      ;; The deadline is read by the accepting thread, so it is
+                      ;; the global that has to change, not a binding here.
+                      (setf *ipc-timeout-seconds* 1)
+                      ;; A client that waits forever for an answer hangs the
+                      ;; suite on the very bug it exists to catch, which is the
+                      ;; worst way to fail.
+                      (flet ((ask-within (seconds form)
+                               (handler-case
+                                   (sb-ext:with-timeout seconds (ask form))
+                                 (sb-ext:timeout () nil))))
+                        (let ((answer (ask-within 15 "(loop)")))
+                          (check (and answer (search ":error" answer))
+                                 "a form that never returns is answered: ~s" answer)
+                          (check (and answer (search "abandoned" answer))
+                                 "and says the form was abandoned, not that the thread was wedged: ~s"
+                                 answer))
+                        (check (search "(:ok 3)" (ask-within 5 "(+ 1 2)"))
+                               "and the next form runs, because the event loop was freed")))
+                 (setf *ipc-timeout-seconds* saved))))
            (stop-ipc-server)
            (setf *ipc-socket* nil)
            (check (not (probe-file path)) "and stopping it takes the socket away")))
