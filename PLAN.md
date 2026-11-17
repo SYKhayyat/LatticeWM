@@ -13,7 +13,8 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [ ] #104 the same truncating write in four extension files that hold user data — auto-respawn's session, recorded macros, saved journals, named layouts. Fix uses #88's `call-with-replacement-file`. (High for auto-respawn, Medium for the explicit-save commands)
 - [x] #87 normalize-tag unbounded keyword interning. (High)
 - [x] #89 make-canvas fd/mmap leak. (High)
-- [ ] #90 single-seat focus, #91 int32 clamp, #93 unbounded IPC threads, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
+- [ ] #90 single-seat focus, #93 unbounded IPC threads, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
+- [x] #91 int32 clamp before the wire (saturate at emit, model keeps the true coordinate). (High)
 - [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)
 - [ ] #98 split axis missing from node-signature, so undo skips an orientation change. (Low)
 - [ ] #99 a form that times out waiting for the WM thread still runs later. (Low)

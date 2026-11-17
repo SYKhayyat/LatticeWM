@@ -26,7 +26,8 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:hooks #:minibuffer #:ipc #:state #:tags #:devices #:capture
+           #:container #:hooks #:minibuffer #:ipc #:state #:tags #:wire #:devices
+           #:capture
            #:boundaries #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite))
 
@@ -78,6 +79,11 @@ is a string, a point and a table of what keys mean.")
 happens to the form that never returns.  Needs no compositor and gets none,
 because the interesting half — which thread waits, which thread runs, and
 whether the second is still alive afterwards — is a property of threads.")
+
+(def-suite wire :in model
+  :description "What the protocol can carry, at the boundary where the model
+stops and the marshaller starts: a coordinate is allowed to be larger than a
+Wayland int, and the request is not.")
 
 (def-suite tags :in model
   :description "A tag is a name, not a keyword.  What a prompt, a window rule and

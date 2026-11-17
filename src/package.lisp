@@ -125,7 +125,7 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:+edges-all+
    #:+cap-window-menu+ #:+cap-maximize+ #:+cap-fullscreen+ #:+cap-minimize+
    #:+caps-all+ #:+protocol-modifier-bits+
-   #:color-component #:premultiplied-rgba #:clamp-unit))
+   #:color-component #:premultiplied-rgba #:clamp-unit #:clamp-int32))
 
 (defpackage #:latticewm/core
   (:use #:cl)

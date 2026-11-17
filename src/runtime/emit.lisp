@@ -332,11 +332,15 @@ screen to say why."
     (setf (server-pending-dimensions *server*) '())
     (dolist (entry work)
       (destructuring-bind (window width height) entry
-        (when (c:window-proxy window)
-          (when-changed (window :dimensions (list width height))
-            (best-effort "propose_dimensions"
-              (w:window-propose-dimensions (c:window-proxy window)
-                                           width height))))))))
+        ;; The same boundary as the position, and the same reason: a very wide
+        ;; cell is geometry, and the request carries an int (#91).
+        (let ((width (w:clamp-int32 width))
+              (height (w:clamp-int32 height)))
+          (when (c:window-proxy window)
+            (when-changed (window :dimensions (list width height))
+              (best-effort "propose_dimensions"
+                (w:window-propose-dimensions (c:window-proxy window)
+                                             width height)))))))))
 
 ;;; ------------------------------------------------------- rendering state
 
@@ -446,11 +450,19 @@ colour tests for the keyword."
     (setf (c:window-rect window) placed)
     (when-changed (window :shown t)
       (best-effort "show" (w:window-show proxy)))
-    (let ((river-node (window-river-node window)))
+    ;; CLAMPED AT THE WIRE, NOT IN THE MODEL (#91).  A layout may legitimately
+    ;; place a pane past 2^31; the request cannot carry it, and a bignum reaching
+    ;; the marshaller signals inside BEST-EFFORT -- one line per frame and a
+    ;; window that has quietly stopped being placed.  The diff uses the clamped
+    ;; values too, because the compositor cannot tell two coordinates out there
+    ;; apart and resending them changes nothing.
+    (let ((river-node (window-river-node window))
+          (x (w:clamp-int32 (c:rect-x placed)))
+          (y (w:clamp-int32 (c:rect-y placed))))
       (when river-node
-        (when-changed (window :position (list (c:rect-x placed) (c:rect-y placed)))
+        (when-changed (window :position (list x y))
           (best-effort "set_position"
-            (w:node-set-position river-node (c:rect-x placed) (c:rect-y placed))))))
+            (w:node-set-position river-node x y)))))
     ;; Borders.  Also the only decoration a focused *empty* pane could have —
     ;; but an empty pane has no window, so the cursor there is drawn by the
     ;; overlay instead; see runtime/cursor.lisp.
@@ -462,12 +474,15 @@ colour tests for the keyword."
         (best-effort "set_content_clip_box"
           (if clip
               (w:window-set-content-clip-box
-               proxy (- (c:rect-x clip) (c:rect-x placed))
-               (- (c:rect-y clip) (c:rect-y placed))
-               (c:rect-w clip) (c:rect-h clip))
+               proxy
+               (w:clamp-int32 (- (c:rect-x clip) (c:rect-x placed)))
+               (w:clamp-int32 (- (c:rect-y clip) (c:rect-y placed)))
+               (w:clamp-int32 (c:rect-w clip))
+               (w:clamp-int32 (c:rect-h clip)))
               ;; A clip box covering everything is how you turn clipping off.
-              (w:window-set-content-clip-box proxy 0 0 (c:rect-w placed)
-                                             (c:rect-h placed))))))))
+              (w:window-set-content-clip-box proxy 0 0
+                                             (w:clamp-int32 (c:rect-w placed))
+                                             (w:clamp-int32 (c:rect-h placed)))))))))
 
 (defun emit-borders (policy window node focusedp)
   "Ask the policy for WINDOW's border and send it, diffed, premultiplied.
