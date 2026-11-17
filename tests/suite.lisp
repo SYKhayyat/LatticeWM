@@ -26,7 +26,7 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:hooks #:minibuffer #:ipc #:devices #:capture
+           #:container #:hooks #:minibuffer #:ipc #:state #:devices #:capture
            #:boundaries #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite))
 
@@ -78,6 +78,12 @@ is a string, a point and a table of what keys mean.")
 happens to the form that never returns.  Needs no compositor and gets none,
 because the interesting half — which thread waits, which thread runs, and
 whether the second is still alive afterwards — is a property of threads.")
+
+(def-suite state :in model
+  :description "The saved layout, as a file: what a reader sees while it is
+being replaced, and what happens to the last copy when it cannot be read.  The
+failure mode of both is losing the arrangement rather than reporting it, which
+is why the checks stand in the middle of the write instead of after it.")
 
 (defparameter *extension-suites* '()
   "Suites belonging to extensions under extensions/, as (PACKAGE SUITE-NAME).

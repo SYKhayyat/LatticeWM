@@ -9,7 +9,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 ## Phase 1 — Runtime safety foundations (before any module)
 - [x] #85 IPC timeout wedged thunk (local self-DoS). (Critical)
 - [ ] #86 watchdog desyncs Wayland stream (closed — VERIFY fix held). (Critical)
-- [ ] #88 save-state truncates in place → temp+rename. (High)
+- [x] #88 save-state truncates in place → temp+rename. (High)
 - [ ] #87 normalize-tag unbounded keyword interning. (High)
 - [ ] #89 make-canvas fd/mmap leak. (High)
 - [ ] #90 single-seat focus, #91 int32 clamp, #93 unbounded IPC threads, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
