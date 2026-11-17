@@ -287,6 +287,38 @@ cleanup that signals would replace a useful answer with an unhelpful one."
         (guarded "pushing the consequences of a form"
           (after-command))))))
 
+(defvar *ipc-no-more-forms* (list nil)
+  "READ's EOF value for READ-IPC-FORM, and a fresh cons so it cannot collide.
+
+READ-FROM-STRING compares its eof-value with EQ, and the only value that can
+never be a form read out of a line is one allocated here and written into no
+text: a line consisting of the symbol NIL is a form, and so is one consisting
+of :EOF.")
+
+(defun read-ipc-form (text)
+  "The single form TEXT holds, or a condition saying why there is not one.
+
+THE PROTOCOL IS ONE FORM IN, ONE LINE OUT, AND ONLY THE SECOND HALF WAS
+ENFORCED.  READ-FROM-STRING reads exactly one form and says nothing about the
+rest, so `--eval '(setf *gaps* 8) (relayout :force t)'` evaluated the SETF,
+printed (:ok 8), and exited 0 — a command reporting success for work it never
+did.  Repeating --eval and wrapping in PROGN both work, so the answer is to say
+that there is more than one form rather than to invent a second protocol
+answer: a batch would need one answer and one deadline per form to stay honest
+about what ran, and that is a different protocol.
+
+Trailing whitespace and comments are not forms, so `(+ 1 2) ; three' still
+evaluates exactly one thing."
+  (let ((*package* (find-package '#:latticewm/user))
+        (*read-eval* nil))
+    (multiple-value-bind (form end) (read-from-string text)
+      (let ((more (read-from-string text nil *ipc-no-more-forms* :start end)))
+        (when (not (eq more *ipc-no-more-forms*))
+          (error "one form per line -- this line holds more than one, and only ~
+                  the first would have run, so nothing was run.  Wrap them in ~
+                  PROGN, or repeat the flag: --eval A --eval B")))
+      form)))
+
 (defun evaluate-for-ipc (text)
   "Read one form from TEXT, evaluate it in the window manager thread, answer.
 
@@ -302,9 +334,7 @@ behind it.  Now one of the two answers is `your form was abandoned', the other
 is `the window manager is stuck somewhere that is not you', and only the second
 one means the session is in trouble."
   (let ((form (handler-case
-                  (let ((*package* (find-package '#:latticewm/user))
-                        (*read-eval* nil))
-                    (read-from-string text))
+                  (read-ipc-form text)
                 (error (condition)
                   (return-from evaluate-for-ipc
                     (one-line (format nil "(:error ~s)"

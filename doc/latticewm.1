@@ -56,7 +56,11 @@ Evaluate
 .I FORM
 inside an already-running LatticeWM, over its control socket, and print the
 result.  May be given more than once, in which case the forms run in order.
-See
+.I FORM
+holds one form, and a second one on the same line is an error rather than
+silently ignored: wrap several in
+.B progn
+or repeat the flag.  See
 .BR latticewm\-config (5).
 .TP
 .B \-\-no\-ipc

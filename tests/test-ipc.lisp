@@ -98,6 +98,36 @@ is applied to the whole answer after it is printed rather than to pieces."
     (is (search "second line" answer))
     (is (= 0 (newline-count answer)))))
 
+;;; ------------------------------------------- #100: one form, or a refusal
+
+(test more-than-one-form-on-a-line-is-an-error
+  "THE REGRESSION TEST FOR #100.  READ-FROM-STRING reads exactly one form and
+says nothing about the rest, so a single `--eval' argument holding two
+evaluated the first, printed `(:ok 8)' and exited 0 — success reported for work
+that never happened.  Reported rather than evaluated as a batch: a batch needs
+one answer and one deadline per form, which is a second protocol.
+
+The first form does not run either, because the answer is about the line and
+`nothing was run' has to be true of it."
+  (let ((*ipc-mark* nil))
+    (let ((answer (r::evaluate-for-ipc
+                   "(setq latticewm/tests::*ipc-mark* :first) ~
+                    (setq latticewm/tests::*ipc-mark* :second)")))
+      (is (search "(:error" answer))
+      (is (search "one form per line" answer))
+      (is (null *ipc-mark*)
+          "not even the first form runs: the client was told nothing did"))))
+
+(test whitespace-and-a-trailing-comment-are-not-a-second-form
+  "The check reads what is *left* after the form, so the things that are not
+forms have to stay not-forms — otherwise every line with a comment at the end
+becomes an error, which is the kind of over-correction that makes a diagnosis
+untrustworthy."
+  (is (string= "(:ok 3)" (r::evaluate-for-ipc "  (+ 1 2)  ")))
+  (is (string= "(:ok 3)" (r::evaluate-for-ipc "(+ 1 2) ; three")))
+  (is (string= "(:ok 6)"
+               (r::evaluate-for-ipc "(progn (+ 1 2) (+ 3 0) 6)"))))
+
 ;;; ---------------------------------------- #85: the form that never returns
 
 (test a-form-that-never-returns-is-answered-and-named

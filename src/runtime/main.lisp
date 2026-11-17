@@ -727,8 +727,9 @@ REPL.  Same treatment as `attached:' in the hook surface, for the same reason."
   --check-config        load the configuration, report problems, and exit
 
   --eval FORM           evaluate FORM in an already-running LatticeWM
-                        (repeatable; talks to the control socket).  Exits
-                        non-zero if any form signalled or was unreachable
+                        (repeatable; talks to the control socket).  One form
+                        per FORM: repeat the flag, or wrap them in PROGN.
+                        Exits non-zero if any form signalled or was unreachable
 
   --no-config           ignore the configuration file
   --no-restore          ignore the saved layout
