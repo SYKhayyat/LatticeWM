@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **`make check` compares the generated documents to the tree.** The six
+  `doc/*.txt` files are printed by the program, and the comparison that holds
+  them to it was in one CI job and nowhere else — so a contributor who ran
+  what CONTRIBUTING.md tells them to run got a green build over a stale
+  document, and found out after pushing. `main` itself carried the drift once.
+  The new `surface-check` target regenerates into a scratch directory and
+  diffs, which is the only shape that works: `make surface` would overwrite
+  the drift, and a check that refused to run on a dirty tree would refuse
+  exactly when it was needed. It is part of `check` now, and CI additionally
+  edits a document and asserts the target fails, because a comparison that
+  compares nothing is the failure this was written for.
+
 - **The extensions now replace their files instead of truncating them.** #88
   taught the core's own state file to write a sibling and rename it; four
   extensions that hold user data were still opening their files with

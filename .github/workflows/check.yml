@@ -309,11 +309,27 @@ jobs:
           key: deps-plain-${{ hashFiles('bootstrap.sh') }}
       - name: bootstrap
         run: ./bootstrap.sh
-      # The two lines.  `git diff --exit-code' prints what drifted, which is
-      # the whole diagnostic: the failure is always "somebody changed the
+      # The same comparison `make check' now runs (#103): regenerate into a
+      # scratch directory and diff against the tree, printing the diff, which
+      # is the whole diagnostic — the failure is always "somebody changed the
       # program and did not run `make surface'", and the diff says which
       # document and which line.
-      - name: make surface
-        run: make surface
-      - name: nothing under doc/ changed
-        run: git diff --exit-code -- doc/
+      - name: the documents are what the program prints
+        run: make surface-check
+      # AND THE CHECK THAT THE CHECK WORKS.  A target that compares nothing
+      # exits 0 for ever, and this is the issue about exactly that: a
+      # comparison nobody had wired up and nobody noticed was missing.  Edit a
+      # document by a line and it must fail; leaves the tree as it was.
+      - name: a document that drifted is caught
+        run: |
+          set -e
+          cp doc/OPTIONS.txt /tmp/OPTIONS.txt.kept
+          printf '\n;; drift added by the check that checks the check\n' >> doc/OPTIONS.txt
+          if make surface-check; then
+            echo "surface-check passed on a document nobody regenerated," >&2
+            echo "so it is not comparing anything." >&2
+            cp /tmp/OPTIONS.txt.kept doc/OPTIONS.txt
+            exit 1
+          fi
+          cp /tmp/OPTIONS.txt.kept doc/OPTIONS.txt
+          git diff --exit-code -- doc/
