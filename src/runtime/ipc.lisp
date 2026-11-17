@@ -376,23 +376,108 @@ one means the session is in trouble."
                  (progn (write-line answer stream) (force-output stream))
                (error () (return))))))
 
+;;; ------------------------------------------------- a bound on the connections
+
+(defconstant +ipc-max-connections+ 16
+  "How many control-socket clients may be connected at once.
+
+EACH CONNECTION IS A THREAD AND TWO FILE DESCRIPTORS, and there was no bound at
+all (#93): a shell loop around `latticewm --eval' — or a script whose client
+half died and left the socket open — grew both until the session could not open
+a window.  The count is live connections rather than commands, because the
+resource is the thread and the thread lasts as long as the client holds the
+socket.
+
+Sixteen is more than any script drives at once (each `--eval' is a connection
+that closes when it exits, and `--eval A --eval B' is one connection) and few
+enough that a flood is refused while the session is still healthy enough to say
+so.  Not an option: nothing a user would tune, and a limit that could be raised
+would be a limit whose failure mode people meet by raising it.")
+
+(defvar *ipc-connections* 0
+  "Live connection threads, and the number +IPC-MAX-CONNECTIONS+ bounds.")
+
+(defvar *ipc-connection-lock* (bt:make-lock "latticewm-ipc-connections"))
+
+(defun ipc-claim-connection ()
+  "Take one of the connection slots, or NIL when they are all taken."
+  (bt:with-lock-held (*ipc-connection-lock*)
+    (when (< *ipc-connections* +ipc-max-connections+)
+      (incf *ipc-connections*)
+      t)))
+
+(defun ipc-release-connection ()
+  "Give a slot back.  Called from the connection thread's UNWIND-PROTECT."
+  (bt:with-lock-held (*ipc-connection-lock*)
+    (decf *ipc-connections*)))
+
+(defun ipc-refuse-connection (connection)
+  "Tell a client that the socket is full, then close it.
+
+AN ANSWER RATHER THAN A SILENT CLOSE.  The client reads one line and treats
+EOF as `no answer', which is indistinguishable from the window manager being
+gone; a refusal it can print, and `latticewm --eval' turns it into a non-zero
+exit status like any other error.  Best-effort throughout: this runs when the
+process is already at a limit, and a refusal that signalled would leak both the
+socket and the slot it never took."
+  (guarded "refusing a control-socket connection"
+    (let ((stream (sb-bsd-sockets:socket-make-stream
+                   connection :input t :output t
+                              :element-type 'character
+                              :external-format :utf-8)))
+      (unwind-protect
+           (progn
+             (write-line (one-line
+                          (format nil "(:error ~s)"
+                                  (format nil "~d control-socket connections are ~
+                                               already open, so this one was ~
+                                               refused.  A client that is not ~
+                                               closing its socket is holding ~
+                                               one of them"
+                                          +ipc-max-connections+)))
+                         stream)
+             (force-output stream))
+        (ignore-errors (close stream)))))
+  ;; Closed whether or not the stream was made, and whether or not the write
+  ;; landed: the refusal must not leak the very descriptor it is refusing.
+  (ignore-errors (sb-bsd-sockets:socket-close connection)))
+
 (defun ipc-accept-loop (socket)
-  "Accept connections until the socket is closed."
+  "Accept connections until the socket is closed, at most the cap at a time."
   (loop
     (let ((connection (handler-case (sb-bsd-sockets:socket-accept socket)
                         (error () (return)))))
       (unless connection (return))
-      (bt:make-thread
-       (lambda ()
-         (with-abandon
-           (let ((stream (sb-bsd-sockets:socket-make-stream
-                          connection :input t :output t
-                                     :element-type 'character
-                                     :external-format :utf-8)))
-             (unwind-protect (serve-ipc-connection stream)
-               (ignore-errors (close stream))
-               (ignore-errors (sb-bsd-sockets:socket-close connection))))))
-       :name "latticewm-ipc-connection"))))
+      (cond
+        ((not (ipc-claim-connection))
+         (logmsg :warn "control socket: ~d connections already open, refusing one"
+                 +ipc-max-connections+)
+         (ipc-refuse-connection connection))
+        (t
+         ;; THE SLOT AND THE SOCKET ARE BOTH GIVEN BACK, including when the
+         ;; thread cannot be started at all: a slot claimed and never released
+         ;; would tighten the cap by one for the rest of the session, which is
+         ;; the same failure this bound exists to prevent, one connection at a
+         ;; time.
+         (handler-case
+             (bt:make-thread
+              (lambda ()
+                (unwind-protect
+                     (with-abandon
+                       (let ((stream (sb-bsd-sockets:socket-make-stream
+                                      connection :input t :output t
+                                                 :element-type 'character
+                                                 :external-format :utf-8)))
+                         (unwind-protect (serve-ipc-connection stream)
+                           (ignore-errors (close stream))
+                           (ignore-errors (sb-bsd-sockets:socket-close connection)))))
+                  (ipc-release-connection)))
+              :name "latticewm-ipc-connection")
+           (error (condition)
+             (ipc-release-connection)
+             (ignore-errors (sb-bsd-sockets:socket-close connection))
+             (logmsg :warn "control socket: could not start a connection thread: ~a"
+                     condition))))))))
 
 (defun start-ipc-server ()
   "Open the control socket and start accepting on it.  Never signals.
@@ -436,12 +521,25 @@ there can only be one of us on it."
         (path *ipc-path*))
     (setf *ipc-listener* nil *ipc-path* nil)
     (when socket
+      ;; SHUTDOWN, THEN CLOSE.  Closing a listening socket does not wake another
+      ;; thread already blocked in ACCEPT -- the descriptor stays referenced by
+      ;; the syscall -- so the accept loop would have sat there forever and the
+      ;; only way out was DESTROY-THREAD interrupting it mid-accept, which is the
+      ;; half-answer #93 names.  SHUTDOWN does wake it: ACCEPT returns EINVAL,
+      ;; the loop treats that as the socket being gone and returns on its own.
+      (ignore-errors (sb-bsd-sockets:socket-shutdown socket :direction :io))
       (ignore-errors (sb-bsd-sockets:socket-close socket)))
     (when path (ignore-errors (delete-file path)))
     (let ((thread *ipc-thread*))
       (setf *ipc-thread* nil)
       (when (and thread (bt:thread-alive-p thread))
-        (ignore-errors (bt:destroy-thread thread)))))
+        ;; DESTROY-THREAD stays as the fallback, because a shutdown that can hang
+        ;; is worse than one that truncates; it is now the case that does not
+        ;; happen rather than the only case.  SBCL's JOIN-THREAD rather than
+        ;; BORDEAUX-THREADS', because the portable one has no timeout and a join
+        ;; that waits forever is exactly the hang this is here to avoid.
+        (when (eq :timeout (sb-thread:join-thread thread :timeout 2))
+          (ignore-errors (bt:destroy-thread thread))))))
   nil)
 
 ;;; ------------------------------------------------------------ the client

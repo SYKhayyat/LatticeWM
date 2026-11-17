@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The control socket has a connection limit, and it stops by being shut down
+  rather than killed.** Every accepted connection was a thread and two file
+  descriptors with no bound — a shell loop around `latticewm --eval`, or a
+  client that died holding its socket open, grew both until the session could
+  not place a window. Sixteen may be connected at once now; the seventeenth is
+  answered with a refusal and closed, deliberately as an answer rather than as
+  an EOF, which a client cannot tell from the window manager being gone.
+  `stop-ipc-server` also shuts the listener down before closing it: closing a
+  listening socket does not wake a thread already blocked in `accept`, so the
+  old shutdown could only kill the accept thread where it stood.
+
 - **Two forms on one line are refused instead of half-run.** `READ-FROM-STRING`
   reads exactly one form and says nothing about the rest, so
   `--eval '(setf *gaps* 8) (relayout :force t)'` evaluated the `setf`, printed
