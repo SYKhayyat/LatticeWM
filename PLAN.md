@@ -8,12 +8,13 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 
 ## Phase 1 — Runtime safety foundations (before any module)
 - [x] #85 IPC timeout wedged thunk (local self-DoS). (Critical)
-- [ ] #86 watchdog desyncs Wayland stream (closed — VERIFY fix held). (Critical)
+- [x] #86 watchdog desyncs Wayland stream — closed as by design, and verified: the 5s backstop is documented at `call-with-watchdog`, and `with-manage-sequence`'s unwind-protect still sends `manage_finish` however the body ends. (Critical)
 - [x] #88 save-state truncates in place → temp+rename. (High)
 - [x] #104 the same truncating write in four extension files that hold user data — auto-respawn's session, recorded macros, saved journals, named layouts. Fix uses #88's `call-with-replacement-file`. (High for auto-respawn, Medium for the explicit-save commands)
 - [x] #87 normalize-tag unbounded keyword interning. (High)
 - [x] #89 make-canvas fd/mmap leak. (High)
-- [ ] #90 single-seat focus, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
+- [x] #94 stale wl_output proxy — verified: no cached proxy survives a global (lookups go through the id each time), and `tests/test-lifecycle.lisp` now pins that `forget-global` drops the name and scale a reused id would inherit.
+- [ ] #90 single-seat focus, #92 per-relayout sort.
 - [x] #93 unbounded IPC threads — a fixed connection cap and a shutdown that joins the accept thread.
 - [x] #91 int32 clamp before the wire (saturate at emit, model keeps the true coordinate). (High)
 - [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)

@@ -611,6 +611,21 @@ still the shipped rule, and something else is now writable."
       (is (= 1 (c:prop output :workspace))
           "an index past the end of the stack is dropped, not clamped to it"))))
 
+(test a-forgotten-output-global-forgets-its-name-and-scale
+  "#94, verified rather than assumed.  Wayland reuses global ids, so a stale
+name here is not a leak that grows -- it is the *next* monitor inheriting the
+last one's identity.  FORGET-GLOBAL is what makes `unplug it and plug in a
+different one' a no-op instead of a wrong answer, and the tables it clears are
+the whole of what a reused id could inherit."
+  (let ((r:*server* (make-instance 'r:server)))
+    (setf (gethash 7 (r::server-output-names r:*server*)) "DP-1"
+          (gethash 7 (r::server-output-scales r:*server*)) 2)
+    (r::forget-global r:*server* 7)
+    (is-false (gethash 7 (r::server-output-names r:*server*))
+              "the name does not survive the global")
+    (is-false (gethash 7 (r::server-output-scales r:*server*))
+              "nor the scale")))
+
 ;;; ==================================================================
 ;;; THE HANGUP NOTHING REPORTED
 ;;; ==================================================================
