@@ -116,38 +116,77 @@ CFFI; this needs nothing and works on every kernel."
 
 The buffer is allocated at the device size and the surface is told its scale at
 commit time, which is how Wayland does HiDPI: the compositor is handed more
-pixels for the same area rather than the same pixels stretched."
+pixels for the same area rather than the same pixels stretched.
+
+A CANVAS THAT CANNOT BE FINISHED LEAVES NOTHING BEHIND (#89).  Four things are
+acquired in order -- an anonymous file, its mapping, a wl_shm pool and a
+buffer -- and the two wire requests can fail on a compositor that has gone
+away.  Unwinding out of the middle used to leak the descriptor and the mapping;
+and that is the failure that repeats, because the overlay asks again on the
+next frame, so a session that is merely near a limit walks into it.
+
+The descriptor is closed as soon as the pool exists, because after that request
+the client's copy is held for nothing: wayflan sends each message before the
+request returns (its `%write-message' flushes), and the pool is what the
+compositor keeps.  A canvas therefore costs no descriptor after creation, and
+DESTROY-CANVAS knows that -1 means there is nothing to close."
   (let* ((scale (max 1 scale))
          (width (* scale (max 1 width)))
          (height (* scale (max 1 height)))
          (stride (* width 4))
          (size (* stride height))
          (fd (make-shm-file size))
-         (data (sb-posix:mmap nil size
-                              (logior sb-posix:prot-read sb-posix:prot-write)
-                              sb-posix:map-shared fd 0))
-         (pool (wl:wl-shm.create-pool shm fd size))
-         (buffer (wl:wl-shm-pool.create-buffer pool 0 width height stride
-                                               :argb8888))
-         (canvas (%make-canvas :width width :height height :scale scale
-                               :stride stride :size size
-                               :fd fd :data data :pool pool :buffer buffer)))
-    ;; THE ONE EVENT THE PROTOCOL REQUIRES OF US, AND THE ONLY INBOUND
-    ;; OBLIGATION IN THE PROGRAM THAT NOTHING ANSWERED.  Gate 8 checks that
-    ;; every event we handle exists on the interface we handle it for — it
-    ;; faces outward, from our code toward the protocol, and the defect was on
-    ;; the other side.  There was no wl_buffer listener anywhere in src/; the
-    ;; only wl_buffer reference at all was .destroy.
-    (on-events (buffer "wl_buffer")
-      (:release (setf (canvas-busy canvas) nil)))
-    canvas))
+         (data nil)
+         (pool nil)
+         (buffer nil)
+         (finished nil))
+    (unwind-protect
+         (let ((canvas (%make-canvas :width width :height height :scale scale
+                                     :stride stride :size size :fd fd)))
+           (setf data (sb-posix:mmap nil size
+                                     (logior sb-posix:prot-read
+                                             sb-posix:prot-write)
+                                     sb-posix:map-shared fd 0))
+           (setf (canvas-data canvas) data)
+           (setf pool (wl:wl-shm.create-pool shm fd size))
+           (setf (canvas-pool canvas) pool)
+           (ignore-errors (sb-posix:close fd))
+           (setf fd -1 (canvas-fd canvas) -1)
+           (setf buffer (wl:wl-shm-pool.create-buffer pool 0 width height stride
+                                                     :argb8888))
+           (setf (canvas-buffer canvas) buffer)
+           ;; THE ONE EVENT THE PROTOCOL REQUIRES OF US, AND THE ONLY INBOUND
+           ;; OBLIGATION IN THE PROGRAM THAT NOTHING ANSWERED.  Gate 8 checks
+           ;; that every event we handle exists on the interface we handle it
+           ;; for — it faces outward, from our code toward the protocol, and
+           ;; the defect was on the other side.  There was no wl_buffer
+           ;; listener anywhere in src/; the only wl_buffer reference at all
+           ;; was .destroy.
+           (on-events (buffer "wl_buffer")
+             (:release (setf (canvas-busy canvas) nil)))
+           (setf finished t)
+           canvas)
+      ;; The partial canvas, in the reverse of the order it was built.  A
+      ;; compositor that refused the last request gets no handle on a buffer
+      ;; whose memory nobody is going to draw into.
+      (unless finished
+        (when buffer (ignore-errors (wl:wl-buffer.destroy buffer)))
+        (when pool (ignore-errors (wl:wl-shm-pool.destroy pool)))
+        (when data (ignore-errors (sb-posix:munmap data size)))
+        (when (>= fd 0) (ignore-errors (sb-posix:close fd)))))))
 
 (defun destroy-canvas (canvas)
   "Release everything a canvas holds."
   (ignore-errors (wl:wl-buffer.destroy (canvas-buffer canvas)))
   (ignore-errors (wl:wl-shm-pool.destroy (canvas-pool canvas)))
   (ignore-errors (sb-posix:munmap (canvas-data canvas) (canvas-size canvas)))
-  (ignore-errors (sb-posix:close (canvas-fd canvas)))
+  ;; -1 IS THE NORMAL CASE NOW, not an error case: MAKE-CANVAS closes the
+  ;; descriptor when the pool has it, and only a canvas from before that did
+  ;; (or one still being made) arrives here with one.  Closing -1 would be an
+  ;; EBADF per overlay resize, logged nowhere and paid for anyway.
+  (when (>= (canvas-fd canvas) 0)
+    (ignore-errors (sb-posix:close (canvas-fd canvas)))
+    (setf (canvas-fd canvas) -1))
   (setf (canvas-buffer canvas) nil (canvas-pool canvas) nil)
   nil)
 

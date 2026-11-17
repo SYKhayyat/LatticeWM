@@ -282,3 +282,39 @@ stops waiting."
     (r::frame-arrived overlay)
     (is (= 0 drawn)
         "a redraw of something no longer on screen is not worth running late")))
+
+;;; ------------------------------------------ the canvas that cannot be made
+
+(test a-canvas-that-cannot-be-made-leaves-no-descriptor-and-no-mapping
+  "THE FAILURE PATH, WHICH IS THE ONE THAT REPEATS (#89).
+
+MAKE-CANVAS acquires four things in order, and the two wire requests are the
+ones that can fail.  Unwinding out of the middle used to leave the anonymous
+file's descriptor open and its mapping in place; the overlay asks again on the
+next frame, so a session merely near a limit walked into the limit.
+
+Asserted from outside the process, because the leak is not a Lisp value: the
+descriptor table and the map are the two things a leaking call changes.  Passing
+NIL as the wl_shm object makes the pool request signal *after* the file and the
+mapping exist, which is the shape of a compositor that has gone away."
+  (labels ((fd-count () (length (directory "/proc/self/fd/*")))
+           (mapped-canvas-count ()
+             (with-open-file (in "/proc/self/maps")
+               (loop for line = (read-line in nil nil)
+                     while line count (search "latticewm-" line)))))
+    (let ((fds (fd-count))
+          (mappings (mapped-canvas-count)))
+      (dotimes (i 3)
+        (is (eq :refused
+                (handler-case (progn (r:make-canvas nil 10 10) :made)
+                  (error () :refused)))
+            "the request fails without a compositor, which is the fixture"))
+      (is (= fds (fd-count)) "no descriptor outlived the failed canvas")
+      (is (= mappings (mapped-canvas-count)) "and no mapping did"))))
+
+(test destroying-a-canvas-with-nothing-left-to-close-is-quiet
+  "A finished canvas no longer owns a descriptor -- MAKE-CANVAS hands it to the
+pool and closes it -- so DESTROY-CANVAS must treat -1 as ordinary rather than
+closing it and swallowing an EBADF per overlay resize."
+  (let ((canvas (r::%make-canvas :size 0 :data (sb-sys:int-sap 0) :fd -1)))
+    (finishes (r:destroy-canvas canvas))))
