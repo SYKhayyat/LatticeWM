@@ -457,6 +457,32 @@ modifier in a binding makes no sense.")
 ;;; four 32-bit RGBA values.  Unless specified in another protocol extension,
 ;;; the RGBA values use pre-multiplied alpha."
 
+;;; ------------------------------------------------- ints the wire can hold
+;;;
+;;; WAYLAND'S `int' IS 32 BITS AND OUR GEOMETRY IS NOT.  The lattice is an
+;;; unbounded plane and a 2x output doubles every coordinate, so a pane far
+;;; enough out reaches 2^31.  A bignum that reaches wayflan's marshaller
+;;; signals a type error there; at the emit boundary that error lands inside
+;;; BEST-EFFORT, which turns "this window cannot be placed" into one log line
+;;; per frame and a desktop that has silently stopped placing one window.
+;;;
+;;; The fix belongs at the boundary and not in the model.  A RECT is allowed to
+;;; name a coordinate the compositor cannot draw -- intersections, centring and
+;;; relative paths are all correct out there -- it just cannot be *sent*.  So
+;;; the value saturates, which is the only thing the compositor could have done
+;;; with it anyway.
+
+(defconstant +int32-min+ (- (expt 2 31)))
+(defconstant +int32-max+ (1- (expt 2 31)))
+
+(defun clamp-int32 (value)
+  "VALUE as the nearest 32-bit signed integer the wire can carry.
+
+Integers only, on purpose: a float in an int field is a different bug, and no
+rounding rule turns 1.5 pixels into 1 or 2 without guessing on the user's
+behalf.  Such a value still signals, as it did before."
+  (max +int32-min+ (min +int32-max+ value)))
+
 (defun clamp-unit (value)
   "VALUE as a float in [0,1].  Anything unreadable becomes 0.0.
 

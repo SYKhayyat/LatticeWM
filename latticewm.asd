@@ -331,6 +331,7 @@ without a compositor — which is the whole model."
      ;; running, and wedged every form behind it.
      (:file "test-ipc")
      (:file "test-tags")
+     (:file "test-wire")
      (:file "test-state")
      (:file "test-devices")
      ;; The three error boundaries.  Nothing had ever asked them a question,

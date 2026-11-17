@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A coordinate past 32 bits no longer stops a window being placed.** Wayland's
+  `int` is signed 32-bit and the lattice is unbounded, so a pane far enough out —
+  or a 2x output doubling every coordinate — produced a bignum that signalled
+  inside the marshaller; at the emit boundary `best-effort` turned that into one
+  log line per frame and a window the desktop had silently stopped placing.
+  Positions, proposed sizes and clip boxes now saturate at the protocol's range
+  (`clamp-int32`), and the emitter's diff uses the saturated value so a window
+  out there is not resent every frame. The model keeps the real coordinate:
+  layout arithmetic is correct past the edge, and it is only the request that
+  cannot carry it.
+
 - **A canvas that cannot be created no longer leaks a descriptor and its
   mapping.** `make-canvas` acquires an anonymous file, maps it, then makes two
   compositor requests; a failure in the second half left the first half behind,
