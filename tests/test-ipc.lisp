@@ -284,3 +284,69 @@ and this form changes it and then hangs."
                                                                :app-id \"third\")))
                              (loop))")))
         (is (= 2 (length (r:undo-ring))))))))
+
+;;; --------------------------------- #93: the number of clients is bounded
+
+(defun connect-to-ipc (path)
+  "A connected client socket and its stream, made the way IPC-EVALUATE does."
+  (let ((socket (make-instance 'sb-bsd-sockets:local-socket :type :stream)))
+    (sb-bsd-sockets:socket-connect socket (namestring path))
+    (values socket
+            (sb-bsd-sockets:socket-make-stream socket :input t :output t
+                                                      :element-type 'character
+                                                      :external-format :utf-8))))
+
+(test a-flood-of-clients-is-refused-rather-than-accepted
+  "THE REGRESSION TEST FOR #93.  Every connection is a thread and two file
+descriptors and there was no bound: a shell loop around `latticewm --eval', or
+a client that died and left its socket open, grew both until the session could
+not place a window.  The limit is on *live* connections, because that is what
+the thread and the descriptors last as long as.
+
+A refusal is an answer and not a silent close: a client that gets EOF cannot
+tell the window manager being full from the window manager being gone, and
+`latticewm --eval' turns the answer into the exit status a script reads."
+  (let* ((path (merge-pathnames (format nil "latticewm-test-~d.sock"
+                                        (sb-posix:getpid))
+                                (uiop:temporary-directory)))
+         (r::*ipc-socket* path))
+    ;; THE GLOBAL, not a binding: the accept thread and every connection thread
+    ;; read and write this, and a binding here would count in this thread only.
+    (setf r::*ipc-connections* 0)
+    (is (r::start-ipc-server) "the control socket opens at ~a" path)
+    (let ((thread r::*ipc-thread*)
+          (clients '()))
+      (unwind-protect
+           (progn
+             ;; The threads land asynchronously, so the cap is read once every
+             ;; client has actually been accepted rather than assumed.
+             (dotimes (i r::+ipc-max-connections+)
+               (push (multiple-value-list (connect-to-ipc path)) clients))
+             (is (wait-until (lambda ()
+                               (= r::+ipc-max-connections+ r::*ipc-connections*))
+                             :timeout 10)
+                 "the cap many clients are all being served")
+             (multiple-value-bind (socket stream) (connect-to-ipc path)
+               (unwind-protect
+                    (let ((answer (read-line stream nil nil)))
+                      (is (stringp answer)
+                          "the one over the cap gets an answer, not a silent close")
+                      (is (and answer (search "refused" answer))
+                          "and the answer says it was refused: ~s" answer))
+                 (ignore-errors (close stream))
+                 (ignore-errors (sb-bsd-sockets:socket-close socket))))
+             (is (= r::+ipc-max-connections+ r::*ipc-connections*)
+                 "a refused client does not take a slot"))
+        ;; The client half is what holds a slot, so closing it is what frees
+        ;; one — the check is that the count comes back down on its own.
+        (dolist (client clients)
+          (destructuring-bind (socket stream) client
+            (ignore-errors (close stream))
+            (ignore-errors (sb-bsd-sockets:socket-close socket))))
+        (r::stop-ipc-server)
+        (is (wait-until (lambda () (zerop r::*ipc-connections*)) :timeout 10)
+            "every slot is given back when the clients go away")
+        (when thread
+          (is (wait-until (lambda () (not (bt:thread-alive-p thread))) :timeout 5)
+              "and the accepting thread ends without being destroyed"))
+        (is (not (probe-file path)) "and the socket file is gone")))))
