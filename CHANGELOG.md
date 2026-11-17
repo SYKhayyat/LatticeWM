@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The extensions now replace their files instead of truncating them.** #88
+  taught the core's own state file to write a sibling and rename it; four
+  extensions that hold user data were still opening their files with
+  `:if-exists :supersede`, which truncates before the first byte. A save that
+  failed halfway therefore destroyed the previous file: auto-respawn's session
+  (written automatically on every layout change and again at shutdown),
+  recorded macros, saved journals, and named layouts. They all write through
+  `call-with-replacement-file` now, so the file on disk is always either the
+  old complete one or the new complete one — and auto-respawn still swallows a
+  failed save, which must stay a log line rather than a second failure on the
+  way out.
+
 - **The control socket has a connection limit, and it stops by being shut down
   rather than killed.** Every accepted connection was a thread and two file
   descriptors with no bound — a shell loop around `latticewm --eval`, or a

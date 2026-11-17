@@ -10,7 +10,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [x] #85 IPC timeout wedged thunk (local self-DoS). (Critical)
 - [ ] #86 watchdog desyncs Wayland stream (closed — VERIFY fix held). (Critical)
 - [x] #88 save-state truncates in place → temp+rename. (High)
-- [ ] #104 the same truncating write in four extension files that hold user data — auto-respawn's session, recorded macros, saved journals, named layouts. Fix uses #88's `call-with-replacement-file`. (High for auto-respawn, Medium for the explicit-save commands)
+- [x] #104 the same truncating write in four extension files that hold user data — auto-respawn's session, recorded macros, saved journals, named layouts. Fix uses #88's `call-with-replacement-file`. (High for auto-respawn, Medium for the explicit-save commands)
 - [x] #87 normalize-tag unbounded keyword interning. (High)
 - [x] #89 make-canvas fd/mmap leak. (High)
 - [ ] #90 single-seat focus, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.

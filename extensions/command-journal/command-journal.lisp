@@ -117,10 +117,13 @@ with a journals/ subdirectory we can write."
     (cond
       ((null file) (r:notify "nowhere to save journals") nil)
       (t (ensure-directories-exist file)
-         (with-open-file (out file :direction :output :if-exists :supersede
-                                       :if-does-not-exist :create)
-           (let ((*package* (find-package :keyword)))
-             (write (list :version 1 :entries *journal*) :stream out)))
+         ;; Replaced, not truncated: saving over the journal after an hour of
+         ;; work must not be able to cost both the old one and the new one.
+         (r:call-with-replacement-file
+          file
+          (lambda (out)
+            (let ((*package* (find-package :keyword)))
+              (write (list :version 1 :entries *journal*) :stream out))))
          (r:logmsg :info "saved journal ~a (~d entr~:@p)"
                    name (length *journal*))
          name))))

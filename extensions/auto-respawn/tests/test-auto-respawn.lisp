@@ -222,3 +222,69 @@ promised — an incomplete morning beats no morning at all."
   "No file, no respawn — and no error."
   (with-session
     (is (null (ar:respawn-session)))))
+
+;;; ------------------------------------------------------- a failed save
+;;
+;; #104.  GUARDED-SAVE wrote the session with :IF-EXISTS :SUPERSEDE, which
+;; truncates before the first byte — and this file is written automatically on
+;; every layout change and again at shutdown, exactly when something else may
+;; already be going wrong.  Both checks fail the write on purpose: once
+;; through SAVE-SESSION, and once through the hooks that call it, because the
+;; automatic path is the one nobody asks for and the one that must be safe.
+
+(defun block-the-replacement (file)
+  "Make FILE's temporary unopenable, so the save cannot start writing."
+  (let* ((temporary (r:temporary-state-path file))
+         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
+         ;; would re-escape the dot SBCL escapes in the temporary's type.
+         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
+    (ensure-directories-exist blocked)
+    blocked))
+
+(defun unblock-the-replacement (temporary)
+  (ignore-errors
+    (uiop:delete-directory-tree temporary :validate t
+                                :if-does-not-exist :ignore)))
+
+(test a-save-that-cannot-write-keeps-the-last-session
+  (with-session
+    (setf ar::*launcher-commands* '(("foot" "foot")))
+    (is-true (ar::save-session))
+    (let* ((file (ar::session-file))
+           (blocked (block-the-replacement file)))
+      (unwind-protect
+           (progn
+             (setf ar::*launcher-commands* '(("firefox" "firefox")))
+             (is-true (ar::save-session)
+                      "a failed save is still non-fatal, as it must be")
+             (let (spawned)
+               (setf ar::*spawn-function* (lambda (argv) (push argv spawned)))
+               (is (= 1 (ar:respawn-session))
+                   "the load path still finds a session")
+               (is (equal '(("foot")) spawned)
+                   "and it is the one from before the failed save")))
+        (unblock-the-replacement blocked))
+      (is-false (probe-file (r:temporary-state-path file))
+                "with no temporary left behind"))))
+
+(test the-automatic-save-goes-through-the-same-replacement
+  "The :LAYOUT-CHANGED and :SHUTDOWN hooks save through the helper too."
+  (with-session
+    (unwind-protect
+         (progn
+           (ar:enable)
+           (setf ar::*launcher-commands* '(("foot" "foot")))
+           (is-true (ar::save-session))
+           (let* ((file (ar::session-file))
+                  (before (getf (ar::guarded-read file) :commands))
+                  (blocked (block-the-replacement file)))
+             (unwind-protect
+                  (progn
+                    (setf ar::*launcher-commands* '(("firefox" "firefox"))
+                          ar::*last-save* 0)
+                    (p:run-hooks :layout-changed)
+                    (p:run-hooks :shutdown)
+                    (is (equal before (getf (ar::guarded-read file) :commands))
+                        "the automatic saves could not truncate the session"))
+               (unblock-the-replacement blocked))))
+      (ignore-errors (ar:disable)))))

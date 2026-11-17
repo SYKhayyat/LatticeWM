@@ -145,24 +145,32 @@ leaves naming windows by app-id."
                            (r:serialize-node node) mapping))))))
 
 (defun guarded-save (file)
-  "Write the session to FILE, swallowing the errors that must not be fatal."
+  "Write the session to FILE, swallowing the errors that must not be fatal.
+
+The write goes through R:CALL-WITH-REPLACEMENT-FILE, not a plain
+:IF-EXISTS :SUPERSEDE stream.  This file is written automatically on every
+layout change and again at shutdown, which is exactly when something else is
+likely to be going wrong, and truncating it first meant a failed save cost the
+previous session as well as the new one.  The IGNORE-ERRORS stays: a full disk
+must be a log line, not a second failure on the way out."
   (ignore-errors
     (ensure-directories-exist file)
-    (with-open-file (out file :direction :output :if-exists :supersede
-                              :if-does-not-exist :create)
-      (let ((*print-readably* nil)
-            (*print-pretty* t)
-            (*package* (find-package :keyword)))
-        (format out ";;;; LatticeWM auto-respawn session.  Written by the ~
-                     auto-respawn extension.~%")
-        (write (list :version +session-version+
-                     :commands (mapcar (lambda (pair)
-                                         (cons (car pair)
-                                               (copy-list (cdr pair))))
-                                       *launcher-commands*)
-                     :workspaces (workspace-forms))
-               :stream out)
-        (terpri out)))))
+    (r:call-with-replacement-file
+     file
+     (lambda (out)
+       (let ((*print-readably* nil)
+             (*print-pretty* t)
+             (*package* (find-package :keyword)))
+         (format out ";;;; LatticeWM auto-respawn session.  Written by the ~
+                      auto-respawn extension.~%")
+         (write (list :version +session-version+
+                      :commands (mapcar (lambda (pair)
+                                          (cons (car pair)
+                                                (copy-list (cdr pair))))
+                                        *launcher-commands*)
+                      :workspaces (workspace-forms))
+                :stream out)
+         (terpri out))))))
 
 (defun save-session ()
   "Write the recorded launchers and the per-workspace arrangement.

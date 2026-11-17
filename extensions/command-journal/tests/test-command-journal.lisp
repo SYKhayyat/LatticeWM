@@ -159,3 +159,48 @@ the same ruling the core makes about hand-edited state files."
         (princ "(this is not a journal" out))
       (is-false (cj:load-journal "nonsense"))
       (is (= 0 (cj:journal-entry-count))))))
+
+;;; ------------------------------------------------------- a failed save
+;;
+;; #104: the same truncation the core's state file had, in the file a journal
+;; exists to keep.  SAVE-JOURNAL-AS opened the named file with :IF-EXISTS
+;; :SUPERSEDE, so the write that failed had already destroyed the previous
+;; one.  The check stands where the save stands: the temporary it writes
+;; through is made impossible, so the write fails, and the file must be
+;; yesterday's journal.
+
+(defun block-the-replacement (file)
+  "Make FILE's temporary unopenable, so the save cannot start writing."
+  (let* ((temporary (r:temporary-state-path file))
+         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
+         ;; would re-escape the dot SBCL escapes in the temporary's type.
+         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
+    (ensure-directories-exist blocked)
+    blocked))
+
+(defun unblock-the-replacement (temporary)
+  (ignore-errors
+    (uiop:delete-directory-tree temporary :validate t
+                                :if-does-not-exist :ignore)))
+
+(test a-save-that-cannot-write-keeps-the-last-journal
+  (with-journal
+    (setf cj::*journal* '(("cj-test-mark" . ("yesterday"))))
+    (is (equal "keepme" (cj:save-journal-as "keepme")))
+    (let* ((file (cj::journal-file "keepme"))
+           (blocked (block-the-replacement file)))
+      (unwind-protect
+           (progn
+             (setf cj::*journal* '(("cj-test-mark" . ("today"))))
+             (is (eq :failed
+                     (handler-case (progn (cj:save-journal-as "keepme") :saved)
+                       (error () :failed)))
+                 "the save could not be written")
+             (setf cj::*journal* '())
+             (is (equal "keepme" (cj:load-journal "keepme"))
+                 "the load command still reads the previous journal")
+             (is (equal '(("cj-test-mark" . ("yesterday"))) cj::*journal*)
+                 "with yesterday's entries, not a fragment"))
+        (unblock-the-replacement blocked))
+      (is-false (probe-file (r:temporary-state-path file))
+                "with no temporary left behind"))))

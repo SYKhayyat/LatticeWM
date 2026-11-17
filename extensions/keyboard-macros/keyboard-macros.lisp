@@ -16,6 +16,11 @@
   "Named macros, as an alist of NAME to entries.  Names are how a sequence
 outlives the session that recorded it -- the file system does the rest.")
 
+(defvar *macros-directory* nil
+  "Where named macros are written, or NIL for the first writable data
+directory.  Bound by tests, which must write somewhere they can clean up and
+must not depend on the host having a data directory at all.")
+
 (defvar *excluded-commands* '("start-macro" "stop-macro" "play-macro"
                               "save-macro" "delete-macro"
                               "undo" "redo" "repeat"
@@ -93,16 +98,17 @@ promise."
          (r:notify "played ~d time~:p" times)))))
 
 (defun macros-directory ()
-  "Where named macros live: the first data directory with a macros/
-subdirectory we can write."
-  (let ((dir (find-if
-              (lambda (root)
-                (let ((macros (merge-pathnames "macros/" root)))
-                  (ignore-errors
-                   (ensure-directories-exist macros)
-                   (probe-file macros))))
-              (r:data-directories))))
-    (and dir (merge-pathnames "macros/" dir))))
+  "Where named macros live: *MACROS-DIRECTORY*, or the first data directory
+with a macros/ subdirectory we can write."
+  (or *macros-directory*
+      (let ((dir (find-if
+                  (lambda (root)
+                    (let ((macros (merge-pathnames "macros/" root)))
+                      (ignore-errors
+                       (ensure-directories-exist macros)
+                       (probe-file macros))))
+                  (r:data-directories))))
+        (and dir (merge-pathnames "macros/" dir)))))
 
 (defun all-macro-names ()
   "Every saved macro name, sorted.  Named macros are files, so the registry
@@ -126,11 +132,14 @@ and the directory are read together."
            (let ((file (merge-pathnames (make-pathname :name name :type "lisp")
                                         dir)))
              (ensure-directories-exist file)
-             (with-open-file (out file :direction :output
-                                        :if-exists :supersede
-                                        :if-does-not-exist :create)
-               (let ((*package* (find-package :keyword)))
-                 (write (list :version 1 :entries *macro*) :stream out))))))
+             ;; A macro is the one thing here the user cannot retype from
+             ;; memory, so the file is replaced, never truncated: a write that
+             ;; fails halfway must leave the last saved sequence alone.
+             (r:call-with-replacement-file
+              file
+              (lambda (out)
+                (let ((*package* (find-package :keyword)))
+                  (write (list :version 1 :entries *macro*) :stream out)))))))
        name)))
 
 (r:defcommand delete-macro (name)
