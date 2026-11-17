@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A form that times out is no longer run later.** `call-in-wm-thread-sync`
+  answers `the window manager did not answer` when the thread never reached the
+  queued form, and that sentence is about the form as much as the thread — but
+  the form stayed on the queue, so a thread wedged by something else that came
+  free a minute later ran it with nobody listening. For `kill-window`,
+  `save-state` or any `run-command`, the terminal had been told it did not
+  happen and then it did. The queue entry now asks a cancellation flag before
+  it runs, the waiter sets that flag when its patience expires, and the answer
+  says the form was not run.
+
 - **Flipping a split's axis is an undo step now.** `node-signature` is what
   layout undo compares to decide whether anything changed, and it left out a
   split's axis: a split with the same children and weights on the other axis

@@ -138,7 +138,10 @@ USED TO BE THE SAME ONE.  :TIMEOUT means the window manager thread never got
 to THUNK at all — it is stuck somewhere earlier, and no amount of waiting
 mints time for it.  :ABANDONED means THUNK ran and ran past TIMEOUT and was
 interrupted in place by RUN-WITH-DEADLINE, so the thread is free and the next
-form will run.  Before that function existed the second case produced the
+form will run.  :TIMEOUT ALSO MEANS THUNK WILL NOT RUN LATER (#99): the entry
+left in the queue is withdrawn by a flag that the wrapper reads before it
+calls RUN-WITH-DEADLINE, because a form that mutates the tree cannot be
+reported as `did not run' and then run minutes later with nobody listening.  Before that function existed the second case produced the
 first case's answer and then left THUNK running: `--eval (loop)' answered `the
 window manager did not answer within 10 seconds', and every form after it
 queued behind a loop that never ended — a control surface that echoed its own
@@ -159,18 +162,40 @@ long name."
       (run-with-deadline thunk timeout)
       (let ((semaphore (bt:make-semaphore))
             (result nil)
-            (status :timeout))
-        (call-in-wm-thread
-         (lambda ()
-           (unwind-protect
-                (multiple-value-setq (result status)
-                  (run-with-deadline thunk timeout))
-             (bt:signal-semaphore semaphore))))
-        (if (bt:wait-on-semaphore
-             semaphore
-             :timeout (and timeout (+ timeout +ipc-wait-grace-seconds+)))
-            (values result status)
-            (values nil :timeout)))))
+            (status :timeout)
+            ;; THE QUEUE ENTRY OUTLIVES THE ANSWER, and that is the whole of
+            ;; #99.  A waiter that gives up has told the client `the window
+            ;; manager did not answer', and for a MUTATING form that sentence
+            ;; has to be true: an entry that runs when the thread next reaches
+            ;; the queue does the opposite of what was reported, minutes
+            ;; later, with the terminal already back at a prompt.  So the
+            ;; wrapper asks this flag before it does anything, and the waiter
+            ;; sets it on the way out of its own patience.
+            ;;
+            ;; Under its own lock rather than `the queue is mostly drained
+            ;; fast': the two threads touch CANCELED at different moments by
+            ;; construction, which is the definition of the case a plain
+            ;; variable does not promise to get right.
+            (cancel-lock (bt:make-lock "latticewm-ipc-cancel"))
+            (canceled nil))
+        (flet ((run-it ()
+                 (bt:with-lock-held (cancel-lock) (not canceled)))
+               (cancel-it ()
+                 (bt:with-lock-held (cancel-lock)
+                   (setf canceled t))))
+          (call-in-wm-thread
+           (lambda ()
+             (when (run-it)
+               (unwind-protect
+                    (multiple-value-setq (result status)
+                      (run-with-deadline thunk timeout))
+                 (bt:signal-semaphore semaphore)))))
+          (if (bt:wait-on-semaphore
+               semaphore
+               :timeout (and timeout (+ timeout +ipc-wait-grace-seconds+)))
+              (values result status)
+              (progn (cancel-it)
+                     (values nil :timeout)))))))
 
 (defun explain-evaluation-error (condition)
   "CONDITION as a message, with a hint when the mistake is a known one.
@@ -300,7 +325,10 @@ one means the session is in trouble."
         (:timeout
          (one-line
           (format nil "(:error ~s)"
-                  (format nil "the window manager did not answer within ~a seconds"
+                  (format nil "the window manager did not answer within ~a ~
+                               seconds, so the form was not run and will not be ~
+                               run later.  The window manager thread is stuck ~
+                               somewhere that is not your form"
                           *ipc-timeout-seconds*))))
         (:abandoned
          (one-line

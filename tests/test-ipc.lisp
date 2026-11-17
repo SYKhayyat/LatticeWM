@@ -169,6 +169,48 @@ the whole session was wedged — which is worse than the bug."
         (is (search "did not answer" answer))
         (is (not (search "abandoned" answer)))))))
 
+(defun run-queued-thunks ()
+  "Everything CALL-IN-WM-THREAD has queued, run here and now.
+
+The body of DRAIN-WM-QUEUE without its tail, so a check can make a wedged
+thread come back at a moment of its choosing rather than the fixture's.  The
+queue is emptied first, because that is the order the real drain uses: the
+window manager thread takes everything under the lock and runs it outside."
+  (let ((thunks (bt:with-lock-held (r::*wm-thread-lock*)
+                  (prog1 (nreverse r::*wm-thread-queue*)
+                    (setf r::*wm-thread-queue* '())))))
+    (dolist (thunk thunks) (funcall thunk))
+    thunks))
+
+(test a-form-that-never-started-is-withdrawn-not-run-later
+  "THE REGRESSION TEST FOR #99.  `:TIMEOUT' is a statement that the form did
+not run, and it has to stay true.  Before the fix the thunk was still on the
+queue when the waiter gave up, so a wedged thread that recovered minutes later
+would run a `kill-window', `save-state' or `run-command' the client had been
+told did not happen — with the terminal back at a prompt and nobody listening.
+
+The answer now says so in words as well as in behaviour: a mutating form that
+silently runs later is the worst kind of bug this surface can have, because it
+is indistinguishable from the window manager acting on its own."
+  (with-fake-wm-thread (:drain nil)
+    (let ((r::*ipc-timeout-seconds* 1)
+          (*ipc-mark* nil))
+      (let ((answer (r::evaluate-for-ipc
+                     "(setq latticewm/tests::*ipc-mark* :ran)")))
+        (is (search "did not answer" answer))
+        (is (search "not run" answer)
+            "the answer says the form did not run, not just that the thread is slow")
+        (is (null *ipc-mark*))
+        ;; The thread comes free and reaches the queue.  What is waiting there
+        ;; must do nothing at all: the client was told it would not run.
+        (run-queued-thunks)
+        (is (null *ipc-mark*)
+            "the form the client was told did not run does not run")
+        (is (search "did not answer"
+                    (r::evaluate-for-ipc "(setq latticewm/tests::*ipc-mark* :ran)")))
+        (run-queued-thunks)
+        (is (null *ipc-mark*))))))
+
 ;;; ----------------------------- what an abandoned form leaves behind, pushed
 
 (test an-abandoned-form-still-pushes-what-it-had-already-done
