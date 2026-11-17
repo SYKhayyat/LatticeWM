@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A failed save no longer destroys the saved layout, and an unreadable one is
+  kept.** `save-state` wrote `state.lisp` with `:if-exists :supersede`, which
+  truncates the file before the first byte is written, so a full disk or a crash
+  halfway through replaced the last good layout with a fragment; `load-state`
+  then answered "no layout" to a file it could not read and left it where the
+  next save overwrote it. The write now goes to a pid-suffixed sibling, is
+  `fsync`ed and renamed into place, so the path always names a complete file; a
+  file the reader cannot parse is moved to `state.lisp.corrupt` first (a version
+  this build does not know still goes to `state.lisp.v<n>`), and the file is
+  read with `*read-eval*` off.
+
 - `extensions/auto-respawn/` — pick up where you left off. `enable` wraps every
   launcher command so the recorder learns what launched each window (the spawn's
   argv matched to the window's app-id, with the `*window-command-guesses*` alist

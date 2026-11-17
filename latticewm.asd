@@ -330,6 +330,7 @@ without a compositor — which is the whole model."
      ;; in exactly that gap: a form that never returned was answered, kept
      ;; running, and wedged every form behind it.
      (:file "test-ipc")
+     (:file "test-state")
      (:file "test-devices")
      ;; The three error boundaries.  Nothing had ever asked them a question,
      ;; which is how all three came to be built on HANDLER-CASE -- so the one

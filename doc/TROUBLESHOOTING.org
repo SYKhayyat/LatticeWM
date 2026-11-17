@@ -185,8 +185,12 @@ latticewm --no-restore     # ignore the saved layout
 #+end_src
 
 The saved layout is written and read back with real window tags in it, and is
-covered against a real river — but if a crash left it in a state that will not
-load, this is the escape hatch.
+covered against a real river.  A save is replaced atomically, so a crash
+mid-write leaves the previous layout rather than a fragment, and a file that
+cannot be read is moved aside — to =state.lisp.corrupt=, or to
+=state.lisp.v<n>= for a version this build does not know — before anything
+overwrites it.  =--no-restore= is still the escape hatch for the case those
+copies cannot cover: a layout that loads but that you do not want back.
 
 ** LatticeWM does not appear at my login screen
 

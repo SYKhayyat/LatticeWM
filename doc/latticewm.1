@@ -141,7 +141,10 @@ Errors in it are logged and do not stop startup.
 .TP
 .I ~/.local/state/latticewm/state.lisp
 The saved layout, written every few seconds while it is changing and restored
-at startup.
+at startup.  A save is replaced atomically, so a failed write leaves the
+previous layout rather than a fragment, and a file that cannot be read is
+moved aside to state.lisp.corrupt (or state.lisp.v<n> for a version this
+build does not know) before anything overwrites it.
 .TP
 .I ~/.local/state/latticewm/latticewm.log
 The log, rotated at two megabytes.  See

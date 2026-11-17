@@ -263,6 +263,83 @@ problem, which is what makes it worth a paragraph."
           (logmsg :debug "no output was showing workspace ~d; ~a is now"
                   (1+ wanted) (or (c:output-name (first outputs)) "the output")))))))
 
+;;; ------------------------------------------------------------ writing it out
+;;;
+;;; A SAVE THAT FAILS MUST NOT DESTROY THE SAVE BEFORE IT.  This wrote the file
+;;; with :IF-EXISTS :SUPERSEDE, which truncates it before the first byte: a full
+;;; disk, a signal, a compositor that exits halfway through FORMAT, and the
+;;; layout that was on screen a moment ago is not merely unsaved but *gone*,
+;;; replaced by a fragment LOAD-STATE refuses.  The failure mode of the one
+;;; thing whose only job is surviving a crash was to lose the data during the
+;;; crash.
+;;;
+;;; So the write goes to a sibling temporary and is renamed into place.  RENAME
+;;; is atomic on a POSIX filesystem and both names are in the same directory, so
+;;; the state file a reader can see is always either the old complete one or the
+;;; new complete one.  The temporary is finished and FSYNCed before the rename,
+;;; because ordering is not durability: without the sync the rename can reach
+;;; the disk before the bytes it points at, and a power cut leaves the *name* of
+;;; a file whose contents are a hole.
+
+(defun temporary-state-path (path)
+  "PATH with a temporary suffix, in the same directory.
+
+Same directory because RENAME is only atomic within a filesystem.  The pid is in
+the name so two window managers -- which a --socket argument makes possible --
+do not write through each other's temporary."
+  (make-pathname :type (format nil "tmp.~d" (sb-posix:getpid))
+                 :defaults path))
+
+(defun sync-file (stream)
+  "Push STREAM's bytes to the disk, not merely to the kernel."
+  (finish-output stream)
+  (sb-posix:fsync (sb-sys:fd-stream-fd stream)))
+
+(defun sync-directory (path)
+  "FSYNC the directory holding PATH, so the rename itself survives a crash.
+
+Best effort, and deliberately not an error: the rename has already happened and
+the data is already there, so what is left to lose is only the *name* across a
+power cut.  Filesystems that refuse to open a directory for fsync exist, and
+turning their refusal into a failed save would be the original bug with a better
+reason."
+  (let ((directory (directory-namestring path)))
+    (handler-case
+        (let ((descriptor
+                (sb-posix:open (if (string= directory "") "." directory)
+                               (logior sb-posix:o-rdonly
+                                       sb-posix:o-directory))))
+          (unwind-protect (sb-posix:fsync descriptor)
+            (sb-posix:close descriptor)))
+      (error (condition)
+        (logmsg :debug "could not sync the directory of ~a: ~a" path condition)
+        nil))))
+
+(defun call-with-replacement-file (path write)
+  "Write PATH through a temporary, replacing PATH only when WRITE succeeds.
+
+WRITE is called with the stream.  If it signals, or the rename fails, PATH is
+untouched and the temporary is removed; the condition propagates, and the caller
+that must not fail -- SAVE-STATE, under GUARDED -- turns it into a log line.
+
+A parameter rather than a macro because the thing worth testing is exactly the
+window in the middle: what PATH contains while WRITE is running."
+  (let ((temporary (temporary-state-path path))
+        (replaced nil))
+    (unwind-protect
+         (progn
+           (with-open-file (out temporary
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+             (funcall write out)
+             (sync-file out))
+           (rename-file temporary path)
+           (setf replaced t)
+           (sync-directory path))
+      (unless replaced
+        (ignore-errors (delete-file temporary))))))
+
 (defun save-state (&optional (path (state-file)))
   "Write the layout out.  Never signals; a failure to save is not fatal.
 
@@ -270,28 +347,39 @@ OUR OWN CODE, GUARDED DELIBERATELY.  This runs from the event loop's idle
 moment and from EMERGENCY-SHUTDOWN, which is the path where the program has
 already lost; a full disk here must produce a log line and a session that
 keeps running rather than an unhandled condition on the way out the door.
-The docstring's first sentence is the contract every caller relies on."
+The docstring's first sentence is the contract every caller relies on.
+
+THE FILE IS REPLACED, NOT OVERWRITTEN.  See the section comment above: a failed
+write now costs the change it was carrying, not the layout that was on screen."
   (guarded "save-state"
     (ensure-directories-exist path)
-    (with-open-file (out path :direction :output :if-exists :supersede
-                              :if-does-not-exist :create)
-      (let ((*print-readably* nil) (*print-pretty* t) (*package* (find-package :keyword)))
-        (format out ";;;; LatticeWM saved layout.  Written automatically.~%~
-                     ;;;; Keyed on river window identifiers, which survive a~%~
-                     ;;;; window manager restart but not a reboot.~%~%")
-        (write (list :version +state-version+
-                     :cursor (c:world-cursor *world*)
-                     :outputs (output-workspaces)
-                     :windows (window-facts)
-                     :root (serialize-node (c:world-root *world*)))
-               :stream out)
-        (terpri out)))
+    (call-with-replacement-file
+     path
+     (lambda (out)
+       (let ((*print-readably* nil) (*print-pretty* t)
+             (*package* (find-package :keyword)))
+         (format out ";;;; LatticeWM saved layout.  Written automatically.~%~
+                      ;;;; Keyed on river window identifiers, which survive a~%~
+                      ;;;; window manager restart but not a reboot.~%~%")
+         (write (list :version +state-version+
+                      :cursor (c:world-cursor *world*)
+                      :outputs (output-workspaces)
+                      :windows (window-facts)
+                      :root (serialize-node (c:world-root *world*)))
+                :stream out)
+         (terpri out))))
     (logmsg :debug "saved layout to ~a" path)
     path))
 
 (defun keep-unreadable-state (path version)
   "Rename PATH out of the way before the running program overwrites it.
 Returns where it went, or NIL if it could not be moved.
+
+THE NAME SAYS WHICH KIND OF UNREADABLE IT WAS.  A version this build does not
+know is kept as `.lisp.v<n>', because what you want back is \"the one from the
+newer build\"; a file the reader could not make a form out of at all is kept as
+`.lisp.corrupt', because there is no version to name it by.  Both are kept for
+the same reason, which is the paragraph below.
 
 THE VERSION GATE DESTROYED THE FILE IT REFUSED.  LOAD-STATE saw a version it
 did not recognise, logged, and returned NIL — correctly, because a
@@ -310,9 +398,11 @@ what you want back is \"the one from the newer build\" and not \"the one from
 Tuesday\".  An existing backup of the same version is left alone: the second
 downgrade would otherwise overwrite what the first one saved, which is this
 bug again one layer out."
-  (let* ((claimed (if (integerp version) version 0))
-         (backup (make-pathname :type (format nil "lisp.v~d" claimed)
-                                :defaults path)))
+  (let ((backup (make-pathname
+                 :type (if (integerp version)
+                           (format nil "lisp.v~d" version)
+                           "lisp.corrupt")
+                 :defaults path)))
     (handler-case
         (cond ((probe-file backup) backup)
               (t (rename-file path backup) backup))
@@ -320,24 +410,50 @@ bug again one layer out."
         (logmsg :warn "could not keep a copy of ~a: ~a" path condition)
         nil))))
 
+(defun read-state-form (path)
+  "The form in PATH, or :UNREADABLE if there is not one.
+
+*READ-EVAL* IS NIL, as in EVALUATE-FOR-IPC and for the same reason: this is a
+file the documentation invites people to hand-edit, so `#.' in it is a way to
+run code, not a way to write a layout.  A file that uses one is kept as corrupt
+rather than executed.
+
+One value and no condition, because the caller has nothing useful to do with a
+reader's error: the caller that matters is MAIN at startup, with no terminal to
+show it on, and its next step is the same for every kind of unreadable."
+  (handler-case
+      (with-open-file (in path :direction :input)
+        (let ((*package* (find-package :keyword))
+              (*read-eval* nil))
+          (read in nil nil)))
+    (error () :unreadable)))
+
 (defun load-state (&optional (path (state-file)))
   "Restore a layout, matching windows by identifier.
 
 Windows in the file that are not present now are dropped, and windows present
 now that are not in the file keep whatever place they already have.  Both are
 normal: the file describes the world as it was a moment ago, not as it must
-be."
+be.
+
+A FILE THAT CANNOT BE READ IS KEPT, NOT OVERWRITTEN.  The version gate already
+knew this (`keep-unreadable-state' has the whole argument); a file the *reader*
+rejected -- a truncated write, a hand edit half finished, a disk error -- went
+through the same NIL answer and stayed where the first debounced save then
+replaced it.  The one copy of a layout that a crashed write left behind was
+deleted by the program that failed to read it."
   (guarded "load-state"
     (unless (probe-file path) (return-from load-state nil))
-    (let ((form (with-open-file (in path)
-                  (let ((*package* (find-package :keyword)))
-                    (read in nil nil)))))
+    (let ((form (read-state-form path)))
       (unless (and (consp form) (eql +state-version+ (getf form :version)))
         (let ((kept (keep-unreadable-state path (and (consp form)
                                                      (getf form :version)))))
-          (logmsg :warn "ignoring ~a: version ~s, expected ~d~@[ (kept a copy at ~a)~]"
-                  path (and (consp form) (getf form :version)) +state-version+
-                  kept))
+          (if (eq form :unreadable)
+              (logmsg :warn "ignoring ~a: it could not be read~@[ (kept a copy at ~a)~]"
+                      path kept)
+              (logmsg :warn "ignoring ~a: version ~s, expected ~d~@[ (kept a copy at ~a)~]"
+                      path (and (consp form) (getf form :version)) +state-version+
+                      kept)))
         (return-from load-state nil))
       (let ((index (make-hash-table :test #'equal)))
         (dolist (window (all-windows))
