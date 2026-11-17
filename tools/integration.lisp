@@ -1716,6 +1716,21 @@ are what a person means by the arrangement, and both are copy-stable."
              (let ((answer (ask "(")))
                (check (search ":error" answer)
                       "and so does a form that does not even read"))
+             ;; ONE FORM IN, ONE LINE OUT HAS TWO HALVES, and only the second
+             ;; was ever checked (#100).  A single --eval argument holding two
+             ;; forms used to evaluate the first one, print its value and exit
+             ;; 0 -- a script told a command succeeded that had done half the
+             ;; work.  Both halves are asserted here: the answer names the rule,
+             ;; and the first form did not run, because `nothing was run' is what
+             ;; it says.
+             (let ((before p:*outer-gaps*))
+               (let ((answer (ask "(setf *outer-gaps* 8) (relayout :force t)")))
+                 (check (search ":error" answer)
+                        "two forms on one line are an error: ~s" answer)
+                 (check (search "one form per line" answer)
+                        "and the answer names the rule rather than half-running it")
+                 (check (eql before p:*outer-gaps*)
+                        "with neither form run, so the answer is true of the line")))
              (let ((answer (ask "(list 1 2 3)")))
                (check (= 1 (count #\Newline (concatenate 'string answer (string #\Newline))))
                       "and every answer is exactly one line"))

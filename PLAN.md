@@ -18,7 +18,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)
 - [x] #98 split axis missing from node-signature, so undo skips an orientation change. (Low)
 - [x] #99 a form that times out waiting for the WM thread still runs later. (Low)
-- [ ] #100 --eval silently ignores everything after the first form on a line. (Low)
+- [x] #100 --eval silently ignores everything after the first form on a line. (Low)
 
 ## Phase 2 — Closed module work (verify, already shipped)
 - #21, #22, #24, #26, #31, #63–#83 — verify each held; check off.

@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Two forms on one line are refused instead of half-run.** `READ-FROM-STRING`
+  reads exactly one form and says nothing about the rest, so
+  `--eval '(setf *gaps* 8) (relayout :force t)'` evaluated the `setf`, printed
+  `(:ok 8)` and exited 0 — a script told a command succeeded that had done half
+  the work. The control socket now reads what is left after the form and, if
+  anything but whitespace or a comment remains, answers `one form per line`
+  without running either. A batch would need one answer and one deadline per
+  form, which is a second protocol; repeating `--eval` and wrapping in `progn`
+  already work.
+
 - **A form that times out is no longer run later.** `call-in-wm-thread-sync`
   answers `the window manager did not answer` when the thread never reached the
   queued form, and that sentence is about the form as much as the thread — but
