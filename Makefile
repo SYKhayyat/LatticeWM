@@ -15,6 +15,8 @@
 #   make image-fast  the same, uncompressed: ~52 MB, ~350 ms faster to start
 #   make run         run nested inside the current Wayland session
 #   make surface     regenerate the generated documents under doc/
+#   make surface-check  compare doc/ to what the program prints, without
+#                    writing into the tree
 #   make install     ./latticewm, a session entry and a man page into $(PREFIX)
 #   make install-check  install to a scratch prefix, check it, take it out again
 #   make dist        dist/latticewm-$(VERSION).tar.gz, from the git index
@@ -68,7 +70,7 @@ RUN         := $(REGISTRY) LATTICEWM_ROOT="$(CURDIR)" $(LISP) --noinform --non-i
                  --load tools/prelude.lisp
 
 .PHONY: all deps toolchain build gates test integration check image image-fast \
-        release bench run run-bare surface config install install-check \
+        release bench run run-bare surface surface-check config install install-check \
         revendor-check \
         uninstall dist clean distclean help
 
@@ -155,7 +157,7 @@ integration: toolchain
 # `make integration' for the forgiving version, or `make check
 # REQUIRE_INTEGRATION=0' if you want the old behaviour back and know why.
 check: REQUIRE_INTEGRATION = 1
-check: build gates test integration
+check: build gates test integration surface-check
 
 # save-lisp-and-die does not cost live redefinition: the dumped core retains
 # the compiler, so SWANK connects and DEFMETHOD still works at runtime.  This
@@ -228,6 +230,53 @@ define GENERATE
 	    rm -f $(2).new; exit 1; }
 	@mv $(2).new $(2)
 endef
+
+# THE COMPARISON CI MADE AND `make check' DID NOT (#103).  The workflow
+# regenerates the documents and diffs them; nothing local did, so a stale
+# doc/*.txt was invisible until a push came back red — and `main' itself sat
+# red that way once.  CONTRIBUTING.md tells a contributor to run `make check',
+# so this is where the comparison belongs.
+#
+# INTO A SCRATCH DIRECTORY, because the point is to catch a dirty tree: a
+# check implemented as `make surface; git diff --exit-code' would either
+# overwrite the drift it was asked to find or refuse to run in exactly the
+# situation it exists for.
+#
+# It also fails when a generator produces nothing, for the reason GENERATE
+# above gives: a blank document is worse than a stale one, because nothing
+# about it looks wrong.
+surface-check: build
+	@scratch=$$(mktemp -d) || exit 1; \
+	status=0; \
+	for spec in \
+	  --extension-surface:EXTENSION-SURFACE.txt \
+	  --container-surface:CONTAINER-SURFACE.txt \
+	  --hooks:HOOKS.txt \
+	  --list-commands:COMMANDS.txt \
+	  --list-options:OPTIONS.txt \
+	  --list-keys:KEYS.txt ; do \
+	  flag=$${spec%%:*}; name=$${spec#*:}; \
+	  if ! $(RUN) --load tools/cli.lisp -- $$flag \
+	       > "$$scratch/$$name" 2> "$$scratch/$$name.err"; then \
+	    echo "surface-check: $$flag failed; doc/$$name was not compared" >&2; \
+	    cat "$$scratch/$$name.err" >&2; status=1; continue; \
+	  fi; \
+	  if [ ! -s "$$scratch/$$name" ]; then \
+	    echo "surface-check: $$flag produced nothing; doc/$$name was not compared" >&2; \
+	    status=1; continue; \
+	  fi; \
+	  if ! diff -u "doc/$$name" "$$scratch/$$name" > "$$scratch/$$name.diff"; then \
+	    echo "surface-check: doc/$$name is not what the program prints" >&2; \
+	    head -40 "$$scratch/$$name.diff" >&2; status=1; \
+	  fi; \
+	done; \
+	rm -rf "$$scratch"; \
+	if [ $$status -ne 0 ]; then \
+	  echo "  run \`make surface' and commit doc/" >&2; \
+	else \
+	  echo "  the generated documents are the ones in the tree" ; \
+	fi; \
+	exit $$status
 
 surface: build
 	@mkdir -p doc

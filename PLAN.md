@@ -26,7 +26,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - #21, #22, #24, #26, #31, #63–#83 — verify each held; check off.
 
 ## Phase 2.5 — Quality: the harness and the documents
-- [ ] #103 `make check` never compares the generated documents to the tree, so `main` can be red while a local run is green; the comparison lives only in CI. (Info)
+- [x] #103 `make check` never compares the generated documents to the tree, so `main` can be red while a local run is green; the comparison lives only in CI. (Info) — `make surface-check` regenerates into a scratch directory and diffs, is part of `check`, and CI edits a document to prove it still fails.
 
 ## Phase 3 — Module roadmap (Info, order by dependency)
 Core first: #4 cell primitives → #32 subtree ops → #37 send-to-cell → #33 targeted spawn → #35 bulk verbs → #40 batch ops → #34 focus-by-name → #25 state machine → #7 groups → #18 tags → #36 tabs (+#39 persist) → #10 templates (+#12 profiles) → #41 auto-respawn (+#15 scratchpad persist) → #30 map nav → #38 peek → #28 drag → #29 zoom/pan → #27 focus toggle → #13 stacking → #14 snapping → #23 preview → #17 history → #19 steal-prevention → #20 sharing → #96 workspace sharing (share-workspace, mirror) → #8 multi-monitor → #11 global shortcuts → #16 gestures → #9 animation → #5 recording → #6 invisible wins → #1 infinite workspaces → #3 promote examples.
