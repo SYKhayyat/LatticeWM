@@ -26,6 +26,15 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Tags are names, not keywords.** `normalize-tag` interned every name it was
+  handed into the `:keyword` package, and a tag arrives from a prompt, so every
+  misspelling stayed in that package for the life of the process — a decision
+  with no undo, in the package every protocol key lives in. It now answers one
+  canonical symbol per name from a table that is pruned when nothing carries the
+  tag any more, and every comparison (`window-tagged-p`, `windows-tagged`,
+  untagging, scratchpad lookup) is by name, so a rule's `:mail`, a typed "mail"
+  and a tag read back from the state file are one tag. No command changed shape.
+
 - **A failed save no longer destroys the saved layout, and an unreadable one is
   kept.** `save-state` wrote `state.lisp` with `:if-exists :supersede`, which
   truncates the file before the first byte is written, so a full disk or a crash

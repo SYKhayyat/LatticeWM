@@ -216,8 +216,18 @@ it by hand, which is the same ruling READ-NODE makes three functions up."
               ;; Reversed, so that a window with no tags yet comes back with
               ;; them in the order they were given.  WINDOW-TAG-NAMES documents
               ;; that order and the tag prompt lists them in it.
-              (dolist (tag (reverse tags)) (pushnew tag (c:window-tags window)))
-              (when scratchpad (setf (c:prop window :scratchpad) scratchpad))
+              ;;
+              ;; NORMALIZED, because the file is read as text: a tag typed at a
+              ;; prompt is stored as an uninterned symbol and prints as
+              ;; `#:MAIL', which the reader makes a *new* uninterned symbol each
+              ;; time it appears.  The tag in :TAGS and the same name in
+              ;; :SCRATCHPAD would otherwise be two symbols that only look
+              ;; alike, and SCRATCHPAD-SHOW would find nothing.
+              (dolist (tag (reverse tags))
+                (pushnew (normalize-tag tag) (c:window-tags window)
+                         :test #'tag-name=))
+              (when scratchpad
+                (setf (c:prop window :scratchpad) (normalize-tag scratchpad)))
               (when (and minimized (not (c:window-minimized-p window)))
                 (guarded "restore minimized"
                   (p:on-minimize (p:current-policy) world window)))))))))) 

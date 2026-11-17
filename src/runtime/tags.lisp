@@ -32,30 +32,81 @@
   "WINDOW's tags as strings, in the order they were added."
   (mapcar #'string (c:window-tags window)))
 
+(defvar *tag-table* (make-hash-table :test #'equal)
+  "The canonical symbol for each tag name, keyed by TAG-KEY.
+
+NOT THE KEYWORD PACKAGE, WHICH WAS THE BUG (#87).  A tag arrives from a prompt,
+so its name is whatever somebody typed, and INTERNing that is a decision with no
+undo: every misspelling stays in :KEYWORD for the life of the process, where
+DO-SYMBOLS and APROPOS walk past it and a later FIND-SYMBOL cannot tell it from
+a protocol key.  Nothing here needed the keyword package.  What it needed was
+one object per name, and one object per name is a table.
+
+The table is pruned by FORGET-UNUSED-TAGS on the paths that list tags for
+completion, so it holds a name only while a window or scratchpad carries it --
+a typo costs one symbol until the next prompt after its window is gone, and
+nothing after that.  An entry is never load-bearing on its own: every
+comparison below is by name, so forgetting one cannot break a tag that exists.")
+
+(defun tag-key (name)
+  "The tag table's key for NAME: its name, upcased.
+
+A string's surrounding spaces are trimmed, because a prompt can supply them; a
+symbol's name is exact and is taken as it is.  One function, because this is the
+definition of which tags are the same tag: it is used for storage, for
+comparison and for pruning, and three copies would be three chances to disagree
+about `Mail'."
+  (etypecase name
+    (symbol (string-upcase (symbol-name name)))
+    (string (string-upcase (string-trim " " name)))))
+
+(defun tag-name= (a b)
+  "Whether A and B are the same tag, by name rather than by symbol identity.
+
+The tags on a window can come from a prompt (an uninterned symbol), a window
+rule (whatever the config file's reader made) or a state file (whatever the
+reader of that made).  Those are three different symbol identities and one name,
+and the name is the tag."
+  (equal (tag-key a) (tag-key b)))
+
 (defun normalize-tag (name)
   "NAME as the symbol a tag is stored as.
 
-Interned in the keyword package and upcased, so that \"mail\", \"Mail\" and
-:MAIL are one tag.  A tag typed at a prompt and a tag written in a rule have to
-be the same thing or the feature does not work at all."
-  (etypecase name
-    (symbol name)
-    (string (intern (string-upcase (string-trim " " name)) :keyword))))
+\"mail\", \"Mail\" and :MAIL are one tag: one typed at a prompt and one written
+in a rule have to be the same thing or the feature does not work at all.
+
+NEVER INTERNS, which is what this used to do (#87).  A name the session has
+already seen answers the same symbol; a new one gets an uninterned symbol named
+by TAG-KEY, and a symbol that was handed in is kept as itself so that a rule's
+:MAIL stays EQ to the tag the same prompt has made."
+  (let ((key (tag-key name)))
+    (or (gethash key *tag-table*)
+        (setf (gethash key *tag-table*)
+              (etypecase name
+                (symbol name)
+                (string (make-symbol key)))))))
 
 (defun window-tagged-p (window name)
-  "True when WINDOW carries the tag NAME."
-  (and (member (normalize-tag name) (c:window-tags window)) t))
+  "True when WINDOW carries the tag NAME.
+
+By name, not by EQ: see TAG-NAME= for the three ways the two symbols can
+differ."
+  (and (member (tag-key name) (c:window-tags window)
+               :key #'tag-key :test #'equal)
+       t))
 
 (defun windows-tagged (name)
   "Every live window carrying tag NAME, in no particular order."
-  (let ((tag (normalize-tag name)))
+  (let ((key (tag-key name)))
     (remove-if-not (lambda (window)
                      (and (c:window-live-p window)
-                          (member tag (c:window-tags window))))
+                          (member key (c:window-tags window)
+                                  :key #'tag-key :test #'equal)))
                    (all-windows))))
 
 (defun all-tags ()
   "Every tag anybody has given a window, sorted, as strings."
+  (forget-unused-tags)
   (let ((out '()))
     (dolist (window (all-windows))
       (dolist (tag (c:window-tags window))
@@ -77,7 +128,7 @@ across workspaces, across cells, and after any amount of rearranging."
     (cond
       ((null window) (notify "nothing here to tag"))
       (t
-       (pushnew (normalize-tag name) (c:window-tags window))
+       (pushnew (normalize-tag name) (c:window-tags window) :test #'tag-name=)
        (notify "tagged ~(~a~): ~{~(~a~)~^ ~}"
                (p:name-of-window window)
                (window-tag-names window))
@@ -89,7 +140,9 @@ across workspaces, across cells, and after any amount of rearranging."
   (let ((window (focused-window)))
     (when window
       (setf (c:window-tags window)
-            (remove (normalize-tag name) (c:window-tags window)))
+            (remove (tag-key name) (c:window-tags window)
+                    :key #'tag-key :test #'equal))
+      (forget-unused-tags)
       (notify "untagged ~(~a~)" name)
       window)))
 
@@ -177,14 +230,37 @@ keystroke collects them wherever they have drifted to."
 
 (defun scratchpad-windows (name)
   "Every window on the scratchpad called NAME."
-  (let ((tag (normalize-tag name)))
+  (let ((key (tag-key name)))
     (remove-if-not (lambda (window)
-                     (and (c:window-live-p window)
-                          (eql tag (scratchpad-name window))))
+                     (let ((stored (scratchpad-name window)))
+                       (and (c:window-live-p window)
+                            stored
+                            (equal key (tag-key stored)))))
                    (all-windows))))
+
+(defun forget-unused-tags ()
+  "Drop canonical tags nothing carries, so a typo does not outlive its window.
+
+Called from the paths that list tags for completion, which already walk every
+window.  Without it the table would be the same unbounded record of every
+misspelling the keyword package was, only quieter -- and \"unbounded\" is the
+word in the issue, not \"not a keyword\".
+
+Nothing breaks if an entry is missed or dropped early: every comparison is by
+name and every write re-registers.  That is what makes pruning safe to do here
+rather than in a sweep somebody has to remember to call."
+  (let ((used (make-hash-table :test #'equal)))
+    (dolist (window (all-windows))
+      (dolist (tag (c:window-tags window))
+        (setf (gethash (tag-key tag) used) t))
+      (let ((name (scratchpad-name window)))
+        (when name (setf (gethash (tag-key name) used) t))))
+    (dolist (key (loop for key being the hash-keys of *tag-table* collect key))
+      (unless (gethash key used) (remhash key *tag-table*)))))
 
 (defun all-scratchpads ()
   "Every named scratchpad that currently holds something, as strings."
+  (forget-unused-tags)
   (let ((out '()))
     (dolist (window (all-windows))
       (let ((name (scratchpad-name window)))
@@ -208,7 +284,7 @@ it away again."
       ((null window) (notify "nothing here to put away"))
       (t
        (setf (c:prop window :scratchpad) (normalize-tag name))
-       (pushnew (normalize-tag name) (c:window-tags window))
+       (pushnew (normalize-tag name) (c:window-tags window) :test #'tag-name=)
        (minimize-window window)
        (notify "~(~a~) put away" name)
        window))))

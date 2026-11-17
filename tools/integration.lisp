@@ -1652,7 +1652,13 @@ are what a person means by the arrangement, and both are copy-stable."
                   (check (assoc (c:window-identifier a) facts :test #'equal)
                          "and the window's own state, keyed by river identifier")
                   (let ((row (cdr (assoc (c:window-identifier a) facts :test #'equal))))
-                    (check (member (normalize-tag "saved") (getf row :tags))
+                    ;; BY NAME, because this is the file read back rather than
+                    ;; the live window: a prompt tag is an uninterned symbol,
+                    ;; the file prints it `#:SAVED' and the reader makes a new
+                    ;; one.  The tag and the name are one thing (#87); the
+                    ;; symbol in the file is not the symbol in memory.
+                    (check (member (normalize-tag "saved") (getf row :tags)
+                                   :test #'r::tag-name=)
                            "including the tag, which is not part of any node"))))
               ;; And back in.  The windows are the same live windows, so this is
               ;; the restart path minus the process boundary.

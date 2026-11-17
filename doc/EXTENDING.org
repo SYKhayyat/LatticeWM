@@ -248,6 +248,12 @@ list order breaking ties. Override ~:float~,
 ~:workspace~, ~:path~, ~:focus~, ~:fullscreen~, ~:minimize~, ~:border-color~,
 ~:border-width~, ~:decoration~, ~:capabilities~, ~:tags~ and ~:label~.
 
+~:tags~ takes a name or a list of names, and a tag is compared by *name*: ~:mail~
+in a rule, ~"mail"~ at the prompt and a tag read back from the state file are one
+tag. Read them through ~window-tagged-p~, ~windows-tagged~ or ~normalize-tag~
+rather than by taking ~window-tags~ apart and comparing symbols — the three
+sources make three different symbols of one name, on purpose.
+
 The table is deliberately not the whole answer. It covers what a declarative
 list can express, and ~window-rule-for~ is the generic underneath it — so a
 rule that needs to *look* at something, rather than match a string, is a tier-1
