@@ -14,10 +14,11 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [x] #87 normalize-tag unbounded keyword interning. (High)
 - [x] #89 make-canvas fd/mmap leak. (High)
 - [x] #94 stale wl_output proxy — verified: no cached proxy survives a global (lookups go through the id each time), and `tests/test-lifecycle.lisp` now pins that `forget-global` drops the name and scale a reused id would inherit.
-- [ ] #90 single-seat focus, #92 per-relayout sort.
+- [x] #92 per-relayout sort and linear scans — grid offscreen order memoised on the cell epoch and viewport (12.5 µs → 0.4 µs at 100 cells, 145 µs → 0.7 µs at 1024), the emitter's unplaced test is a set, and the render-order signature is no longer copied.
+- [ ] #90 single-seat focus.
 - [x] #93 unbounded IPC threads — a fixed connection cap and a shutdown that joins the accept thread.
 - [x] #91 int32 clamp before the wire (saturate at emit, model keeps the true coordinate). (High)
-- [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)
+- [x] #95 undo granularity for viewport/track ops is coarse — already the two-ring undo of #26, verified: `lattice/undo.lisp` records plane verbs on their own ring and `node-signature` no longer carries the camera, with four tests in `tests/test-lattice.lisp` holding both directions.
 - [x] #98 split axis missing from node-signature, so undo skips an orientation change. (Low)
 - [x] #99 a form that times out waiting for the WM thread still runs later. (Low)
 - [x] #100 --eval silently ignores everything after the first form on a line. (Low)

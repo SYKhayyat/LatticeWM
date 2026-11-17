@@ -111,7 +111,11 @@ cannot express: a cell wider than its same-column neighbours, by construction
 rather than by absence of a binding.")
    (names :initform (make-hash-table :test #'equal) :accessor grid-names
           :documentation "NAME -> (X . Y).  DESIGN D1 layer 3: durable names
-are the layer humans actually remember."))
+are the layer humans actually remember.")
+   (epoch :initform 0 :accessor grid-epoch
+          :documentation "Bumped by every change to CELLS, and by nothing else.")
+   (offscreen :initform nil :accessor grid-offscreen
+              :documentation "(SIGNATURE . ADDRESSES) for OFFSCREEN-ADDRESSES."))
   (:documentation
    "An infinite two-dimensional plane of cells, each holding a subtree.
 
@@ -129,6 +133,45 @@ Discrete geometry is dramatically more memorable than continuous space.
 Two dimensions is still more than twice as hard to hold in your head as
 niri's one, and that remains the single biggest design risk in the project."))
 
+;;; ---------------------------------------------------------- the cell table
+;;;
+;;; EVERY WRITE TO GRID-CELLS GOES THROUGH THE TWO FUNCTIONS BELOW, and that is
+;;; the cache's whole safety argument.  A write has one thing to do beyond
+;;; touching the table -- bump the epoch -- and every write that exists does it
+;;; here, so a future one cannot forget without hand-writing
+;;; (setf (gethash ... (grid-cells ...))), which a grep for GRID-CELLS finds in
+;;; this file and in the tests that count cells, and nowhere else.
+
+(defun set-grid-cell (grid address node)
+  "Put NODE at ADDRESS, and invalidate what was derived from the cell set."
+  (prog1 (setf (gethash address (grid-cells grid)) node)
+    (incf (grid-epoch grid))))
+
+(defun forget-grid-cell (grid address)
+  "Empty ADDRESS, and invalidate what was derived from the cell set."
+  (remhash address (grid-cells grid))
+  (incf (grid-epoch grid)))
+
+(defun offscreen-addresses (grid)
+  "Every occupied address outside the viewport, in reading order.
+
+Memoised on the epoch and the viewport rectangle: the offscreen set is a
+function of exactly those (panning changes which cells are offscreen without
+changing a single cell), and sorting it on every relayout was the lattice's one
+cost that grew with how long the session had been running.  A page of twenty
+cells does not care; a plane walked across for a day does."
+  (let* ((viewport (grid-viewport grid))
+         (key (list (grid-epoch grid) (viewport-origin viewport)
+                    (viewport-cols viewport) (viewport-rows viewport)))
+         (cache (grid-offscreen grid)))
+    (unless (and cache (equal (car cache) key))
+      (let ((rest (loop for address being the hash-keys of (grid-cells grid)
+                        unless (viewport-contains-p viewport address)
+                          collect address)))
+        (setf cache (cons key (sort rest #'cell-before-p))
+              (grid-offscreen grid) cache)))
+    (cdr cache)))
+
 (defun make-grid (&key (cols 1) (rows 1) cells)
   "A grid showing COLS by ROWS cells, optionally pre-populated.
 
@@ -136,9 +179,9 @@ CELLS is an alist of ((X . Y) . NODE)."
   (let ((grid (make-instance 'grid)))
     (setf (grid-viewport grid) (make-instance 'viewport :cols cols :rows rows))
     (loop for (address . node) in cells
-          do (setf (gethash address (grid-cells grid)) node))
+          do (set-grid-cell grid address node))
     (unless cells
-      (setf (gethash (cell 0 0) (grid-cells grid)) (c:make-leaf)))
+      (set-grid-cell grid (cell 0 0) (c:make-leaf)))
     grid))
 
 ;;; ------------------------------------------- the container protocol, answered
@@ -152,18 +195,13 @@ CELLS is an alist of ((X . Y) . NODE)."
 The order matters twice over: LAYOUT-CHILDREN walks it to place cells, and the
 conventional layout driver walks the *remainder* to hide what it did not
 place.  Putting the visible ones first means the common case touches the front
-of the list and stops."
-  (let* ((viewport (grid-viewport grid))
-         (visible (remove-if-not (lambda (address)
-                                   (gethash address (grid-cells grid)))
-                                 (viewport-cells viewport)))
-         (rest '()))
-    (maphash (lambda (address node)
-               (declare (ignore node))
-               (unless (viewport-contains-p viewport address)
-                 (push address rest)))
-             (grid-cells grid))
-    (append visible (sort rest #'cell-before-p))))
+of the list and stops.
+
+The offscreen half is memoised; see OFFSCREEN-ADDRESSES."
+  (let ((visible (remove-if-not (lambda (address)
+                                  (gethash address (grid-cells grid)))
+                                (viewport-cells (grid-viewport grid)))))
+    (append visible (offscreen-addresses grid))))
 
 (defun cell-before-p (a b)
   "Reading order, for a stable enumeration of offscreen cells."
@@ -174,7 +212,7 @@ of the list and stops."
   (and (consp address) (gethash address (grid-cells grid))))
 
 (defmethod (setf c:child-at) (node (grid grid) address)
-  (setf (gethash address (grid-cells grid)) node))
+  (set-grid-cell grid address node))
 
 (defmethod c:insert-child ((grid grid) address node)
   "Fill a coordinate.  Nothing shifts.
@@ -183,7 +221,7 @@ DESIGN D13: opening and closing never shift anything.  A cell is where you put
 it, and it stays there — which is D8's own argument reused, because the entire
 point of spreadsheet geometry is that every address stays where you left it.
 Automatic shifting would move things you were not touching."
-  (setf (gethash address (grid-cells grid)) node)
+  (set-grid-cell grid address node)
   grid)
 
 (defmethod c:remove-child ((grid grid) address)
@@ -194,10 +232,9 @@ D3's skip motion already exists to cross gaps cheaply.  COMPACT is an explicit
 command for when you want it.  A cell that goes away takes its size with it —
 the scale is part of the cell, so the removal paths agree with TIDY-GRID and
 FORGET-EMPTY-CELL."
-  (let ((node (gethash address (grid-cells grid))))
+  (prog1 (gethash address (grid-cells grid))
     (unset-cell-scale grid address)
-    (remhash address (grid-cells grid))
-    node))
+    (forget-grid-cell grid address)))
 
 (defmethod c:container-count ((grid grid))
   (hash-table-count (grid-cells grid)))
@@ -215,7 +252,7 @@ Never dissolves into its single child: a plane with one cell on it is still a
 plane, and collapsing it would silently throw away the viewport, the column
 widths and the names."
   (when (zerop (hash-table-count (grid-cells grid)))
-    (setf (gethash (cell 0 0) (grid-cells grid)) (c:make-leaf))
+    (set-grid-cell grid (cell 0 0) (c:make-leaf))
     (setf (viewport-origin (grid-viewport grid)) (cell 0 0)))
   grid)
 
@@ -369,8 +406,7 @@ result is a valid grid — at least one cell — whatever came out of the file."
     (loop for entry in (getf plist :cells)
           when (and (consp entry) (= 3 (length entry)))
             do (destructuring-bind (x y form) entry
-                 (setf (gethash (cell x y) (grid-cells grid))
-                       (r:read-node form index))))
+                 (set-grid-cell grid (cell x y) (r:read-node form index))))
     ;; Names are derived rather than stored: a cell's name is its node's label,
     ;; and keeping a second copy in the grid's own table is how the two come to
     ;; disagree after a rename.
@@ -390,7 +426,7 @@ principle: moving into empty space is an ordinary navigation, and D3 says
 plain motion moves exactly one cell 'whether or not that cell is occupied'.
 The cell has to exist for focus to rest on it, so arriving creates it."
   (or (gethash address (grid-cells grid))
-      (setf (gethash address (grid-cells grid)) (c:make-leaf))))
+      (set-grid-cell grid address (c:make-leaf))))
 
 (defun occupied-cells (grid)
   "Every cell address that holds at least one window, in reading order."
@@ -415,7 +451,7 @@ reason nothing else here is automatic."
              (grid-cells grid))
     (dolist (address doomed)
       (unset-cell-scale grid address)
-      (remhash address (grid-cells grid)))
+      (forget-grid-cell grid address))
     (c:simplify-node grid)
     (length doomed)))
 
@@ -452,7 +488,7 @@ is written for."
                (not (cell-named-p grid address))
                (not (nth-value 1 (gethash address (grid-cell-scales grid)))))
       (unset-cell-scale grid address)
-      (remhash address (grid-cells grid))
+      (forget-grid-cell grid address)
       t)))
 
 ;;; ------------------------------------------------------------- track sizes

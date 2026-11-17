@@ -26,6 +26,19 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The per-relayout costs the lattice paid on every keystroke are smaller.**
+  A grid sorted every offscreen cell on every relayout to answer
+  `container-addresses`, and the answer only changes when a cell appears,
+  disappears, or the camera moves — so it is memoised on the cell epoch and the
+  viewport rectangle now. Measured: a relayout that changes neither costs
+  12.5 µs of sorting at 100 cells and 145 µs at 1024 before, and 0.4 µs and
+  0.7 µs after; a pan or a cell edit still rebuilds the order, at the same
+  ~10 µs it cost before. The
+  emitter's hide step also compared every window against the unplaced list,
+  which is quadratic in the one state where it matters — startup, with every
+  announced window still undecided — and now builds that side as a set; and the
+  render-order signature no longer copies the list it just built.
+
 - **`make check` compares the generated documents to the tree.** The six
   `doc/*.txt` files are printed by the program, and the comparison that holds
   them to it was in one CI job and nowhere else — so a contributor who ran

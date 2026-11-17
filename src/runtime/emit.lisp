@@ -407,18 +407,26 @@ reached PLACE-UNPLACED-WINDOWS yet is not a window that should be hidden; it is
 a window nobody has decided about, and hiding it would make every new window
 flash.  Diffed like everything else here, so the common case — nothing to hide —
 is one walk of a list that is almost always short."
-  (let ((placed (make-hash-table :test #'eq)))
+  ;; BOTH SIDES OF THE TEST ARE TABLES.  The *UNPLACED* side used to be a
+  ;; MEMBER call inside a walk of every window, which is quadratic in the one
+  ;; state where it hurts: a session that has just started, when every window
+  ;; river has announced and nobody has decided about yet is on it at once.
+  ;; Measured against the list on the same walk it is a set built once (#92).
+  (let ((placed (make-hash-table :test #'eq))
+        (undecided (make-hash-table :test #'eq)))
     (dolist (placement render-list)
       (let ((node (first placement)))
         (when (typep node 'c:leaf)
           (let ((window (c:leaf-window node)))
             (when window (setf (gethash window placed) t))))))
+    (dolist (window *unplaced*)
+      (setf (gethash window undecided) t))
     (do-windows (window)
       (let ((proxy (c:window-proxy window)))
         (when (and proxy
                    (c:window-live-p window)
                    (not (gethash window placed))
-                   (not (member window *unplaced*)))
+                   (not (gethash window undecided)))
           (when-changed (window :shown nil)
             (best-effort "hide" (w:window-hide proxy))))))))
 
@@ -637,8 +645,11 @@ obeyed."
     ;; EQUAL on a list of objects compares them with EQL, which is identity —
     ;; exactly the comparison wanted, and it makes the common case (nothing
     ;; changed order) one list walk rather than N protocol messages.
+    ;; The signature keeps ORDER itself: it is a list this function just made
+    ;; and nothing else holds a reference to, so the copy that used to be taken
+    ;; here was one cons per visible window per relayout buying nothing (#92).
     (unless (equal order (c:prop *world* :render-signature))
-      (setf (c:prop *world* :render-signature) (copy-list order))
+      (setf (c:prop *world* :render-signature) order)
       (let ((previous nil))
         (dolist (window order)
           (let ((node (window-river-node window)))

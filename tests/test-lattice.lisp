@@ -504,6 +504,33 @@ side the neighbour was on"))))
       (is (equal "a" (at (c:world-root world) (list (l:cell 0 0))))
           "and undo puts the windows back"))))
 
+(test container-addresses-tells-the-truth-after-every-edit
+  "The offscreen half is memoised (#92), and this is the check that would fail
+if the memo outlived what it describes.  Every kind of change the plane allows
+is here: a cell added, a cell removed, and a camera move -- which changes the
+split without changing a single cell, and is why the viewport rectangle is in
+the key rather than only the cell set."
+  (let ((grid (grid-of '(0 0 nil) '(1 0 nil))))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
+          (c:child-at grid (l:cell 1 0)) (leaf "b"))
+    (is (equal (list (l:cell 0 0) (l:cell 1 0))
+               (c:container-addresses grid))
+        "both occupied cells are visible")
+    (setf (c:child-at grid (l:cell 5 0)) (leaf "c"))
+    (is (equal (list (l:cell 0 0) (l:cell 1 0) (l:cell 5 0))
+               (c:container-addresses grid))
+        "a new offscreen cell appears at the end")
+    (c:remove-child grid (l:cell 0 0))
+    (is (equal (list (l:cell 1 0) (l:cell 5 0))
+               (c:container-addresses grid))
+        "and a removed one disappears from it")
+    (setf (l:viewport-cols (l:grid-viewport grid)) 1
+          (l:viewport-rows (l:grid-viewport grid)) 1
+          (l:viewport-origin (l:grid-viewport grid)) (l:cell 5 0))
+    (is (equal (list (l:cell 5 0) (l:cell 1 0))
+               (c:container-addresses grid))
+        "and a pan re-partitions the same cells")))
+
 (test removing-a-cell-takes-its-size-with-it
   (let ((grid (grid-of '(0 0 nil) '(1 0 nil))))
     (setf (c:child-at grid (l:cell 0 0)) (leaf "a")
