@@ -27,6 +27,12 @@
   "Register a seat, and give it its keyboard bindings."
   (let ((seat (make-instance 'seat :proxy proxy)))
     (push seat (server-seats *server*))
+    ;; THE FIRST SEAT IS THE SESSION'S DEFAULT PLACE, recorded once and kept.
+    ;; It used to be `(first server-seats)', which is this list's head -- so a
+    ;; seat created later (a remote-desktop client, a second keyboard) became
+    ;; the primary one and took the keyboard from the person at the machine.
+    (unless (server-default-seat *server*)
+      (setf (server-default-seat *server*) seat))
     (on-events (proxy "river_seat_v1")
                 (:pointer-position
                  (setf (seat-pointer-x seat) (first arguments)
@@ -83,7 +89,8 @@
       (setf (seat-bindings-seat seat)
             (w:bindings-get-seat (server-bindings *server*) proxy))
       (on-events ((seat-bindings-seat seat) "river_xkb_bindings_seat_v1")
-        (:ate-unbound-key (handle-unbound-key (first arguments)))
+        (:ate-unbound-key (let ((p:*seat* (seat-key seat)))
+                            (handle-unbound-key (first arguments))))
         (t nil))
       ;; Registration itself is fine here, but ENABLE is window-management
       ;; state and is therefore manage-sequence-only.  A seat arrives during
@@ -134,6 +141,15 @@ its half."
       (best-effort "bindings seat destroy"
         (w:bindings-seat-destroy bindings-seat))
       (setf (seat-bindings-seat seat) nil)))
+  ;; THE PLACE GOES WITH THE SEAT.  Two tables on the world are keyed by seat,
+  ;; and a seat that has gone away would otherwise leave its cursor and its
+  ;; focused float in both for ever.  The default seat is the exception: its
+  ;; key is NIL, which is the world's own cursor, and that is what the next
+  ;; default seat starts from.
+  (when (and *world* (not (eq seat (default-seat))))
+    (c:world-forget-seat *world* seat))
+  (when (eq seat (server-default-seat *server*))
+    (setf (server-default-seat *server*) nil))
   (setf (server-seats *server*) (remove seat (server-seats *server*)))
   (best-effort "seat destroy" (w:seat-destroy proxy))
   (setf (seat-proxy seat) nil)
@@ -144,14 +160,15 @@ its half."
   nil)
 
 (defun pointer-moved (seat)
-  "Focus follows the pointer, if that is turned on."
-  (let* ((policy (p:current-policy))
-         (path (guarded "pointer-focus"
-                 (p:pointer-focus policy *world*
-                                  (seat-pointer-x seat) (seat-pointer-y seat)))))
-    (when (and path (not (c:path-equal path (current-path))))
-      (p:jump-cursor policy *world* path)
-      (mark-dirty))))
+  "Focus follows SEAT's pointer, if that is turned on."
+  (let ((p:*seat* (seat-key seat)))
+    (let* ((policy (p:current-policy))
+           (path (guarded "pointer-focus"
+                   (p:pointer-focus policy *world*
+                                    (seat-pointer-x seat) (seat-pointer-y seat)))))
+      (when (and path (not (c:path-equal path (current-path))))
+        (p:jump-cursor policy *world* path)
+        (mark-dirty)))))
 
 ;;; --------------------------------------------------------- keybindings
 
@@ -180,8 +197,14 @@ window-management state."
                           (declare (ignore arguments))
                           (with-abandon
                             (case event
-                              (:pressed (run-hooks :user-activity)
-                                        (when (handle-key key) (after-command)))
+                              ;; AS THIS SEAT.  Every command a key press
+                              ;; runs is that person's command: it moves their
+                              ;; cursor and focuses their window, which is the
+                              ;; whole of what a second seat is for.
+                              (:pressed (let ((p:*seat* (seat-key seat)))
+                                          (run-hooks :user-activity)
+                                          (when (handle-key key)
+                                            (after-command))))
                               (t nil))))))
                     (wl:wl-proxy-hooks binding))
               (best-effort "enable binding" (w:binding-enable binding)))))))

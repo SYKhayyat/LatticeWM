@@ -96,10 +96,17 @@ initial guess."))
 (defclass world ()
   ((root :initarg :root :accessor world-root
          :documentation "The layout tree.  Shipped as a STACK of workspaces.")
-   (cursor :initarg :cursor :initform '() :accessor world-cursor
-           :documentation
-           "The focus path (DESIGN D18).  A place, not a window.  Wayland
-keyboard focus is derived from it on every relayout and never stored.")
+   (cursors :initform (make-hash-table :test #'eq) :accessor world-cursors
+            :documentation
+            "SEAT KEY -> focus path (DESIGN D18).  A place, not a window.
+
+DESIGN says *one cursor per seat*, and this used to be one slot: a second
+keyboard is a second person, at a second place, and one slot meant the second
+one could only stand where the first was standing.  The key is a seat object,
+or NIL for the world's own cursor — the one every caller that does not name a
+seat gets, which is the default seat and, on the one-seat machines this is
+normally run on, the only one.  NIL is the default rather than an absence so
+that every existing caller keeps meaning exactly what it meant.")
    (outputs :initform '() :accessor world-outputs
             :documentation "List of OUTPUT, in the order river reported them.")
    (inputs :initform '() :accessor world-inputs
@@ -112,15 +119,18 @@ has to be able to find the touchpads — and policy may not depend on the
 runtime.")
    (floats :initform '() :accessor world-floats
            :documentation "List of FLOATING-WINDOW, bottom to top.")
-   (focused-float :initform nil :accessor world-focused-float
-                  :documentation
-                  "The floating window that has keyboard focus, or NIL.
+   (focused-floats :initform (make-hash-table :test #'eq)
+                   :accessor world-focused-floats
+                   :documentation
+                   "SEAT KEY -> the floating window that has that keyboard, or absent.
 
-Focus is a *place* in the tree (D18), and a float is deliberately not in the
-tree — so without this slot there is no way to express \"the keyboard is
-talking to the floating window\", and a floated window could never be typed
-into.  That is not a corner case: it is every dialog, every file picker, and
-the first thing anybody notices.
+The same per-seat rule as CURSORS, for the same reason: two people at one
+machine can each be in a dialog, and one slot could only say that both were in
+the same one.  Focus is a *place* in the tree (D18), and a float is
+deliberately not in the tree — so without a float slot there is no way to
+express \"the keyboard is talking to the floating window\", and a floated window
+could never be typed into.  That is not a corner case: it is every dialog,
+every file picker, and the first thing anybody notices.
 
 The cursor keeps pointing wherever it was, so dismissing the float returns you
 exactly where you were without anything having to remember it.")
@@ -146,6 +156,50 @@ that pane, where — per DESIGN D19 — typing a key spawns something."
           (if cursor-supplied cursor (first-leaf-path root)))
     world))
 
+;;; ------------------------------------------------------------ the seat's place
+;;;
+;;; THE ACCESSORS ARE FUNCTIONS WITH AN OPTIONAL SEAT, and that is what made
+;;; this change small.  `(world-cursor world)' still means what it always meant
+;;; — the world's own cursor, which belongs to the default seat — so the
+;;; emitter, the history, the saved state and every extension compiled against
+;;; the old slot keep working unchanged, and single-seat behaviour is identical
+;;; by construction rather than by testing.  Naming a seat gets that seat's
+;;; place instead.
+;;;
+;;; A setf place rather than a plain reader, because `(setf (world-cursor world
+;;; seat) path)' is how the policy moves a *particular* person: SETF passes the
+;;; extra arguments through to the function below, so the form reads like the
+;;; slot it replaced.
+
+(defun world-cursor (world &optional seat)
+  "The focus path of SEAT, or the world's own cursor when SEAT is NIL (DESIGN D18)."
+  (values (gethash seat (world-cursors world) '())))
+
+(defun (setf world-cursor) (path world &optional seat)
+  "Put SEAT's cursor at PATH."
+  (setf (gethash seat (world-cursors world)) path))
+
+(defun world-focused-float (world &optional seat)
+  "The floating window holding SEAT's keyboard, or NIL."
+  (values (gethash seat (world-focused-floats world))))
+
+(defun (setf world-focused-float) (float world &optional seat)
+  "Give SEAT's keyboard to FLOAT, or to nothing when FLOAT is NIL."
+  (let ((table (world-focused-floats world)))
+    (if float
+        (setf (gethash seat table) float)
+        (remhash seat table))))
+
+(defun world-forget-seat (world seat)
+  "Drop every per-seat fact about SEAT: its place and its focused float.
+
+For a seat that has gone away.  Left behind, a departed seat's cursor sits in
+the table for ever, and a seat object that is garbage is a hash key nothing can
+reach — two small leaks the removal path used to have no reason to care about."
+  (remhash seat (world-cursors world))
+  (remhash seat (world-focused-floats world))
+  nil)
+
 (defmethod print-object ((w world) stream)
   (print-unreadable-object (w stream :type t :identity nil)
     (format stream "~d window~:p, cursor ~s"
@@ -168,18 +222,18 @@ empty, which is an ordinary state and not an error."
   (let ((leaf (world-leaf-at world path)))
     (when leaf (leaf-window leaf))))
 
-(defun world-focus-window (world)
-  "The window that should have keyboard focus, or NIL.
+(defun world-focus-window (world &optional seat)
+  "The window that should have SEAT's keyboard, or NIL.
 
 A focused float wins over the cursor, because a float is on top and is what the
 user is looking at.  Otherwise it is the cursor's window, which may be NIL when
 the cursor rests on an empty pane — and NIL is the honest answer there, not a
 reason to leave focus on the last window."
-  (let ((float (world-focused-float world)))
+  (let ((float (world-focused-float world seat)))
     (if (and float (window-live-p (float-window float))
              (member float (world-floats world)))
         (float-window float)
-        (world-window-at world))))
+        (world-window-at world (world-cursor world seat)))))
 
 (defun world-workspaces (world)
   "The workspace container, if the root is one, else NIL.

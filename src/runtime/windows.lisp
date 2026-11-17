@@ -205,7 +205,7 @@ nothing."
       ;; Focus follows the window you just floated.  Without this, floating
       ;; something takes the keyboard away from it — which is exactly backwards,
       ;; since you floated it in order to use it.
-      (setf (c:world-focused-float *world*) float))
+      (setf (c:world-focused-float *world* p:*seat*) float))
     ;; set_tiled is window-management state and is reconciled by the emitter in
     ;; the next manage sequence.  Sending it here would work from a key binding
     ;; and fail from a REPL.
@@ -228,8 +228,8 @@ is what you want if you use floating as a way of *moving* windows around.")
 (defun unfloat-window (window)
   "Put a floating window back into the tree — where it came from, or at the cursor."
   (let ((float (c:float-of-window *world* window)))
-    (when (eq float (c:world-focused-float *world*))
-      (setf (c:world-focused-float *world*) nil)))
+    (when (eq float (c:world-focused-float *world* p:*seat*))
+      (setf (c:world-focused-float *world* p:*seat*) nil)))
   (setf (c:world-floats *world*)
         (remove window (c:world-floats *world*) :key #'c:float-window)
         (c:window-floating-p window) nil)
@@ -284,8 +284,8 @@ it a policy question."
   ;; again and river went on drawing it where it was — minimize left the window
   ;; on screen, and the model was correct throughout.
   (let ((float (c:float-of-window *world* window)))
-    (when (eq float (c:world-focused-float *world*))
-      (setf (c:world-focused-float *world*) nil)))
+    (when (eq float (c:world-focused-float *world* p:*seat*))
+      (setf (c:world-focused-float *world* p:*seat*) nil)))
   (mark-dirty)
   (request-manage)
   window)
@@ -300,7 +300,23 @@ it a policy question."
 ;;; ------------------------------------------------------------ keyboard focus
 
 (defun apply-keyboard-focus ()
-  "Derive Wayland keyboard focus from the cursor.  DESIGN D18.
+  "Derive every seat's Wayland keyboard focus from that seat's cursor.  DESIGN D18.
+
+EVERY SEAT, NOT THE FIRST ONE.  This derived focus once, for `(primary-seat)',
+and on a one-seat machine that is the whole job.  With a second seat it was
+worse than nothing: the second keyboard's focus was never sent at all, so its
+typing went nowhere — every keystroke that was not a bound chord was dropped —
+and nobody could tell why.  Each seat has its own place now, so each one is
+asked separately and told separately.
+
+The derivation is per seat because P:*SEAT* is what the policy reads; see
+APPLY-SEAT-KEYBOARD-FOCUS."
+  (let ((policy (p:current-policy)))
+    (dolist (seat (server-seats *server*) (values))
+      (apply-seat-keyboard-focus policy seat))))
+
+(defun apply-seat-keyboard-focus (policy seat)
+  "Derive and send keyboard focus for SEAT, and say so if it changed.
 
 Focus is a *place*.  When the place holds a window that window gets focus;
 when it is an empty pane there is nothing for Wayland focus to be, and
@@ -315,14 +331,14 @@ decision no policy could reach: click-to-focus and sloppy-focus were both
 unwritable, in a program whose thesis is that they are methods.  This function
 keeps what is genuinely the runtime's: the lock-screen case, the diff, and the
 choice of which protocol request says `nothing'."
-  (let* ((seat (primary-seat))
+  (let* ((p:*seat* (seat-key seat))
          ;; Wrapped in a list, deliberately.  A policy answering NIL means `an
          ;; empty pane, clear the keyboard' and is D18's whole point; GUARDED
          ;; also answers NIL when a method signalled.  Clearing the keyboard
          ;; because somebody's FOCUS-TARGET has a typo in it is the wrong
          ;; failure — the right one is to leave focus exactly where it was.
          (answer (guarded "focus-target"
-                   (list (p:focus-target (p:current-policy) *world*))))
+                   (list (p:focus-target policy *world*))))
          (window (if answer (first answer) (and seat (seat-focused seat)))))
     (when seat
       (let ((was (seat-focused seat)))
@@ -354,5 +370,13 @@ choice of which protocol request says `nothing'."
         ;; Here rather than at the call sites because this is the one place the
         ;; question is answered — D18 makes keyboard focus derived, so deriving
         ;; it is the only moment at which the answer is known to have changed.
+        ;; TWO HOOKS, ONE OLD AND ONE NEW.  :KEYBOARD-FOCUS-CHANGED keeps the
+        ;; shape and the meaning it had with one seat — a status bar attached
+        ;; to it keeps working — and now describes the *default* seat, which is
+        ;; the machine's own person.  :SEAT-FOCUS-CHANGED names the seat, so a
+        ;; listener can tell two people's focus apart instead of seeing one
+        ;; pair of windows after another with no way to know whose they were.
         (unless (eq was (seat-focused seat))
-          (run-hooks :keyboard-focus-changed was (seat-focused seat)))))))
+          (run-hooks :seat-focus-changed seat was (seat-focused seat))
+          (when (eq seat (default-seat))
+            (run-hooks :keyboard-focus-changed was (seat-focused seat))))))))

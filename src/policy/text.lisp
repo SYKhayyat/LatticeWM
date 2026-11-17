@@ -109,6 +109,23 @@ one grey slab."
         (cond ((and space start) (push (subseq string start i) out) (setf start nil))
               ((not (or space start)) (setf start i)))))))
 
+(defun lambda-list-parameter-name (parameter)
+  "The symbol PARAMETER binds, or NIL when it names no argument.
+
+One entry of a lambda list, which has three shapes and is why anything walking
+one by hand gets this wrong.  A plain parameter is a symbol; a defaulted one is
+a list whose first element is the symbol, `(AMOUNT *RESIZE-AMOUNT*)' or
+`(AMOUNT 10 SUPPLIED-P)'; a keyword parameter may name its variable something
+other than the keyword, `((:WIDTH PIXELS) 40)'.  A lambda-list marker --
+&optional, &rest, &key, &allow-other-keys -- binds nothing and must not be
+mistaken for an argument, or the position of every parameter after it drifts."
+  (let ((head (if (consp parameter) (first parameter) parameter)))
+    (when (consp head) (setf head (second head)))
+    (when (and head (symbolp head)
+               (plusp (length (symbol-name head)))
+               (not (char= #\& (char (symbol-name head) 0))))
+      head)))
+
 (defun substitute-arguments (text command arguments)
   "Replace a docstring's argument placeholders with the actual arguments.
 
@@ -120,22 +137,29 @@ template with the hole still in it.  The difference between
     Super+h   left Move the cursor one pane DIRECTION
     Super+h   Move the cursor one pane left.
 
-is the difference between a reference and a help screen."
+is the difference between a reference and a help screen.
+
+A parameter that was not passed keeps its placeholder.  The alternative is to
+substitute the default, which for `(AMOUNT *RESIZE-AMOUNT*)' is the name of an
+option — a help screen that reads \"by *RESIZE-AMOUNT* of its container\" is
+worse than one that reads \"by AMOUNT\", which at least names the argument a
+person could give."
   (let ((result text)
         (remaining arguments))
     (dolist (parameter (command-lambda-list command) result)
-      (let ((name (string parameter)))
-        ;; A lambda-list marker (&optional, &rest, &key ...) names no argument,
-        ;; so it must NOT advance the arguments pointer.  Walking parameters and
-        ;; arguments in lockstep consumed an argument for the `&' token, and
-        ;; every parameter after &optional then paired with the wrong argument
-        ;; -- the help text rendered with the placeholder still in it.
-        (unless (char= #\& (char name 0))
-          (when remaining
-            (let ((argument (pop remaining))
-                  (position (search name result :test #'char-equal)))
-              (when position
-                (setf result
-                      (concatenate 'string (subseq result 0 position)
-                                   (string-downcase (princ-to-string argument))
-                                   (subseq result (+ position (length name)))))))))))))
+      ;; Markers bind nothing, so they must NOT advance the arguments pointer;
+      ;; a defaulted parameter is a list rather than a symbol and must not be
+      ;; handed to STRING (it signalled a type error from inside the help
+      ;; screen for every command with an &optional default).  Both are the
+      ;; same question -- which argument does this parameter correspond to --
+      ;; so both are answered in one place.
+      (let ((symbol (lambda-list-parameter-name parameter)))
+        (when (and symbol remaining)
+          (let ((name (symbol-name symbol))
+                (argument (pop remaining))
+                (position (search (symbol-name symbol) result :test #'char-equal)))
+            (when position
+              (setf result
+                    (concatenate 'string (subseq result 0 position)
+                                 (string-downcase (princ-to-string argument))
+                                 (subseq result (+ position (length name))))))))))))

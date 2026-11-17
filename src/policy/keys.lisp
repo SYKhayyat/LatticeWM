@@ -402,10 +402,10 @@ pending, so river ate them always and the window manager acted on them never."
            ;; The cursor rests on a deliberately empty pane and no float has
            ;; the keyboard — which is the whole of what makes an unbound `e'
            ;; there mean `open an editor' rather than reach an application.
-           (let ((leaf (and world (c:world-leaf-at world (c:world-cursor world)))))
+           (let ((leaf (and world (c:world-leaf-at world (c:world-cursor world *seat*)))))
              (and leaf
                   (c:leaf-empty-p leaf)
-                  (null (c:world-focused-float world)))))
+                  (null (c:world-focused-float world *seat*)))))
        t))
 
 (defvar *help-visible* nil

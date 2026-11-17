@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM hooks
-20 hooks.  Generated from the running image.
+21 hooks.  Generated from the running image.
 ============================================================================
 
 A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,
@@ -119,6 +119,10 @@ stays where it was.  NEW-WINDOW is NIL for an empty pane — D18's honest answer
 not a missing value — and also while a screen locker holds the keyboard, since
 for as long as that lasts every focus request we make is ignored.
 
+With more than one seat this is the *default* seat's changes: the machine's own
+person, and the only seat a one-keyboard listener ever had.  Use
+:SEAT-FOCUS-CHANGED when you need to know which seat it was.
+
 
 ----------------------------------------------------------------------------
 :KEYBOARD-LAYOUT-CHANGED (device name)
@@ -207,6 +211,20 @@ extension guide could not find the second, and gate 7 could not see it.  There
 is one way now, and this is it.
 
   attached: 2
+
+----------------------------------------------------------------------------
+:SEAT-FOCUS-CHANGED (seat old-window new-window)
+----------------------------------------------------------------------------
+Run when any seat's
+keyboard focus changes.  Either window may be NIL.
+
+:KEYBOARD-FOCUS-CHANGED was the only report there was, and it exists for a
+status bar showing *the* focused window -- true while there is one person at
+the machine.  A second seat is a second person with their own place and their
+own focus (see P:*SEAT*), so the bare pair of windows was two people's answers
+interleaved with nothing to tell them apart.  SEAT is the runtime's seat
+object, and (R:DEFAULT-SEAT) is the one :KEYBOARD-FOCUS-CHANGED reports.
+
 
 ----------------------------------------------------------------------------
 :SHUTDOWN ()

@@ -92,8 +92,8 @@ this."
       ;; the :FOCUS-CHANGED hook a second time for a move that was the same
       ;; window at a deeper path -- a doubled hook and MRU churn on the hottest
       ;; path.  The caller's JUMP-CURSOR is the one and only announce.
-      (setf (c:world-cursor world)
-            (c:repair-path new-root (c:world-cursor world)))
+      (setf (c:world-cursor world *seat*)
+            (c:repair-path new-root (c:world-cursor world *seat*)))
       new-path)))
 
 ;;; ==================================================================
@@ -507,11 +507,11 @@ separate command rather than a mode, because they are different intentions and
 a mode would make you remember which one you were in."
   (let ((root (c:world-root world)))
     (unless (and path (c:resolve-path root path))
-      (return-from on-window-close (c:world-cursor world)))
+      (return-from on-window-close (c:world-cursor world *seat*)))
     (multiple-value-bind (removed new-root suggested)
         (c:tree-remove-at root path
                           :simplify (lambda (node) (should-collapse-p policy node))
-                          :focus-path (c:world-cursor world))
+                          :focus-path (c:world-cursor world *seat*))
       (declare (ignore removed))
       (setf (c:world-root world) new-root)
       (let ((landed (focus-after-remove policy world path suggested)))
@@ -541,7 +541,7 @@ where it was if that place still exists."
     (when path
       (setf (c:window-home-path window) path)
       (multiple-value-bind (removed new-root suggested)
-          (c:tree-remove-at root path :focus-path (c:world-cursor world))
+          (c:tree-remove-at root path :focus-path (c:world-cursor world *seat*))
         (declare (ignore removed))
         ;; THROUGH REPAIR-CURSOR, NOT INTO THE SLOT -- exactly as ON-WINDOW-CLOSE
         ;; does.  Writing WORLD-CURSOR directly skipped ON-FOCUS-CHANGE (so :MRU
@@ -575,8 +575,9 @@ lose a window."
        (setf (c:world-root world) (c:tree-replace-at root home leaf))
        (jump-cursor policy world home))
       (t
-       (let ((landed (place-node policy world leaf (c:world-cursor world)
-                                 (if (let ((here (c:world-leaf-at world)))
+       (let ((landed (place-node policy world leaf (c:world-cursor world *seat*)
+                                 (if (let ((here (c:world-leaf-at
+                                                  world (c:world-cursor world *seat*))))
                                        (and here (c:leaf-empty-p here)))
                                      :fill :split))))
          (jump-cursor policy world landed))))))

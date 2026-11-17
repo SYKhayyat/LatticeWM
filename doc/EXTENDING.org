@@ -706,11 +706,11 @@ latticewm --hooks    # every hook, what it is called with, and when it fires
 thirteen of the program's seventeen, missing ~:layout-restored~ — which is the
 hook the lattice itself uses — and the three that report input devices, with
 "~(all-hooks)~ is authoritative" underneath, which is a true sentence that only
-helps somebody already at a REPL. There are twenty, and the list is generated
+helps somebody already at a REPL. There are twenty-one, and the list is generated
 from the running image now, like the other two surfaces, and installed beside
 them as =HOOKS.txt=.
 
-#+CLAIM: (= 20 (length (all-hooks)))
+#+CLAIM: (= 21 (length (all-hooks)))
 #+CLAIM: (every (lambda (row) (stringp (second row))) (all-hooks))
 
 Two are worth naming here. ~:capture-changed~ is the only fact in the list your
@@ -719,7 +719,11 @@ of screen capture sessions now reading it, so a status bar, a keyboard light or
 a script that mutes a microphone can follow a screen share without polling
 anything. And ~:keyboard-focus-changed~ is the one a status bar showing the
 focused window actually wants — ~:focus-changed~ reports the *cursor*, which is
-a place, and focusing a floating window does not move it.
+a place, and focusing a floating window does not move it. With a second
+keyboard, ~:seat-focus-changed~ carries the seat as well as the pair of windows,
+so a listener can tell whose focus moved; ~:keyboard-focus-changed~ keeps
+reporting the default seat, which is why a status bar written for one keyboard
+needs no change.
 
 *The argument list beside each name is checked, in both directions.* Attaching
 a function that cannot be called with them says so at the moment you attach it,

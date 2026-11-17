@@ -228,7 +228,17 @@ from a key binding, which is *outside* any sequence -- so closing a window
 straight from the verb reached the sequence discipline and was refused, every
 time, on every machine.")
    (version :initform 0 :accessor server-version
-            :documentation "The river_window_manager_v1 version river offered."))
+            :documentation "The river_window_manager_v1 version river offered.")
+   (default-seat :initform nil :accessor server-default-seat
+                 :documentation
+                 "The seat that owns the world's own cursor, recorded when the
+first seat arrives and kept for the session.
+
+A slot rather than `(first server-seats)', which is what the focus code used
+to ask: ATTACH-SEAT pushes, so a seat created later — a remote-desktop client,
+a second keyboard — became the first one and took the keyboard away from the
+person at the machine.  NIL once that seat has gone, which is what lets
+DEFAULT-SEAT fall back instead of pointing at a destroyed object."))
   (:documentation
    "The compositor connection and everything derived from it."))
 
@@ -271,11 +281,48 @@ is the thing that has to be remembered.")
    (props :initform '() :accessor c:props))
   (:documentation "One seat: a keyboard, a pointer, and a keyboard focus."))
 
-(defun primary-seat ()
-  "The first seat, which on every ordinary machine is the only one."
-  (first (server-seats *server*)))
+(defun default-seat ()
+  "The seat the world's own cursor belongs to.
 
-(defun warp-pointer (x y &optional (seat (primary-seat)))
+On every ordinary machine this is the only seat.  It is *not*
+`(first server-seats)', which is what this used to be: ATTACH-SEAT pushes, so a
+seat arriving later — a remote-desktop client, a second keyboard — became the
+first one and silently took keyboard focus away from the person at the machine.
+The default seat is recorded when the first seat arrives and keeps that
+identity for the session; anything else gets its own cursor and its own focus
+and leaves this one alone.
+
+Falls back to the first seat when the recorded one has gone away, which is what
+makes a session survive a seat that is removed."
+  (let ((recorded (and *server* (server-default-seat *server*))))
+    (if (member recorded (server-seats *server*))
+        recorded
+        (first (server-seats *server*)))))
+
+(defun primary-seat ()
+  "DEFAULT-SEAT under its old name, kept because extensions and tests say it."
+  (default-seat))
+
+(defun seat-key (seat)
+  "The key SEAT's cursor is stored under: NIL for the default seat.
+
+NIL is the world's own cursor — the one every caller that does not name a seat
+gets, the one the emitter draws and saved sessions restore.  Making the
+default seat that key is what keeps one-seat behaviour exactly what it was."
+  (unless (eq seat (default-seat)) seat))
+
+(defun call-as-seat (seat function)
+  "Call FUNCTION as SEAT's keyboard, and return what it returns.
+
+What a key press does: P:*SEAT* is the seat's cursor key for the duration, so
+every command FUNCTION runs — and every policy method they ask — moves that
+person's cursor and focuses that person's window.  Exposed because a second
+seat cannot be typed at from a test or a REPL, and this is the next best thing:
+`(call-as-seat second (lambda () (run-command \"focus-right\")))`."
+  (let ((p:*seat* (seat-key seat)))
+    (funcall function)))
+
+(defun warp-pointer (x y &optional (seat (default-seat)))
   "Move the pointer to X, Y in output-layout coordinates.
 
 Wraps one protocol request, and exists because the alternative is that an
@@ -342,9 +389,11 @@ latency, directly and visibly."
 
 ;;; --------------------------------------------------------- the cursor's view
 
-(defun current-path ()
-  "The cursor's path."
-  (and *world* (c:world-cursor *world*)))
+(defun current-path (&optional (seat p:*seat*))
+  "The cursor's path, for SEAT when one is named (default: the seat whose
+command or event is being handled — see P:*SEAT*, which is what every caller
+inside a key press gets without saying anything)."
+  (and *world* (c:world-cursor *world* seat)))
 
 (defun current-node (&optional (path (current-path)))
   "The node the cursor is on."
@@ -367,7 +416,7 @@ exactly when a floating window is focused, and every command that acts on \"the
 window\" — close, minimize, fullscreen, float — means this one.  Getting that
 wrong is not subtle in use: you press close, and the window behind the dialog
 you were looking at disappears."
-  (and *world* (c:world-focus-window *world*)))
+  (and *world* (c:world-focus-window *world* p:*seat*)))
 
 (defun node-rect-now (node)
   "The rectangle NODE was last laid out at, or NIL.

@@ -281,7 +281,7 @@ CURRENT-OUTPUT answers by intersection area because it has to say which
 monitor a pane straddling the seam is mostly on; this is asking `which screen
 is my workspace displayed on', which is what crossing between them is defined
 in terms of, and it has an exact answer with no geometry in it at all."
-  (let* ((from (output-showing world (first (c:world-cursor world))))
+  (let* ((from (output-showing world (first (c:world-cursor world *seat*))))
          (to (output-in-direction world from direction))
          (index (and to (output-workspace to))))
     (when (integerp index)
@@ -296,20 +296,20 @@ and not as an error: bumping into the edge is an ordinary thing to do and must
 not produce a beep, a log line, or a condition."
   (let* ((cached (c:prop world :rect-index))
          (target (find-motion-target policy (c:world-root world)
-                                     (c:world-cursor world) direction
+                                     (c:world-cursor world *seat*) direction
                                      :rects (or cached
                                                 (motion-rects
                                                  policy (c:world-root world))))))
     (cond
       (target
-       (let ((old (c:world-cursor world)))
-         (setf (c:world-cursor world) target
+       (let ((old (c:world-cursor world *seat*)))
+         (setf (c:world-cursor world *seat*) target
                ;; Directional motion is a statement about the tree, so it takes
                ;; the keyboard back from any floating window.  Otherwise
                ;; pressing Left while a dialog is up moves the cursor invisibly
                ;; underneath it, which is the worst kind of bug: nothing looks
                ;; wrong until you type.
-               (c:world-focused-float world) nil)
+               (c:world-focused-float world *seat*) nil)
          (note-cursor-arrival policy world old target)))
       ;; The tree had nowhere to go.  The screens might.
       (*motion-crosses-outputs* (cross-to-output policy world direction)))))
@@ -324,12 +324,12 @@ than an edge — DESIGN D20's second rule."
          (target (if node
                      (descend-to-leaf policy node path nil)
                      (c:repair-path root path))))
-    (let ((old (c:world-cursor world)))
-      (setf (c:world-cursor world) target
-            (c:world-focused-float world) nil)
+    (let ((old (c:world-cursor world *seat*)))
+      (setf (c:world-cursor world *seat*) target
+            (c:world-focused-float world *seat*) nil)
       (note-cursor-arrival policy world old target))))
 
-(defun repair-cursor (policy world &optional (was (c:world-cursor world)))
+(defun repair-cursor (policy world &optional (was (c:world-cursor world *seat*)))
   "Put the cursor somewhere valid after the tree changed under it.
 
 WAS may be a path that no longer names a leaf — the usual case being that the
@@ -338,8 +338,8 @@ container rather than a place.  Every verb that restructures the tree calls
 this; it is REPAIR-PATH plus the focus-change hook."
   (let* ((root (c:world-root world))
          (target (c:repair-path root was))
-         (old (c:world-cursor world)))
-    (setf (c:world-cursor world) target)
+         (old (c:world-cursor world *seat*)))
+    (setf (c:world-cursor world *seat*) target)
     (unless (c:path-equal old target)
       (note-cursor-arrival policy world old target))
     target))

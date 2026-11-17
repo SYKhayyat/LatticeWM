@@ -538,6 +538,21 @@ Returning something else is a one-method change, and MRU-after-close is one of
 the shipped worked examples precisely because it is the most commonly wanted
 one."))
 
+(defvar *seat* nil
+  "The seat whose command or event is being handled, as a cursor key.
+
+NIL is the world's own cursor — the default seat — and that is the value
+everywhere a single keyboard is in play, so a policy method that reads it gets
+exactly what it got before there were seats at all.  The runtime binds it
+around a key press and a pointer event, and the policy's cursor operations pass
+it to C:WORLD-CURSOR: one person moving, not everybody.
+
+It is a special rather than an argument on FOCUS-TARGET and the motion protocol
+for the reason those are extension points: adding an argument to a generic that
+every extension implements is how a protocol change breaks the extensions it
+exists for.  A binding changes nothing for a method that does not look, and the
+one-argument call is still the right call for anything that is not per seat.")
+
 (defgeneric focus-target (policy world)
   (:documentation
    "Which window should hold the *keyboard*, or NIL for none.

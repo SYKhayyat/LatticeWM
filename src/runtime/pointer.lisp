@@ -222,17 +222,19 @@ first event after a connect."
                        (c:rect-contains-p rect x y))
               (return window)))))))
 
-(defun focus-window-from-pointer (window)
-  "Give WINDOW the keyboard because the pointer asked.
+(defun focus-window-from-pointer (window &optional (seat p:*seat*))
+  "Give WINDOW the keyboard because SEAT's pointer asked.
 
-A float becomes the focused float; a tiled window moves the cursor to its pane.
-Both are the *model* change — the emitter turns it into protocol requests in
-the next manage sequence, which is the same rule every command follows."
+A float becomes that seat's focused float; a tiled window moves that seat's
+cursor to its pane.  Both are the *model* change — the emitter turns it into
+protocol requests in the next manage sequence, which is the same rule every
+command follows.  SEAT says *whose* keyboard: two pointers on one desktop are
+two people, and one of them clicking a dialog must not take the other's typing."
   (when (and window (c:window-live-p window))
     (let ((float (c:float-of-window *world* window)))
       (cond
         (float
-         (setf (c:world-focused-float *world*) float)
+         (setf (c:world-focused-float *world* seat) float)
          (when p:*click-to-raise*
            (setf (c:world-floats *world*)
                  (append (remove float (c:world-floats *world*)) (list float)))))
@@ -251,10 +253,11 @@ the next manage sequence, which is the same rule every command follows."
 ;;; ATTACH-SEAT and EVLAMBDA-FOR-WINDOW.  What lives here is what they call.
 
 (defun on-pointer-enter (seat window)
-  "The pointer entered WINDOW's area."
+  "SEAT's pointer entered WINDOW's area."
   (setf (seat-pointer-window seat) window)
   (when (and p:*focus-follows-mouse* window (null (seat-pointer-op seat)))
-    (guarded "pointer-focus" (focus-window-from-pointer window))))
+    (let ((p:*seat* (seat-key seat)))
+      (guarded "pointer-focus" (focus-window-from-pointer window p:*seat*)))))
 
 (defun on-pointer-leave (seat)
   "The pointer left whatever it was over."
@@ -268,11 +271,14 @@ is that a window manager needs to know *when to send keyboard focus and when to
 raise*, and exposing every pointer event to answer that would be mechanism
 where policy belongs.  The consequence is pleasant: this one handler is
 click-to-focus for the mouse, for touch, and for a tablet stylus, and it never
-had to be told they were different."
-  (declare (ignore seat))
+had to be told they were different.
+
+SEAT was ignored here, which was invisible with one seat and wrong with two:
+clicking on the second person's screen moved the first person's cursor."
   (when (and p:*click-to-focus* window)
-    (guarded "click to focus" (focus-window-from-pointer window))
-    (request-manage)))
+    (let ((p:*seat* (seat-key seat)))
+      (guarded "click to focus" (focus-window-from-pointer window p:*seat*))
+      (request-manage))))
 
 (defun on-client-move-request (window seat)
   "A client asked to be dragged, because somebody grabbed its own titlebar."

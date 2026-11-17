@@ -200,7 +200,7 @@ Filling an empty pane rather than splitting it is not a special case bolted
 on: an empty pane exists *because the user made a place for something*, so
 putting the next thing there is the only reading that respects the gesture."
   (declare (ignore window))
-  (let* ((path (c:world-cursor world))
+  (let* ((path (c:world-cursor world *seat*))
          (leaf (c:world-leaf-at world path)))
     (cond
       ((and leaf (c:leaf-empty-p leaf)) (values path :fill))

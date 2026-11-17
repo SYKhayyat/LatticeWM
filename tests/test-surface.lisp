@@ -1068,6 +1068,30 @@ not the same as a test that renders it.  These five are the rendering."
           "and the placeholder did not survive: ~s" description)
       (is (not (find (code-char 8212) description))
           "a summary cut at a dash does not keep the dash: ~s" description))
+    ;; A defaulted parameter is a list, not a symbol, and every command with an
+    ;; &optional default made the help screen signal a type error as it
+    ;; rendered -- caught and logged, so the screen still appeared and nothing
+    ;; noticed.  `resize' is one: (DIRECTION &OPTIONAL (AMOUNT *RESIZE-AMOUNT*)).
+    ;; The unsupplied parameter keeps its placeholder on purpose; the supplied
+    ;; one must still arrive one position early rather than not at all.
+    (let ((description (p:binding-description policy '("resize" :right))))
+      (is (search "right" description)
+          "the argument reached the docstring: ~s" description)
+      (is (not (search "DIRECTION" description))
+          "and the placeholder did not survive: ~s" description)
+      (is (search "AMOUNT" description)
+          "while the parameter nobody passed keeps its name: ~s" description))
+    ;; The same shape, one more parameter, and the markers in front of them:
+    ;; `split' is (&OPTIONAL AXIS (SIDE :AFTER)), so a naive walk hands :VERTICAL
+    ;; to &OPTIONAL and every placeholder after it names the wrong argument.
+    ;; BINDING-DESCRIPTION cannot show this -- it returns the docstring's first
+    ;; line, and the placeholders are in the paragraph below -- so the text goes
+    ;; in directly.
+    (let ((text (p:substitute-arguments "Split AXIS with SIDE."
+                                        (p:find-command "split")
+                                        '(:vertical :before))))
+      (is (string= "Split vertical with before." text)
+          "&OPTIONAL is not an argument: ~s" text))
     ;; describe-command, and where-is.
     (let ((rows (p:command-help-rows policy (p:find-command "focus"))))
       (is (plusp (length rows)))

@@ -306,7 +306,7 @@ round — the message is about what just happened and the hint is about what is
 always true, so the hint is the one that can wait for a quieter line."
   (let* ((root (c:world-root world))
          (workspaces (c:world-workspaces world))
-         (window (c:world-focus-window world))
+         (window (c:world-focus-window world *seat*))
          (leaf (c:world-leaf-at world))
          (segments '()))
     ;; NAMED, NOT JUST NUMBERED.  This used to render a bare [2/5], and the

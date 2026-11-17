@@ -379,7 +379,21 @@ It covers what :FOCUS-CHANGED structurally cannot: clicking a dialog, cycling
 floats, calling up a named scratchpad, and a window closing while the cursor
 stays where it was.  NEW-WINDOW is NIL for an empty pane — D18's honest answer,
 not a missing value — and also while a screen locker holds the keyboard, since
-for as long as that lasts every focus request we make is ignored.")
+for as long as that lasts every focus request we make is ignored.
+
+With more than one seat this is the *default* seat's changes: the machine's own
+person, and the only seat a one-keyboard listener ever had.  Use
+:SEAT-FOCUS-CHANGED when you need to know which seat it was.")
+
+(defhook :seat-focus-changed (seat old-window new-window) "Run when any seat's
+keyboard focus changes.  Either window may be NIL.
+
+:KEYBOARD-FOCUS-CHANGED was the only report there was, and it exists for a
+status bar showing *the* focused window -- true while there is one person at
+the machine.  A second seat is a second person with their own place and their
+own focus (see P:*SEAT*), so the bare pair of windows was two people's answers
+interleaved with nothing to tell them apart.  SEAT is the runtime's seat
+object, and (R:DEFAULT-SEAT) is the one :KEYBOARD-FOCUS-CHANGED reports.")
 
 (defhook :output-added (output) "Run once a monitor has appeared, been given a
 workspace, and said what it is.  For anything that needs a surface or a process

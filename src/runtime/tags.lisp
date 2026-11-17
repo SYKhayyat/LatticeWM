@@ -173,7 +173,7 @@ nothing."
   (let ((float (c:float-of-window *world* window)))
     (cond
       (float
-       (setf (c:world-focused-float *world*) float)
+       (setf (c:world-focused-float *world* p:*seat*) float)
        (mark-dirty)
        (request-manage))
       (t

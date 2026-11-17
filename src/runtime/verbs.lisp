@@ -850,33 +850,33 @@ that fixes it, and this is the verb that sets it."
   (with-relayout
     (let* ((floats (remove-if-not (lambda (f) (c:window-live-p (c:float-window f)))
                                   (c:world-floats *world*)))
-           (current (c:world-focused-float *world*))
+           (current (c:world-focused-float *world* p:*seat*))
            (position (position current floats)))
-      (setf (c:world-focused-float *world*)
+      (setf (c:world-focused-float *world* p:*seat*)
             (cond ((null floats) nil)
                   ((null position) (first floats))
                   (t (let ((next (+ position step)))
                        (when (< -1 next (length floats)) (nth next floats))))))
       (request-manage)
-      (c:world-focused-float *world*))))
+      (c:world-focused-float *world* p:*seat*))))
 
 (defcommand focus-tiled ()
   "Take keyboard focus off any floating window and give it back to the cursor."
   (with-relayout
-    (setf (c:world-focused-float *world*) nil)
+    (setf (c:world-focused-float *world* p:*seat*) nil)
     (request-manage)))
 
 (defcommand raise-float ()
   "Put the focused floating window on top of the other floats."
   (with-relayout
-    (let ((float (c:world-focused-float *world*)))
+    (let ((float (c:world-focused-float *world* p:*seat*)))
       (when float
         (setf (c:world-floats *world*)
               (append (remove float (c:world-floats *world*)) (list float)))))))
 
 (defcommand close-float ()
   "Close the focused floating window."
-  (let ((float (c:world-focused-float *world*)))
+  (let ((float (c:world-focused-float *world* p:*seat*)))
     (when float
       (let ((window (c:float-window float)))
         (when (c:window-proxy window)

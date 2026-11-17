@@ -124,7 +124,7 @@ sort of thing that goes wrong quietly.  What is new is that the *question* is
 now asked of a policy, so answering it differently is a method rather than a
 patch to an event handler."
   (declare (ignore policy))
-  (c:world-focus-window world))
+  (c:world-focus-window world *seat*))
 
 (defmethod pointer-focus ((policy motion-policy) world x y)
   "The deepest visible leaf whose rectangle contains the pointer."

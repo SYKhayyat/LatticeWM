@@ -605,6 +605,39 @@ exercises the hook mechanism on the way past."
         (settle))
       window)))
 
+(defun create-seat (name)
+  "Ask river for a seat called NAME, and return the runtime SEAT once it arrives.
+
+THE ONLY WAY TO HAVE A SECOND SEAT HERE, and it is the real path rather than a
+stub: no headless backend has a second keyboard, but river's input manager
+creates seats by name at runtime — which is also how a remote-desktop client
+gets its own — and the window manager learns about it through the ordinary
+manage sequence, exactly as it would on real hardware.
+
+NIL means river offered no input manager, which is a compositor older than this
+feature rather than anything the window manager did wrong."
+  (let ((manager (and *server* (r::server-input-manager *server*)))
+        (before (and *server* (copy-list (r::server-seats *server*)))))
+    (when manager
+      ;; ON THE WINDOW MANAGER'S THREAD, LIKE EVERY OTHER REQUEST HERE.  The
+      ;; socket's outgoing buffer belongs to whatever is flushing it, and this
+      ;; thread is not that -- sent from here it raced the emitter's own
+      ;; flushes and the wire layer's bounds assertion fired inside whichever
+      ;; request lost, roughly one run in three.  WM is the one door.
+      (wm (lambda () (w::river-input-manager-v1.create-seat manager name)))
+      (poll-until (lambda ()
+                    (find-if (lambda (seat) (not (member seat before)))
+                             (r::server-seats *server*)))
+                  10))))
+
+(defun destroy-seat (name)
+  "Destroy the seat called NAME, and say whether it went away."
+  (let ((manager (and *server* (r::server-input-manager *server*)))
+        (before (and *server* (length (r::server-seats *server*)))))
+    (when manager
+      (wm (lambda () (w::river-input-manager-v1.destroy-seat manager name)))
+      (poll-until (lambda () (< (length (r::server-seats *server*)) before)) 10))))
+
 (defun verb (name &rest arguments)
   "Run the command NAME with ARGUMENTS, then wait for the screen to catch up.
 
@@ -1088,6 +1121,136 @@ are what a person means by the arrangement, and both are copy-stable."
                          "and P:FOCUS-TARGET's answer is what river was told to focus")))))))
 
        ;; ------------------------------------------------------------------
+       ;; A SECOND SEAT (#90).  DESIGN says "The lattice cursor (D18). One per
+       ;; seat".  The code had one cursor and one focused float for the whole
+       ;; machine, and derived keyboard focus only for the first seat: on a
+       ;; two-keyboard machine the second person's typing went nowhere at all,
+       ;; because river was never told to focus anything for them.
+       ;;
+       ;; THE SECOND SEAT HERE IS REAL.  No headless backend has a second
+       ;; keyboard, but river's input manager creates seats by name at runtime
+       ;; — which is also how a remote-desktop client gets one — so this drives
+       ;; the same path hardware would.
+       (section "a second seat"
+         (let ((first (r:default-seat)))
+           (cond
+             ((null first) (skip "no seat, so there is no second one"))
+             ((null (and *server* (r::server-input-manager *server*)))
+              (skip "river offered no input manager, so no seat can be created"))
+             (t
+              (check (eq first (r:primary-seat))
+                     "the first seat is the machine's own, and stays it")
+              (let ((second (create-seat "latticewm-second")))
+                (cond
+                  ((null second)
+                   (skip "river did not announce the seat it was asked for"))
+                  (t
+                   (check t "river created a second seat, and it was attached")
+                   (check (eq first (r:default-seat))
+                          "and the seat that arrived did not become the default")
+                   (check (poll-until
+                           (lambda ()
+                             (plusp (hash-table-count (r::seat-bound-keys second))))
+                           10)
+                          "the second seat got its own key bindings: ~d"
+                          (hash-table-count (r::seat-bound-keys second)))
+                   (let* ((mark (length *clients*))
+                          (a (open-window "latticewm-seat-a"))
+                          (b (open-window "latticewm-seat-b")))
+                     (cond
+                       ((or (null a) (null b))
+                        (missing "no terminal emulator on PATH, so the two-keyboard half did not run"))
+                       (t
+                        ;; One seat stands on each window, as that seat.
+                        (stand-on a)
+                        (wm (lambda ()
+                              (r:call-as-seat
+                               second
+                               (lambda ()
+                                 (let ((leaf (c:leaf-holding (c:world-root *world*) b)))
+                                   (when leaf
+                                     (jump-cursor (p:current-policy) *world*
+                                                  (c:node-path-to (c:world-root *world*)
+                                                                  leaf))))))))
+                        (settle)
+                        (check (poll-until (lambda () (eq a (r:seat-focused first))) 10)
+                               "the default seat's keyboard is on its own window")
+                        (check (poll-until (lambda () (eq b (r:seat-focused second))) 10)
+                               "and the second seat's is on the other one")
+                        (check (not (eq (r:seat-focused first) (r:seat-focused second)))
+                               "two seats, two keyboards, which is the whole point")
+                        ;; AND IT SAID WHICH PERSON IT MEANT.  There was one
+                        ;; focus report and it was a pair of windows, so two
+                        ;; people's moves arrived as one indistinguishable
+                        ;; stream.  The new hook names the seat.
+                        (let ((firings (remove-if-not
+                                        (lambda (given) (eq (first given) second))
+                                        (fired :seat-focus-changed))))
+                          (check firings
+                                 ":seat-focus-changed named the second seat ~d time~:p"
+                                 (length firings))
+                          (check (every (lambda (given)
+                                          (destructuring-bind (seat old new) given
+                                            (declare (ignore seat))
+                                            (and (or (null old) (typep old 'window))
+                                                 (or (null new) (typep new 'window)))))
+                                        firings)
+                                 "with the windows it moved between, NIL being the ~
+                                  honest answer for an empty pane"))
+                        ;; The old hook is not replaced, it is narrowed to the
+                        ;; default seat -- so a status bar written before any of
+                        ;; this goes on working on a one-keyboard machine.
+                        (check (find-if (lambda (given)
+                                          (destructuring-bind (old new) given
+                                            (declare (ignore old))
+                                            (eq new a)))
+                                        (fired :keyboard-focus-changed))
+                               "and :keyboard-focus-changed still reports the default ~
+                                seat's window")))
+                     ;; The seat goes away, and does not take the other one's
+                     ;; focus or place with it.
+                     (check (destroy-seat "latticewm-second")
+                            "destroying the seat removes it")
+                     (check (poll-until (lambda () (eq first (r:default-seat))) 10)
+                            "the default seat is still the default seat")
+                     (check (or (null a) (eq a (r:seat-focused first)))
+                            "and the surviving seat still has its own keyboard")
+                     ;; AND THE WINDOWS GO AWAY AGAIN.  The sections below
+                     ;; count the tree -- `two windows and the tree' means
+                     ;; exactly two -- so a section that leaves two behind
+                     ;; makes the next one assert something false.  A window
+                     ;; leaves when its client does, so kill the clients this
+                     ;; section started and wait for the tree to agree.
+                     (dolist (process (subseq *clients* 0 (- (length *clients*) mark)))
+                       (ignore-errors (uiop:terminate-process process :urgent t)))
+                     (check (poll-until
+                             (lambda ()
+                               (and (or (null a) (not (c:window-live-p a)))
+                                    (or (null b) (not (c:window-live-p b)))
+                                    ;; AND THE TREE HAS ALREADY FORGOTTEN THEM.
+                                    ;; A window leaves the tree in the next
+                                    ;; relayout, not in the event that kills
+                                    ;; it, so `the windows are dead' is an
+                                    ;; earlier moment than `the layout is what
+                                    ;; it would have been without them'.
+                                    (or (null a)
+                                        (not (c:leaf-holding (c:world-root *world*) a)))
+                                    (or (null b)
+                                        (not (c:leaf-holding (c:world-root *world*) b)))))
+                             15)
+                            "and both windows went away, so the sections below ~
+                             find the tree they expect")
+                     ;; AND THE SCREEN HAS CAUGHT UP WITH THE TREE.  Two relayouts
+                     ;; run here on purpose: the collapse that removes the panes
+                     ;; those windows stood in moves the *other* windows, and the
+                     ;; diff section below compares the emitter's table across
+                     ;; two settles — so a relayout this section leaves pending
+                     ;; arrives there and looks like an emitter that re-sends
+                     ;; geometry nothing changed.  It was one run in three.
+                     (settle)
+                     (settle)))))))))
+
+       ;; ------------------------------------------------------------------
        ;; THE PAIR OF EVENTS THAT WERE UNHANDLED.  river 0.4.6 added
        ;; capture_sessions to river_window_v1 and to river_output_v1, and
        ;; src/protocol/PINNED recorded that we did not listen for either.
@@ -1255,7 +1418,8 @@ are what a person means by the arrangement, and both are copy-stable."
            (cond
              ((not (and a b)) (missing "two client windows"))
              (t
-              (check (= 2 (tree-window-count)) "both windows are in the tree")
+              (check (= 2 (tree-window-count)) "both windows are in the tree: ~d"
+                     (tree-window-count))
               (let ((ra (poll-until (lambda () (rect-of a)) 5))
                     (rb (poll-until (lambda () (rect-of b)) 5)))
                 (check (and ra rb) "and both were placed")
@@ -1272,7 +1436,8 @@ are what a person means by the arrangement, and both are copy-stable."
               ;; overlapping windows flicker between frames.
               (let ((signature (c:prop *world* :render-signature)))
                 (check (= 2 (length signature))
-                       "and both were given an explicit place in the render order"))))))
+                       "and both were given an explicit place in the render order: ~d"
+                       (length signature)))))))
 
        ;; ------------------------------------------------------------------
        ;; "ANY KEY CLOSES THIS" WAS FALSE, AND ONLY A COMPOSITOR CAN SAY SO.

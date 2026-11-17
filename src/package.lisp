@@ -218,7 +218,7 @@ deliberately decomposed so that policy can redirect it.")
    ;; and stayed in this list after the rename, exported and denoting nothing --
    ;; REPLACE-CHILD fifty lines above, found the same way and fixed the same way.
    ;; Gate 16 is the thing that will not let it happen a third time.
-   #:world-floats #:make-world #:world-focused-float
+   #:world-floats #:make-world #:world-focused-float #:world-forget-seat
    #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
@@ -304,6 +304,7 @@ You never edit this package.")
    #:command-arguments #:*commands* #:undocumented-commands
    #:*last-command* #:*not-repeatable*
    #:*command-wrappers* #:add-command-wrapper #:remove-command-wrapper
+   #:*seat*
    #:define-argument-type #:argument-type #:argument-type-name
    #:argument-type-prompt #:argument-type-candidates
    #:argument-type-parser #:argument-type-documentation #:*argument-types*
@@ -461,6 +462,7 @@ You never edit this package.")
    #:*command-wrappers*
    #:add-command-wrapper
    #:remove-command-wrapper
+   #:*seat*
    #:*last-command*
    #:*not-repeatable*
    #:*commands*
@@ -544,7 +546,8 @@ You never edit this package.")
 keybindings, the command registry, and the session loop.")
   (:export
    ;; the live session
-   #:*world* #:*server* #:server #:seat #:primary-seat #:server-manager
+   #:*world* #:*server* #:server #:seat #:primary-seat #:default-seat
+   #:seat-key #:call-as-seat #:seat-focused #:server-manager
    #:server-display #:server-seats #:server-running #:seat-proxy
    #:window-of-proxy #:all-windows #:all-outputs #:current-output
    ;; OUTPUT-SHOWING-WORKSPACE was here and is P:OUTPUT-SHOWING now, so that
