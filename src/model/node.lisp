@@ -571,8 +571,18 @@ degrading to a sane layout beats obeying a broken policy exactly."
   (eq (split-axis c) axis))
 
 (defmethod node-signature ((s split))
-  "The container's answer, plus the weights — so a resize is undoable."
-  (list* (copy-list (weights s)) (call-next-method)))
+  "The container's answer, plus the axis and the weights.
+
+THE AXIS WAS MISSING (#98).  A split with the same children and the same
+weights on the other axis is a different arrangement, and it used to sign the
+same as the original: NOTE-LAYOUT-SETTLED saw no change, so the flip was not a
+step and undo skipped it.  The generic's docstring says the signature changes
+exactly when the arrangement does, and an orientation *is* the arrangement.
+
+The weights were added for the same reason a resize had the same bug; that one
+was found because a resize is a keypress away, and an axis flip is an extension
+method and a REPL line away, which is how it survived."
+  (list* (split-axis s) (copy-list (weights s)) (call-next-method)))
 
 (defmethod copy-node-slots progn ((new split) (old split))
   "The axis and the weights.
