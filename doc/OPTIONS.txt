@@ -403,11 +403,18 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
 
 *IPC-TIMEOUT-SECONDS*
   default: 10
-  How long a single form may run before the socket gives up waiting.
+  How long a single form may run before it is abandoned.
   
   The client gets an answer either way, which is the point: a form that wedges
   the window manager should produce a message on the terminal that asked, rather
   than a shell that hangs forever with no indication of which side is stuck.
+  
+  It is the FORM's budget, not the caller's patience — RUN-WITH-DEADLINE starts
+  its clock when the form starts, and a form that finishes in nine seconds is
+  never abandoned however busy the window manager was in front of it.  The
+  caller waits a second longer, which is +IPC-WAIT-GRACE-SECONDS+.  NIL means
+  no budget at all, and then nothing is abandoned: the form runs until it
+  returns, which is the behaviour of a REPL and not of a socket.
 
 *KEYBOARD-LAYOUT*
   default: "us"
@@ -1081,11 +1088,22 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
       :app-id-contains  a substring of it
       :title            the title, exactly, ignoring case
       :title-contains   a substring of it
+      :app-id-glob      a ?/* pattern against it, case-insensitive
+      :title-glob       a ?/* pattern against the title
+      :parent-app-id    the app id of the window's parent, if it has one
       :parent           T for windows river reports as having a parent
   
-  OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+: :float, :workspace, :path,
-  :focus, :fullscreen, :minimize, :border-color, :border-width, :decoration,
-  :capabilities, :tags and :label.
+  A glob pattern is a whole-string match with ? for any one character and *
+  for any run, and ^ and $ pin the ends: "^firefox-" means *starts with
+  firefox-*, "*YouTube*" means *contains YouTube*, "*terminal$" means
+  *ends with terminal*.  A pattern with no anchor may match anywhere.
+  
+  OVERRIDE keys are the ones in +WINDOW-RULE-KEYS+ — :float, :workspace,
+  :path, :focus, :fullscreen, :minimize, :border-color, :border-width,
+  :decoration, :capabilities, :tags and :label — plus :priority, which is not
+  an override at all: it orders the rules, higher first, with the list order
+  breaking ties.  Rules with no :priority are 0 and stay in list order, so the
+  line above reads exactly as it always has.
   
   :LABEL IS WHAT THIS PROGRAM CALLS THE WINDOW when it has to name it -- in the
   status line, on the drawn map, in a notification, in the tag and scratchpad
