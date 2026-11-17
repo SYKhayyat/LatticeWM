@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A canvas that cannot be created no longer leaks a descriptor and its
+  mapping.** `make-canvas` acquires an anonymous file, maps it, then makes two
+  compositor requests; a failure in the second half left the first half behind,
+  and the overlay asks again on the next frame — so a session merely near a
+  file-descriptor limit walked into it. The partial canvas is destroyed on the
+  way out, and the descriptor is closed as soon as the `wl_shm` pool exists,
+  because after that request the client's copy is held for nothing. Measured in
+  `/proc/self/fd` and `/proc/self/maps`: three failed creations went from three
+  leaked descriptors and three mappings to none.
+
 - **Tags are names, not keywords.** `normalize-tag` interned every name it was
   handed into the `:keyword` package, and a tag arrives from a prompt, so every
   misspelling stayed in that package for the life of the process — a decision
