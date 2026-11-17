@@ -11,7 +11,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [ ] #86 watchdog desyncs Wayland stream (closed — VERIFY fix held). (Critical)
 - [x] #88 save-state truncates in place → temp+rename. (High)
 - [ ] #104 the same truncating write in four extension files that hold user data — auto-respawn's session, recorded macros, saved journals, named layouts. Fix uses #88's `call-with-replacement-file`. (High for auto-respawn, Medium for the explicit-save commands)
-- [ ] #87 normalize-tag unbounded keyword interning. (High)
+- [x] #87 normalize-tag unbounded keyword interning. (High)
 - [ ] #89 make-canvas fd/mmap leak. (High)
 - [ ] #90 single-seat focus, #91 int32 clamp, #93 unbounded IPC threads, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
 - [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)
