@@ -484,6 +484,34 @@ single method beyond the six below."))
     (is (not (equal before (c:node-signature stack)))
         "and so is switching a tab")))
 
+(test the-axis-of-a-split-is-part-of-its-arrangement
+  "#98: a split with the same children and weights on the other axis is a
+different arrangement.  The signature is what undo compares, so an arrangement
+change it cannot see is a step undo silently skips."
+  (let* ((root (c:make-split :horizontal (list (leaf-with "a") (leaf-with "b"))))
+         (before (c:node-signature root)))
+    (setf (c:split-axis root) :vertical)
+    (is (not (equal before (c:node-signature root)))
+        "flipping the axis is a change")
+    (setf (c:split-axis root) :horizontal)
+    (is (equal before (c:node-signature root))
+        "and flipping back is the tree it started as")))
+
+(test flipping-a-splits-axis-is-one-undo-step
+  "The whole path, because the signature alone is only a predicate: undo has to
+record the step and put the axis back."
+  (let* ((root (c:make-split :horizontal (list (leaf-with "a") (leaf-with "b"))))
+         (world (c:make-world :root root)))
+    (let ((r:*world* world)
+          (p:*policy* (policy)))
+      (r::note-layout-settled "baseline")
+      (setf (c:split-axis root) :vertical)
+      (r::note-layout-settled "flip")
+      (is (= 1 (length (r::undo-ring))) "the flip is a tree step")
+      (p:run-command "undo")
+      (is (eq :horizontal (c:split-axis (c:world-root world)))
+          "and undo puts the axis back"))))
+
 (test props-are-per-node
   (let ((n (c:make-leaf)))
     (is (null (c:prop n :missing)))

@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Flipping a split's axis is an undo step now.** `node-signature` is what
+  layout undo compares to decide whether anything changed, and it left out a
+  split's axis: a split with the same children and weights on the other axis
+  signed identically, so `note-layout-settled` saw no change and undo skipped
+  the flip. The weights had the same bug once and were fixed the same way; the
+  axis survived because nothing in the core flips one, so the callers were
+  extensions and the REPL — which is also why the repro is a line of Lisp.
+
 - **A coordinate past 32 bits no longer stops a window being placed.** Wayland's
   `int` is signed 32-bit and the lattice is unbounded, so a pane far enough out —
   or a 2x output doubling every coordinate — produced a bignum that signalled

@@ -16,7 +16,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [ ] #90 single-seat focus, #93 unbounded IPC threads, #94 stale wl_output proxy (closed — verify), #92 per-relayout sort.
 - [x] #91 int32 clamp before the wire (saturate at emit, model keeps the true coordinate). (High)
 - [ ] #95 undo granularity for viewport/track ops is coarse — separate undo steps for pan, zoom, resize. (High)
-- [ ] #98 split axis missing from node-signature, so undo skips an orientation change. (Low)
+- [x] #98 split axis missing from node-signature, so undo skips an orientation change. (Low)
 - [ ] #99 a form that times out waiting for the WM thread still runs later. (Low)
 - [ ] #100 --eval silently ignores everything after the first form on a line. (Low)
 
