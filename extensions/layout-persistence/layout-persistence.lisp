@@ -168,14 +168,16 @@ the same thing after a reboot."
                  (setf (gethash (c:window-identifier window) mapping)
                        (c:window-app-id window))))
              (ensure-directories-exist file)
-             (with-open-file (out file :direction :output
-                                       :if-exists :supersede
-                                       :if-does-not-exist :create)
-               (let ((*package* (find-package :keyword)))
-                 (write (list :version 1
-                              :root (identifier-to-app-id
-                                     (r:serialize-node node) mapping))
-                        :stream out))))
+             ;; Re-saving a layout under the same name is routine, so a failed
+             ;; write must cost the new arrangement and not the saved one.
+             (r:call-with-replacement-file
+              file
+              (lambda (out)
+                (let ((*package* (find-package :keyword)))
+                  (write (list :version 1
+                               :root (identifier-to-app-id
+                                      (r:serialize-node node) mapping))
+                         :stream out)))))
            (r:logmsg :info "saved layout ~a" name)
            name)))))
 

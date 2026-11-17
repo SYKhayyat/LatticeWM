@@ -655,6 +655,11 @@ keybindings, the command registry, and the session loop.")
    #:close-window-later #:run-shutdown-once
    #:on-events #:declare-handled-events #:all-handled-events
    #:save-state #:load-state #:save-state-soon #:state-file
+   ;; The write that replaces instead of truncating.  #88 built it for the
+   ;; core's own state file and left it private; the extensions hold user data
+   ;; in files of their own and were still truncating them in place, so the
+   ;; pair is published and they are its readers (their saves are the callers).
+   #:call-with-replacement-file #:temporary-state-path
    #:serialize-node #:deserialize-node #:read-node
    #:serialize-children #:deserialize-children
    #:window-facts #:restore-window-facts))

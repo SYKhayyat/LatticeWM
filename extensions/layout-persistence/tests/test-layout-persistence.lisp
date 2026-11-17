@@ -209,3 +209,55 @@ and an absolute count would be asserting on their tidiness."
                              (gethash :layout-changed p:*hooks*))
                      "no hook when the option is off"))
       (ignore-errors (lp:disable)))))
+
+;;; ------------------------------------------------------- a failed save
+;;
+;; #104.  SAVE-LAYOUT opened the named file with :IF-EXISTS :SUPERSEDE, which
+;; truncates before the first byte -- so re-saving a layout under the same
+;; name could cost both the old arrangement and the new one.  The check stands
+;; where the save stands: the temporary it writes through is made impossible,
+;; so the write fails, and the file must be yesterday's arrangement.
+
+(defun block-the-replacement (file)
+  "Make FILE's temporary unopenable, so the save cannot start writing."
+  (let* ((temporary (r:temporary-state-path file))
+         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
+         ;; would re-escape the dot SBCL escapes in the temporary's type.
+         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
+    (ensure-directories-exist blocked)
+    blocked))
+
+(defun unblock-the-replacement (temporary)
+  (ignore-errors
+    (uiop:delete-directory-tree temporary :validate t
+                                :if-does-not-exist :ignore)))
+
+(test a-save-that-cannot-write-keeps-the-last-layout
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")))
+    (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
+    (is (equal "work" (lp:save-layout "work")))
+    (let* ((file (lp::layout-file "work"))
+           (blocked (block-the-replacement file)))
+      (unwind-protect
+           (progn
+             (setf lp::*live-windows*
+                   (list (make-instance 'c:window :app-id "firefox"
+                                        :identifier "F")))
+             (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
+             (is (eq :failed
+                     (handler-case (progn (lp:save-layout "work") :saved)
+                       (error () :failed)))
+                 "the save could not be written")
+             ;; The load command still reads the arrangement from before.
+             (install-workspace-content (c:make-leaf))
+             (setf lp::*live-windows*
+                   (list (make-instance 'c:window :app-id "emacs"
+                                        :identifier "E2")))
+             (is (eq :restored (lp:restore-layout "work")))
+             (is (equal '("emacs") (workspace-app-ids))
+                 "yesterday's layout, not a truncated fragment"))
+        (unblock-the-replacement blocked))
+      (is-false (probe-file (r:temporary-state-path file))
+                "with no temporary left behind"))))
