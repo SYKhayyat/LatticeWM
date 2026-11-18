@@ -26,6 +26,15 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A batch selection, and verbs that consume it.** `select-window` marks or
+  unmarks the focused window, `clear-selection` forgets the lot, and
+  `list-selected` names them — then `batch-close`, `batch-minimize`,
+  `batch-send-to-workspace` and (lattice) `batch-move-to-cell` act on every
+  marked window at once.  Selection is container-agnostic: a window marked on
+  another workspace or in another cell is still marked.  The batch verbs leave
+  the cursor on the pane you were standing in rather than touring the panes
+  they moved.  Stale marks fall out of the selection when the window dies, the
+  same staleness rule as the spawn latch.
 - **Bulk workspace verbs.** `close-others`, `close-workspace`, `minimize-others`
   and `minimize-workspace` do what their names say to the workspace the cursor
   is in, keeping the focused window where the verb is "others" and leaving an

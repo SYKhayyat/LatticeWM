@@ -525,9 +525,17 @@ workspaces, live in two places at once.
 
 Callers that ignore a surgery function's second value have a bug they have not
 noticed yet; this one had it for the life of the command."
+  (send-path-to-workspace (current-path) number :follow follow))
+
+(defun send-path-to-workspace (from number &key follow)
+  "Move the pane at path FROM to workspace NUMBER.  The landed path, or NIL.
+
+FROM rather than the cursor, so that BATCH-SEND-TO-WORKSPACE can move a window
+that is not the focused one without walking the cursor to it first: that would
+fire :FOCUS-CHANGED once per window and leave the user standing three
+workspaces away from where they were."
   (with-relayout
     (let ((stack (workspace-stack))
-          (from (current-path))
           (index (max 0 (1- number))))
       (when (and stack (> (length from) 1))
         (let* ((workspace (grow-workspaces-to stack index))
@@ -555,6 +563,127 @@ noticed yet; this one had it for the life of the command."
                (p:repair-cursor (policy) *world* from)
                (notify "sent to ~a ~d" (p:world-role-name *world* stack) (1+ index))))
             landed))))))
+
+;;; ------------------------------------------------------- selection
+
+(defvar *selection* '()
+  "Windows marked for a batch verb, in the order they were marked.
+
+A list rather than a flag on the window: marking is a thing you did *for this
+operation*, not a property of the window, and a window that carried a
+SELECTED-P bit would need somebody to remember to clear it on close, on
+restore, on session load, and after the batch that used it.")
+
+(defun selected-windows ()
+  "The marked windows that still exist, oldest mark first.
+
+Windows are dropped from the selection as soon as the compositor says they
+are gone (WINDOW-LIVE-P), so a batch verb can never act on a dead proxy — the
+same reasoning as the spawn latch dropping a stale path: the world moves
+between the mark and the act."
+  (setf *selection* (remove-if-not #'c:window-live-p *selection*)))
+
+(defun mark-selected (window)
+  "Add WINDOW to the selection if it is not there, remove it if it is.
+
+Returns T when it is now selected.  Toggling rather than adding is what makes
+one binding do both jobs — the mistake people make with a selection is not
+selecting too little, it is being unable to take one back."
+  (let ((selected (not (member window (selected-windows)))))
+    (setf *selection*
+          (if selected
+              (append *selection* (list window))
+              (remove window *selection*)))
+    selected))
+
+(defun clear-selected ()
+  "Forget the whole selection."
+  (setf *selection* '()))
+
+(defcommand select-window ()
+  "Mark the focused window for a batch verb, or unmark it.
+
+Selection is deliberately container-agnostic: a window marked on one
+workspace, in a lattice cell, or in another output's tree is still marked,
+and the batch verbs act on it wherever it is.  Nothing about the selection is
+visible on screen yet; LIST-SELECTED is how you ask."
+  (let ((window (focused-window)))
+    (when window
+      (let ((selected (mark-selected window)))
+        (notify "~a ~a (~d selected)"
+                (if selected "selected" "deselected")
+                (or (c:window-app-id window) "window")
+                (length (selected-windows)))
+        selected))))
+
+(defcommand clear-selection ()
+  "Unmark every window."
+  (let ((count (length (selected-windows))))
+    (clear-selected)
+    (notify "cleared ~d selected window~:p" count)
+    count))
+
+(defcommand list-selected ()
+  "Show the marked windows, in the order they were marked."
+  (let ((windows (selected-windows)))
+    (notify "~d selected: ~{~a~^, ~}" (length windows)
+            (mapcar (lambda (window)
+                      (or (c:window-app-id window) "window"))
+                    windows))
+    windows))
+
+(defcommand batch-close ()
+  "Ask every selected window to close, then forget the selection."
+  (let ((windows (selected-windows))
+        (closed 0))
+    (dolist (window windows)
+      (when (close-window-later window) (incf closed)))
+    (clear-selected)
+    (notify "closing ~d selected window~:p" closed)
+    closed))
+
+(defcommand batch-minimize ()
+  "Take every selected window out of the tree, then forget the selection.
+
+Each one lands on the scratchpad exactly as MINIMIZE would have put it there,
+so RESTORE and RESTORE-LAST bring them back."
+  (let ((windows (selected-windows)))
+    (dolist (window windows) (minimize-window window))
+    (clear-selected)
+    (notify "minimized ~d selected window~:p" (length windows))
+    (length windows)))
+
+(defcommand batch-send-to-workspace (number)
+  "Move every selected pane to workspace NUMBER, counting from one.
+
+Sent from each pane's own path rather than by walking the cursor to it, so
+the :focus-changed hook fires once for the batch rather than once per window.
+The cursor is put back on the *leaf you were standing in* afterwards: the
+single-window verb leaves the cursor at the repaired source, which for a batch
+would walk you through every pane it moved.  If the pane you were standing in
+was itself marked, the cursor follows it — you sent the place you were in, and
+standing anywhere else would be a lie."
+  (let ((windows (selected-windows))
+        ;; THE WINDOW, NOT THE LEAF.  Tree surgery rebuilds the nodes it walks,
+        ;; so a leaf object captured before a move is no longer in the tree and
+        ;; NODE-PATH-TO answers NIL for it -- which reads as "the place you were
+        ;; standing is gone" when you are standing in it.
+        (start (current-window))
+        (sent 0))
+    (dolist (window windows)
+      (let* ((root (c:world-root *world*))
+             (leaf (c:leaf-holding root window))
+             (from (and leaf (c:node-path-to root leaf))))
+        (when (send-path-to-workspace from number)
+          (incf sent))))
+    (let* ((root (c:world-root *world*))
+           (leaf (and start (c:leaf-holding root start))))
+      (p:jump-cursor (policy) *world*
+                     (or (and leaf (c:node-path-to root leaf))
+                         (c:repair-path root (c:world-cursor *world*)))))
+    (clear-selected)
+    (notify "sent ~d selected window~:p to workspace ~d" sent number)
+    sent))
 
 ;;; ============================================== floating, fullscreen, etc.
 

@@ -566,6 +566,10 @@ keybindings, the command registry, and the session loop.")
    #:workspace-stack #:grow-workspaces-to
    #:focused-window #:in-wm-thread-p
    #:window-river-node #:guarded #:best-effort #:with-abandon
+   ;; the batch selection.  A list of windows marked for one operation, kept
+   ;; in the runtime because it is a UI gesture rather than a property of the
+   ;; layout, and emptied by the batch verb that consumes it.
+   #:*selection* #:selected-windows #:mark-selected #:clear-selected
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*

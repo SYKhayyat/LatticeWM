@@ -210,10 +210,16 @@ muscle memory.  This is one modifier away for when you are crossing a gap."
 If that cell is empty the pane becomes its whole contents; if it is occupied
 the pane joins as a split, which is the shipped answer to move-onto-occupied
 and the only one that never destroys structure."
+  (move-path-to-cell (c:world-cursor r:*world*) x y :follow follow))
+
+(defun move-path-to-cell (from x y &key follow)
+  "Move the pane at path FROM to the cell at X, Y, on the plane FROM is in.
+
+FROM rather than the cursor so that BATCH-MOVE-TO-CELL can move a window that
+is not the focused one without walking the cursor across the plane first."
   (multiple-value-bind (grid ignored base) (cursor-plane r:*world*)
     (declare (ignore ignored))
-    (let ((from (c:world-cursor r:*world*))
-          (target (cell x y)))
+    (let ((target (cell x y)))
       (when (and grid (> (length from) (length base)))
         (ensure-cell grid target)
         (let ((to (append base (list target))))
@@ -226,6 +232,49 @@ and the only one that never destroys structure."
                 (p:repair-cursor (p:current-policy) r:*world* from))
             (r:mark-dirty)
             landed))))))
+
+(r:defcommand batch-move-to-cell (x y)
+  "Move every selected pane into the cell at X, Y of the plane you are on.
+
+The cell is read in the *current* plane even for windows marked elsewhere: a
+batch verb needs one destination, and 'the cell I am looking at' is the only
+one the person pressing the key can see.  Panes already in that cell are left
+alone rather than reported as failures — a selection is a broad gesture and
+half of it being where you are sending it is not an error."
+  (multiple-value-bind (grid ignored base) (cursor-plane r:*world*)
+    (declare (ignore ignored))
+    (let ((target (cell x y))
+          ;; The window, not the leaf: TREE-MOVE rebuilds the nodes on its way,
+          ;; so an old leaf object is no longer in the tree.
+          (start (r:current-window))
+          (moved 0))
+      (when grid
+        (ensure-cell grid target)
+        (dolist (window (r:selected-windows))
+          (let* ((root (c:world-root r:*world*))
+                 (leaf (c:leaf-holding root window))
+                 (from (and leaf (c:node-path-to root leaf))))
+            ;; ALREADY THERE IS NOT A MOVE.  TREE-MOVE onto a node's own address
+            ;; is the one thing it must refuse, and skipping it here keeps a
+            ;; batch from stopping halfway on something the user cannot see.
+            (let ((address (and from (> (length from) (length base))
+                                (nth (length base) from))))
+              (when (and from
+                         (not (equal address target))
+                         (r:guarded "batch-move-to-cell"
+                           (move-path-to-cell from x y :follow nil)))
+                (incf moved))))))
+      ;; BACK ON THE LEAF YOU WERE STANDING IN.  MOVE-PATH-TO-CELL repairs the
+      ;; cursor from each source path, which is right for one move and a tour
+      ;; of every cell for a batch.
+      (let* ((root (c:world-root r:*world*))
+             (leaf (and start (c:leaf-holding root start))))
+        (p:jump-cursor (p:current-policy) r:*world*
+                       (or (and leaf (c:node-path-to root leaf))
+                           (c:repair-path root (c:world-cursor r:*world*)))))
+      (r:clear-selected)
+      (r:notify "moved ~d selected window~:p to cell ~d,~d" moved x y)
+      moved)))
 
 (r:defcommand move-cell (direction &key (follow t))
   "Move the focused pane one cell DIRECTION."

@@ -21,6 +21,26 @@ LatticeWM commands.
   names.  This reads the docstrings, so `screen' finds `toggle-fullscreen' even
   though the word does not occur in its name.
 
+(batch-close)
+  Ask every selected window to close, then forget the selection.
+
+(batch-minimize)
+  Take every selected window out of the tree, then forget the selection.
+  
+  Each one lands on the scratchpad exactly as MINIMIZE would have put it there,
+  so RESTORE and RESTORE-LAST bring them back.
+
+(batch-send-to-workspace number)
+  Move every selected pane to workspace NUMBER, counting from one.
+  
+  Sent from each pane's own path rather than by walking the cursor to it, so
+  the :focus-changed hook fires once for the batch rather than once per window.
+  The cursor is put back on the *leaf you were standing in* afterwards: the
+  single-window verb leaves the cursor at the repaired source, which for a batch
+  would walk you through every pane it moved.  If the pane you were standing in
+  was itself marked, the cursor follows it — you sent the place you were in, and
+  standing anywhere else would be a lie.
+
 (browser)
   Open a web browser.  Bound to `b' in an empty pane by default.
 
@@ -42,6 +62,9 @@ LatticeWM commands.
   different intentions and a mode would make you remember which one you were in.
   
   The window itself is closed; what survives is the place.
+
+(clear-selection)
+  Unmark every window.
 
 (clear-target)
   Drop a TARGET-HERE latch.  New windows go where placement says again.
@@ -210,6 +233,9 @@ LatticeWM commands.
 
 (list-scratchpads)
   Show every named scratchpad and what is on it.
+
+(list-selected)
+  Show the marked windows, in the order they were marked.
 
 (list-tags)
   Show every tag and the windows carrying it.
@@ -403,6 +429,14 @@ LatticeWM commands.
   One key, both directions.  That is the whole point of a scratchpad: the
   terminal you consult twenty times an hour should cost one keystroke each way
   and should never need to be found.
+
+(select-window)
+  Mark the focused window for a batch verb, or unmark it.
+  
+  Selection is deliberately container-agnostic: a window marked on one
+  workspace, in a lattice cell, or in another output's tree is still marked,
+  and the batch verbs act on it wherever it is.  Nothing about the selection is
+  visible on screen yet; LIST-SELECTED is how you ask.
 
 (send-to-output which &key (follow nil))
   Move the focused pane to another screen — a direction, or a number from one.

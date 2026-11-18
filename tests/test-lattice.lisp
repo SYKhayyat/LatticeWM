@@ -769,6 +769,31 @@ Returns (values world stack source-grid target-grid)."
       (is (equal "mover" (at (c:world-root world) (list 0 (l:cell 0 0))))
           "the window stays put rather than going somewhere approximate"))))
 
+(test batch-move-to-cell-moves-every-marked-pane-and-keeps-the-cursor
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil) '(2 0 nil)))
+         (world (c:make-world :root (c:make-stack (list grid) 0)))
+         (a (t*::win "a"))
+         (b (t*::win "b")))
+    (setf (c:child-at grid (l:cell 0 0))
+          (c:make-split :vertical (list (c:make-leaf a) (c:make-leaf b))))
+    (setf (c:world-cursor world) (list 0 (l:cell 0 0) 0))
+    (let ((r:*world* world)
+          (r:*selection* '())
+          (p:*policy* (pol)))
+      (mapc #'r:mark-selected (list a b))
+      (is (= 2 (l:batch-move-to-cell 2 0)) "both marked panes moved")
+      ;; The emptied cell is forgotten (unnamed cell, and it ran dry: debris,
+      ;; the same rule as a split) -- what matters is that it no longer holds
+      ;; the panes, whichever of the two shapes that takes.
+      (is (not (member a (c:node-windows (or (c:child-at grid (l:cell 0 0))
+                                             (c:make-leaf)))))
+          "the source cell did not keep the panes")
+      (is (equal (list a b) (c:node-windows (c:child-at grid (l:cell 2 0))))
+          "and they arrived together, in the order they were marked")
+      (is (eq a (r:current-window))
+          "the cursor followed the pane it was standing in, and did not tour")
+      (is (null (r:selected-windows)) "the selection is spent"))))
+
 (test target-here-cell-sends-the-next-spawn-into-the-whole-cell
   ;; TARGET-HERE targets a pane, so the next window subdivides the pane you are
   ;; standing in.  This targets the *cell*: the arrival joins the cell's own

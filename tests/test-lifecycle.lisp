@@ -512,6 +512,94 @@ method."))
       (r:clear-target))
     (is (null p:*spawn-target*))))
 
+;;; ----------------------------------------------------------- selection
+
+(test select-window-toggles-the-focused-window
+  (let ((world (fresh-world)) (r:*selection* '()))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal
+                                            (list (leaf-with "a")
+                                                  (leaf-with "b"))))
+                        0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world))
+      (is-true (r:select-window) "the first press marks the focused window")
+      (is (= 1 (length (r:selected-windows))))
+      (is-false (r:select-window) "the second takes it back")
+      (is (null (r:selected-windows))))))
+
+(test a-dead-window-falls-out-of-the-selection
+  ;; The world moves between the mark and the act: the same staleness the spawn
+  ;; latch guards against.  Acting on a dead proxy is the failure mode.
+  (let ((world (fresh-world)) (r:*selection* '()) (gone (win "gone")))
+    (declare (ignore world))
+    (setf (c:window-live-p gone) nil)
+    (push gone r:*selection*)
+    (is (null (r:selected-windows)) "a window that is not live is not selected")
+    (is (null r:*selection*) "and it is forgotten, not merely hidden")))
+
+(test batch-close-closes-every-marked-window-and-forgets-the-selection
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil)
+        (r:*selection* '()))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore root))
+      (dolist (window (list a b c other)) (setf (c:window-proxy window) :proxy))
+      (let ((r:*world* world))
+        ;; One marked from the cursor, the rest from elsewhere -- including one
+        ;; on another workspace, since selection is not a property of a plane.
+        (r:select-window)
+        (mapc #'r:mark-selected (list a c other))
+        (is (= 4 (r:batch-close)) "every marked window was asked to close")
+        (is (= 4 (length (r::server-pending-closes r:*server*)))
+            "and the request went through the ordinary close path")
+        (is (null (r:selected-windows)) "the selection is spent")))))
+
+(test batch-minimize-moves-every-marked-window-to-the-scratchpad
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*policy* (policy))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil)
+        (r:*selection* '()))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore a c other))
+      (let ((r:*world* world)
+            (workspace (c:child-at root 0)))
+        (r:select-window)
+        (r:mark-selected (c:leaf-window (c:child-at workspace 0)))
+        (is (= 2 (r:batch-minimize)))
+        (is (= 2 (length (c:world-scratchpad world))))
+        (is (null (r:selected-windows)))
+        (is (= 1 (length (c:node-windows workspace)))
+            "the unmarked window stays where it was")))))
+
+(test batch-send-to-workspace-moves-marked-panes-and-leaves-the-cursor
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*policy* (policy))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil)
+        (r:*selection* '()))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore other))
+      (let ((r:*world* world))
+        ;; Mark the two windows on either side of the cursor, from marks that
+        ;; were made on other panes rather than from the cursor.
+        (mapc #'r:mark-selected (list a c))
+        (is (= 2 (r:batch-send-to-workspace 2)))
+        (is (equal (list b) (c:node-windows (c:child-at root 0)))
+            "the workspace kept the window that was not marked")
+        (is (subsetp (list a c) (c:node-windows (c:child-at (c:world-root world) 1)))
+            "and both marked windows arrived together on workspace 2")
+        ;; By window, not by path: moving two panes out collapsed the split the
+        ;; survivor was in, so its *address* changed while its identity did not.
+        (is (eq b (r:current-window))
+            "the cursor did not tour the panes it sent")
+        (is (null (r:selected-windows)))))))
+
 ;;; ---------------------------------------------------------- bulk verbs
 
 (defun three-window-workspace ()
