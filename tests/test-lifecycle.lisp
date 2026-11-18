@@ -386,6 +386,88 @@ method."))
     (is (equal '(:stack 0 (:h (:leaf "c") (:leaf "b")))
                (shape (c:world-root world))))))
 
+;;; ------------------------------------------------------- targeted spawn
+
+(defun two-pane-world ()
+  "A world holding two panes side by side, cursor on the first."
+  (let ((world (fresh-world)) (pol (policy)))
+    (p:on-window-open pol world (win "a"))
+    (p:on-window-open pol world (win "b"))
+    (setf (c:world-cursor world) '(0 0))
+    (values world pol)))
+
+(test target-here-routes-the-next-spawn-there-not-at-the-cursor
+  (multiple-value-bind (world pol) (two-pane-world)
+    (let ((r:*world* world))
+      (r:target-here))
+    ;; Walk away while the latch is armed: this is the whole point.
+    (setf (c:world-cursor world) '(0 1))
+    (p:on-window-open pol world (win "c"))
+    (is (equal (list "a" "c" "b")
+               (list (app-at (c:world-root world) '(0 0))
+                     (app-at (c:world-root world) '(0 1))
+                     (app-at (c:world-root world) '(0 2))))
+        "the window joined the targeted pane, not the one the cursor was on")))
+
+(test a-target-is-consumed-by-the-window-it-placed
+  (multiple-value-bind (world pol) (two-pane-world)
+    (let ((r:*world* world))
+      (r:target-here))
+    (setf (c:world-cursor world) '(0 1))
+    (p:on-window-open pol world (win "c"))
+    ;; And the next one follows the cursor again.
+    (p:on-window-open pol world (win "d"))
+    (is (equal "d" (app-at (c:world-root world) '(0 2)))
+        "the second spawn split the cursor's pane, so the latch went")))
+
+(test a-target-with-a-count-places-that-many
+  (multiple-value-bind (world pol) (two-pane-world)
+    (let ((r:*world* world))
+      (r:target-here 2))
+    (setf (c:world-cursor world) '(0 1))
+    (p:on-window-open pol world (win "c"))
+    (p:on-window-open pol world (win "d"))
+    (is (equal (list "a" "c" "d" "b")
+               (list (app-at (c:world-root world) '(0 0))
+                     (app-at (c:world-root world) '(0 1))
+                     (app-at (c:world-root world) '(0 2))
+                     (app-at (c:world-root world) '(0 3))))
+        "both arrivals joined the targeted pane, in the order they opened")))
+
+(test a-target-on-an-empty-pane-fills-it
+  (multiple-value-bind (world pol) (two-pane-world)
+    (setf (c:leaf-window (c:resolve-path (c:world-root world) '(0 1))) nil)
+    (setf (c:world-cursor world) '(0 1))
+    (let ((r:*world* world))
+      (r:target-here))
+    (setf (c:world-cursor world) '(0 0))
+    (p:on-window-open pol world (win "c"))
+    (is (equal "c" (app-at (c:world-root world) '(0 1)))
+        "an empty pane becomes the window rather than being split")))
+
+(test a-stale-target-falls-back-to-the-cursor-and-drops-itself
+  (multiple-value-bind (world pol) (two-pane-world)
+    (let ((r:*world* world))
+      (r:target-here))
+    ;; The targeted pane goes away (its window closes, the split collapses).
+    (setf (c:world-cursor world) '(0 0))
+    (let* ((root (c:world-root world))
+           (window (c:leaf-window (c:resolve-path root '(0 0)))))
+      (p:on-window-close pol world window '(0 0)))
+    (p:on-window-open pol world (win "c"))
+    (is (null p:*spawn-target*)
+        "the latch was dropped rather than kept pointing at a place that is gone")
+    (is (equal 2 (length (c:node-windows (c:world-root world))))
+        "and the window was placed at the cursor, so nothing was lost")))
+
+(test clear-target-drops-the-latch
+  (multiple-value-bind (world pol) (two-pane-world)
+    (declare (ignore pol))
+    (let ((r:*world* world))
+      (r:target-here)
+      (r:clear-target))
+    (is (null p:*spawn-target*))))
+
 ;;; ------------------------------------------------------------- layout
 
 (test layout-divides-by-weight

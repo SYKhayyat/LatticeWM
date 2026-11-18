@@ -193,34 +193,120 @@ representations meet, which is the point: without it every caller would build
 the same lambda and one of them would eventually build a different one."
   (lambda (parent axis) (join-existing-split-p policy parent axis)))
 
+;;; ------------------------------------------------------ targeted spawn
+;;
+;; WHERE THE NEXT WINDOW GOES IS POLICY, and policy reads the cursor.  That is
+;; right for the overwhelming majority of spawns — you open a thing where you are
+;; looking — and it leaves one intention unsayable: 'put the next one THERE',
+;; pointing at a pane that is not where your keyboard currently rests.  Window
+;; rules can place a window, but a rule is keyed off the window (its app-id, its
+;; title) and requires knowing the absolute path; neither is a gesture.
+;;
+;; So the latch is a *place*, set by a command, consulted once by the ordinary
+;; spawn path, and consumed.  It lives on the policy side because that is where
+;; placement is decided: every policy that answers SPAWN-TARGET gets it, rather
+;; than only the shipped one, and a policy that wants different consumption
+;; rules can read the latch itself.
+
+(defvar *spawn-target* nil
+  "Where the next spawned window should land, as (PATH . COUNT), or NIL.
+
+Set by TARGET-HERE and TARGET-HERE-CELL, consumed by SPAWN-TARGET.  A dynamic
+variable rather than world state because it describes the person at the
+keyboard — 'I am about to open something and I want it here' — and there is one
+of those per session, not per world.")
+
+(defun set-spawn-target (path &key (count 1))
+  "Make the next COUNT spawned windows land at PATH.
+
+COUNT is clamped to at least one: a latch that can hold zero is a latch that
+was cleared, and having two ways to say that is how one of them gets missed."
+  (setf *spawn-target* (and path (cons (copy-list path) (max 1 (or count 1)))))
+  *spawn-target*)
+
+(defvar *spawn-target-used-p* nil
+  "T when the last SPAWN-TARGET call answered from the latch.
+
+SET-SPAWN-TARGET consumes nothing and SPAWN-TARGET places nothing, so neither
+can decrement honestly on its own; ON-WINDOW-OPEN is the one place that has
+both the answer and the path the window actually landed on, and this flag is
+how it knows the answer was the latch rather than the cursor.")
+
+(defun clear-spawn-target ()
+  "Drop the latch.  New windows go wherever placement's ordinary rules say."
+  (setf *spawn-target* nil))
+
+(defun spawn-target-latch (world)
+  "The latched path, if it still names a place in WORLD, or NIL.
+
+A latched path can go stale between the command and the spawn — the pane was
+closed, a split collapsed, the workspace went away — and placing a window into
+a path that names nothing is how a spawn loses a window.  A stale latch is
+dropped and the ordinary target used, which is the same answer a policy gives
+when a window rule names nothing."
+  (let ((entry *spawn-target*))
+    (when entry
+      (destructuring-bind (path . ignored) entry
+        (declare (ignore ignored))
+        (let ((node (and path (c:resolve-path (c:world-root world) path))))
+          (cond
+            ((null node) (clear-spawn-target) nil)
+            ((eq node (c:world-root world)) (clear-spawn-target) nil)
+            (t path)))))))
+
+(defun note-spawn-target-used (landed)
+  "One window was placed LANDEED.  Spend one from the latch, and re-anchor it.
+
+RE-ANCHORING AT WHAT WAS JUST PLACED is what makes a count read the way people
+expect: `target-here 2' from a pane puts the first window beside that pane and
+the second beside the *first window*, not beside the pane again — which would
+insert every arrival at the same address and reverse their order on screen."
+  (let ((entry *spawn-target*))
+    (when entry
+      (destructuring-bind (ignored . count) entry
+        (declare (ignore ignored))
+        (if (<= count 1)
+            (clear-spawn-target)
+            (set-spawn-target landed :count (1- count)))))))
+
 (defmethod spawn-target ((policy structure-policy) world window)
   "Split the focused pane, unless it is empty, in which case fill it.
 
 Filling an empty pane rather than splitting it is not a special case bolted
 on: an empty pane exists *because the user made a place for something*, so
-putting the next thing there is the only reading that respects the gesture."
+putting the next thing there is the only reading that respects the gesture.
+
+A TARGET-HERE latch wins over all of that, and :SPLIT is the right disposition
+for it in every case PLACE-NODE cares about: an empty destination replaces, an
+occupied pane joins it, and a whole cell joins that cell's own split.  :FILL
+would have to ask the same question again and would be wrong for the cell."
   (declare (ignore window))
-  (let* ((path (c:world-cursor world *seat*))
-         (leaf (c:world-leaf-at world path)))
-    (cond
-      ((and leaf (c:leaf-empty-p leaf)) (values path :fill))
-      ((eq *spawn-mode* :stack) (values path :stack))
-      ((eq *spawn-mode* :fill-first)
-       ;; LEAF-PATHS of the workspace are relative to the workspace, so they
-       ;; must be resolved against it and only then rebased onto the world.
-       ;; Resolving a workspace-relative path against the world root is the
-       ;; kind of mistake that silently does nothing, which is worse than
-       ;; crashing.
-       (let* ((workspace (c:current-workspace world))
-              (empty (find-if (lambda (candidate)
-                                (let ((node (c:resolve-path workspace candidate)))
-                                  (and (typep node 'c:leaf)
-                                       (c:leaf-empty-p node))))
-                              (c:leaf-paths workspace))))
-         (if empty
-             (values (append (c:workspace-path world) empty) :fill)
-             (values path :split))))
-      (t (values path :split)))))
+  (setf *spawn-target-used-p* nil)
+  (let ((latched (spawn-target-latch world)))
+    (if latched
+        (progn (setf *spawn-target-used-p* t)
+               (values latched :split))
+        (let* ((path (c:world-cursor world *seat*))
+               (leaf (c:world-leaf-at world path)))
+          (cond
+            ((and leaf (c:leaf-empty-p leaf)) (values path :fill))
+            ((eq *spawn-mode* :stack) (values path :stack))
+            ((eq *spawn-mode* :fill-first)
+             ;; LEAF-PATHS of the workspace are relative to the workspace, so they
+             ;; must be resolved against it and only then rebased onto the world.
+             ;; Resolving a workspace-relative path against the world root is the
+             ;; kind of mistake that silently does nothing, which is worse than
+             ;; crashing.
+             (let* ((workspace (c:current-workspace world))
+                    (empty (find-if (lambda (candidate)
+                                      (let ((node (c:resolve-path workspace candidate)))
+                                        (and (typep node 'c:leaf)
+                                             (c:leaf-empty-p node))))
+                                    (c:leaf-paths workspace))))
+               (if empty
+                   (values (append (c:workspace-path world) empty) :fill)
+                   (values path :split))))
+            (t (values path :split)))))))
 ;;; ------------------------------------------------------ names and roles
 
 (defmethod container-label ((policy structure-policy) container)

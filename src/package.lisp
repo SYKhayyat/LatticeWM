@@ -279,7 +279,9 @@ You never edit this package.")
    #:repair-cursor #:motion-rects #:best-aligned-address
    #:mru-path #:node-rect #:place-node
    ;; --- structure ------------------------------------------------------
-   #:spawn-target #:split-axis-for #:new-child-side #:should-collapse-p
+   #:spawn-target #:*spawn-target* #:set-spawn-target #:clear-spawn-target
+   #:spawn-target-latch #:note-spawn-target-used #:*spawn-target-used-p*
+   #:split-axis-for #:new-child-side #:should-collapse-p
    #:move-into-occupied #:insertion-weight
    ;; what a workspace is made of.  The Z axis of "lattices one behind
    ;; another" is this generic and nothing else.

@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **"Put the next window here" is a command now.** Spawn placement reads the
+  cursor, which is right most of the time and left one intention unsayable:
+  aiming the next window at a place you are not standing in. `target-here
+  [count]` latches the focused pane as the destination and `clear-target`
+  drops it; `target-here-cell [count]` (lattice) latches the whole cell, so the
+  arrival joins the cell's own split rather than subdividing the pane you
+  happen to be on. The latch is consulted by `spawn-target` — so every policy
+  answer goes through it — spent where the window actually lands, and
+  re-anchored on that window when a count remains, so two arrivals appear in
+  the order they opened rather than reversed. A latch whose place has gone
+  (the pane was closed) is dropped and ordinary placement used.
+
 - **A window can be sent straight into a named cell on another workspace.**
   `send-to-workspace` lands at that workspace's entry address, and `goto-name`
   reads only the current plane's name table, so "put this in `mail` on

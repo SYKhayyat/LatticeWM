@@ -354,6 +354,43 @@ direction, this on a named coordinate.  Refuses when there is no cell at X, Y."
                 t)))))))
 
 ;;; ==================================================================
+;;; TARGETING THE WHOLE CELL FOR THE NEXT SPAWN
+;;; ==================================================================
+
+(defun cell-name-at (grid address)
+  "The name GRID's table gives ADDRESS, or NIL.
+
+Linear over the names, because a plane has a handful and the alternative is a
+second table mapping address to name, which is a second copy that can disagree
+after a rename — the same reason the saved state derives names rather than
+storing them."
+  (loop for name being the hash-keys of (grid-names grid)
+          using (hash-value at)
+        when (cell-equal at address)
+          return name))
+
+(r:defcommand target-here-cell (&optional (count 1))
+  "The next COUNT windows open inside the current cell, splits and all.
+
+TARGET-HERE targets the focused *pane*, which is right when you want the next
+window beside the one you are reading.  This targets the *cell*: the next
+window joins the cell's own split rather than subdividing the pane you are
+standing in, and an empty cell simply receives it.  The difference only shows
+in a cell that holds more than one pane, which is exactly when it matters."
+  (:interactive :number)
+  (let ((address (current-cell)))
+    (cond
+      ((null address) (r:notify "the cursor is not in a cell"))
+      (t
+       (let ((path (cell-path address)))
+         (p:set-spawn-target path :count count)
+         (r:notify "the next ~d window~:p will open in cell ~a"
+                   (max 1 count)
+                   (or (cell-name-at (current-grid) address)
+                       (cell-string address)))
+         path)))))
+
+;;; ==================================================================
 ;;; SENDING A PANE TO A NAMED CELL ON ANOTHER WORKSPACE
 ;;; ==================================================================
 ;;

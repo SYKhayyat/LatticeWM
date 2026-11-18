@@ -769,6 +769,43 @@ Returns (values world stack source-grid target-grid)."
       (is (equal "mover" (at (c:world-root world) (list 0 (l:cell 0 0))))
           "the window stays put rather than going somewhere approximate"))))
 
+(test target-here-cell-sends-the-next-spawn-into-the-whole-cell
+  ;; TARGET-HERE targets a pane, so the next window subdivides the pane you are
+  ;; standing in.  This targets the *cell*: the arrival joins the cell's own
+  ;; split, which matters exactly when the cell holds more than one pane.
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world :root (c:make-stack (list grid) 0)))
+         (policy (pol)))
+    (setf (c:child-at grid (l:cell 0 0))
+          (c:make-split :horizontal (list (leaf "a") (leaf "b")))
+          (c:child-at grid (l:cell 1 0)) (leaf "c"))
+    (setf (c:world-cursor world) (list 0 (l:cell 0 0) 0))
+    (let ((r:*world* world)
+          (p:*policy* policy))
+      (l:target-here-cell)
+      ;; Walk to the other cell; the latch is about the cell, not the cursor.
+      (setf (c:world-cursor world) (list 0 (l:cell 1 0)))
+      (p:on-window-open policy world (t*::win "new"))
+      (is (equal "new" (at (c:world-root world) (list 0 (l:cell 0 0) 1)))
+          "the arrival joined the targeted cell, beside the pane the latch was set on")
+      (is (equal "c" (at (c:world-root world) (list 0 (l:cell 1 0))))
+          "and the cell the cursor walked to is untouched"))))
+
+(test a-cell-target-with-a-count-re-anchors-on-what-it-placed
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world :root (c:make-stack (list grid) 0)))
+         (policy (pol)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+    (setf (c:world-cursor world) (list 0 (l:cell 0 0)))
+    (let ((r:*world* world)
+          (p:*policy* policy))
+      (l:target-here-cell 2)
+      (p:on-window-open policy world (t*::win "b"))
+      (p:on-window-open policy world (t*::win "c"))
+      (is (equal "c" (at (c:world-root world) (list 0 (l:cell 0 0) 2)))
+          "the second arrival went beside the first, not beside the anchor again")
+      (is (null p:*spawn-target*) "and the latch is spent"))))
+
 (test workspaces-of-planes-one-behind-another
   ;; "infinite workspaces of lattices one behind another": a stack of grids.
   ;; Nothing was written to make this work.

@@ -466,6 +466,12 @@ Every documented rule key is honoured here, which took three of them from
                                  disposition))
                 (leaf (c:make-leaf window))
                 (landed (place-node policy world leaf path disposition)))
+           ;; A TARGET-HERE LATCH IS SPENT WHERE THE WINDOW ACTUALLY LANDED.
+           ;; PLACE-NODE is the only place that knows that, and it runs after
+           ;; SPAWN-TARGET answered; so the latch is decremented here rather
+           ;; than guessed at in the policy.
+           (when *spawn-target-used-p*
+             (note-spawn-target-used landed))
            (when (getf rule :minimize)
              (on-minimize policy world window)
              (return-from on-window-open landed))

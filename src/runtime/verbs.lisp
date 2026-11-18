@@ -674,6 +674,34 @@ directory does not exist."
   "Open a file manager.  Bound to `f' in an empty pane by default."
   (spawn *file-manager*))
 
+;;; ------------------------------------------------------- targeted spawn
+
+(defcommand target-here (&optional (count 1))
+  "The next COUNT windows open in the focused pane, wherever you go meanwhile.
+
+Spawn placement reads the cursor, so opening something 'here' is the default
+and there was no way to say it about a place you were not standing in.  This
+is the latch: set it on a pane, then walk anywhere and open the thing, and it
+lands here.  One-shot, because a latch that stays armed is a mode, and the
+mode people actually want is the cursor.
+
+A pane that holds a window is split to receive the next one, and an empty pane
+is filled — the same rules an ordinary spawn follows at the cursor."
+  (:interactive :number)
+  (let ((path (current-path)))
+    (cond
+      ((null path) (notify "there is no pane to target"))
+      (t
+       (p:set-spawn-target path :count count)
+       (notify "the next ~d window~:p will open here" (max 1 count))
+       path))))
+
+(defcommand clear-target ()
+  "Drop a TARGET-HERE latch.  New windows go where placement says again."
+  (p:clear-spawn-target)
+  (notify "no targeted spawn")
+  nil)
+
 (defcommand reload-config ()
   "Re-read the configuration file.
 
