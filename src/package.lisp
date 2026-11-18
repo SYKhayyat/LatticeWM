@@ -561,6 +561,7 @@ keybindings, the command registry, and the session loop.")
    ;; the frame clock: when drawing is worth anything.  See DRAW-WHEN-READY.
    #:draw-when-ready #:overlay-frame #:forget-frame
    #:current-node #:current-leaf #:current-window #:current-path
+   #:workspace-stack #:grow-workspaces-to
    #:focused-window #:in-wm-thread-p
    #:window-river-node #:guarded #:best-effort #:with-abandon
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window

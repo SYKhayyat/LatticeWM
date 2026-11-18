@@ -354,6 +354,128 @@ direction, this on a named coordinate.  Refuses when there is no cell at X, Y."
                 t)))))))
 
 ;;; ==================================================================
+;;; SENDING A PANE TO A NAMED CELL ON ANOTHER WORKSPACE
+;;; ==================================================================
+;;
+;; SEND-TO-WORKSPACE LANDS WHERE THE WORKSPACE'S ENTRY-ADDRESS SAYS, which is
+;; the honest answer to 'send this somewhere over there' and the wrong answer to
+;; 'send this to mail'.  Names are D1's third addressing layer and they were
+;; plane-local: GOTO-NAME reads the current grid's table and nothing else, so a
+;; cell you named on workspace 3 could only be reached by travelling to
+;; workspace 3 and naming it again.
+;;
+;; The move itself is the same TREE-MOVE call SEND-TO-WORKSPACE makes; what is
+;; new is resolving the destination from the *target* grid's name table instead
+;; of from a direction, and that is all it should be.
+
+(defun first-grid (node)
+  "The first grid at or under NODE, or NIL.
+
+A workspace made by the lattice is a grid, so this is usually the node itself.
+The descent matters for a workspace that holds a plane inside a split, and for
+an extension that wraps workspaces in a container of its own: the destination
+of a cell-addressed send is 'the plane in this workspace', however deep the
+workspace's shape puts it."
+  (or (typecase node (grid node))
+      (and (typep node 'c:container)
+           (loop for address in (c:container-addresses node)
+                 for child = (c:child-at node address)
+                 for found = (and child (first-grid child))
+                 when found return found))))
+
+(defun resolve-cell-designator (grid designator)
+  "The address DESIGNATOR names in GRID, or NIL.
+
+A string is looked up in GRID's name table and a CONS of two integers is a
+coordinate (which is what CELL returns, so an address works too) -- so the
+REPL can say (send-to-cell 3 `mail`), (send-to-cell 3 (cons 2 1)) or
+(send-to-cell 3 (cell 2 1)) and all three mean a place.  A string that names nothing on that
+plane is a refusal rather than a guess: sending a window to the nearest thing
+with a similar name is how somebody's editor ends up on the wrong screen."
+  (typecase designator
+    (string (gethash designator (grid-names grid)))
+    (cons (let ((x (car designator)) (y (cdr designator)))
+            (when (and (integerp x) (integerp y))
+              (cell x y))))
+    (t nil)))
+
+(r:define-argument-type :cell "cell: "
+  :documentation "A cell name on this plane, or a coordinate written x,y."
+  ;; The names of THIS plane, which is the only table a prompt can honestly
+  ;; offer.  SEND-TO-CELL may be sending to another plane's name, so the prompt
+  ;; also takes free text; the completion list is a starting point rather than
+  ;; a constraint.
+  :candidates (let ((grid (current-grid)))
+                (when grid
+                  (loop for name being the hash-keys of (grid-names grid)
+                        collect name)))
+  :parse (lambda (text)
+           (let ((text (string-trim " " text)))
+             (if (position #\, text)
+                 (let* ((comma (position #\, text))
+                        (x (parse-integer text :end comma))
+                        (y (parse-integer text :start (1+ comma))))
+                   (cell x y))
+                 text))))
+
+(r:defcommand send-to-cell (workspace cell-or-name &key (follow nil))
+  "Move the focused pane into the cell named CELL-OR-NAME on WORKSPACE.
+
+WORKSPACE counts from one, like `workspace 3'.  CELL-OR-NAME is a name from
+that plane's table or a coordinate written X,Y.  The pane arrives *in* the
+cell — replacing its contents when it is empty just as MOVE-TO-CELL and
+SEND-TO-WORKSPACE do, joining as a split when it is not — rather than beside
+the plane, which is the bug SEND-TO-WORKSPACE's descend-to-leaf path exists to
+avoid.
+
+FOLLOW takes you with it, selecting the workspace and landing on the pane,
+which is what makes this usable as 'go there and put this in it' from one key.
+Without it the cursor is repaired where the pane came from and the echo area
+says where the window went — the pair every send verb uses."
+  (:interactive :number :cell)
+  (let* ((stack (r:workspace-stack))
+         (from (r:current-path))
+         (index (max 0 (1- workspace))))
+    (cond
+      ((or (null stack) (null from) (<= (length from) 1))
+       (r:notify "there is nowhere to send this window"))
+      (t
+       (let* ((workspace-node (r:grow-workspaces-to stack index))
+              (grid (first-grid workspace-node)))
+         (cond
+           ((null grid)
+            (r:notify "workspace ~d does not hold a lattice" (1+ index)))
+           (t
+            (let ((address (resolve-cell-designator grid cell-or-name)))
+              (cond
+                ((null address)
+                 (r:notify "workspace ~d has no cell ~a"
+                           (1+ index) cell-or-name))
+                (t
+                 (ensure-cell grid address)
+                 (let* ((base (c:node-path-to (c:world-root r:*world*) grid))
+                        (to (append base (list address))))
+                   (multiple-value-bind (root landed)
+                       (c:tree-move (c:world-root r:*world*) from to
+                                    :join (p:move-into-occupied
+                                           (p:current-policy) r:*world*
+                                           from to))
+                     (setf (c:world-root r:*world*) root)
+                     (if follow
+                         (progn
+                           (setf (c:container-selection stack) index)
+                           (p:jump-cursor (p:current-policy) r:*world* landed))
+                         (progn
+                           (p:repair-cursor (p:current-policy) r:*world* from)
+                           (r:notify "sent to ~a on workspace ~d"
+                                     (if (stringp cell-or-name)
+                                         cell-or-name
+                                         (cell-string address))
+                                     (1+ index))))
+                     (r:mark-dirty)
+                     landed))))))))))))
+
+;;; ==================================================================
 ;;; WHOLE CELLS — the subtree, not the pane you happen to be in
 ;;; ==================================================================
 ;;

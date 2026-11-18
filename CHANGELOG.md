@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A window can be sent straight into a named cell on another workspace.**
+  `send-to-workspace` lands at that workspace's entry address, and `goto-name`
+  reads only the current plane's name table, so "put this in `mail` on
+  workspace 3" took three steps and could not name the destination.
+  `send-to-cell (workspace cell-or-name)` resolves the name in the *target*
+  plane (or takes an `x,y` coordinate), creates the cell if nobody has stood
+  there yet, and moves the pane into it with the same join rule every other
+  send uses. `:follow` selects the workspace and lands the cursor with the
+  window. M-x asks for it with a new `:cell` argument type that completes the
+  current plane's names and parses a coordinate.
+
 - **A lattice cell is a thing you can move, copy and delete as a unit.** Every
   cell verb until now addressed the *pane* the cursor was standing in, so
   dragging a three-pane cell to another coordinate took one pane with it and

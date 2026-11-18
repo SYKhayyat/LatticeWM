@@ -678,6 +678,97 @@ REMOVE-CHILD and TIDY-GRID agreeing")))
 
 ;;; ================================ THE INTEROP: workspaces of planes
 
+;;; ------------------------------------------------- sending to a named cell
+
+(defun two-plane-world (&key (source-cell (l:cell 0 0)) (target-cell (l:cell 2 1)))
+  "A world of two lattice workspaces, with one window in the first.
+
+Returns (values world stack source-grid target-grid)."
+  (let* ((a (grid-of (list (l:cell-x source-cell) (l:cell-y source-cell) nil)))
+         (b (grid-of (list (l:cell-x target-cell) (l:cell-y target-cell) nil)))
+         (stack (c:make-stack (list a b) 0))
+         (world (c:make-world :root stack)))
+    (setf (c:child-at a source-cell) (leaf "mover"))
+    (setf (c:world-cursor world) (list 0 source-cell))
+    (values world stack a b)))
+
+(test send-to-cell-lands-in-a-named-cell-on-another-workspace
+  (multiple-value-bind (world stack a b)
+      (two-plane-world :target-cell (l:cell 2 1))
+    (declare (ignore stack))
+    (setf (gethash "mail" (l:grid-names b)) (l:cell 2 1))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:send-to-cell 2 "mail")
+      (is (equal "mover" (at (c:world-root world) (list 1 (l:cell 2 1))))
+          "the pane arrived in the cell the name points at")
+      (is (c:node-empty-p (c:child-at a (l:cell 0 0)))
+          "and the source cell is empty, not still holding the pane"))))
+
+(test send-to-cell-resolves-the-name-in-the-target-plane
+  ;; Names are per plane, so "mail" must mean workspace 2's mail even when the
+  ;; plane you are standing on has a mail of its own.  Looking the name up in
+  ;; the current grid is the easy mistake and it is a different cell entirely.
+  (multiple-value-bind (world stack a b)
+      (two-plane-world :target-cell (l:cell 2 1))
+    (declare (ignore stack))
+    (setf (gethash "mail" (l:grid-names a)) (l:cell 0 0)
+          (gethash "mail" (l:grid-names b)) (l:cell 2 1))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:send-to-cell 2 "mail")
+      (is (equal "mover" (at (c:world-root world) (list 1 (l:cell 2 1))))
+          "the destination is the name on the target plane"))))
+
+(test send-to-cell-creates-a-named-cell-that-does-not-exist-yet
+  ;; A name may point at a coordinate no cell has been created at.  Arriving
+  ;; there is an ordinary navigation (D3), so the send makes the cell.
+  (let* ((a (grid-of '(0 0 nil)))
+         (b (l:make-grid :cols 2 :rows 2))
+         (stack (c:make-stack (list a b) 0))
+         (world (c:make-world :root stack)))
+    (declare (ignore stack))
+    (setf (c:child-at a (l:cell 0 0)) (leaf "mover"))
+    (setf (c:world-cursor world) (list 0 (l:cell 0 0)))
+    (setf (gethash "scratch" (l:grid-names b)) (l:cell 5 5))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:send-to-cell 2 "scratch")
+      (is (equal "mover" (at (c:world-root world) (list 1 (l:cell 5 5))))
+          "the cell was created where the name said"))))
+
+(test send-to-cell-takes-a-coordinate-too
+  (multiple-value-bind (world stack a b)
+      (two-plane-world :target-cell (l:cell 1 0))
+    (declare (ignore stack b))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:send-to-cell 2 (cons 1 0))
+      (is (equal "mover" (at (c:world-root world) (list 1 (l:cell 1 0)))))
+      (is (c:node-empty-p (c:child-at a (l:cell 0 0)))))))
+
+(test send-to-cell-with-follow-selects-the-workspace-and-lands-on-the-pane
+  (multiple-value-bind (world stack a b)
+      (two-plane-world :target-cell (l:cell 2 1))
+    (declare (ignore a))
+    (setf (gethash "mail" (l:grid-names b)) (l:cell 2 1))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:send-to-cell 2 "mail" :follow t)
+      (is (= 1 (c:stack-selected stack)) "the workspace was selected")
+      (is (equal (list 1 (l:cell 2 1)) (c:world-cursor world))
+          "and the cursor arrived with the window"))))
+
+(test send-to-cell-refuses-a-name-the-target-plane-does-not-have
+  (multiple-value-bind (world stack a b)
+      (two-plane-world :target-cell (l:cell 2 1))
+    (declare (ignore stack a b))
+    (let ((r:*world* world)
+          (p:*policy* (pol)))
+      (l:send-to-cell 2 "nowhere")
+      (is (equal "mover" (at (c:world-root world) (list 0 (l:cell 0 0))))
+          "the window stays put rather than going somewhere approximate"))))
+
 (test workspaces-of-planes-one-behind-another
   ;; "infinite workspaces of lattices one behind another": a stack of grids.
   ;; Nothing was written to make this work.
