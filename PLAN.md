@@ -15,7 +15,7 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [x] #89 make-canvas fd/mmap leak. (High)
 - [x] #94 stale wl_output proxy — verified: no cached proxy survives a global (lookups go through the id each time), and `tests/test-lifecycle.lisp` now pins that `forget-global` drops the name and scale a reused id would inherit.
 - [x] #92 per-relayout sort and linear scans — grid offscreen order memoised on the cell epoch and viewport (12.5 µs → 0.4 µs at 100 cells, 145 µs → 0.7 µs at 1024), the emitter's unplaced test is a set, and the render-order signature is no longer copied.
-- [ ] #90 single-seat focus.
+- [x] #90 single-seat focus — verified: `world-cursor`/`world-focused-float` are per-seat tables, `default-seat` is recorded rather than `(first server-seats)`, every keyboard-focus derivation runs per seat, and `tools/integration.lisp` creates a real second seat through river's input manager and watches both keyboards land on their own windows (integration: `a second seat`, 14 checks, PASS).
 - [x] #93 unbounded IPC threads — a fixed connection cap and a shutdown that joins the accept thread.
 - [x] #91 int32 clamp before the wire (saturate at emit, model keeps the true coordinate). (High)
 - [x] #95 undo granularity for viewport/track ops is coarse — already the two-ring undo of #26, verified: `lattice/undo.lisp` records plane verbs on their own ring and `node-signature` no longer carries the camera, with four tests in `tests/test-lattice.lisp` holding both directions.
@@ -24,13 +24,21 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 - [x] #100 --eval silently ignores everything after the first form on a line. (Low)
 
 ## Phase 2 — Closed module work (verify, already shipped)
-- #21, #22, #24, #26, #31, #63–#83 — verify each held; check off.
+- [x] #21 — duplicate of #10: named app-id-matched arrangements shipped as `save-layout`/`restore-layout` in `extensions/layout-persistence`.
+- [x] #22 — rules engine: `:app-id-glob`/`:title-glob`/`:parent-app-id`/`:priority` in `src/policy/lifecycle.lisp`, tests in `tests/test-lifecycle.lisp`.
+- [x] #24 — duplicate of #7; the group scope is recorded there.
+- [x] #26 — two-ring undo: tree snapshots in `src/runtime/history.lisp`, plane verbs on their own ring in `lattice/undo.lisp`, both held by `tests/test-lattice.lisp`.
+- [x] #31 — per-cell sizing: `grid-cell-scales` composed in `cell-rects`, `resize-cell`/`reset-cell-size`, serialization and `node-signature` covered by 42 checks.
+- [x] #63–#83 — closed release mirrors of the shipped extension documents; `make surface-check` regenerates `doc/EXTENSION-SURFACE.txt` and compares it to the tree, so the documents are held to the program.
 
 ## Phase 2.5 — Quality: the harness and the documents
 - [x] #103 `make check` never compares the generated documents to the tree, so `main` can be red while a local run is green; the comparison lives only in CI. (Info) — `make surface-check` regenerates into a scratch directory and diffs, is part of `check`, and CI edits a document to prove it still fails.
 
 ## Phase 3 — Module roadmap (Info, order by dependency)
-Core first: #4 cell primitives → #32 subtree ops → #37 send-to-cell → #33 targeted spawn → #35 bulk verbs → #40 batch ops → #34 focus-by-name → #25 state machine → #7 groups → #18 tags → #36 tabs (+#39 persist) → #10 templates (+#12 profiles) → #41 auto-respawn (+#15 scratchpad persist) → #30 map nav → #38 peek → #28 drag → #29 zoom/pan → #27 focus toggle → #13 stacking → #14 snapping → #23 preview → #17 history → #19 steal-prevention → #20 sharing → #96 workspace sharing (share-workspace, mirror) → #8 multi-monitor → #11 global shortcuts → #16 gestures → #9 animation → #5 recording → #6 invisible wins → #1 infinite workspaces → #3 promote examples.
+- [x] #4 cell primitives (closed; the grid, viewport and addressing layers).
+- [x] #32 whole-cell subtree operations — `move-cell-contents`, `copy-cell`, `delete-cell`; one tree step each. (658d033)
+
+Core first: #32 subtree ops → #37 send-to-cell → #33 targeted spawn → #35 bulk verbs → #40 batch ops → #34 focus-by-name → #25 state machine → #7 groups → #18 tags → #36 tabs (+#39 persist) → #10 templates (+#12 profiles) → #41 auto-respawn (+#15 scratchpad persist) → #30 map nav → #38 peek → #28 drag → #29 zoom/pan → #27 focus toggle → #13 stacking → #14 snapping → #23 preview → #17 history → #19 steal-prevention → #20 sharing → #96 workspace sharing (share-workspace, mirror) → #8 multi-monitor → #11 global shortcuts → #16 gestures → #9 animation → #5 recording → #6 invisible wins → #1 infinite workspaces → #3 promote examples.
 
 ## Routing rule for new issues
 Any AI opening an issue here MUST file safety/runtime items into Phase 1 and modules into Phase 3 in dependency position — never above safety. Mirror-duplicates go to SKIP with the evidence. See AI_ISSUE_ROUTING.md.
