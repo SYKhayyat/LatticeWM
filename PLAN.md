@@ -37,8 +37,9 @@ Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 ## Phase 3 — Module roadmap (Info, order by dependency)
 - [x] #4 cell primitives (closed; the grid, viewport and addressing layers).
 - [x] #32 whole-cell subtree operations — `move-cell-contents`, `copy-cell`, `delete-cell`; one tree step each. (658d033)
+- [x] #37 send-to-cell — `send-to-cell (workspace cell-or-name)`, target-plane name resolution, `:cell` M-x argument type. (see git log)
 
-Core first: #32 subtree ops → #37 send-to-cell → #33 targeted spawn → #35 bulk verbs → #40 batch ops → #34 focus-by-name → #25 state machine → #7 groups → #18 tags → #36 tabs (+#39 persist) → #10 templates (+#12 profiles) → #41 auto-respawn (+#15 scratchpad persist) → #30 map nav → #38 peek → #28 drag → #29 zoom/pan → #27 focus toggle → #13 stacking → #14 snapping → #23 preview → #17 history → #19 steal-prevention → #20 sharing → #96 workspace sharing (share-workspace, mirror) → #8 multi-monitor → #11 global shortcuts → #16 gestures → #9 animation → #5 recording → #6 invisible wins → #1 infinite workspaces → #3 promote examples.
+Core first: #37 send-to-cell → #33 targeted spawn → #35 bulk verbs → #40 batch ops → #34 focus-by-name → #25 state machine → #7 groups → #18 tags → #36 tabs (+#39 persist) → #10 templates (+#12 profiles) → #41 auto-respawn (+#15 scratchpad persist) → #30 map nav → #38 peek → #28 drag → #29 zoom/pan → #27 focus toggle → #13 stacking → #14 snapping → #23 preview → #17 history → #19 steal-prevention → #20 sharing → #96 workspace sharing (share-workspace, mirror) → #8 multi-monitor → #11 global shortcuts → #16 gestures → #9 animation → #5 recording → #6 invisible wins → #1 infinite workspaces → #3 promote examples.
 
 ## Routing rule for new issues
 Any AI opening an issue here MUST file safety/runtime items into Phase 1 and modules into Phase 3 in dependency position — never above safety. Mirror-duplicates go to SKIP with the evidence. See AI_ISSUE_ROUTING.md.
