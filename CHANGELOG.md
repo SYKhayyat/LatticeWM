@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A lattice cell is a thing you can move, copy and delete as a unit.** Every
+  cell verb until now addressed the *pane* the cursor was standing in, so
+  dragging a three-pane cell to another coordinate took one pane with it and
+  left the other two behind. `move-cell-contents (x y)` moves the cell's whole
+  split/stack subtree, joining an occupied destination as a split exactly as
+  `move-to-cell` does; `copy-cell (x y)` gives an empty cell the same
+  arrangement, with empty panes (a window can only be in one place, so copying
+  the windows would be a promise the emitter cannot keep) and the same per-cell
+  scale; `delete-cell` closes every window in the cell and takes the cell
+  itself away rather than emptying it pane by pane. Each is one tree step, so
+  one undo puts it back.
+
 - **The per-relayout costs the lattice paid on every keystroke are smaller.**
   A grid sorted every offscreen cell on every relayout to answer
   `container-addresses`, and the answer only changes when a cell appears,

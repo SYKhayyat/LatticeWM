@@ -354,6 +354,149 @@ direction, this on a named coordinate.  Refuses when there is no cell at X, Y."
                 t)))))))
 
 ;;; ==================================================================
+;;; WHOLE CELLS — the subtree, not the pane you happen to be in
+;;; ==================================================================
+;;
+;; EVERY VERB ABOVE ADDRESSES A PANE.  MOVE-TO-CELL and SWAP-CELL are tree
+;; operations on the *cursor's leaf*, so walking into a cell that holds a
+;; three-way split and moving it takes one of the three windows with you and
+;; leaves the other two behind.  That is the right default — motion is
+;; pane-sized, because that is the size a keystroke changes — but it is not the
+;; whole vocabulary: 'this cell goes there' is an intention the plane has no
+;; verb for, and the plane is the unit people point at.
+;;
+;; The surgery already takes any node by path, so nothing in the model had to
+;; change; what was missing was commands that resolve the *cell node* rather
+;; than the leaf the cursor is standing in.
+
+(defun cell-subtree (grid address)
+  "The node GRID holds at ADDRESS, or NIL.
+
+Named rather than (c:child-at grid address) for the three commands below, which
+all mean 'the cell as a unit' and read better saying so."
+  (and grid address (c:child-at grid address)))
+
+(r:defcommand move-cell-contents (x y &key (follow t))
+  "Move the whole cell at the cursor to X, Y — every pane in it.
+
+The cell-sized counterpart to MOVE-TO-CELL, which takes only the focused pane.
+An empty destination cell becomes the whole subtree; an occupied one receives
+it as a split, the same never-destroy-structure answer MOVE-TO-CELL gives.  The
+source cell is left behind as a hole (D13) rather than an empty pane: the cell
+itself moved.
+
+FOLLOW moves the cursor with the cell, which is the useful default and matches
+MOVE-TO-CELL.  The cursor lands on whatever leaf the move left it on, so moving
+a cell you are standing in does not move you somewhere else in it."
+  (multiple-value-bind (grid ignored base) (cursor-plane r:*world*)
+    (declare (ignore ignored))
+    (let ((here (and grid (current-cell)))
+          (target (cell x y)))
+      (cond
+        ((null here) (r:notify "the cursor is not in a cell"))
+        ((cell-equal here target) (r:notify "the cell is already there"))
+        ((null (cell-subtree grid here)) (r:notify "there is no cell to move"))
+        (t
+         (ensure-cell grid target)
+         (let* ((from (append base (list here)))
+                (to (append base (list target)))
+                ;; The leaf the cursor is on, by identity.  After the move
+                ;; JUMP-CURSOR would arrive at the subtree's first leaf —
+                ;; 'non-directional arrival wants a leaf' — but when the cell
+                ;; you are standing in is the one that moved, the pane you were
+                ;; looking at is the one to come back to.
+                (standing (c:resolve-path (c:world-root r:*world*)
+                                          (c:world-cursor r:*world*))))
+           (multiple-value-bind (root landed)
+               (c:tree-move (c:world-root r:*world*) from to :join :split)
+             (setf (c:world-root r:*world*) root)
+             (if follow
+                 (progn (ensure-visible grid target)
+                        (p:jump-cursor (p:current-policy) r:*world*
+                                       (or (and standing
+                                                (c:node-path-to root standing))
+                                           landed)))
+                 ;; Not following means the cursor was standing in the cell that
+                 ;; went away, so it has to go somewhere real.
+                 (p:repair-cursor (p:current-policy) r:*world* from))
+             (r:mark-dirty)
+             landed)))))))
+
+(defun copy-cell-shape (node)
+  "A copy of NODE's arrangement with empty panes where its windows were.
+
+COPY-NODE duplicates a tree *including* its windows, which is correct for a
+journal or a saved layout and wrong here: a window can only be in one pane (the
+emitter places it once, closing it empties one leaf and leaves the other naming
+a dead object), so a 'copy' that duplicated windows would be a promise the rest
+of the program cannot keep.  What a cell can honestly give another cell is its
+shape — how many panes, which way they are split, what the weights and the
+selected tab are — and the new panes are empty, ready for windows."
+  (let ((copy (c:copy-node node)))
+    (c:map-nodes (lambda (n)
+                   (when (typep n 'c:leaf)
+                     (setf (c:leaf-window n) nil)))
+                 copy)
+    copy))
+
+(r:defcommand copy-cell (x y)
+  "Give the empty cell at X, Y the current cell's arrangement, without windows.
+
+The second way to duplicate a cell, and the honest one: the panes, splits,
+weights and tab selection are copied; the windows stay where they are, because
+there is only ever one of each.  Use it to lay out a fresh cell like a finished
+one — the counterpart of writing a window rule by hand for a shape you already
+have on screen.
+
+Refuses when the destination holds anything.  Copying onto a live cell would
+either destroy its windows or silently mean 'move', and neither is what the
+verb says."
+  (with-grid (grid)
+    (let ((here (current-cell))
+          (target (cell x y)))
+      (cond
+        ((null here) (r:notify "the cursor is not in a cell"))
+        ((cell-equal here target) (r:notify "the cell is already there"))
+        (t
+         (let ((source (cell-subtree grid here))
+               (occupant (cell-subtree grid target)))
+           (cond
+             ((null source) (r:notify "there is no cell to copy"))
+             ((and occupant (not (c:node-empty-p occupant)))
+              (r:notify "cell ~a holds windows" (cell-string target)))
+             (t
+              (setf (c:child-at grid target)
+                    (copy-cell-shape source))
+              ;; The scale is part of the cell (#31), so a copied cell is the
+              ;; same size as the one it was copied from.
+              (setf (cell-scale grid target) (cell-scale grid here))
+              target))))))))
+
+(r:defcommand delete-cell ()
+  "Close every window in the current cell and take the cell away.
+
+Neither CLOSE (one pane) nor TIDY (empty cells): this is 'this cell is done'.
+Each window is closed through the ordinary path, so the applications get to
+save and the :WINDOW-CLOSED hook fires for whatever was watching; the cell's
+subtree leaves the plane in the same step rather than being emptied window by
+window.  The cursor is repaired to a real cell, which is what TIDY does after
+the same kind of change."
+  (with-grid (grid)
+    (let ((here (current-cell)))
+      (when here
+        (let ((node (cell-subtree grid here)))
+          (if (null node)
+              (r:notify "there is no cell here")
+              (let ((windows (c:node-windows node)))
+                (dolist (window windows)
+                  (r:close-window-later window))
+                (c:remove-child grid here)
+                (p:repair-cursor (p:current-policy) r:*world*)
+                (r:notify "closed ~d window~:p; the cell is gone"
+                          (length windows))
+                (length windows))))))))
+
+;;; ==================================================================
 ;;; SPREADSHEET GEOMETRY — D8 and D12
 ;;; ==================================================================
 
