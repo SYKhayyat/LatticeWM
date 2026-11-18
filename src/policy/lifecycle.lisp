@@ -503,6 +503,50 @@ is the honest answer for a rule naming a workspace in a policy that has none."
                                        (c:make-leaf)))))
         (c:first-leaf-path (c:child-at stack index) (list index))))))
 
+(defun workspace-node-p (world node)
+  "T when NODE is one of the workspaces itself, not something inside one.
+
+A workspace's contents are a container (a split under the default policy, a
+plane under the lattice) and that container is what empties when its last
+window closes.  Distinguishing the two is the whole of D19: a split that runs
+dry is debris and must go, while the *workspace* running dry is a place you
+can spawn into and must survive, in place, index unchanged."
+  (let ((workspaces (c:world-workspaces world)))
+    (and workspaces
+         (loop for i below (c:container-count workspaces)
+               thereis (eq node (c:child-at workspaces i))))))
+
+(defun remove-window-from-tree (policy world window)
+  "Take WINDOW's pane out of the tree, keeping every workspace standing.
+
+Returns the suggested focus path, or NIL when WINDOW was in no tree (it is a
+float, or already gone).  The tree is left simplified: a workspace that loses
+a window from a multi-pane split collapses that split, exactly as closing an
+ordinary pane does.
+
+The one case that is not a plain removal is a workspace whose whole content is
+the window — and there the pane IS the workspace node.  Removing it by path
+deletes the workspace, shifts every later index, and quietly kills the place
+the user asked D19 to keep.  So that leaf is emptied in place instead: the
+pane goes with the window's intention, but the workspace survives, unchanged,
+ready to spawn into."
+  (let* ((root (c:world-root world))
+         (leaf (c:leaf-holding root window))
+         (path (and leaf (c:node-path-to root leaf))))
+    (when path
+      (if (workspace-node-p world leaf)
+          (progn
+            (setf (c:leaf-window leaf) nil)
+            (c:repair-path root path))
+          (multiple-value-bind (removed new-root suggested)
+              (c:tree-remove-at root path
+                                :simplify (lambda (node)
+                                            (should-collapse-p policy node))
+                                :focus-path (c:world-cursor world *seat*))
+            (declare (ignore removed))
+            (setf (c:world-root world) new-root)
+            suggested)))))
+
 (defmethod on-window-close ((policy lifecycle-policy) world (window c:window)
                             path)
   "Take the window's pane out with it, and let its sibling grow.
@@ -514,21 +558,17 @@ a mode would make you remember which one you were in."
   (let ((root (c:world-root world)))
     (unless (and path (c:resolve-path root path))
       (return-from on-window-close (c:world-cursor world *seat*)))
-    (multiple-value-bind (removed new-root suggested)
-        (c:tree-remove-at root path
-                          :simplify (lambda (node) (should-collapse-p policy node))
-                          :focus-path (c:world-cursor world *seat*))
-      (declare (ignore removed))
-      (setf (c:world-root world) new-root)
-      (let ((landed (focus-after-remove policy world path suggested)))
-        ;; THROUGH REPAIR-CURSOR, NOT INTO THE SLOT.  This is the commonest
-        ;; focus change there is — close a window and the cursor lands
-        ;; somewhere else — and writing the slot here skipped both halves of
-        ;; the notification: ON-FOCUS-CHANGE, so :MRU never learned that the
-        ;; place had moved, and the :FOCUS-CHANGED hook, which is documented
-        ;; "run after the cursor moves" and did not.  REPAIR-CURSOR is exactly
-        ;; REPAIR-PATH plus those two, and has been since it was written.
-        (repair-cursor policy world landed)))))
+    (let ((suggested (remove-window-from-tree policy world window)))
+      (when suggested
+        (let ((landed (focus-after-remove policy world path suggested)))
+          ;; THROUGH REPAIR-CURSOR, NOT INTO THE SLOT.  This is the commonest
+          ;; focus change there is — close a window and the cursor lands
+          ;; somewhere else — and writing the slot here skipped both halves of
+          ;; the notification: ON-FOCUS-CHANGE, so :MRU never learned that the
+          ;; place had moved, and the :FOCUS-CHANGED hook, which is documented
+          ;; "run after the cursor moves" and did not.  REPAIR-CURSOR is exactly
+          ;; REPAIR-PATH plus those two, and has been since it was written.
+          (repair-cursor policy world landed))))))
 
 (defmethod on-minimize ((policy lifecycle-policy) world (window c:window))
   "Take the window out of the tree entirely and put it on the scratchpad.
@@ -546,17 +586,15 @@ where it was if that place still exists."
          (path (and leaf (c:node-path-to root leaf))))
     (when path
       (setf (c:window-home-path window) path)
-      (multiple-value-bind (removed new-root suggested)
-          (c:tree-remove-at root path :focus-path (c:world-cursor world *seat*))
-        (declare (ignore removed))
+      (let ((suggested (remove-window-from-tree policy world window)))
         ;; THROUGH REPAIR-CURSOR, NOT INTO THE SLOT -- exactly as ON-WINDOW-CLOSE
         ;; does.  Writing WORLD-CURSOR directly skipped ON-FOCUS-CHANGE (so :MRU
         ;; never recorded the window we left) and the :FOCUS-CHANGED hook, which
         ;; made minimize/restore asymmetric: RESTORE announces, MINIMIZE did not,
         ;; and the minimize -> look-elsewhere -> restore flow restore exists to
         ;; serve corrupted the focus history it depends on.
-        (setf (c:world-root world) new-root)
-        (repair-cursor policy world suggested)))
+        (when suggested
+          (repair-cursor policy world suggested))))
     (setf (c:window-minimized-p window) t)
     (pushnew window (c:world-scratchpad world))
     window))

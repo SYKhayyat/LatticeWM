@@ -612,6 +612,73 @@ otherwise."
   (let ((window (first (c:world-scratchpad *world*))))
     (when window (restore-window window))))
 
+;;; -------------------------------------------------------- bulk verbs
+
+(defun current-workspace-windows ()
+  "Every tiled window on the workspace the cursor is in, or NIL.
+
+Floats belong to the output rather than to a workspace — a dialog does not
+live on a plane — so a bulk verb that cleaned the screen with them would be
+closing windows that were never on it.  They are deliberately left alone; a
+float is dismissed with CLOSE-FLOAT."
+  (let ((workspace (c:current-workspace *world*)))
+    (and workspace (c:node-windows workspace))))
+
+(defcommand close-others ()
+  "Close every window on the current workspace except the focused one.
+
+'Clean the screen but keep my editor.'  The survivor is untouched — its pane,
+its place in the tree — and every other window on this workspace is asked to
+close through the ordinary path, so the applications get to save and the
+:WINDOW-CLOSED hook fires.  Returns how many went."
+  (let ((focus (focused-window))
+        (closed '()))
+    (dolist (window (current-workspace-windows))
+      (unless (eq window focus)
+        (when (close-window-later window) (push window closed))))
+    (notify "closing ~d other window~:p" (length closed))
+    (length closed)))
+
+(defcommand close-workspace ()
+  "Close every window on the current workspace, leaving an empty pane.
+
+A workspace you are done with, in one key.  Closing every pane leaves the
+workspace a single empty pane — DESIGN D17/D19's shape, so that typing there
+still spawns something — and the applications are asked to close through the
+ordinary path rather than being torn down.  Returns how many went."
+  (let ((closed '()))
+    (dolist (window (current-workspace-windows))
+      (when (close-window-later window) (push window closed)))
+    (notify "closing ~d window~:p on this workspace" (length closed))
+    (length closed)))
+
+(defcommand minimize-others ()
+  "Minimize every window on the current workspace except the focused one.
+
+The model, not the wire: each one is taken out of the tree onto the
+scratchpad by MINIMIZE-WINDOW immediately, so the rest of the workspace
+retiles now and RESTORE-LAST brings each back.  Returns how many went."
+  (let ((focus (focused-window))
+        (went '()))
+    (dolist (window (current-workspace-windows))
+      (unless (eq window focus)
+        (minimize-window window)
+        (push window went)))
+    (notify "minimized ~d other window~:p" (length went))
+    (length went)))
+
+(defcommand minimize-workspace ()
+  "Minimize every window on the current workspace.
+
+The whole workspace to the scratchpad at once — 'put this session down'.
+Returns how many went."
+  (let ((went '()))
+    (dolist (window (current-workspace-windows))
+      (minimize-window window)
+      (push window went))
+    (notify "minimized ~d window~:p" (length went))
+    (length went)))
+
 ;;; ================================================================ system
 
 (defvar *spawn-directory* nil

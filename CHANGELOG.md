@@ -26,6 +26,19 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Bulk workspace verbs.** `close-others`, `close-workspace`, `minimize-others`
+  and `minimize-workspace` do what their names say to the workspace the cursor
+  is in, keeping the focused window where the verb is "others" and leaving an
+  empty pane (D17/D19) when the workspace is emptied.  Floats are deliberately
+  untouched: a float belongs to the output, not to a workspace.  Each returns
+  how many windows it moved.
+- **An emptied workspace survives, in place.** Closing or minimizing the last
+  window of a workspace whose contents were a split used to remove the
+  workspace from the stack — the split simplified to nothing, the workspace
+  went with it, and every later workspace shifted an index.  The workspace
+  node is now kept: its pane is emptied in place, exactly as the single-pane
+  case always did, and RESTORE still finds the slot a minimized window came
+  from.  (See issue #115.)
 - **"Put the next window here" is a command now.** Spawn placement reads the
   cursor, which is right most of the time and left one intention unsayable:
   aiming the next window at a place you are not standing in. `target-here

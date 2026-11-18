@@ -130,6 +130,50 @@ not.  It is the obvious thing somebody will want back."))
         "the workspace survives as a place you can spawn into")
     (is (equal '(0) (c:world-cursor world)))))
 
+(test emptying-a-multi-pane-workspace-keeps-the-workspace-in-the-stack
+  ;; #115.  The workspace whose child is a leaf took the right path already; one
+  ;; holding a split went through the split, the split simplified to nothing,
+  ;; and the workspace was removed from the stack -- taking every later index
+  ;; with it.  D19 is about the workspace, not about how deep its contents are.
+  (let* ((a (win "a")) (b (win "b"))
+         (workspace (c:make-split :horizontal
+                                  (list (c:make-leaf a) (c:make-leaf b))))
+         (other (win "z"))
+         (root (c:make-stack (list workspace (c:make-leaf other)) 0))
+         (world (c:make-world :root root))
+         (pol (policy)))
+    (let ((r:*world* world))
+      (p:on-window-close pol world a
+                         (c:node-path-to root (c:leaf-holding root a)))
+      (p:on-window-close pol world b
+                         (c:node-path-to (c:world-root world)
+                                         (c:leaf-holding (c:world-root world) b)))
+      (is (equal '(:stack 0 (:leaf nil) (:leaf "z"))
+                 (shape (c:world-root world)))
+          "the emptied workspace is still workspace 0, and z is still workspace 1")
+      (is (= 2 (c:container-count (c:world-workspaces world))))
+      (is (equal '(0) (c:workspace-path world))))))
+
+(test minimizing-the-last-window-keeps-its-workspace-and-its-home
+  ;; Same edge, on the minimize path, and RESTORE must still find the slot: the
+  ;; pane was emptied rather than removed, so the window's remembered place
+  ;; survives the trip to the scratchpad.
+  (let* ((a (win "a"))
+         (other (win "z"))
+         (root (c:make-stack (list (c:make-leaf a) (c:make-leaf other)) 0))
+         (world (c:make-world :root root))
+         (pol (policy)))
+    (let ((r:*world* world))
+      (p:on-minimize pol world a)
+      (is (equal '(:stack 0 (:leaf nil) (:leaf "z"))
+                 (shape (c:world-root world)))
+          "the workspace survives empty")
+      (is (equal '(0) (c:window-home-path a)))
+      (p:on-restore pol world a)
+      (is (equal '(:stack 0 (:leaf "a") (:leaf "z"))
+                 (shape (c:world-root world)))
+          "and restore lands back in workspace 0"))))
+
 (test focus-after-close-stays-put-by-default
   ;; The governing property: nothing moves the viewport except the user.
   (let ((world (fresh-world)) (pol (policy)))
@@ -467,6 +511,87 @@ method."))
       (r:target-here)
       (r:clear-target))
     (is (null p:*spawn-target*))))
+
+;;; ---------------------------------------------------------- bulk verbs
+
+(defun three-window-workspace ()
+  "A world of two workspaces; the first holds three tiled windows.
+
+Returns (values WORLD ROOT A B C OTHER), the window objects, with the cursor
+resting on B."
+  (let* ((a (win "a")) (b (win "b")) (c (win "c"))
+         (workspace (c:make-split :horizontal
+                                  (list (c:make-leaf a) (c:make-leaf b)
+                                        (c:make-leaf c))))
+         (other (win "z"))
+         (root (c:make-stack (list workspace (c:make-leaf other)) 0))
+         (world (c:make-world :root root)))
+    (setf (c:world-cursor world)
+          (c:node-path-to root (c:leaf-holding root b)))
+    (values world root a b c other)))
+
+(test close-others-spares-the-focused-window
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore root other))
+      (dolist (window (list a b c)) (setf (c:window-proxy window) :proxy))
+      (let ((r:*world* world))
+        (is (= 2 (r:close-others)) "two windows were asked to close")
+        (let ((pending (r::server-pending-closes r:*server*)))
+          (is (and (member a pending) (member c pending))
+              "the two that are not the focused window")
+          (is (not (member b pending))
+              "and not the one the cursor is on"))))))
+
+(test close-workspace-closes-every-window-on-it-and-not-elsewhere
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore root b))
+      (dolist (window (list a b c other)) (setf (c:window-proxy window) :proxy))
+      (let ((r:*world* world))
+        (is (= 3 (r:close-workspace)) "the three windows of this workspace")
+        (is (not (member other (r::server-pending-closes r:*server*)))
+            "and nothing on the other workspace")))))
+
+(test minimize-others-leaves-the-focused-window-in-place
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*policy* (policy))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore a c other))
+      (let ((r:*world* world)
+            (workspace (c:child-at root 0)))
+        (is (= 2 (r:minimize-others)) "two were minimized")
+        (is (equal (list b) (c:node-windows workspace))
+            "the focused window is still the workspace's only one")
+        (is (= 2 (length (c:world-scratchpad world)))
+            "and the other two are on the scratchpad, restorable")))))
+
+(test minimize-workspace-empties-it-and-keeps-every-window
+  (let ((r:*server* (make-instance 'r::server))
+        (p:*policy* (policy))
+        (p:*log-level* nil)
+        (p:*debug-on-error* nil))
+    (multiple-value-bind (world root a b c other)
+        (three-window-workspace)
+      (declare (ignore other))
+      (let ((r:*world* world)
+            (workspace (c:child-at root 0)))
+        (is (= 3 (r:minimize-workspace)) "all three went")
+        (is (c:node-empty-p (c:child-at root 0))
+            "the workspace is a single empty pane, ready to spawn into")
+        (is (= 3 (length (c:world-scratchpad world))))
+        (is (every (lambda (window) (member window (c:world-scratchpad world)))
+                   (list a b c))
+            "nothing was closed: minimize is not close")))))
 
 ;;; ------------------------------------------------------------- layout
 

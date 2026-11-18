@@ -55,6 +55,22 @@ LatticeWM commands.
 (close-float)
   Close the focused floating window.
 
+(close-others)
+  Close every window on the current workspace except the focused one.
+  
+  'Clean the screen but keep my editor.'  The survivor is untouched — its pane,
+  its place in the tree — and every other window on this workspace is asked to
+  close through the ordinary path, so the applications get to save and the
+  :WINDOW-CLOSED hook fires.  Returns how many went.
+
+(close-workspace)
+  Close every window on the current workspace, leaving an empty pane.
+  
+  A workspace you are done with, in one key.  Closing every pane leaves the
+  workspace a single empty pane — DESIGN D17/D19's shape, so that typing there
+  still spawns something — and the applications are asked to close through the
+  ordinary path rather than being torn down.  Returns how many went.
+
 (describe-command name)
   Show a command's documentation, its arguments and the keys that run it.
   
@@ -223,6 +239,19 @@ LatticeWM commands.
   The remaining windows retile without it.  Minimize is not 'hide it somewhere',
   it is 'take it out of the layout' — and where it went is the scratchpad, which
   RESTORE-LAST brings it back from.
+
+(minimize-others)
+  Minimize every window on the current workspace except the focused one.
+  
+  The model, not the wire: each one is taken out of the tree onto the
+  scratchpad by MINIMIZE-WINDOW immediately, so the rest of the workspace
+  retiles now and RESTORE-LAST brings each back.  Returns how many went.
+
+(minimize-workspace)
+  Minimize every window on the current workspace.
+  
+  The whole workspace to the scratchpad at once — 'put this session down'.
+  Returns how many went.
 
 (move direction &key (join nil))
   Move the focused pane DIRECTION, onto whatever is there.
