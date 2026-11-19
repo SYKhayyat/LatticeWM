@@ -1052,46 +1052,13 @@ a package that did not exist when it was defined.  So (zoom-out) at a REPL is
 an undefined function, and the whole extension appears to be broken while
 working perfectly.
 
-USE-PACKAGE at load time rather than a hand-maintained re-export list, so that
-a command added tomorrow is reachable tomorrow.  Conflicts are resolved in
-favour of the name that was already there, because a configuration file that
-has already defined its own ZOOM-OUT should keep it — it is theirs, and
-refusing to load over it would be the wrong way round.
+The mechanics -- USE-PACKAGE at load time, conflicts settled in the user's
+favour before they can interrupt it -- live in R:INSTALL-VOCABULARY, which is
+this paragraph's argument made executable once instead of three times (#121).
+That this extension is the one whose behaviour the others were copied from is
+why the name here stays a function of one argument: it is the documented
+thing to call, and it returns the package it installed into."
+  (r:install-vocabulary '#:lattice :package package :label "lattice"))
 
-THE CONFLICTS ARE RESOLVED BEFORE THE USE-PACKAGE RATHER THAN DURING IT.  This
-used to be `(ignore-errors (use-package ...))' under a HANDLER-BIND hunting for
-CL:CONTINUE or SB-IMPL::TAKE-NEW, and if neither restart was found — which is
-not a hypothetical, it is what a symbol conflict between two *used* packages
-gives you — the error escaped to the IGNORE-ERRORS, the whole USE-PACKAGE was
-abandoned partway, and how many names got imported first was unspecified.  The
-extension was then half installed behind one :WARN line, which is precisely the
-failure the paragraph above exists to prevent.  Every name that is already
-spoken for is SHADOWING-IMPORTed first — which pins the user's meaning whether
-theirs is present or inherited — so the USE-PACKAGE that follows has nothing
-left to signal about, and a collision costs one name and one log line."
-  (let ((target (find-package package))
-        (source (find-package '#:lattice)))
-    (unless (and target source)
-      (r:logmsg :warn "lattice: no package ~a; vocabulary not installed" package)
-      (return-from install-vocabulary nil))
-    (let ((taken '()))
-      (do-external-symbols (symbol source)
-        (multiple-value-bind (theirs status)
-            (find-symbol (symbol-name symbol) target)
-          (when (and status (not (eq theirs symbol)))
-            (push theirs taken))))
-      (when taken
-        ;; Theirs, kept: SHADOWING-IMPORT of a symbol already present is how
-        ;; you say "this name is decided" without changing what it means.
-        (shadowing-import taken target)
-        (r:logmsg :warn "lattice: ~d name~:p in ~a already meant something else ~
-and still do: ~{~a~^ ~}"
-                  (length taken) (package-name target)
-                  (sort (mapcar #'symbol-name taken) #'string<)))
-      (use-package source target))
-    target))
-
-;; Do it on load, so that `(load-extension "lattice")' is the whole of the
-;; installation and `lattice:enable' is genuinely optional.
 (eval-when (:load-toplevel :execute)
   (install-vocabulary))

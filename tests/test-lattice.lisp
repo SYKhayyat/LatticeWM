@@ -1976,6 +1976,29 @@ of it")
                "including the two names the documentation tells people to type"))
       (delete-package package))))
 
+(test the-installer-is-one-function-with-a-label
+  "The lattice's version was the one with the good answers -- resolve
+conflicts first, log the names kept, say which package it installed into --
+and it stayed an argument in a docstring while buffers and transient-rules
+each re-solved the same problem less completely (#121).  It lives on the
+runtime surface now, takes the source package as an argument, and names the
+caller in its own log line rather than assuming it is the lattice."
+  (let ((package (make-package "LATTICE-VOCABULARY-SHARED-TEST" :use '(#:cl))))
+    (unwind-protect
+         (progn
+           (is (eq package (r:install-vocabulary '#:lattice
+                                                 :package package
+                                                 :label "shared-test"))
+               "it answers the package it installed into")
+           (is (eq 'l:zoom-out (find-symbol "ZOOM-OUT" package))
+               "and the source's names are there")
+           (is (null (r:install-vocabulary '#:no-such-source-package
+                                           :package package))
+               "a missing source is a log line, not a condition -- an
+extension installing before its own package exists is a load-order bug
+that should not take the session down"))
+      (delete-package package))))
+
 ;;; ================================================ A PLANE INSIDE A PLANE
 ;;;
 ;;; FINDINGS.org lists plane-inside-a-plane among the things that came for

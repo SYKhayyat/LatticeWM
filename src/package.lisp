@@ -589,7 +589,8 @@ keybindings, the command registry, and the session loop.")
    #:sample-config #:data-directories #:register-data-registry
    #:extension-loaded-p #:load-extension #:executable-directory
    #:cannot-start #:connect-to-compositor #:emergency-shutdown
-   #:install-default-keymap #:print-options #:print-commands #:print-keymap
+   #:install-default-keymap #:install-vocabulary
+   #:print-options #:print-commands #:print-keymap
    #:main #:all-hooks #:defhook
    ;; commands
    #:defcommand #:command #:find-command #:all-commands #:run-command

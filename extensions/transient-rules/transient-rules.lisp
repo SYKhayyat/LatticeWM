@@ -73,18 +73,4 @@ cannot re-arm a rule that has already had its one shot."
 
 ;;; Make the commands typable from init.lisp and M-x without prefixes: the
 ;;; lattice's reachability pattern.
-(defun install-vocabulary (&optional (package '#:latticewm/user))
-  (let ((target (find-package package))
-        (source (find-package '#:transient-rules)))
-    (when (and target source)
-      (let ((taken '()))
-        (do-external-symbols (symbol source)
-          (multiple-value-bind (theirs status)
-              (find-symbol (symbol-name symbol) target)
-            (when (and status (not (eq theirs symbol)))
-              (push theirs taken))))
-        (when taken (shadowing-import taken target))
-        (use-package source target)))
-    (values)))
-
-(install-vocabulary)
+(r:install-vocabulary '#:transient-rules)

@@ -294,6 +294,10 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:file "history" :depends-on ("server" "minibuffer" "echo" "help" "sequence"))
        (:file "verbs" :depends-on ("server" "minibuffer" "echo" "help" "config" "emit" "capture" "windows" "sequence" "outputs" "seats" "history"))
        (:file "tags" :depends-on ("server" "echo" "help" "windows" "sequence" "outputs" "verbs"))
+       ;; #121: the one implementation of "make an extension's names
+       ;; typable", which the lattice and two extensions had each solved for
+       ;; themselves.
+       (:file "vocabulary" :depends-on ("config"))
        (:file "state" :depends-on ("server" "minibuffer" "sequence" "history" "verbs" "tags"))
        (:file "main" :depends-on ("server" "minibuffer" "help" "config" "welcome" "emit" "sequence" "swank" "input" "session" "ipc" "verbs" "state"))))))))
 

@@ -201,3 +201,16 @@ state the module can produce."
                                               (c:container-addresses node)))))))
         (count-in (c:world-root r:*world*)))
       (is (= 1 holders)))))
+
+;;; ------------------------------------------------------ reachability
+
+(test the-module-installs-its-vocabulary-through-the-runtime
+  "Reachability is one implementation since #121.  This is the half of that
+check an extension can make about itself: the name arrives in the user
+package, and the module no longer carries a copy of the installer -- which is
+what 'copied three times' looks like from inside the copy."
+  (is (null (find-symbol "INSTALL-VOCABULARY" '#:buffers))
+      "no local copy: the module calls R:INSTALL-VOCABULARY at load time")
+  (is (eq 'bf:window-named
+          (find-symbol "WINDOW-NAMED" (find-package '#:latticewm/user)))
+      "and its names are typable from init.lisp, which is all the pattern is for"))

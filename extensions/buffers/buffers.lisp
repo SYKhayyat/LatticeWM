@@ -93,31 +93,7 @@ hand it."
 
 ;;; ------------------------------------------------------- reachability
 
-(defun install-vocabulary (&optional (package '#:latticewm/user))
-  "Make this module's names visible in PACKAGE, the one configuration files
-and the REPL are read in.  The lattice's own pattern, verbatim in spirit:
-USE-PACKAGE at load time rather than a hand-maintained re-export list, with
-conflicts resolved in favour of the name that was already there, because a
-name the user defined is theirs."
-  (let ((target (find-package package))
-        (source (find-package '#:buffers)))
-    (when (and target source)
-      (let ((taken '()))
-        (do-external-symbols (symbol source)
-          (multiple-value-bind (theirs status)
-              (find-symbol (symbol-name symbol) target)
-            (when (and status (not (eq theirs symbol)))
-              (push theirs taken))))
-        (when taken
-          (shadowing-import taken target)
-          (r:logmsg :warn "buffers: ~d name~:p in ~a already meant something ~
-else and still do: ~{~a~^ ~}"
-                    (length taken) (package-name target)
-                    (sort (mapcar #'symbol-name taken) #'string<)))
-        (use-package source target)))
-    (values)))
-
-(install-vocabulary)
+(r:install-vocabulary '#:buffers)
 
 
 

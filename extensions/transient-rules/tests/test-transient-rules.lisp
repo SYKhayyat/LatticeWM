@@ -107,3 +107,12 @@ second stays for the NEXT window."
     (p:on-window-open p:*policy* world
                       (make-instance 'c:window
                                      :app-id (format nil "app~d" i)))))
+
+;;; ------------------------------------------------------ reachability
+
+(test the-module-installs-its-vocabulary-through-the-runtime
+  "Same check as buffers' (#121): no second copy of the installer, and the
+names are reachable from the user package without a prefix."
+  (is (null (find-symbol "INSTALL-VOCABULARY" '#:transient-rules)))
+  (is (eq 'tr:float-next
+          (find-symbol "FLOAT-NEXT" (find-package '#:latticewm/user)))))

@@ -34,8 +34,11 @@ in windows.lisp and again, differently, in world.lisp; 100×60 floor in
 one loop spelled six ways. `act-on-windows` / `act-on-current-workspace`;
 each verb is now its notice plus one call, and the two behavioural rulings
 (skip EXCEPT; count what acted) live in one docstring. +7 checks.
-- [ ] #121 `install-vocabulary` is copied three times (lattice, buffers,
-transient-rules) and already drifting; one implementation on the surface.
+- [x] #121 `install-vocabulary` was copied three times (lattice, buffers,
+transient-rules) and already drifting. Now `r:install-vocabulary` in
+`src/runtime/vocabulary.lisp`, taking the source package; the lattice keeps
+its documented one-argument wrapper, the two extensions call the runtime at
+load time. Gate 1 caught the first signature (&optional + &key). +4 checks.
 - [ ] #120 the extension test harness (block/unblock-the-replacement, temp
 dirs) is verbatim in four suites; one shared `extensions/test-support` system.
 - [ ] #124 the CLI (+usage+, +flags+, main, printing, `--eval`) shares
