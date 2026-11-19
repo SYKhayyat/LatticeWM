@@ -26,7 +26,8 @@
                     (#:r #:latticewm/runtime)
                     (#:w #:latticewm/wire))
   (:export #:run-all #:model #:geometry #:tree #:motion #:lifecycle #:surface
-           #:container #:hooks #:minibuffer #:ipc #:state #:tags #:wire #:devices
+           #:container #:hooks #:minibuffer #:ipc #:state #:tags #:verbs #:wire
+           #:devices
            #:capture
            #:boundaries #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite))
@@ -89,6 +90,12 @@ Wayland int, and the request is not.")
   :description "A tag is a name, not a keyword.  What a prompt, a window rule and
 a state file each make of the same name, and why normalizing one must not add a
 permanent keyword to the package every protocol key lives in.")
+
+(def-suite verbs :in model
+  :description "The commands, where they can be asked a question without a
+compositor: which windows a name reaches, what a picker offers for two of them
+that share one, and whether choosing an entry lands on it.  #34 is the first
+inhabitant -- the door that lets you reach a window you have not labelled.")
 
 (def-suite state :in model
   :description "The saved layout, as a file: what a reader sees while it is

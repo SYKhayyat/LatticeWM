@@ -163,36 +163,6 @@ scratchpad the same feature seen twice."
                  (and (rest windows) (length (rest windows))))
          window)))))
 
-(defun focus-existing-window (window)
-  "Put the cursor on WINDOW wherever it is, switching workspace if needed.
-
-The workspace switch is the part that matters and the part that is easy to
-forget: a window on another workspace can be focused perfectly correctly and
-still be on no screen, which looks exactly like the command having done
-nothing."
-  (let ((float (c:float-of-window *world* window)))
-    (cond
-      (float
-       (setf (c:world-focused-float *world* p:*seat*) float)
-       (mark-dirty)
-       (request-manage))
-      (t
-       (let* ((root (c:world-root *world*))
-              (leaf (c:leaf-holding root window))
-              (path (and leaf (c:node-path-to root leaf))))
-         (when path
-           (let ((stack (workspace-stack)))
-             (when (and stack (first path))
-               (setf (c:container-selection stack) (first path))
-               ;; Through SHOW-WORKSPACE-ON, so that following a window to a
-               ;; workspace the *other* monitor is showing trades for it rather
-               ;; than putting both monitors on one workspace.
-               (show-workspace-on (current-output) (first path))))
-           (p:jump-cursor (policy) *world* path)
-           (mark-dirty)
-           (request-manage)
-           path))))))
-
 (defcommand gather-tag (name)
   "Bring every window tagged NAME to the workspace you are on.
 

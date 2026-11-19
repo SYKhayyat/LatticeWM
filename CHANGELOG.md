@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Focus any window by name.** `focus-window-by-name` completes over every
+  window the session has — on any workspace, in a lattice cell, put away on the
+  scratchpad, or floating — and focuses the one you pick where it is, with
+  nothing rearranged.  The other by-name doors all need something established
+  first (a buffer name, a tag), and this one needs only what is written on the
+  window.  A put-away window is restored first, because a window on the
+  scratchpad is on no screen.  Two windows sharing a name — two terminals is
+  ordinary — are offered with their place beside the name rather than as the
+  same string twice, since a picker's Return key must not be a coin flip; a
+  bare name or a unique prefix is still enough to reach a window.  (#34)
+
 - **A batch selection, and verbs that consume it.** `select-window` marks or
   unmarks the focused window, `clear-selection` forgets the lot, and
   `list-selected` names them — then `batch-close`, `batch-minimize`,

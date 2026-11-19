@@ -188,6 +188,20 @@ LatticeWM commands.
 (focus-tiled)
   Take keyboard focus off any floating window and give it back to the cursor.
 
+(focus-window-by-name window)
+  Focus the window you name, wherever it is.
+  
+  Every window this session has is offered with completion -- on any workspace,
+  inside a lattice cell, put away on the scratchpad, or floating over the top --
+  and the one you choose is the one you are typing into, with nothing
+  rearranged.  That is the gap this fills: the other by-name doors need a name
+  or a tag you set first, and this one needs only what is written on the window.
+  
+  A window that was put away is restored first.  A window on the scratchpad is
+  on no screen, so `focus it where it is' would otherwise be a command that
+  looks like it did nothing; RESTORE puts it back in the slot it left, and the
+  cursor follows it there.
+
 (gather-tag name)
   Bring every window tagged NAME to the workspace you are on.
   

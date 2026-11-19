@@ -59,6 +59,190 @@ the world does nothing, and that is not an error."
   "Move the cursor to PATH, a list of addresses from the root."
   (with-relayout (p:jump-cursor (policy) *world* path)))
 
+;;; --------------------------------------------------- by name
+;;;
+;;; THE DOOR THAT WAS MISSING.  There were four ways to reach a window by name
+;;; and every one of them needed something else established first:
+;;; SWITCH-TO-BUFFER wants a name you gave the window, JUMP-TO-TAG a tag you
+;;; set, TAB-ADD pulls the window *in* rather than focusing it where it is,
+;;; and the keyboard overview finds windows by rearranging the tree.  None of
+;;; them answers "the window whose title that is", asked about a window you
+;;; have not labelled and cannot see.
+;;;
+;;; FOCUS-EXISTING-WINDOW lives here rather than in tags.lisp, where it was
+;;; born, because it is not about tags: two callers in that file and this one
+;;; use it, and this file loads first, so a call to it from here would be the
+;;; forward reference gate 1 refuses.
+
+(defun focus-existing-window (window)
+  "Put the cursor on WINDOW wherever it is, switching workspace if needed.
+
+The workspace switch is the part that matters and the part that is easy to
+forget: a window on another workspace can be focused perfectly correctly and
+still be on no screen, which looks exactly like the command having done
+nothing.
+
+A float takes the keyboard where it stands.  That is not a shortcut: focus is
+a *place in the tree* (D18) and a float is deliberately not in the tree, so
+there is no cell to move the cursor to — WORLD-FOCUSED-FLOAT is the slot that
+says the keyboard is somewhere else."
+  (let ((float (c:float-of-window *world* window)))
+    (cond
+      (float
+       (setf (c:world-focused-float *world* p:*seat*) float)
+       (mark-dirty)
+       (request-manage))
+      (t
+       (let* ((root (c:world-root *world*))
+              (leaf (c:leaf-holding root window))
+              (path (and leaf (c:node-path-to root leaf))))
+         (when path
+           (let ((stack (workspace-stack)))
+             (when (and stack (first path))
+               (setf (c:container-selection stack) (first path))
+               ;; Through SHOW-WORKSPACE-ON, so that following a window to a
+               ;; workspace the *other* monitor is showing trades for it rather
+               ;; than putting both monitors on one workspace.
+               (show-workspace-on (current-output) (first path))))
+           (p:jump-cursor (policy) *world* path)
+           (mark-dirty)
+           (request-manage)
+           path))))))
+
+(defun world-windows (&optional (world *world*))
+  "Every window WORLD holds a place for: tiled, put away, or floating.
+
+ASKED OF THE WORLD AND NOT OF THE COMPOSITOR, which is the difference between
+a picker that can be trusted and one that cannot.  ALL-WINDOWS answers with
+river's list, and that list holds a window which has arrived and has not been
+placed yet -- a window with no path, so a picker offering it is offering an
+entry that does nothing when you choose it.  The world's answer is the windows
+this program has a place for, each exactly once, in a stable order; it is also
+the same answer with no compositor attached, which is what lets this be tested."
+  (let ((seen (make-hash-table :test #'eq))
+        (found '()))
+    (flet ((note (window)
+             (when (and window (not (gethash window seen)))
+               (setf (gethash window seen) t)
+               (push window found))))
+      (dolist (window (c:node-windows (c:world-root world))) (note window))
+      (dolist (window (c:world-scratchpad world)) (note window))
+      (dolist (float (c:world-floats world)) (note (c:float-window float))))
+    (nreverse found)))
+
+(defun window-place-name (window &optional (world *world*))
+  "Where WINDOW is, in two words, for a picker that has to tell two apart.
+
+The words are the ones the rest of the program says: the workspace's role name
+and its number counting from one, `floating', or `scratchpad'.
+
+ASKED OF THE WORLD RATHER THAN OF THE WINDOW'S FLAGS, for the same reason
+WORLD-WINDOWS is: WINDOW-MINIMIZED-P is a disposition something sets, and the
+scratchpad is where the window is.  They agree in every path the program has,
+and where they would disagree the place is the answer the picker needs."
+  (cond
+    ((member window (c:world-scratchpad world)) "scratchpad")
+    ((c:float-of-window world window) "floating")
+    (t
+     (let* ((root (c:world-root world))
+            (leaf (c:leaf-holding root window))
+            (path (and leaf (c:node-path-to root leaf)))
+            (stack (c:world-workspaces world)))
+       (if (and stack path (integerp (first path)))
+           (format nil "~a ~d" (p:world-role-name world stack) (1+ (first path)))
+           "tiled")))))
+
+(defun window-picker-entries (&optional (windows (world-windows)))
+  "WINDOWS paired with the label a picker offers for each: (LABEL . WINDOW).
+
+THE BARE NAME WHERE IT IS A NAME, AND THE PLACE WHERE IT IS NOT.  A window's
+name is not an address -- two windows may share one and nothing breaks, which
+is the test P:NAME-OF-WINDOW's docstring sets -- so a picker built on the bare
+name would offer `firefox' twice and make Return a coin flip.  Where a name is
+unique it is offered alone, because that is the whole point of asking by name;
+where it is not, each candidate is spelled with where it is, and numbered if
+two windows share a place as well.
+
+The list is sorted by label rather than left in traversal order: a prompt you
+scan is read alphabetically, and a completion that reorders itself when a
+window opens somewhere else is worse than one that does not."
+  (let ((shared (make-hash-table :test #'equal))
+        (used (make-hash-table :test #'equal))
+        (entries '()))
+    (dolist (window windows)
+      (incf (gethash (p:name-of-window window) shared 0)))
+    (dolist (window windows)
+      (let* ((name (p:name-of-window window))
+             (base (if (> (gethash name shared) 1)
+                       (format nil "~a (~a)" name (window-place-name window))
+                       name))
+             (count (incf (gethash base used 0)))
+             (label (if (= count 1) base (format nil "~a <~d>" base count))))
+        (push (cons label window) entries)))
+    (sort entries #'string< :key #'car)))
+
+(defun window-by-picker-name (text &optional (windows (world-windows)))
+  "The window a picker's TEXT names, or NIL when it names none of them.
+
+Three readings, in order, because a prompt is typed at as often as it is
+completed: an exact label, then a bare name only one window carries, then a
+prefix only one label matches.  Ambiguity answers NIL rather than guessing --
+focusing the wrong window is a visible act, and the picker's job is to say
+*which one*."
+  (let ((entries (window-picker-entries windows))
+        (text (string-trim " " text)))
+    (flet ((only (candidates)
+             (when (and candidates (null (rest candidates))) (first candidates))))
+      (or
+       ;; The label the prompt showed, which is also what completing a prefix
+       ;; leaves in the input.
+       (cdr (assoc text entries :test #'string=))
+       ;; A bare name: the completion prompt only ever shows the bare name when
+       ;; it is unambiguous, so typing it must mean the same thing.
+       (cdr (only (remove-if-not (lambda (entry)
+                                   (string= text (p:name-of-window (cdr entry))))
+                                 entries)))
+       ;; A prefix of one label, so that the first letters of a disambiguated
+       ;; entry are enough to reach it.
+       (cdr (only (remove-if-not
+                   (lambda (entry)
+                     (let ((label (car entry)))
+                       (and (plusp (length text))
+                            (<= (length text) (length label))
+                            (string-equal text label :end2 (length text)))))
+                   entries)))))))
+
+(define-argument-type :window "window: "
+  :documentation "Any window of this session, by name, with completion over all of them."
+  :candidates (mapcar #'car (window-picker-entries))
+  :parse (lambda (text)
+           (or (window-by-picker-name text)
+               (error "no window matches ~a" text))))
+
+(defcommand focus-window-by-name (window)
+  "Focus the window you name, wherever it is.
+
+Every window this session has is offered with completion -- on any workspace,
+inside a lattice cell, put away on the scratchpad, or floating over the top --
+and the one you choose is the one you are typing into, with nothing
+rearranged.  That is the gap this fills: the other by-name doors need a name
+or a tag you set first, and this one needs only what is written on the window.
+
+A window that was put away is restored first.  A window on the scratchpad is
+on no screen, so `focus it where it is' would otherwise be a command that
+looks like it did nothing; RESTORE puts it back in the slot it left, and the
+cursor follows it there."
+  (:interactive :window)
+  (cond
+    ((null window) (notify "no window matches") nil)
+    (t
+     (when (c:window-minimized-p window) (restore-window window))
+     (focus-existing-window window)
+     ;; The place is part of the answer, not decoration: the cursor can cross a
+     ;; workspace without the window changing at all, and a notification that
+     ;; only repeated the name you just chose would leave you unsure it had.
+     (notify "~a (~a)" (p:name-of-window window) (window-place-name window))
+     window)))
 ;;; ============================================================ structure
 
 (defcommand (split-pane "split") (&optional axis (side :after))

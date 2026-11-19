@@ -331,6 +331,10 @@ without a compositor — which is the whole model."
      ;; running, and wedged every form behind it.
      (:file "test-ipc")
      (:file "test-tags")
+     ;; After tags: FOCUS-EXISTING-WINDOW moved to verbs so that focusing by
+     ;; name could use it from a file that loads first, and the two checks here
+     ;; and in test-tags are about one function.
+     (:file "test-verbs")
      (:file "test-wire")
      (:file "test-state")
      (:file "test-devices")
