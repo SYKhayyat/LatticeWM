@@ -30,8 +30,10 @@ shape of gate 16, with an allowlist that shrinks as coverage grows.
 - [ ] #123 float geometry is three magic spellings of one thing (640×480 twice
 in windows.lisp and again, differently, in world.lisp; 100×60 floor in
 `resize-float`); one option/policy answer, gate 11 stays honest.
-- [ ] #122 six bulk verbs (close/minimize × others/workspace × selection) are
-one loop spelled six ways — one helper, per the P1 header of verbs.lisp.
+- [x] #122 six bulk verbs (close/minimize × others/workspace × selection) were
+one loop spelled six ways. `act-on-windows` / `act-on-current-workspace`;
+each verb is now its notice plus one call, and the two behavioural rulings
+(skip EXCEPT; count what acted) live in one docstring. +7 checks.
 - [ ] #121 `install-vocabulary` is copied three times (lattice, buffers,
 transient-rules) and already drifting; one implementation on the surface.
 - [ ] #120 the extension test harness (block/unblock-the-replacement, temp

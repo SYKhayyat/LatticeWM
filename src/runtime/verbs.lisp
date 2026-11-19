@@ -818,24 +818,20 @@ visible on screen yet; LIST-SELECTED is how you ask."
 
 (defcommand batch-close ()
   "Ask every selected window to close, then forget the selection."
-  (let ((windows (selected-windows))
-        (closed 0))
-    (dolist (window windows)
-      (when (close-window-later window) (incf closed)))
+  (let ((closed (act-on-windows (selected-windows) #'close-window-later)))
     (clear-selected)
-    (notify "closing ~d selected window~:p" closed)
-    closed))
+    (notify "closing ~d selected window~:p" (length closed))
+    (length closed)))
 
 (defcommand batch-minimize ()
   "Take every selected window out of the tree, then forget the selection.
 
 Each one lands on the scratchpad exactly as MINIMIZE would have put it there,
 so RESTORE and RESTORE-LAST bring them back."
-  (let ((windows (selected-windows)))
-    (dolist (window windows) (minimize-window window))
+  (let ((went (act-on-windows (selected-windows) #'minimize-window)))
     (clear-selected)
-    (notify "minimized ~d selected window~:p" (length windows))
-    (length windows)))
+    (notify "minimized ~d selected window~:p" (length went))
+    (length went)))
 
 (defcommand batch-send-to-workspace (number)
   "Move every selected pane to workspace NUMBER, counting from one.
@@ -937,6 +933,30 @@ float is dismissed with CLOSE-FLOAT."
   (let ((workspace (c:current-workspace *world*)))
     (and workspace (c:node-windows workspace))))
 
+(defun act-on-windows (windows action &key except)
+  "Call ACTION on each of WINDOWS but EXCEPT, returning those it acted on.
+
+THE LOOP SIX VERBS WERE SPELLING OUT, in the file whose header names this
+exact mistake -- 'if you find yourself adding focus-left, focus-right,
+focus-up and focus-down as separate commands, stop'.  The six bulk verbs
+below differed by two tokens -- CLOSE-WINDOW-LATER or MINIMIZE-WINDOW, and
+whether a window came from the workspace or from the selection -- and a
+behavioural ruling (bulk verbs leave floats alone; count only the ones that
+actually moved) had to be reasoned about and applied six times.
+
+ACTION answers truthy when it acted, and that answer is what the count is:
+CLOSE-WINDOW-LATER refuses a window with no proxy and MINIMIZE-WINDOW returns
+the window it moved, so the two verbs disagree about failure in a way the
+caller now does not have to know about."
+  (let ((acted '()))
+    (dolist (window windows (nreverse acted))
+      (unless (eq window except)
+        (when (funcall action window) (push window acted))))))
+
+(defun act-on-current-workspace (action &key except)
+  "ACT-ON-WINDOWS over this workspace's tiled windows.  See it for the shape."
+  (act-on-windows (current-workspace-windows) action :except except))
+
 (defcommand close-others ()
   "Close every window on the current workspace except the focused one.
 
@@ -944,11 +964,8 @@ float is dismissed with CLOSE-FLOAT."
 its place in the tree — and every other window on this workspace is asked to
 close through the ordinary path, so the applications get to save and the
 :WINDOW-CLOSED hook fires.  Returns how many went."
-  (let ((focus (focused-window))
-        (closed '()))
-    (dolist (window (current-workspace-windows))
-      (unless (eq window focus)
-        (when (close-window-later window) (push window closed))))
+  (let ((closed (act-on-current-workspace #'close-window-later
+                                          :except (focused-window))))
     (notify "closing ~d other window~:p" (length closed))
     (length closed)))
 
@@ -959,9 +976,7 @@ A workspace you are done with, in one key.  Closing every pane leaves the
 workspace a single empty pane — DESIGN D17/D19's shape, so that typing there
 still spawns something — and the applications are asked to close through the
 ordinary path rather than being torn down.  Returns how many went."
-  (let ((closed '()))
-    (dolist (window (current-workspace-windows))
-      (when (close-window-later window) (push window closed)))
+  (let ((closed (act-on-current-workspace #'close-window-later)))
     (notify "closing ~d window~:p on this workspace" (length closed))
     (length closed)))
 
@@ -971,12 +986,8 @@ ordinary path rather than being torn down.  Returns how many went."
 The model, not the wire: each one is taken out of the tree onto the
 scratchpad by MINIMIZE-WINDOW immediately, so the rest of the workspace
 retiles now and RESTORE-LAST brings each back.  Returns how many went."
-  (let ((focus (focused-window))
-        (went '()))
-    (dolist (window (current-workspace-windows))
-      (unless (eq window focus)
-        (minimize-window window)
-        (push window went)))
+  (let ((went (act-on-current-workspace #'minimize-window
+                                        :except (focused-window))))
     (notify "minimized ~d other window~:p" (length went))
     (length went)))
 
@@ -985,10 +996,7 @@ retiles now and RESTORE-LAST brings each back.  Returns how many went."
 
 The whole workspace to the scratchpad at once — 'put this session down'.
 Returns how many went."
-  (let ((went '()))
-    (dolist (window (current-workspace-windows))
-      (minimize-window window)
-      (push window went))
+  (let ((went (act-on-current-workspace #'minimize-window)))
     (notify "minimized ~d window~:p" (length went))
     (length went)))
 

@@ -222,3 +222,78 @@ labels are promises until a prompt makes them sentences."
           "and a bare unique name is an answer, not a guess")
       (signals error (funcall (p:argument-type-parser type) "no-one")
         "a name the picker does not know is refused, not guessed"))))
+
+;;; ------------------------------------------------------- the bulk verbs
+;;;
+;;; #122: six verbs were one loop spelled six ways.  What is worth pinning is
+;;; not the loop — it is the rulings the loop carries: EXCEPT is skipped, the
+;;; count is what acted rather than what was offered, and a window on another
+;;; workspace or floating over this one is not on this workspace.  Those are
+;;; the answers that were previously reasoned about in six places.
+
+(defun bulk-world ()
+  "One workspace of three windows plus a window on another one and a float.
+
+Values: (values WORLD A B C ELSEWHERE FLOAT-WINDOW)."
+  (let* ((a (win "a")) (b (win "b")) (c (win "c"))
+         (elsewhere (win "elsewhere"))
+         (float-window (win "floating"))
+         (world (c:make-world
+                 :root (c:make-stack
+                        (list (c:make-split :horizontal
+                                            (list (c:make-leaf a)
+                                                  (c:make-leaf b)
+                                                  (c:make-leaf c)))
+                              (c:make-leaf elsewhere))
+                        0))))
+    (setf (c:world-floats world) (list (float-of float-window)))
+    (values world a b c elsewhere float-window)))
+
+(defmacro with-bulk-world ((world a b c elsewhere float-window) &body body)
+  `(multiple-value-bind (,world ,a ,b ,c ,elsewhere ,float-window)
+       (bulk-world)
+     (let ((r:*world* ,world)
+           (p:*policy* (policy))
+           (p:*seat* nil))
+       ,@body)))
+
+(test the-bulk-loop-skips-except-and-other-workspaces-and-floats
+  "The three rulings in one place: EXCEPT is not touched, a window on another
+workspace was never on this one, and a float belongs to the output."
+  (with-bulk-world (world a b c elsewhere float-window)
+    (declare (ignore world))
+    (let ((seen '()))
+      (r::act-on-current-workspace (lambda (window) (push window seen) t)
+                                    :except b)
+      (is (equal (list a c) (nreverse seen))
+          "the focus survives and the other workspace's window is absent")
+      (is (not (member float-window seen))
+          "and the float was never a candidate"))))
+
+(test a-bulk-count-is-what-acted-not-what-was-offered
+  "`close-window-later' refuses a window with no proxy, which is every window
+in a headless test and no window in a live session.  The count has to be the
+refusals' complement, or `close-others' reports closing windows it did not."
+  (with-bulk-world (world a b c elsewhere float-window)
+    (declare (ignore world elsewhere float-window))
+    (is (zerop (r:close-others))
+        "nothing has a proxy here, so nothing was closed")
+    (is (equal (list b c)
+               (r::act-on-current-workspace (lambda (window) window)
+                                             :except a))
+        "while an action that does act reports what it acted on")))
+
+(test minimize-workspace-still-minimizes-only-this-workspace
+  "The composed loop changed the spelling of these four verbs, not what they
+mean -- so the meaning gets a check of its own: the window on the other
+workspace keeps its pane."
+  (with-bulk-world (world a b c elsewhere float-window)
+    (declare (ignore float-window))
+    (is (= 3 (r:minimize-workspace))
+        "three windows were on this workspace")
+    (is (notany #'c:window-minimized-p (list elsewhere))
+        "the fourth was not, and is still in its pane")
+    ;; The other workspace still holds its window, so this workspace's
+    ;; emptiness did not travel.
+    (is (eq elsewhere
+            (c:leaf-window (c:child-at (c:world-workspaces world) 1))))))
