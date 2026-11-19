@@ -299,7 +299,10 @@ system, an infinite zoomable plane of cells, is a proof of."
        ;; themselves.
        (:file "vocabulary" :depends-on ("config"))
        (:file "state" :depends-on ("server" "minibuffer" "sequence" "history" "verbs" "tags"))
-       (:file "main" :depends-on ("server" "minibuffer" "help" "config" "welcome" "emit" "sequence" "swank" "input" "session" "ipc" "verbs" "state"))))))))
+       (:file "main" :depends-on ("server" "minibuffer" "help" "config" "welcome" "emit" "sequence" "swank" "input" "session" "ipc" "verbs" "state"))
+       ;; #124: the command line, which calls back into MAIN for the one
+       ;; branch that runs the window manager and needs nothing else from it.
+       (:file "cli" :depends-on ("main"))))))))
 
 (defsystem "latticewm/tests"
   :description "Unit tests for the parts of a window manager that are testable

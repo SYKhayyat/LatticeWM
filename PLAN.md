@@ -49,8 +49,11 @@ copy lives in the harness that already existed -- `tests/suite.lisp` exports
 `t*:block-the-replacement`, `t*:unblock-the-replacement`,
 `t*:fresh-temporary-directory`; `grep -rc "defun unblock-the-replacement"
 extensions/` answers nothing, and all four suites pass against the one copy.
-- [ ] #124 the CLI (+usage+, +flags+, main, printing, `--eval`) shares
-src/runtime/main.lisp with the session loop; split into src/runtime/cli.lisp.
+- [x] #124 the CLI shared src/runtime/main.lisp with the session loop. Split:
+`src/runtime/cli.lisp` (flags, usage, surface printing, `--check-config`,
+`--write-config`, argument readers, `main`), loaded after `main`, which keeps
+the loop, `start`, shutdown and `relaunch`. Surface byte-identical, 2292 checks
+PASS, gates PASS; `make integration` could not run (no river on this host).
 
 Ordering note: #116 first (it is red on `main` and every later check must
 prove its own failures are not this one); then the documents nobody checks
