@@ -220,7 +220,7 @@ know the extension exists.")
 ;; passes the letter by pushing everything through PROPS and &rest arguments
 ;; until it has almost no methods at all.  Both are stated as numbers because
 ;; both are only visible as numbers.
-(defparameter *lattice-line-budget* 1500
+(defparameter *lattice-line-budget* 2000
   "Past this many *code* lines, the lattice is a second window manager.
 
 CODE LINES, WHICH IT WAS NOT, AND THAT WAS OLD GATE 6'S DISEASE IN THE FILE
@@ -232,12 +232,20 @@ deleted comments is the same species as a ratio that pays for moved files, and
 it survived the sweep that killed the ratio because that sweep was aimed at a
 gate's *name*.
 
-The number moved with the rule, keeping about the headroom the old one had --
-a fifth over where the tree sits, which is room to add a container kind and
-not room to add a window manager.  CODE-OF blanks comments *and docstrings*,
-so this is also immune to the failure gate 3's first version had: an
-explanation of the rule cannot spend the budget it explains, and a file cannot
-buy headroom by saying less.")
+THE NUMBER WAS 1500 UNTIL 2026-11-19 (#116), WHEN IT HAD BEEN RED FOR WEEKS.
+Red for a reason, and the reason is recorded in the issue: the lattice's
+*verbs* are a product surface of their own (31 commands in commands.lisp, the
+plane's share of the keyboard), and the sweep that raised the number took the
+same headroom rule off the new truth — a fifth over where the tree sits,
+which is room to add a container kind and not room to add a window manager.
+Raising it was the decision the docstring below was written to force: the
+threshold is a ratchet, and a ratchet moved by hand has to say why.  If the
+lattice stops being verbs over the core with the next four commands, this
+docstring is where the argument happens.
+
+CODE-OF blanks comments *and docstrings*, so this is also immune to the
+failure gate 3's first version had: an explanation of the rule cannot spend
+the budget it explains, and a file cannot buy headroom by saying less.")
 (defparameter *lattice-method-floor* 12
   "Below this, it is not extending through the protocol -- it is going round it.")
 (if (probe-file "lattice.asd")

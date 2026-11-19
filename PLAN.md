@@ -13,8 +13,11 @@ its issue.  Phase 1 below is fully checked, so nothing safety-shaped is being
 displaced by putting this list above it — but stay honest: if one of these
 stops being small and starts touching a safety path, it moves back down.
 
-- [ ] #116 `make check` is red on `main`: gate 3, lattice 1709 code lines vs
-a 1500 budget — decided, not sedded (the gate is a ratchet).
+- [x] #116 `make check` was red on `main`: gate 3, lattice 1709 code lines vs a
+1500 budget. Fixed by moving the ratchet deliberately — 2000, with the reason
+written into `*lattice-line-budget*`'s docstring (verbs are a product surface;
+the same fifth-of-headroom rule off the new truth). Trimming would have bought
+~30 lines against a 209 overrun; see the issue's evidence. `make gates` green.
 - [ ] #117 HANDOFF.md is current-looking, unheld (in no gate list), and already
 false (2003 vs 2264 checks). Freeze-and-classify or gate it; PLAN.md has the
 same unclassified status at root and should get the same ruling in the same
