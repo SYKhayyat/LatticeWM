@@ -2,6 +2,45 @@
 
 Worker loop: top unchecked item only, fix + test, commit, check off, stop.
 
+## Phase 0 — Technical debt (goes FIRST)
+
+These are the audit findings of 2026-11-19, filed as issues and promoted here
+because each is paid by every session until it is gone: a red `make check`, a
+document every handoff trusts that nothing checks, a command the docs promise
+and M-x cannot run, the least-tested layer in the tree, and machinery copied
+instead of shared.  None is a feature; each has a proposed resolving test in
+its issue.  Phase 1 below is fully checked, so nothing safety-shaped is being
+displaced by putting this list above it — but stay honest: if one of these
+stops being small and starts touching a safety path, it moves back down.
+
+- [ ] #116 `make check` is red on `main`: gate 3, lattice 1709 code lines vs
+a 1500 budget — decided, not sedded (the gate is a ratchet).
+- [ ] #117 HANDOFF.md is current-looking, unheld (in no gate list), and already
+false (2003 vs 2264 checks). Freeze-and-classify or gate it; PLAN.md has the
+same unclassified status at root and should get the same ruling in the same
+commit.
+- [ ] #118 auto-respawn's `respawn-session`: docs (package.lisp, README.org,
+.asd) promise a command; it is a `defun`, so M-x and a key binding cannot
+reach it — and the docs name the wrong package (`r:` vs `auto-respawn:`).
+- [ ] #119 38 of 90 commands are named by no test at all — a gate in the
+shape of gate 16, with an allowlist that shrinks as coverage grows.
+- [ ] #123 float geometry is three magic spellings of one thing (640×480 twice
+in windows.lisp and again, differently, in world.lisp; 100×60 floor in
+`resize-float`); one option/policy answer, gate 11 stays honest.
+- [ ] #122 six bulk verbs (close/minimize × others/workspace × selection) are
+one loop spelled six ways — one helper, per the P1 header of verbs.lisp.
+- [ ] #121 `install-vocabulary` is copied three times (lattice, buffers,
+transient-rules) and already drifting; one implementation on the surface.
+- [ ] #120 the extension test harness (block/unblock-the-replacement, temp
+dirs) is verbatim in four suites; one shared `extensions/test-support` system.
+- [ ] #124 the CLI (+usage+, +flags+, main, printing, `--eval`) shares
+src/runtime/main.lisp with the session loop; split into src/runtime/cli.lisp.
+
+Ordering note: #116 first (it is red on `main` and every later check must
+prove its own failures are not this one); then the documents nobody checks
+(#117, #118), then the untested surface (#119), then the three magic-number /
+duplication items, then the structural split (#124).
+
 ## SKIP — duplicate mirrors, keep ONE side
 - #42–#62 (open [Release]) are EXACT mirrors of closed #63–#83. Work from #63–#83 only; close the mirror set as a batch when ready (you said not now — so SKIP).
 - #2==#4 (keep #4), #7==#24 (keep #7).
