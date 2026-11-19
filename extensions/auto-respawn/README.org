@@ -5,7 +5,7 @@
 than a thing you rebuild by hand: it *records* the command that launched each
 window, saves that beside the per-workspace arrangement (keyed by application
 id, which unlike a river identifier means the same thing every morning), and
-=r:respawn-session= runs them again into the panes they left.
+=auto-respawn:respawn-session= runs them again into the panes they left.
 
 #+begin_src lisp
 (load-extension "auto-respawn")
@@ -38,15 +38,25 @@ more at shutdown. It is a readable Lisp form, like the core's own state file.
 
 * What respawns
 
-=r:respawn-session= builds the recorded arrangement as empty panes, spawns
+=auto-respawn:respawn-session= builds the recorded arrangement as empty panes, spawns
 each recorded command (through =*spawn-function*=, the seam tests use), and
 places each window as it arrives by the pane it was promised. A command whose
 window never arrives leaves an empty pane; a workspace that already holds
 windows is left alone.
 
-To have it happen by itself at login, set =*respawn-on-startup*= before
-=enabling= — the respawn fires on =:layout-restored=, after the core has put
-the saved layout back.
+It is a registered command, so =M-x respawn-session= finds it and a config
+key binding can name it as a string:
+
+#+begin_src lisp
+(define-key *keymap* "C-M-r" '("respawn-session"))
+#+end_src
+
+This README promised a command before it was one — =--list-commands= had no
+line for it and =(find-command "respawn-session")= answered NIL — and it also
+spelled the namespace =r:=, which is the core runtime.  The extension is
+=auto-respawn=, =ar:= as a nickname.  To have it happen by itself at login,
+set =*respawn-on-startup*= before =enabling= — the respawn fires on
+=:layout-restored=, after the core has put the saved layout back.
 
 * What it is not
 

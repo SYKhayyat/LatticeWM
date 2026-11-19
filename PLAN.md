@@ -22,9 +22,10 @@ the same fifth-of-headroom rule off the new truth). Trimming would have bought
 false (2003 vs 2264 checks). Freeze-and-classify or gate it; PLAN.md has the
 same unclassified status at root and should get the same ruling in the same
 commit.
-- [ ] #118 auto-respawn's `respawn-session`: docs (package.lisp, README.org,
-.asd) promise a command; it is a `defun`, so M-x and a key binding cannot
-reach it — and the docs name the wrong package (`r:` vs `auto-respawn:`).
+- [x] #118 auto-respawn's `respawn-session` was documented as a command and was
+a plain `defun` — no `--list-commands` line, no M-x, nothing for a binding to
+name. Now an `r:defcommand`; README drops the wrong `r:` namespace and shows a
+binding. +4 checks.
 - [ ] #119 38 of 90 commands are named by no test at all — a gate in the
 shape of gate 16, with an allowlist that shrinks as coverage grows.
 - [x] #123 float geometry was three magic spellings of one thing. The default

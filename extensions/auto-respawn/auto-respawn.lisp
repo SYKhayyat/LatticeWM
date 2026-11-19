@@ -345,7 +345,7 @@ placement itself already happened through the rule bridge."
       (funcall *spawn-function* argv)
       (apply #'r:spawn argv)))
 
-(defun respawn-session ()
+(r:defcommand respawn-session ()
   "Run every recorded launcher again, into the arrangement the windows left.
 
 Returns the number of commands spawned, or NIL when there is no recorded

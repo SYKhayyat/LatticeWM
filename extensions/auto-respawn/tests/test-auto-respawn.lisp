@@ -288,3 +288,19 @@ promised — an incomplete morning beats no morning at all."
                         "the automatic saves could not truncate the session"))
                (unblock-the-replacement blocked))))
       (ignore-errors (ar:disable)))))
+;;; ------------------------------------------------------- reachability
+
+(test respawn-session-is-a-command-and-not-only-a-function
+  "Three documents sent the user to \"the extension's respawn-session
+command\" while the definition was a plain DEFUN -- so --list-commands had no
+line for it, M-x could not find it, and a key binding had nothing to name.
+(#118)"
+  (let ((command (r:find-command "respawn-session")))
+    (is-true command "the command the README tells you to run is a command")
+    (is (eq 'ar:respawn-session (r:command-symbol command))
+        "and it is the extension's own function behind it, not a second copy")
+    (is-true (search "recorded launcher" (r:command-documentation command))
+             "with the docstring M-x shows you"))
+  (is (null (r:run-command "respawn-session"))
+      "and running it through the registry is the same call: no session file
+here, so it declines -- which is the documented answer, not an error"))
