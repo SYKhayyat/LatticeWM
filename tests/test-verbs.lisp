@@ -297,3 +297,72 @@ workspace keeps its pane."
     ;; emptiness did not travel.
     (is (eq elsewhere
             (c:leaf-window (c:child-at (c:world-workspaces world) 1))))))
+
+;;; ---------------------------------------------------------- float geometry
+;;;
+;;; #123: 640x480 was spelled three times -- the FLOATING-WINDOW initform, the
+;;; no-output fallback in FLOAT-WINDOW-NOW twice over -- and the resize floor
+;;; 100x60 was a literal inside RESIZE-FLOAT.  These pin the two rulings that
+;;; came out of naming them: there is one default size and it is fresh each
+;;; time, and the floor is an option rather than a number in a body.
+
+(test a-default-float-rect-is-the-single-answer-and-is-fresh
+  "Fresh matters: callers mutate the rect they were handed, so one shared
+rectangle would make every default-sized float on screen move together."
+  (let ((one (c:make-default-float-rect))
+        (two (c:make-default-float-rect)))
+    (is (not (eq one two)))
+    (is (= c:*default-float-width* (c:rect-w one)))
+    (is (= c:*default-float-height* (c:rect-h one)))
+    (is (c:rect-equal (c:make-default-float-rect 100 100)
+                      (c:make-rect 100 100 c:*default-float-width*
+                                   c:*default-float-height*))
+        "and its origin is the caller's")))
+
+(test a-floating-window-made-without-a-rect-gets-the-default
+  (let ((float (make-instance 'c:floating-window :window (win "rectless"))))
+    (is (= c:*default-float-width* (c:rect-w (c:float-rect float)))
+        "the class initform and the no-output fallback agree by construction")))
+
+(test a-float-created-with-no-output-lands-in-the-default-rect
+  "The fallback path rather than the usual one: no output to centre on."
+  (let ((r:*world* (c:make-world))
+        (p:*policy* (policy))
+        (p:*seat* nil))
+    (let ((window (win "lonely")))
+      (r::float-window-now p:*policy* window)
+      (let ((float (c:float-of-window r:*world* window)))
+        (is-true float "it floated")
+        (is (= 100 (c:rect-x (c:float-rect float))))
+        (is (= c:*default-float-width* (c:rect-w (c:float-rect float)))
+            "and it is the one default, not a third literal")))))
+
+(defun float-in-a-world (width height)
+  "A world whose only float is WIDTH x HEIGHT and is holding the keyboard.
+Returns (values WORLD WINDOW FLOAT)."
+  (let* ((world (c:make-world))
+         (window (win "floaty"))
+         (float (make-instance 'c:floating-window
+                               :window window
+                               :rect (c:make-rect 100 100 width height))))
+    (setf (c:window-floating-p window) t)
+    (push float (c:world-floats world))
+    (setf (c:world-focused-float world nil) float)
+    (values world window float)))
+
+(test shrinking-a-float-stops-at-the-option-not-at-a-literal
+  "A float narrower than the floor is still focused and still framed and
+cannot be seen or grabbed back, which is why there is a floor at all -- and
+why it is a setting rather than a number in the middle of a command."
+  (multiple-value-bind (world window float) (float-in-a-world 400 400)
+    (declare (ignore float))
+    (let ((r:*world* world)
+          (p:*policy* (policy))
+          (p:*seat* nil)
+          (p:*float-minimum-size* (cons 120 90)))
+      (dotimes (i 40) (r:resize-float :left))
+      (is (= 120 (c:rect-w (c:float-rect (c:float-of-window world window))))
+          "shrink all you like: the width stops at the option's width")
+      (dotimes (i 40) (r:resize-float :up))
+      (is (= 90 (c:rect-h (c:float-rect (c:float-of-window world window))))
+          "and the height at the option's height"))))

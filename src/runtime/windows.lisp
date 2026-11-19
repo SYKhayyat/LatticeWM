@@ -196,11 +196,11 @@ nothing."
          (rect (if output
                    (guarded "default-float-rect"
                      (p:default-float-rect policy window output))
-                   (c:make-rect 100 100 640 480))))
+                   (c:make-default-float-rect 100 100))))
     (setf (c:window-floating-p window) t)
     (let ((float (make-instance 'c:floating-window
                                 :window window
-                                :rect (or rect (c:make-rect 100 100 640 480)))))
+                                :rect (or rect (c:make-default-float-rect 100 100)))))
       (push float (c:world-floats *world*))
       ;; Focus follows the window you just floated.  Without this, floating
       ;; something takes the keyboard away from it — which is exactly backwards,

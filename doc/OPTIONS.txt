@@ -275,6 +275,21 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   default: 3/5
   Fraction of the output a floated window takes when it has no opinion.
 
+*FLOAT-MINIMUM-SIZE*
+  default: (100 . 60)
+  How small RESIZE-FLOAT may make a floating window: (width . height).
+  
+  A floor is a ruling, not an implementation detail.  Without one, holding the
+  shrink key produces a float zero pixels wide -- a window that still has focus,
+  still has a frame, and cannot be seen or grabbed back.  100x60 was the number
+  inline in RESIZE-FLOAT; naming it puts it where the other float geometry is
+  argued about (see *FLOAT-FRACTION* and C:MAKE-DEFAULT-FLOAT-RECT) and lets
+  compositor on a small screen say something different.
+  
+  It is not a minimum imposed on windows that arrive small -- a policy that
+  resizes a float the application asked for is a different decision, and
+  DEFAULT-FLOAT-RECT honours the application first.
+
 *FLOAT-ON-DRAG*
   default: T
   Dragging a *tiled* window with the move binding floats it first.

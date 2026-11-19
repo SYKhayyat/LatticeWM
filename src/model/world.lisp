@@ -60,9 +60,39 @@ read.")
 
 ;;; ----------------------------------------------------------------- floats
 
+(defparameter *default-float-width* 640
+  "The width a floating window gets when nothing better is known.
+
+Nothing better is known in exactly two places: a FLOATING-WINDOW constructed
+without a rect -- a test, or a policy that answered NIL -- and a session with
+no output to centre a float on.  Both used to spell 640x480 inline, in two
+different files and with two different origins.
+
+This lives in the model rather than beside `*float-fraction*' in the policy
+because it is the model's answer to the question 'what is a rect at all', and
+the first of those two places has no policy to ask.  It is emphatically *not*
+the answer to 'how big should a float be': that is the policy's
+DEFAULT-FLOAT-RECT, which takes a fraction of the output and asks the window
+first.")
+
+(defparameter *default-float-height* 480
+  "The height that goes with *DEFAULT-FLOAT-WIDTH*.  See it for the argument.")
+
+(defun make-default-float-rect (&optional (x 0) (y 0))
+  "A fresh default float rectangle at X,Y.
+
+Named MAKE- and not DEFAULT- because POLICY already has a generic called
+DEFAULT-FLOAT-RECT (the one that asks the output), and two names that differ
+only by package would collide in the very package extensions are read in.
+
+Fresh, not a shared object: callers mutate the rect they were handed (a move,
+a resize), and one shared rectangle would make every default-sized float on
+screen move together."
+  (make-rect x y *default-float-width* *default-float-height*))
+
 (defclass floating-window ()
   ((window :initarg :window :accessor float-window)
-   (rect :initarg :rect :initform (make-rect 0 0 640 480) :accessor float-rect)
+   (rect :initarg :rect :initform (make-default-float-rect) :accessor float-rect)
    (anchor :initarg :anchor :initform nil :accessor float-anchor
            :documentation
            "The node this float is pinned to, or NIL for one pinned to the

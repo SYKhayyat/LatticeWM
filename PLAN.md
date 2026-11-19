@@ -27,9 +27,11 @@ commit.
 reach it — and the docs name the wrong package (`r:` vs `auto-respawn:`).
 - [ ] #119 38 of 90 commands are named by no test at all — a gate in the
 shape of gate 16, with an allowlist that shrinks as coverage grows.
-- [ ] #123 float geometry is three magic spellings of one thing (640×480 twice
-in windows.lisp and again, differently, in world.lisp; 100×60 floor in
-`resize-float`); one option/policy answer, gate 11 stays honest.
+- [x] #123 float geometry was three magic spellings of one thing. The default
+size is `c:*default-float-width*`/`-height*` + `c:make-default-float-rect`
+(fresh per call, used by the class initform and both fallbacks); the resize
+floor is the option `*float-minimum-size*` `(100 . 60)`. +10 checks, surface
+regenerated.
 - [x] #122 six bulk verbs (close/minimize × others/workspace × selection) were
 one loop spelled six ways. `act-on-windows` / `act-on-current-workspace`;
 each verb is now its notice plus one call, and the two behavioural rulings

@@ -388,6 +388,9 @@ LatticeWM commands.
 
 (resize-float direction &optional (pixels 40))
   Grow or shrink the focused floating window DIRECTION.
+  
+  Shrinking stops at *FLOAT-MINIMUM-SIZE*, because a float smaller than that is
+  still focused and still framed and cannot be seen or grabbed back.
 
 (restart-wm)
   Restart the window manager without ending the session.

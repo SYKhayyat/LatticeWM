@@ -186,6 +186,20 @@ default, typing `ls` at an empty pane opens a terminal showing `s`.")
 (define-option *float-fraction* 3/5
   "Fraction of the output a floated window takes when it has no opinion.")
 
+(define-option *float-minimum-size* (cons 100 60)
+  "How small RESIZE-FLOAT may make a floating window: (width . height).
+
+A floor is a ruling, not an implementation detail.  Without one, holding the
+shrink key produces a float zero pixels wide -- a window that still has focus,
+still has a frame, and cannot be seen or grabbed back.  100x60 was the number
+inline in RESIZE-FLOAT; naming it puts it where the other float geometry is
+argued about (see *FLOAT-FRACTION* and C:MAKE-DEFAULT-FLOAT-RECT) and lets
+compositor on a small screen say something different.
+
+It is not a minimum imposed on windows that arrive small -- a policy that
+resizes a float the application asked for is a different decision, and
+DEFAULT-FLOAT-RECT honours the application first.")
+
 (define-option *smart-gaps* t
   "Drop the screen-edge gap and the border when one pane is alone on a screen.
 

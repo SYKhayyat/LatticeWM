@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-69 generics, 114 options.  Generated from the running image.
+69 generics, 115 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -1737,6 +1737,22 @@ that gets said.  Set it to NIL to float every fixed-size window, or to
   now: 3/5
   read by: default-float-rect (lifecycle-policy window output)
   Fraction of the output a floated window takes when it has no opinion.
+
+*float-minimum-size*
+  now: (100 . 60)
+  read by: resize-float
+  How small RESIZE-FLOAT may make a floating window: (width . height).
+
+A floor is a ruling, not an implementation detail.  Without one, holding the
+shrink key produces a float zero pixels wide -- a window that still has focus,
+still has a frame, and cannot be seen or grabbed back.  100x60 was the number
+inline in RESIZE-FLOAT; naming it puts it where the other float geometry is
+argued about (see *FLOAT-FRACTION* and C:MAKE-DEFAULT-FLOAT-RECT) and lets
+compositor on a small screen say something different.
+
+It is not a minimum imposed on windows that arrive small -- a policy that
+resizes a float the application asked for is a different decision, and
+DEFAULT-FLOAT-RECT honours the application first.
 
 *float-on-drag*
   now: T

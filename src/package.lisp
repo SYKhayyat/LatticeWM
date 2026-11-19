@@ -140,6 +140,9 @@ deliberately decomposed so that policy can redirect it.")
   (:export
    ;; rectangles
    #:rect #:make-rect #:rect-x #:rect-y #:rect-w #:rect-h
+   ;; #123: the one spelling of "a float with no better size", used by the
+   ;; class's initform and by the no-output fallback alike.
+   #:make-default-float-rect #:*default-float-width* #:*default-float-height*
    #:rect-p #:copy-rect #:rect-right #:rect-bottom #:rect-contains-p
    #:rect-intersect #:rect-empty-p #:rect-equal #:rect-inset #:rect-center
    #:divide-rect
@@ -263,7 +266,7 @@ You never edit this package.")
    #:*float-dialogs* #:*focus-follows-mouse* #:*focus-new-windows*
    #:*float-fixed-size-limit* #:*window-rules* #:+window-rule-keys+
    #:window-matches-rule-p #:check-window-rule #:node-window-prop
-   #:*empty-pane-keys* #:*float-fraction* #:*smart-gaps*
+   #:*empty-pane-keys* #:*float-fraction* #:*float-minimum-size* #:*smart-gaps*
    ;; --- layout ---------------------------------------------------------
    #:layout-children #:layout-node #:window-dimensions #:gravity
    #:gaps #:border-width #:border-color #:border-state #:border-color-for

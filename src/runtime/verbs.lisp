@@ -1237,7 +1237,10 @@ the keyboard half of that."
                              (c:rect-w rect) (c:rect-h rect))))))))
 
 (defcommand resize-float (direction &optional (pixels 40))
-  "Grow or shrink the focused floating window DIRECTION."
+  "Grow or shrink the focused floating window DIRECTION.
+
+Shrinking stops at *FLOAT-MINIMUM-SIZE*, because a float smaller than that is
+still focused and still framed and cannot be seen or grabbed back."
   (with-relayout
     (let* ((window (focused-window))
            (float (c:float-of-window *world* window)))
@@ -1248,8 +1251,10 @@ the keyboard half of that."
                (dh (if (c:direction-vertical-p direction) (* pixels sign) 0)))
           (setf (c:float-rect float)
                 (c:make-rect (c:rect-x rect) (c:rect-y rect)
-                             (max 100 (+ (c:rect-w rect) dw))
-                             (max 60 (+ (c:rect-h rect) dh)))))))))
+                             (max (car p:*float-minimum-size*)
+                                  (+ (c:rect-w rect) dw))
+                             (max (cdr p:*float-minimum-size*)
+                                  (+ (c:rect-h rect) dh)))))))))
 
 (defcommand focus-float (&optional (step 1))
   "Move keyboard focus to the next floating window, or back to the tree.
