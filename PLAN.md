@@ -18,10 +18,12 @@ stops being small and starts touching a safety path, it moves back down.
 written into `*lattice-line-budget*`'s docstring (verbs are a product surface;
 the same fifth-of-headroom rule off the new truth). Trimming would have bought
 ~30 lines against a 209 overrun; see the issue's evidence. `make gates` green.
-- [ ] #117 HANDOFF.md is current-looking, unheld (in no gate list), and already
-false (2003 vs 2264 checks). Freeze-and-classify or gate it; PLAN.md has the
-same unclassified status at root and should get the same ruling in the same
-commit.
+- [x] #117 HANDOFF.md was current-looking, in no gate list, and false. Frozen:
+date + banner + no live numbers, and it is in `*historical-documents*` with
+CHANGELOG.md (a log). Root `*.md` are enumerated by gate 12(a) now, so no
+document can arrive unclassified; a new `*working-documents*` holds PLAN.md,
+CONTRIBUTING.md, AI_ISSUE_ROUTING.md, and gate 12(e) fails an open item citing
+an issue number triage.csv does not know (verified by feeding it #999).
 - [x] #118 auto-respawn's `respawn-session` was documented as a command and was
 a plain `defun` — no `--list-commands` line, no M-x, nothing for a binding to
 name. Now an `r:defcommand`; README drops the wrong `r:` namespace and shows a

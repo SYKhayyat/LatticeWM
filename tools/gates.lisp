@@ -1222,9 +1222,23 @@ before the code existed, and half its value is showing where that was wrong.")
 
 (defparameter *historical-documents*
   '("doc/DESIGN.org" "doc/PLAN.org" "doc/ASSESSMENT.org" "doc/SPIKE-WEEK0.org"
-    "doc/EXTENSION-IDEAS.org")
+    "doc/EXTENSION-IDEAS.org"
+    "HANDOFF.md" "CHANGELOG.md")
   "Dated records.  Correct when written, frozen on purpose, not to be edited
 into agreement with whatever shipped.
+
+HANDOFF.MD IS HERE BY COMMIT: it used to be current-looking prose nothing
+checked, and it was already false (#117) -- it told the next session the suite
+reported a check count it no longer reported, and listed as open work that had
+shipped.  It is now a dated record with a banner that says so, on the same
+principle as DESIGN.org: if a document's *point* is a moment, editing it into
+agreement with the present destroys the thing it was written to be.
+
+CHANGELOG.MD is a log: each entry is a record of when it was true, and the
+whole file moves at a different rate from the program it describes.  Nothing
+should ask a changelog to be consistent with the code; the code is what makes
+changelog entries false eventually, and the gate's job is to catch that in the
+documents that *should* agree.
 
 EXTENSION-IDEAS.org is here by its own declaration: \"a backlog, not a plan.
 Nothing here is promised.\"  Its sentences describe extensions that do not
@@ -1616,14 +1630,98 @@ with."
                   (reverse orphans) (length orphans))
           "names nothing the program owns, so it cannot be false"))))
 
+(defparameter *working-documents*
+    '("PLAN.md" "AI_ISSUE_ROUTING.md" "CONTRIBUTING.md")
+  "Documents about the work rather than about the program.
+
+SESSION DOCUMENTS: PLAN.md is the routing table AI_ISSUE_ROUTING.md tells every
+session to read first, and CONTRIBUTING.md is the loop each of them runs.  Both
+are edited by the sessions that do the work (#117), which puts them outside
+both existing categories:
+
+- not *current* -- the program is not falsified by a plan whose next item is
+  unchecked, nor by a routing rule a session has not followed yet;
+- not *historical* -- they are live by design, and calling them frozen would
+  make every session that edits them a liar.
+
+They get one check that has teeth: an OPEN item (`- [ ] #117 ...') may not cite
+an issue number the project's own priority table does not know.  That is the
+claim a plan can be wrong about, and the check needs no network -- the table IS
+triage.csv, a file in the tree.  Checked items and prose are history and may
+cite anything: closed issues leave the table on purpose.
+
+A category per file would be worse than no category.  If this list ever grows
+past the three documents that describe the loop, the loop has grown a fourth
+document and this comment is where that gets argued.")
+
+;; (e) THE WORK A ROUTING DOCUMENT STILL OWES IS IN THE PROJECT'S OWN TABLE.
+;;
+;; Read off the RAW LINE, not from WORD-TOKENS: `#' is not a character a Lisp
+;; name may contain, so the tokenizer drops it and `#999' arrives as `999' --
+;; which made the first version of this check unable to fail.  That was found
+;; by feeding it a bogus number, not by reading it twice.
+(defun issue-numbers-in (line)
+  "Every #NNN written in LINE, as integers."
+  (let ((out '())
+        (start 0))
+    (loop for hash = (position #\# line :start start)
+          while hash
+          do (setf start (1+ hash))
+             (let* ((stop (position-if-not #'digit-char-p line :start start))
+                    (end (or stop (length line))))
+               (when (> end start)
+                 (push (parse-integer line :start start :end end) out))
+               (setf start (max start end))))
+    (nreverse out)))
+
+(defun open-plan-line-p (line)
+  "True for an unchecked checkbox line: work a document still claims to owe."
+  (eql 0 (search "- [ ]" (string-left-trim '(#\Space #\Tab) line))))
+
+(let* ((known
+         (let ((table (merge-pathnames "triage.csv" *root*)))
+           (with-open-file (in table)
+             (read-line in nil)                 ; the header
+             (loop for line = (read-line in nil)
+                   while line
+                   for number = (parse-integer line :junk-allowed t)
+                   when number
+                     collect number))))
+       (unknown '())
+       (open-citations 0)
+       (all-citations 0))
+  (dolist (doc *working-documents*)
+    (loop for line in (document-lines (merge-pathnames doc *root*))
+          for number from 1
+          do (dolist (cited (issue-numbers-in line))
+               (incf all-citations)
+               (when (open-plan-line-p line)
+                 (incf open-citations)
+                 (unless (member cited known)
+                   (pushnew (format nil "~a:~d  #~d" doc number cited)
+                            unknown :test #'string=))))))
+  (format t "  working documents~46t~d~%  issue numbers cited~46t~d~%~
+             ~4topen items whose issue is on triage.csv~46t~d~%"
+          (length *working-documents*) all-citations open-citations)
+  (when unknown
+    (fail 12 "~d open item~:p citing an issue triage.csv does not know:~
+              ~{~%    ~a~}~%~
+              ~4tAn unchecked line says 'this is left to do'.  A number the~%~
+              ~4tproject's own table cannot route a reader to is work nobody~%~
+              ~4twill find again.  Either add the row to triage.csv or drop~%~
+              ~4tthe reference and say in words what is left."
+          (length unknown) (reverse unknown))))
+
 ;; (a) every prose file is classified.
 (let* ((tracked (sort (mapcar #'relative
                               (append (directory (merge-pathnames "*.org" *root*))
+                                      (directory (merge-pathnames "*.md" *root*))
                                       (directory (merge-pathnames "doc/*.org" *root*))
                                       (directory (merge-pathnames "doc/*.1" *root*))
                                       (directory (merge-pathnames "doc/*.5" *root*))))
                       #'string<))
-       (known (append *current-documents* *historical-documents*))
+       (known (append *current-documents* *historical-documents*
+                      *working-documents*))
        (unclassified (remove-if (lambda (name) (member name known :test #'string=)) tracked))
        (missing (remove-if (lambda (name) (member name tracked :test #'string=)) known)))
   (format t "  current~46t~d~%  historical~46t~d~%"
@@ -1633,8 +1731,10 @@ with."
               ~4tSay which it is in tools/gates.lisp gate 12.  A document that~%~
               ~4tdescribes the program as it is goes in *CURRENT-DOCUMENTS* and~%~
               ~4tis checked; a dated record goes in *HISTORICAL-DOCUMENTS* and~%~
-              ~4tis left alone.  Arriving unclassified is the one thing it~%~
-              ~4tcannot do, because that is how a document goes unread."
+              ~4tis left alone; a document about the work goes in~%~
+              ~4t*WORKING-DOCUMENTS* and is checked for the numbers it cites.~%~
+              ~4tArriving unclassified is the one thing it cannot do, because~%~
+              ~4tthat is how a document goes unread."
           (length unclassified) unclassified))
   (when missing
     (fail 12 "~d classified document~:p that is not there:~{~%    ~a~}"
