@@ -26,10 +26,7 @@
 (defun fresh-save-directory ()
   "A directory that exists and holds nobody else's session.  Unique per run:
 RANDOM alone is deterministic on hosts whose entropy is quiet."
-  (let ((dir (merge-pathnames (format nil "ar-test-~d-~d/"
-                                      (sb-posix:getpid) (random (expt 2 30)))
-                              (uiop:temporary-directory))))
-    (ensure-directories-exist dir)))
+  (t*:fresh-temporary-directory "ar-test"))
 
 (defmacro with-session (&body body)
   `(let ((ar::*enabled* t)
@@ -232,26 +229,12 @@ promised — an incomplete morning beats no morning at all."
 ;; through SAVE-SESSION, and once through the hooks that call it, because the
 ;; automatic path is the one nobody asks for and the one that must be safe.
 
-(defun block-the-replacement (file)
-  "Make FILE's temporary unopenable, so the save cannot start writing."
-  (let* ((temporary (r:temporary-state-path file))
-         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
-         ;; would re-escape the dot SBCL escapes in the temporary's type.
-         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
-    (ensure-directories-exist blocked)
-    blocked))
-
-(defun unblock-the-replacement (temporary)
-  (ignore-errors
-    (uiop:delete-directory-tree temporary :validate t
-                                :if-does-not-exist :ignore)))
-
 (test a-save-that-cannot-write-keeps-the-last-session
   (with-session
     (setf ar::*launcher-commands* '(("foot" "foot")))
     (is-true (ar::save-session))
     (let* ((file (ar::session-file))
-           (blocked (block-the-replacement file)))
+           (blocked (t*:block-the-replacement file)))
       (unwind-protect
            (progn
              (setf ar::*launcher-commands* '(("firefox" "firefox")))
@@ -263,7 +246,7 @@ promised — an incomplete morning beats no morning at all."
                    "the load path still finds a session")
                (is (equal '(("foot")) spawned)
                    "and it is the one from before the failed save")))
-        (unblock-the-replacement blocked))
+        (t*:unblock-the-replacement blocked))
       (is-false (probe-file (r:temporary-state-path file))
                 "with no temporary left behind"))))
 
@@ -277,7 +260,7 @@ promised — an incomplete morning beats no morning at all."
            (is-true (ar::save-session))
            (let* ((file (ar::session-file))
                   (before (getf (ar::guarded-read file) :commands))
-                  (blocked (block-the-replacement file)))
+                  (blocked (t*:block-the-replacement file)))
              (unwind-protect
                   (progn
                     (setf ar::*launcher-commands* '(("firefox" "firefox"))
@@ -286,7 +269,7 @@ promised — an incomplete morning beats no morning at all."
                     (p:run-hooks :shutdown)
                     (is (equal before (getf (ar::guarded-read file) :commands))
                         "the automatic saves could not truncate the session"))
-               (unblock-the-replacement blocked))))
+               (t*:unblock-the-replacement blocked))))
       (ignore-errors (ar:disable)))))
 ;;; ------------------------------------------------------- reachability
 

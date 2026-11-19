@@ -31,10 +31,8 @@
   label)
 
 (defun fresh-journals-directory ()
-  (let ((dir (merge-pathnames (format nil "cj-test-~d-~d/"
-                                      (sb-posix:getpid) (random (expt 2 30)))
-                              (uiop:temporary-directory))))
-    (ensure-directories-exist dir)))
+  "A directory that exists and holds nobody else's file."
+  (t*:fresh-temporary-directory "cj-test"))
 
 (defmacro with-journal (&body body)
   `(let ((cj::*enabled* nil)
@@ -169,26 +167,12 @@ the same ruling the core makes about hand-edited state files."
 ;; through is made impossible, so the write fails, and the file must be
 ;; yesterday's journal.
 
-(defun block-the-replacement (file)
-  "Make FILE's temporary unopenable, so the save cannot start writing."
-  (let* ((temporary (r:temporary-state-path file))
-         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
-         ;; would re-escape the dot SBCL escapes in the temporary's type.
-         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
-    (ensure-directories-exist blocked)
-    blocked))
-
-(defun unblock-the-replacement (temporary)
-  (ignore-errors
-    (uiop:delete-directory-tree temporary :validate t
-                                :if-does-not-exist :ignore)))
-
 (test a-save-that-cannot-write-keeps-the-last-journal
   (with-journal
     (setf cj::*journal* '(("cj-test-mark" . ("yesterday"))))
     (is (equal "keepme" (cj:save-journal-as "keepme")))
     (let* ((file (cj::journal-file "keepme"))
-           (blocked (block-the-replacement file)))
+           (blocked (t*:block-the-replacement file)))
       (unwind-protect
            (progn
              (setf cj::*journal* '(("cj-test-mark" . ("today"))))
@@ -201,6 +185,6 @@ the same ruling the core makes about hand-edited state files."
                  "the load command still reads the previous journal")
              (is (equal '(("cj-test-mark" . ("yesterday"))) cj::*journal*)
                  "with yesterday's entries, not a fragment"))
-        (unblock-the-replacement blocked))
+        (t*:unblock-the-replacement blocked))
       (is-false (probe-file (r:temporary-state-path file))
                 "with no temporary left behind"))))

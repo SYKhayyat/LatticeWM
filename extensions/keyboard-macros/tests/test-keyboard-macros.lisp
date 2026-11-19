@@ -134,20 +134,6 @@ takes it back off the list."
 ;; impossible, so the write fails, and the file must still be yesterday's
 ;; macro.
 
-(defun block-the-replacement (file)
-  "Make FILE's temporary unopenable, so the save cannot start writing."
-  (let* ((temporary (r:temporary-state-path file))
-         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
-         ;; would re-escape the dot SBCL escapes in the temporary's type.
-         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
-    (ensure-directories-exist blocked)
-    blocked))
-
-(defun unblock-the-replacement (temporary)
-  (ignore-errors
-    (uiop:delete-directory-tree temporary :validate t
-                                :if-does-not-exist :ignore)))
-
 (defun saved-macro-entries (file)
   "The :ENTRIES in the macro file FILE, read the way the extension writes them."
   (with-open-file (in file)
@@ -156,10 +142,7 @@ takes it back off the list."
 
 (defun fresh-macros-directory ()
   "A directory that exists and holds nobody else's macros."
-  (let ((dir (merge-pathnames (format nil "km-test-~d-~d/"
-                                      (sb-posix:getpid) (random (expt 2 30)))
-                              (uiop:temporary-directory))))
-    (ensure-directories-exist dir)))
+  (t*:fresh-temporary-directory "km-test"))
 
 (test a-save-that-cannot-write-keeps-the-last-macro
   "A save that fails leaves the previous macro file exactly as it was."
@@ -169,7 +152,7 @@ takes it back off the list."
       (is (equal "keepme" (km:save-macro "keepme")))
       (let* ((file (merge-pathnames (make-pathname :name "keepme" :type "lisp")
                                     (km::macros-directory)))
-             (blocked (block-the-replacement file)))
+             (blocked (t*:block-the-replacement file)))
         (unwind-protect
              (progn
                (setf km::*macro* '(("km-test-mark" . ("today"))))
@@ -180,7 +163,7 @@ takes it back off the list."
                (is (equal '(("km-test-mark" . ("yesterday")))
                           (saved-macro-entries file))
                    "and yesterday's macro is still in the file"))
-          (unblock-the-replacement blocked))
+          (t*:unblock-the-replacement blocked))
         (is-false (probe-file (r:temporary-state-path file))
                   "with no temporary left behind")
         (ignore-errors (delete-file file))))))

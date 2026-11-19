@@ -27,10 +27,7 @@
   "A directory that exists and holds nobody else's layouts.  Unique per run:
 RANDOM alone is deterministic on hosts whose entropy is quiet, and a shared
 directory would let one run's leftover files answer another run's questions."
-  (let ((dir (merge-pathnames (format nil "lp-test-~d-~d/"
-                                      (sb-posix:getpid) (random (expt 2 30)))
-                              (uiop:temporary-directory))))
-    (ensure-directories-exist dir)))
+  (t*:fresh-temporary-directory "lp-test"))
 
 (defmacro with-layouts (&body body)
   `(let ((lp::*enabled* nil)
@@ -218,20 +215,6 @@ and an absolute count would be asserting on their tidiness."
 ;; where the save stands: the temporary it writes through is made impossible,
 ;; so the write fails, and the file must be yesterday's arrangement.
 
-(defun block-the-replacement (file)
-  "Make FILE's temporary unopenable, so the save cannot start writing."
-  (let* ((temporary (r:temporary-state-path file))
-         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
-         ;; would re-escape the dot SBCL escapes in the temporary's type.
-         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
-    (ensure-directories-exist blocked)
-    blocked))
-
-(defun unblock-the-replacement (temporary)
-  (ignore-errors
-    (uiop:delete-directory-tree temporary :validate t
-                                :if-does-not-exist :ignore)))
-
 (test a-save-that-cannot-write-keeps-the-last-layout
   (with-layouts
     (setf lp::*live-windows*
@@ -239,7 +222,7 @@ and an absolute count would be asserting on their tidiness."
     (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
     (is (equal "work" (lp:save-layout "work")))
     (let* ((file (lp::layout-file "work"))
-           (blocked (block-the-replacement file)))
+           (blocked (t*:block-the-replacement file)))
       (unwind-protect
            (progn
              (setf lp::*live-windows*
@@ -258,6 +241,6 @@ and an absolute count would be asserting on their tidiness."
              (is (eq :restored (lp:restore-layout "work")))
              (is (equal '("emacs") (workspace-app-ids))
                  "yesterday's layout, not a truncated fragment"))
-        (unblock-the-replacement blocked))
+        (t*:unblock-the-replacement blocked))
       (is-false (probe-file (r:temporary-state-path file))
                 "with no temporary left behind"))))

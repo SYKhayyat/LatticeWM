@@ -30,7 +30,10 @@
            #:devices
            #:capture
            #:boundaries #:pixels #:versions #:wait-until
-           #:*extension-suites* #:register-extension-suite))
+           #:*extension-suites* #:register-extension-suite
+           ;; shared fixtures for extension suites (#120)
+           #:fresh-temporary-directory #:block-the-replacement
+           #:unblock-the-replacement))
 
 (in-package #:latticewm/tests)
 
@@ -120,6 +123,51 @@ promoted examples have no such seniority.")
 Called at load time from an extension's tests file.  PUSHNEW rather than PUSH,
 because a configuration file gets loaded twice and so does an extension."
   (pushnew (list package name) *extension-suites* :test #'equal))
+
+;;; ------------------------------------------------------- save fixtures
+;;;
+;;; THE FOURTH COPY IS THE ONE SOMEBODY FORGETS.  Four extension suites each
+;;; carried their own BLOCK-THE-REPLACEMENT / UNBLOCK-THE-REPLACEMENT pair --
+;;; byte for byte, comment included -- because each had to verify the same
+;;; regression (#88's in-place truncating write, met again in #104).  A fix to
+;;; the trick meant editing four files in lockstep, and every new extension
+;;; that writes a user file had to copy it a fifth time before its test could
+;;; say anything (#120).
+;;;
+;;; It lives in the harness now, next to REGISTER-EXTENSION-SUITE, which is the
+;;; same answer to the same question the core already settled.
+
+(defun fresh-temporary-directory (&optional (prefix "lw-test"))
+  "A new directory under the system temporary directory, unique per call.
+
+Unique by pid and a random draw because two runs of the suite may overlap, and
+a fixed name would have them fighting over one directory.  The name is a
+prefix rather than a constant so that a leftover directory says which suite
+made it."
+  (let ((dir (merge-pathnames (format nil "~a-~d-~d/" prefix
+                                      (sb-posix:getpid) (random (expt 2 30)))
+                              (uiop:temporary-directory))))
+    (ensure-directories-exist dir)))
+
+(defun block-the-replacement (file)
+  "Make FILE's temporary unopenable, so an atomic save cannot start writing.
+
+The failure being injected is the one an atomic save is built to survive: the
+temporary exists to make a write all-or-nothing, so a test of the surviving
+half has to stop the temporary from being created at all.  Returns the
+pathname that must be handed to UNBLOCK-THE-REPLACEMENT."
+  (let* ((temporary (r:temporary-state-path file))
+         ;; The namestring plus a slash, because ENSURE-DIRECTORY-PATHNAME
+         ;; would re-escape the dot SBCL escapes in the temporary's type.
+         (blocked (pathname (concatenate 'string (namestring temporary) "/"))))
+    (ensure-directories-exist blocked)
+    blocked))
+
+(defun unblock-the-replacement (temporary)
+  "Undo BLOCK-THE-REPLACEMENT.  Safe to call twice, and from an unwind."
+  (ignore-errors
+    (uiop:delete-directory-tree temporary :validate t
+                                :if-does-not-exist :ignore)))
 
 (defun wait-until (predicate &key (timeout 30))
   "Poll PREDICATE until it returns true, or TIMEOUT seconds elapse.

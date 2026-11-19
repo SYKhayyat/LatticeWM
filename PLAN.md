@@ -44,8 +44,11 @@ transient-rules) and already drifting. Now `r:install-vocabulary` in
 `src/runtime/vocabulary.lisp`, taking the source package; the lattice keeps
 its documented one-argument wrapper, the two extensions call the runtime at
 load time. Gate 1 caught the first signature (&optional + &key). +4 checks.
-- [ ] #120 the extension test harness (block/unblock-the-replacement, temp
-dirs) is verbatim in four suites; one shared `extensions/test-support` system.
+- [x] #120 the extension test harness was verbatim in four suites. The shared
+copy lives in the harness that already existed -- `tests/suite.lisp` exports
+`t*:block-the-replacement`, `t*:unblock-the-replacement`,
+`t*:fresh-temporary-directory`; `grep -rc "defun unblock-the-replacement"
+extensions/` answers nothing, and all four suites pass against the one copy.
 - [ ] #124 the CLI (+usage+, +flags+, main, printing, `--eval`) shares
 src/runtime/main.lisp with the session loop; split into src/runtime/cli.lisp.
 
