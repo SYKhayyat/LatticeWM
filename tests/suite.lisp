@@ -112,6 +112,14 @@ may not add a second layout entry, and the workspace invariant must still move
 a stranger off a shared index -- and those are the ones that keep the
 exception the feature needs from becoming the collapse it replaced.")
 
+(def-suite stacking :in model
+  :description "RAISE, LOWER and PIN (#13).  Tiled windows do not overlap, so
+every question here is a float question -- and the two that matter are about
+*permanence*: raising is where a window sits now, pinning is where it stays, and
+a pinned float must keep its place in the order when another float is raised.
+The policy answers both in RENDER-ORDER, so a custom policy can answer them
+differently without this vocabulary knowing.")
+
 (def-suite placement :in model
   :description "Where a window sits when you say where: SNAP-RECT (#14) and the
 rule that opens a window there.  Pure geometry, so this is the one part of

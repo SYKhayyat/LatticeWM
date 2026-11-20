@@ -318,6 +318,7 @@ without a compositor — which is the whole model."
      (:file "test-shares")
      (:file "test-window-state")
      (:file "test-placement")
+     (:file "test-stacking")
      (:file "test-tree")
      (:file "test-motion")
      (:file "test-lifecycle")

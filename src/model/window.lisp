@@ -90,6 +90,21 @@ gone."))
                  (format nil "~dx~d" (window-width w) (window-height w)))
             (not (window-live-p w)))))
 
+;;;; ------------------------------------------------------------- stacking
+;;;;
+;;;; #13.  Stacking is a float attribute, not a state (#25): a pinned window is
+;;;; an ordinary float that sorts above the other floats, and a tiled window is
+;;;; neither, because tiles do not overlap.  PROP-BACKED for the same reason
+;;;; #14's snap place is -- the rule that says `pin this' is read by a
+;;;; policy-layer function, which has no slot of its own to write to.
+
+(defun window-pinned-p (window)
+  "Is WINDOW pinned above the other floating windows?"
+  (and (prop window :pinned) t))
+
+(defun (setf window-pinned-p) (value window)
+  (setf (prop window :pinned) (and value t)))
+
 (defun window-captured-p (window)
   "Is something recording this window right now?
 

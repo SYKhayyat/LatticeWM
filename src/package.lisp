@@ -202,6 +202,7 @@ deliberately decomposed so that policy can redirect it.")
    #:window-width #:window-height #:window-parent-window #:window-live-p
    #:window-min-width #:window-min-height #:window-max-width #:window-max-height
    #:window-floating-p #:window-minimized-p #:window-fullscreen-p
+   #:window-pinned-p
    #:window-decoration-hint #:window-rect #:window-tags #:window-home-path
    #:window-preferred-size
    #:window-capture-sessions #:window-captured-p
@@ -582,6 +583,7 @@ keybindings, the command registry, and the session loop.")
    #:*selection* #:selected-windows #:mark-selected #:clear-selected
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:focus-behaviour #:snap-window
+   #:raise-window #:lower-window #:float-window-of
    #:float-away-from-tree #:transition-window #:*window-transitions*
    #:*focus-override* #:with-focus-on #:focused-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command

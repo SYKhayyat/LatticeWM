@@ -315,6 +315,9 @@ LatticeWM commands.
   the overlays are redrawn from the new metrics on the next frame.  For a
   font in one place only, write a FONT-FOR method instead.
 
+(lower-float)
+  Put the focused floating window under the other floats.
+
 (minimize)
   Take the focused window out of the tiling tree entirely.
   
@@ -368,6 +371,15 @@ LatticeWM commands.
 
 (next-workspace &optional (step 1))
   Switch to the next workspace, wrapping.
+
+(pin-window)
+  Keep the focused window above the other floats, near or far.
+  
+  Pinning is stacking's persistence: RAISE puts a window on top until the next
+  float appears, PIN keeps it there -- the reference you are working against
+  stays put while you go and work.  A tiled window cannot pin (tiles do not
+  overlap), so pinning one floats it, and that is the same promise the window
+  rule's :PIN makes for windows that open pinned.
 
 (previous-workspace)
   Switch to the previous workspace, wrapping.
@@ -681,6 +693,9 @@ LatticeWM commands.
   Cheap in both directions: river ignores clip boxes and does not draw borders
   while fullscreen, so entering and leaving cost no relayout.
 
+(toggle-pin)
+  Pin the focused window, or unpin it if it already is.
+
 (unanchor-float)
   Pin the focused floating window to the output instead of to a pane.
 
@@ -697,6 +712,9 @@ LatticeWM commands.
 
 (undo-history)
   Show what UNDO would walk back through.
+
+(unpin-window)
+  Let the focused window stack like the other floats again.
 
 (unshare-workspace)
   Stop sharing the workspace you are on; this screen shows its own again.

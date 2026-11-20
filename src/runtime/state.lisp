@@ -182,9 +182,10 @@ been, which for a persistence path is the wrong way round."
         for minimized = (c:window-minimized-p window)
         for floating = (c:window-floating-p window)
         for fullscreen = (c:window-fullscreen-p window)
+        for pinned = (c:window-pinned-p window)
         for float-rect = (let ((float (c:float-of-window *world* window)))
                            (and float (c:copy-rect (c:float-rect float))))
-        when (and identifier (or tags scratchpad minimized floating fullscreen))
+        when (and identifier (or tags scratchpad minimized floating fullscreen pinned))
           collect (list identifier
                         :tags (copy-list tags)
                         :scratchpad scratchpad
@@ -196,7 +197,8 @@ been, which for a persistence path is the wrong way round."
                         ;; and the tree no longer mentioned it.
                         :floating floating
                         :fullscreen fullscreen
-                        :float-rect float-rect)))
+                        :float-rect float-rect
+                        :pinned pinned)))
 
 (defun restore-a-float (world window rect)
   "Put WINDOW back on the float list at RECT, or at the default float size.
@@ -239,7 +241,7 @@ it by hand, which is the same ruling READ-NODE makes three functions up."
       ;; that promise for a malformed list, not only for a non-list.
       (guarded "restore-window-fact"
         (destructuring-bind (identifier &key tags scratchpad minimized
-                                          floating fullscreen float-rect) row
+                                          floating fullscreen float-rect pinned) row
           (let ((window (gethash identifier index)))
             (when window
               ;; Reversed, so that a window with no tags yet comes back with
@@ -265,6 +267,8 @@ it by hand, which is the same ruling READ-NODE makes three functions up."
                   (restore-a-float world window float-rect)))
               (when fullscreen
                 (setf (c:window-fullscreen-p window) t))
+              (when pinned
+                (setf (c:window-pinned-p window) t))
               (when (and minimized (not (c:window-minimized-p window)))
                 (guarded "restore minimized"
                   (p:on-minimize (p:current-policy) world window)))))))))) 

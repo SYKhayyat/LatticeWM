@@ -1477,13 +1477,79 @@ that fixes it, and this is the verb that sets it."
     (setf (c:world-focused-float *world* p:*seat*) nil)
     (request-manage)))
 
+;;; ------------------------------------------------------------- stacking
+;;;
+;;; #13.  Tiled windows do not overlap, so stacking is a float question twice
+;;; over: WHERE in the overlap (raise, lower) and WHO wins it permanently
+;;; (pin).  Both ask FOCUSED-WINDOW who they are working on, so both inherit
+;;; WITH-WINDOW's subject machinery and an extension's verb can aim them.
+
+(defun float-window-of (window)
+  "The float object carrying WINDOW, if there is one."
+  (c:float-of-window *world* window))
+
+(defun raise-window ()
+  "Put the focused floating window on top of the other floats."
+  (let ((window (focused-window)))
+    (if (and window (float-window-of window))
+        (with-relayout
+          (setf (c:world-floats *world*)
+                (append (remove (float-window-of window) (c:world-floats *world*))
+                        (list (float-window-of window)))))
+        (notify "nothing to raise: ~:[no window~;tiled windows do not overlap~]"
+                window))))
+
 (defcommand raise-float ()
   "Put the focused floating window on top of the other floats."
-  (with-relayout
-    (let ((float (c:world-focused-float *world* p:*seat*)))
-      (when float
-        (setf (c:world-floats *world*)
-              (append (remove float (c:world-floats *world*)) (list float)))))))
+  (raise-window))
+
+(defun lower-window ()
+  "Put the focused floating window under the other floats."
+  (let ((window (focused-window)))
+    (if (and window (float-window-of window))
+        (with-relayout
+          (setf (c:world-floats *world*)
+                (append (list (float-window-of window))
+                        (remove (float-window-of window) (c:world-floats *world*)))))
+        (notify "nothing to lower: ~:[no window~;tiled windows do not overlap~]"
+                window))))
+
+(defcommand lower-float ()
+  "Put the focused floating window under the other floats."
+  (lower-window))
+
+(defcommand pin-window ()
+  "Keep the focused window above the other floats, near or far.
+
+Pinning is stacking's persistence: RAISE puts a window on top until the next
+float appears, PIN keeps it there -- the reference you are working against
+stays put while you go and work.  A tiled window cannot pin (tiles do not
+overlap), so pinning one floats it, and that is the same promise the window
+rule's :PIN makes for windows that open pinned."
+  (let ((window (focused-window)))
+    (cond
+      ((null window) (notify "no window to pin"))
+      (t (unless (float-window-of window)
+           (transition-window window :floating))
+         (setf (c:window-pinned-p window) t)
+         (mark-dirty) (relayout)
+         (notify "pinned: ~a" (p:name-of-window window))))))
+
+(defcommand unpin-window ()
+  "Let the focused window stack like the other floats again."
+  (let ((window (focused-window)))
+    (cond
+      ((null window) (notify "no window to unpin"))
+      (t (setf (c:window-pinned-p window) nil)
+         (mark-dirty) (relayout)
+         (notify "unpinned: ~a" (p:name-of-window window))))))
+
+(defcommand toggle-pin ()
+  "Pin the focused window, or unpin it if it already is."
+  (let ((window (focused-window)))
+    (if (and window (c:window-pinned-p window))
+        (unpin-window)
+        (pin-window))))
 
 (defcommand close-float ()
   "Close the focused floating window."

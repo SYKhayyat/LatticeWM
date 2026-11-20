@@ -580,12 +580,19 @@ key standing in for a generic is the mistake *SMART-GAPS* made with an option."
   ;; partition, and the copy exists only because STABLE-SORT is destructive.
   ;; One pass and two NREVERSEs is the same answer with the same stability and
   ;; without the O(n log n) or the second list.
-  (let ((tiled '()) (floating '()))
+  ;;
+  ;; AND PINNED FLOATS SORT ABOVE THE REST (#13).  Three buckets rather than
+  ;; two: a pinned window is an ordinary float that stays on top of its
+  ;; neighbours -- the thing you pin is the reference you are working against,
+  ;; so the alternative (pinning means nothing) makes the attribute a lie.  The
+  ;; order *within* each group is the world's, which is recency: raising a
+  ;; window is moving it in WORLD-FLOATS, and this does not overrule that.
+  (let ((tiled '()) (floating '()) (pinned '()))
     (dolist (placement placements)
-      (let ((node (first placement)))
-        (if (and (typep node 'c:leaf)
-                 (c:leaf-window node)
-                 (c:window-floating-p (c:leaf-window node)))
-            (push placement floating)
-            (push placement tiled))))
-    (nconc (nreverse tiled) (nreverse floating))))
+      (let* ((node (first placement))
+             (window (and (typep node 'c:leaf) (c:leaf-window node))))
+        (cond
+          ((and window (c:window-pinned-p window)) (push placement pinned))
+          ((and window (c:window-floating-p window)) (push placement floating))
+          (t (push placement tiled)))))
+    (nconc (nreverse tiled) (nreverse floating) (nreverse pinned))))

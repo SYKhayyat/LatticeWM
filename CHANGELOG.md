@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Stack your floating windows: raise, lower, pin.** `raise-window` /
+  `lower-float` move the focused float to the top or bottom of the pile;
+  `pin-window` keeps it above the others no matter what you raise afterwards —
+  the reference you pinned stays put while you go and work. Tiled windows do
+  not overlap, so this is a float question and the commands say so; pinning a
+  tiled window floats it. `unpin-window` and `toggle-pin` complete the set, a
+  rule can open a window pinned (`((:app-id "gimp") :pin t)`), and pinned
+  survives a save and restore. (#13)
 - **Snap a window to any region of the screen.** `M-x snap` takes a place —
   `left`, `right`, `top`, `bottom`, the four corners, `maximize` or `center` —
   and puts the focused window there, floating. The regions are cut from the

@@ -178,6 +178,13 @@ letters are what you use on your hundredth.
 #+CLAIM:          ("Super+bracketright" "tab-next") ("Super+z" "undo")
 #+CLAIM:          ("Super+Shift+z" "redo")))
 
+Floating windows stack, and you are in charge of the pile: =M-x raise-window=
+and =M-x lower-float= move the focused one to the top and bottom, and =M-x
+pin-window= keeps it above everything else — the window you pinned is the
+reference you are working against. =M-x toggle-pin= flips it. Tiled windows do
+not overlap, so these are float commands, and they say so if you aim one at a
+tile; a window rule can pin at open time.
+
 =M-x snap= puts the focused window in a place -- =left=, =right=, =top=,
 =bottom=, a corner, =maximize= or =center= -- and it floats there. The places
 are cut from the space the tiled layout gets, so your gaps and your status bar
