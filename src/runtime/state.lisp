@@ -180,11 +180,39 @@ been, which for a persistence path is the wrong way round."
         for tags = (c:window-tags window)
         for scratchpad = (c:prop window :scratchpad)
         for minimized = (c:window-minimized-p window)
-        when (and identifier (or tags scratchpad minimized))
+        for floating = (c:window-floating-p window)
+        for fullscreen = (c:window-fullscreen-p window)
+        for float-rect = (let ((float (c:float-of-window *world* window)))
+                           (and float (c:copy-rect (c:float-rect float))))
+        when (and identifier (or tags scratchpad minimized floating fullscreen))
           collect (list identifier
                         :tags (copy-list tags)
                         :scratchpad scratchpad
-                        :minimized minimized)))
+                        :minimized minimized
+                        ;; #25: the disposition is state too, and it was not
+                        ;; being written.  A window left floating at shutdown
+                        ;; came back as a tile, in the tree, at a place it had
+                        ;; never been -- the file described the tree faithfully
+                        ;; and the tree no longer mentioned it.
+                        :floating floating
+                        :fullscreen fullscreen
+                        :float-rect float-rect)))
+
+(defun restore-a-float (world window rect)
+  "Put WINDOW back on the float list at RECT, or at the default float size.
+
+Called from RESTORE-WINDOW-FACTS, which is why it does not do the tree surgery
+FLOAT-AWAY-FROM-TREE does: a window that was floating when the layout was saved
+was never in the restored tree in the first place, so there is nothing to take
+it out of.  RECT is what it looked like; a file written before #25 has none, and
+the default float rectangle is the honest answer then -- the alternative is a
+float at 0,0 the size of nothing."
+  (let ((rect (or rect (c:make-default-float-rect 100 100))))
+    (setf (c:window-floating-p window) t)
+    (unless (c:float-of-window world window)
+      (push (make-instance 'c:floating-window :window window :rect rect)
+            (c:world-floats world)))
+    window))
 
 (defun restore-window-facts (world saved index)
   "Put SAVED per-window state back onto the live windows in INDEX.
@@ -210,7 +238,8 @@ it by hand, which is the same ruling READ-NODE makes three functions up."
       ;; just that row.  The docstring promises the row is skipped; this keeps
       ;; that promise for a malformed list, not only for a non-list.
       (guarded "restore-window-fact"
-        (destructuring-bind (identifier &key tags scratchpad minimized) row
+        (destructuring-bind (identifier &key tags scratchpad minimized
+                                          floating fullscreen float-rect) row
           (let ((window (gethash identifier index)))
             (when window
               ;; Reversed, so that a window with no tags yet comes back with
@@ -228,6 +257,14 @@ it by hand, which is the same ruling READ-NODE makes three functions up."
                          :test #'tag-name=))
               (when scratchpad
                 (setf (c:prop window :scratchpad) (normalize-tag scratchpad)))
+              ;; Disposition before minimization, so that a window put away
+              ;; floating comes back with both facts in the order ON-MINIMIZE
+              ;; would have seen them.
+              (when (and floating (not (c:window-minimized-p window)))
+                (guarded "restore float"
+                  (restore-a-float world window float-rect)))
+              (when fullscreen
+                (setf (c:window-fullscreen-p window) t))
               (when (and minimized (not (c:window-minimized-p window)))
                 (guarded "restore minimized"
                   (p:on-minimize (p:current-policy) world window)))))))))) 

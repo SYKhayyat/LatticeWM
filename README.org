@@ -182,6 +182,20 @@ Minimize leaves the tiling tree rather than collapsing it, so restoring puts
 the window back where it was. Floating and unfloating do the same, so looking
 at something and putting it back is symmetric.
 
+There are five ways to look at a window — tiled, floating, fullscreen,
+minimized, and whichever of those it was underneath — and =M-x describe-window=
+is the page that says which one applies, where the window is, and what it would
+do if you pressed one of the keys above. It reads; it changes nothing.
+
+Two things about that list are deliberate and are worth knowing before you
+write an extension. *Fullscreen is not a fourth state*: river renders a
+fullscreen window alone on its output and ignores the layout, so a fullscreen
+window is still a tile or still a float underneath, and leaving fullscreen
+lands it back where it was. *Minimized is exclusive* of the tree but not of
+floating — put a float away and it comes back a float, because that is what you
+meant by putting it away. Both facts live in =window-state=, which is where an
+extension should ask rather than reading the three flags itself.
+
 *Undo is a layout undo.* It restores the arrangement, and it cannot un-quit an
 application — a window that has closed since is simply absent from the tree
 that comes back. =Super+? u= lists what it would walk through.

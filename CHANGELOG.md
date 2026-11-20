@@ -26,6 +26,21 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **"What state is this window in?" has one answer.** It used to be five facts
+  read from three places — three booleans on the window, tree membership in the
+  world, and the scratchpad — and the five verbs that changed them each knew
+  part of the story. `window-state` now derives one answer from those facts, and
+  `transition-window` is the one way to change them, so the four keys that do
+  (`toggle-float`, `toggle-fullscreen`, `minimize`, `restore-last`) are one call
+  each and every transition is idempotent. Two rulings came out of writing it
+  down: **fullscreen is a second axis**, not a fourth state (river renders a
+  fullscreen window alone, so it is still a tile or a float underneath and
+  leaving fullscreen lands it back where it was), and **minimized is exclusive
+  of the tree but not of floating** (a float put away comes back a float). The
+  state a window should never be in — alive, in no tree, not floating — is now
+  named `:unplaced` rather than being indistinguishable from a bug. New
+  `describe-window` is the page that says which applies. Floats and fullscreen
+  now survive a save and a restart, with the rectangle they had. (#25)
 - **One workspace across two screens.** `share-workspace` takes the workspace
   you are on and spreads it across the next screen in the direction you name:
   the layout spans the union of the two rectangles, so a cell, a split or a

@@ -30,6 +30,7 @@
            #:devices
            #:capture
            #:shares
+           #:states
            #:boundaries #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite
            ;; shared fixtures for extension suites (#120)
@@ -110,6 +111,15 @@ name.  Two of these checks are about what the feature must NOT do -- a follower
 may not add a second layout entry, and the workspace invariant must still move
 a stranger off a shared index -- and those are the ones that keep the
 exception the feature needs from becoming the collapse it replaced.")
+
+(def-suite states :in model
+  :description "What state a window is in, derived rather than stored (#25).
+Two rulings are the whole of it: fullscreen is a second axis (river renders a
+fullscreen window alone, so it is still a tile or still a float underneath), and
+minimized is exclusive of tree membership but not of floating.  The third thing
+here is TRANSITION-WINDOW's contract -- idempotent, one name, and the four verbs
+that change a window's state all going through it -- which is what keeps the
+invariants in one place instead of in five.")
 
 (def-suite state :in model
   :description "The saved layout, as a file: what a reader sees while it is

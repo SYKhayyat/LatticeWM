@@ -226,6 +226,7 @@ deliberately decomposed so that policy can redirect it.")
    #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
+   #:window-state #:window-state-name
    #:output-share-group #:output-share-rect #:share-follower-p
    #:share-siblings-p #:refresh-share-rects
    #:output-capture-sessions #:output-captured-p #:world-captures
@@ -577,6 +578,7 @@ keybindings, the command registry, and the session loop.")
    ;; layout, and emptied by the batch verb that consumes it.
    #:*selection* #:selected-windows #:mark-selected #:clear-selected
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
+   #:float-away-from-tree #:transition-window #:*window-transitions*
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
    ;; things that happen because time passed rather than because a client

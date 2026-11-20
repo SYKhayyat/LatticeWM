@@ -316,6 +316,7 @@ without a compositor — which is the whole model."
     ((:file "suite")
      (:file "test-geometry")
      (:file "test-shares")
+     (:file "test-window-state")
      (:file "test-tree")
      (:file "test-motion")
      (:file "test-lifecycle")

@@ -52,6 +52,67 @@ read.")
   (let ((count (output-capture-sessions output)))
     (and count (plusp count))))
 
+;;; --------------------------------------------------------- window state
+;;;
+;;; #25.  "What state is this window in?" had five answers in five places: three
+;;; booleans on the window, tree membership in the world, and the scratchpad.
+;;; The query is now one function, and what it returns is derived rather than
+;;; stored -- which is the finding, not a shortcut.
+
+(defun window-state (world window)
+  "How WINDOW is currently shown, as a list of keywords, least surprising first.
+
+The vocabulary, and why each entry exists:
+
+  (:DEAD)                    river has told us the window is gone.
+  (:MINIMIZED ...)           out of the layout and out of sight; the
+                             scratchpad holds it.  May be followed by
+                             :FLOATING, because a floated window that is put
+                             away comes back floating -- the membership is
+                             kept for exactly that reason.
+  (:TILED)                   a leaf of the tree: the layout places it.
+  (:FLOATING)                on the world's float list, outside the tree.
+  (:UNPLACED)                alive, in no tree, not floating, not minimized.
+                             THIS ONE SHOULD NOT EXIST, and naming it is half
+                             the reason to have this function: it is the state
+                             #6 calls invisible, it is what a window is between
+                             `river says it exists' and `somebody placed it.',
+                             and until now nothing could say whether a window
+                             was in it.  A caller that finds it has found a
+                             bug, not a state.
+  ... :FULLSCREEN             appended to any of the above but :DEAD.
+
+*FULLSCREEN IS ORTHOGONAL TO TILED AND FLOATING*, and that is the second thing
+this function records.  River renders a fullscreen window alone on its output
+and ignores the layout, so a fullscreen window is still either a leaf of the
+tree or a float underneath -- minimizing it and restoring it, or unfloating it,
+has a correct answer that depends on which.  An enum with one slot per state
+would have to throw that away, which is the reason the model does not have one.
+
+*MINIMIZED IS EXCLUSIVE*, and the difference between the two rules is the whole
+design: a window cannot be minimized and tiled at once (it is not in the tree),
+but it can be minimized and floating, because putting a float away and getting
+it back should not turn it into a tile."
+  (cond
+    ((not (window-live-p window)) '(:dead))
+    ((window-minimized-p window)
+     (append '(:minimized)
+             (when (window-floating-p window) '(:floating))
+             (when (window-fullscreen-p window) '(:fullscreen))))
+    (t
+     (append
+      (cond
+        ((window-floating-p window) '(:floating))
+        ((leaf-holding (world-root world) window) '(:tiled))
+        (t '(:unplaced)))
+      (when (window-fullscreen-p window) '(:fullscreen))))))
+
+(defun window-state-name (state)
+  "STATE as one readable string, for an inspector to print."
+  (if (null state)
+      "unknown"
+      (format nil "~{~(~a~)~^ ~}" state)))
+
 ;;; ------------------------------------------------------ shared outputs
 ;;;
 ;;; #96: one plane across several monitors.  The word "share" needs a

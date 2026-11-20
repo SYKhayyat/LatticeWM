@@ -212,6 +212,32 @@ nothing."
     (mark-dirty)
     window))
 
+(defun float-away-from-tree (policy window)
+  "Take WINDOW out of the tree and make it a float, remembering the slot it left.
+
+The surgery, extracted from TOGGLE-FLOAT so that #25's TRANSITION-WINDOW can
+float a window without a second copy of it.  NIL when the window holds no leaf
+to leave -- it is already outside the tree, which is a no-op rather than an
+error.
+
+The remembered slot is :FLOAT-HOME-PATH ON THE WINDOW'S PROPS and not
+C:WINDOW-HOME-PATH, which is where ON-MINIMIZE records where a window came from
+and what ON-RESTORE reads.  The old code wrote the latter, so minimizing a
+window, then floating and unfloating anything at all, then restoring, put the
+restored window somewhere it had never been: one verb quietly overwriting
+another's memory."
+  (let* ((root (c:world-root *world*))
+         (leaf (c:leaf-holding root window))
+         (path (and leaf (c:node-path-to root leaf))))
+    (when path
+      (setf (c:prop window :float-home-path) path)
+      (multiple-value-bind (removed new-root landed)
+          (c:tree-remove-at root path :focus-path (current-path))
+        (declare (ignore removed))
+        (setf (c:world-root *world*) new-root
+              (c:world-cursor *world*) (c:repair-path new-root landed)))
+      (float-window-now policy window))))
+
 (p:define-option *unfloat-returns-home* t
   "Put an unfloated window back where it was floated from, if that place survives.
 
@@ -380,3 +406,63 @@ choice of which protocol request says `nothing'."
           (run-hooks :seat-focus-changed seat was (seat-focused seat))
           (when (eq seat (default-seat))
             (run-hooks :keyboard-focus-changed was (seat-focused seat))))))))
+
+;;; ------------------------------------------------------- the state machine
+;;;
+;;; #25.  Five functions above each change one thing about a window, and each is
+;;; right; what was missing is a *name* for "move this window to that state",
+;;; so that a command, an extension and an IPC call all mean the same thing by
+;;; "float this".  This is that name, and it is deliberately thin: the
+;;; invariants are the ones the five already keep -- floating remembers where
+;;; it came from, unfloating goes back there, minimizing records the slot and
+;;; routing it through REPAIR-CURSOR so the focus history stays true -- and this
+;;; function's job is to not re-derive them.  A second copy of those rules is
+;;; what the issue was filed about.
+;;;
+;;; Every transition is IDEMPOTENT.  Asking for the state a window is already in
+;;; is not an error and does not bump the undo history: a toggle computed from a
+;;; stale view, two key bindings pressed at once, or an IPC caller replaying a
+;;; journal all end up here, and the answer to "float it again" must be
+;;; "it is floating".
+
+(defparameter *window-transitions* '(:tiled :floating :fullscreen :normal
+                                     :minimized :visible)
+  "The states TRANSITION-WINDOW understands, for the inspector and the error.")
+
+(defun transition-window (window to &key (policy (p:current-policy)))
+  "Move WINDOW to state TO.  The one way a window changes state.
+
+TO is one of :TILED, :FLOATING, :FULLSCREEN, :NORMAL, :MINIMIZED, :VISIBLE.
+Returns WINDOW when something changed and NIL when it was already there, so a
+caller can tell `done' from `nothing to do' without asking first -- which is
+what makes it safe to call twice.
+
+:MINIMIZED and :VISIBLE are each other's inverse; :FULLSCREEN and :NORMAL are.
+:TILED and :FLOATING are the disposition, and they are a separate axis on
+purpose: a fullscreen window is still one or the other underneath, which is what
+C:WINDOW-STATE reports and what makes leaving fullscreen land somewhere sensible."
+  (unless (member to *window-transitions*)
+    (error "not a window state: ~s (one of ~{~s~^, ~})"
+           to *window-transitions*))
+  (let ((changed
+          (case to
+            (:minimized
+             (unless (c:window-minimized-p window)
+               (minimize-window window)))
+            (:visible
+             (when (c:window-minimized-p window)
+               (restore-window window)))
+            (:fullscreen
+             (unless (c:window-fullscreen-p window)
+               (request-fullscreen window t)))
+            (:normal
+             (when (c:window-fullscreen-p window)
+               (request-fullscreen window nil)))
+            (:floating
+             (unless (or (c:window-floating-p window)
+                         (c:window-minimized-p window))
+               (float-away-from-tree policy window)))
+            (:tiled
+             (when (c:window-floating-p window)
+               (unfloat-window window))))))
+    (if changed window nil)))

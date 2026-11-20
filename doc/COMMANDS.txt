@@ -111,6 +111,19 @@ LatticeWM commands.
   Every option in this system carries a paragraph explaining what turning it off
   costs you, and this is where those paragraphs are read.
 
+(describe-window window)
+  Show what this window is, where it is, and what state it is in.
+  
+  THE INSPECTOR #25 ASKED FOR, and the reason it is a command rather than a
+  debug print: the state is now one derived answer (C:WINDOW-STATE), so the
+  question `why did that window end up there' is one page instead of three slots
+  read in a debugger.  :UNPLACED on this page means the model is inconsistent --
+  alive, in no tree, not floating -- and it is worth seeing before you wonder why
+  a window is not on screen.
+  
+  Everything here is read, nothing is changed: this is the page you open when you
+  are about to use one of the verbs and want to know what it will do.
+
 (editor)
   Open an editor.  Bound to `e' in an empty pane by default.
 

@@ -142,6 +142,62 @@ paragraphs rather than as labels: this is where they are read."
                         (p:command-help-rows (policy) command))
         (notify "no such command: ~a" name))))
 
+(defcommand describe-window (window)
+  "Show what this window is, where it is, and what state it is in.
+
+THE INSPECTOR #25 ASKED FOR, and the reason it is a command rather than a
+debug print: the state is now one derived answer (C:WINDOW-STATE), so the
+question `why did that window end up there' is one page instead of three slots
+read in a debugger.  :UNPLACED on this page means the model is inconsistent --
+alive, in no tree, not floating -- and it is worth seeing before you wonder why
+a window is not on screen.
+
+Everything here is read, nothing is changed: this is the page you open when you
+are about to use one of the verbs and want to know what it will do."
+  (:interactive :window)
+  (let* ((state (c:window-state *world* window))
+         (output (current-output))
+         (float (c:float-of-window *world* window))
+         (tags (c:window-tags window)))
+    (show-help-page
+     (or (c:window-title window)
+         (c:window-app-id window)
+         "a window")
+     (list
+      (cons "app id" (or (c:window-app-id window) "—"))
+      (cons "state" (c:window-state-name state))
+      (cons "size" (if (plusp (c:window-width window))
+                       (format nil "~dx~d" (c:window-width window)
+                               (c:window-height window))
+                       "not reported yet"))
+      (cons "layout rect" (if (c:window-rect window)
+                              (let ((r (c:window-rect window)))
+                                (format nil "~d,~d ~dx~d" (c:rect-x r) (c:rect-y r)
+                                        (c:rect-w r) (c:rect-h r)))
+                              "—"))
+      (cons "float rect" (if float
+                             (let ((r (c:float-rect float)))
+                               (format nil "~d,~d ~dx~d" (c:rect-x r) (c:rect-y r)
+                                       (c:rect-w r) (c:rect-h r)))
+                             "—"))
+      (cons "in" (cond ((c:window-minimized-p window) "the scratchpad")
+                       (float "floating, over this output")
+                       ((c:leaf-holding (c:world-root *world*) window)
+                        (format nil "the tree at ~s"
+                                (c:node-path-to (c:world-root *world*)
+                                                (c:leaf-holding (c:world-root *world*)
+                                                                window))))
+                       (t "nowhere — see the state above")))
+      (cons "tags" (if tags
+                       (format nil "~{~a~^, ~}" (window-tag-names window))
+                       "none"))
+      (cons "recording" (if (c:window-captured-p window) "yes" "no"))
+      (cons "identifier" (or (c:window-identifier window) "—"))
+      (cons "" "")
+      (cons "" (format nil "M-x toggle-float, toggle-fullscreen, minimize, ~
+                            or restore-last from here~@[ (on ~a)~]."
+                       (and output (c:output-name output))))))))
+
 (defcommand describe-option (name)
   "Show a configuration value: what it is now, what it shipped as, and why.
 

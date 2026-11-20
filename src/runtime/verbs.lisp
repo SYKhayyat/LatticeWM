@@ -872,29 +872,15 @@ standing anywhere else would be a lie."
 
 Floating is per window and chosen, never inferred and forced: SHOULD-FLOAT-P
 only supplies the initial guess, and this is how you overrule it."
+  ;; The surgery lives in FLOAT-AWAY-FROM-TREE, beside the other window-state
+  ;; changes, so that TRANSITION-WINDOW (#25) floats a window the same way this
+  ;; key does rather than growing a second copy of the same four lines.
   (with-relayout
     (let ((window (focused-window)))
       (cond
         ((null window) nil)
         ((c:window-floating-p window) (unfloat-window window))
-        (t
-         (let* ((root (c:world-root *world*))
-                (leaf (c:leaf-holding root window))
-                (path (and leaf (c:node-path-to root leaf))))
-           (when path
-             ;; ON ITS OWN SLOT, NOT ON HOME-PATH.  This used to write
-             ;; C:WINDOW-HOME-PATH, which is where ON-MINIMIZE records where a
-             ;; window came from and what ON-RESTORE reads.  So minimizing a
-             ;; window, then floating and unfloating anything at all, then
-             ;; restoring, put the restored window somewhere it had never been
-             ;; — one verb quietly overwriting another's memory.
-             (setf (c:prop window :float-home-path) path)
-             (multiple-value-bind (removed new-root landed)
-                 (c:tree-remove-at root path :focus-path (current-path))
-               (declare (ignore removed))
-               (setf (c:world-root *world*) new-root
-                     (c:world-cursor *world*) (c:repair-path new-root landed)))
-             (float-window-now (policy) window))))))))
+        (t (float-away-from-tree (policy) window))))))
 
 (defcommand toggle-fullscreen ()
   "Make the focused window the only thing on its output, or stop.
@@ -902,7 +888,9 @@ only supplies the initial guess, and this is how you overrule it."
 Cheap in both directions: river ignores clip boxes and does not draw borders
 while fullscreen, so entering and leaving cost no relayout."
   (let ((window (focused-window)))
-    (when window (request-fullscreen window (not (c:window-fullscreen-p window))))))
+    (when window
+      (transition-window window (if (c:window-fullscreen-p window)
+                                    :normal :fullscreen)))))
 
 (defcommand minimize ()
   "Take the focused window out of the tiling tree entirely.
@@ -911,7 +899,7 @@ The remaining windows retile without it.  Minimize is not 'hide it somewhere',
 it is 'take it out of the layout' — and where it went is the scratchpad, which
 RESTORE-LAST brings it back from."
   (let ((window (focused-window)))
-    (when window (minimize-window window))))
+    (when window (transition-window window :minimized))))
 
 (defcommand restore-last ()
   "Bring back the most recently minimized window.
@@ -919,7 +907,7 @@ RESTORE-LAST brings it back from."
 To the slot it was minimized from if that slot still exists, and to the cursor
 otherwise."
   (let ((window (first (c:world-scratchpad *world*))))
-    (when window (restore-window window))))
+    (when window (transition-window window :visible))))
 
 ;;; -------------------------------------------------------- bulk verbs
 
