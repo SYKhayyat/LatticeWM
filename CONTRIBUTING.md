@@ -26,6 +26,21 @@ meant to tell you the whole story — every gate prints why it exists before it
 prints what is wrong. If one of them does not, that is a bug in the gate and
 worth reporting on its own.
 
+**The last tier needs a compositor.** `make check` includes the integration
+suite, which starts a real `river` and is the only tier that ever sees one, so
+`check` refuses outright when `river` is not on `PATH` — that refusal is
+deliberate: a green `check` that verified nothing is worse than a red one. On a
+machine without `river` you have two honest options:
+
+```sh
+nix-shell --run "make check"          # river comes with the dev shell
+make check REQUIRE_INTEGRATION=0      # everything but the 268-check integration tier
+```
+
+The second is fine for a branch that touches nothing a running compositor
+could notice, and the maintainers' CI runs the first. Nothing else about
+`make check` changes.
+
 ## What will fail your branch, up front
 
 There are twenty-three build gates. They are not style checks; each one exists
