@@ -166,6 +166,10 @@ letters are what you use on your hundredth.
 | =Super+m=           | minimize (=Shift+Super+m= restores)  |
 | =Super+w=           | tab this pane (=Shift+Super+w= untabs) |
 | =Super+[= / =Super+]= | previous / next tab                 |
+| =M-x tab-move=      | move this tab forward or backward    |
+| =M-x tab-move-to=   | put this tab at a given place        |
+| =M-x tab-rename=    | name this tab                        |
+| =M-x tab-send=      | send this tab into another group     |
 | =Super+z=           | undo the last layout change (=Shift+Super+z= redoes) |
 | =Super+-=           | show/hide a named scratchpad (=Shift+Super+-= puts one away) |
 | =Super+t=           | tag this window (=Shift+Super+t= jumps to a tag) |

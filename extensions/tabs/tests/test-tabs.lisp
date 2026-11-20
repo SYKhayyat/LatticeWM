@@ -199,3 +199,130 @@ stack."
       (is (= 1 (count-if (lambda (leaf) (tb:group-of leaf))
                          (c:node-leaves (c:world-root r:*world*))))
           "exactly one pane still holds the group"))))
+
+;;; ============================================================== #36 join
+
+(defun a-two-tab-pane (w1 w2)
+  "Set up the focused pane as a group of W1 then W2, visible on W2.
+Requires WITH-TABS and the live-windows pointer to be set by the caller."
+  (setf (c:leaf-window (focused-leaf)) w1)
+  (tb:tab-here)
+  (tb:tab-add (c:window-app-id w2)))
+
+(test tab-move-reorders-and-stays-on-the-window-you-moved
+  "Moving a tab is arranging the list, not choosing a window: the visible
+member stays visible, and its position in the group is what changed.  The
+check that matters (the one a rotate-the-whole-selection bug would fail):
+the member SET is unchanged and the selection is unchanged."
+  (with-tabs
+    (let ((w1 (make-window "one")) (w2 (make-window "two")))
+      (setf tb::*live-windows* (lambda () (list w1 w2)))
+      (a-two-tab-pane w1 w2)
+      (tb:tab-move :backward)
+      (is (equal (list w2 w1) (tb:group-of (focused-leaf)))
+          "the visible tab moved back")
+      (is (eq w2 (tb:visible-window (focused-leaf)))
+          "still showing the one that moved")
+      (tb:tab-move :forward)
+      (is (equal (list w1 w2) (tb:group-of (focused-leaf)))
+          "and forward returns it"))))
+
+(test tab-move-wraps-around-and-says-where-it-landed
+  (with-tabs
+    (let ((w1 (make-window "one"))
+          (w2 (make-window "two"))
+          (w3 (make-window "three"))
+          (r::*echo-message* nil))
+      (setf tb::*live-windows* (lambda () (list w1 w2 w3)))
+      (a-two-tab-pane w1 w2)
+      (tb:tab-add "three")
+      ;; visible=three at position 3; move forward wraps to 1.
+      (tb:tab-move :forward)
+      (is (equal (list w3 w1 w2) (tb:group-of (focused-leaf)))
+          "wrapped to the front")
+      (is-true (search "tab 1" (car r::*echo-message*))
+               "and reported its new place"))))
+
+(test tab-move-to-places-the-visible-tab-at-an-absolute-position
+  "An absolute place, counting from 1, and no wrapping: a number past the end
+is a mistake and is said to be one."
+  (with-tabs
+    (let ((w1 (make-window "one"))
+          (w2 (make-window "two"))
+          (w3 (make-window "three"))
+          (r::*echo-message* nil))
+      (setf tb::*live-windows* (lambda () (list w1 w2 w3)))
+      (a-two-tab-pane w1 w2)
+      (tb:tab-add "three")          ; visible = three, at the end
+      (tb:tab-move-to 1)
+      (is (equal (list w3 w1 w2) (tb:group-of (focused-leaf)))
+          "first in the group")
+      (is (eq w3 (tb:visible-window (focused-leaf)))
+          "and still the visible one")
+      (tb:tab-move-to 99)
+      (is (equal (list w3 w1 w2) (tb:group-of (focused-leaf)))
+          "out of range changes nothing")
+      (is-true (search "no tab 99" (car r::*echo-message*))
+               "and says why"))))
+
+(test tab-rename-gives-the-window-a-name-and-clears-it
+  "The name sticks to the WINDOW, not the pane: it is the label prop, so
+UNTAB moving it elsewhere takes the name with it, and an empty name clears."
+  (with-tabs
+    (let ((w1 (make-window "one")))
+      (setf (c:leaf-window (focused-leaf)) w1)
+      (tb:tab-here)
+      (tb:tab-rename "mail")
+      (is (equal "mail" (c:prop w1 :label)))
+      (tb:tab-rename " ")
+      (is (null (c:prop w1 :label)) "an empty name clears it"))))
+
+(test tab-send-moves-the-tab-into-the-named-group
+  "The other half of TAB-ADD: push this tab out to a *named* destination.
+The sending group keeps its remaining member and its selection; the
+destination becomes a group of two and shows the newcomer.  Named by a
+window rather than by coordinates, so it does not depend on the layout --
+and `that terminal belongs over in that group' is the sentence."
+  (with-tabs
+    ;; LET*, not LET: the split's init form names W3, and in a parallel binding
+    ;; list that is a reference to an outer (unbound) variable.
+    (let* ((w1 (make-window "one"))
+           (w2 (make-window "two"))
+           (w3 (make-window "three"))
+           (split (c:make-split :horizontal
+                                (list (c:make-leaf)
+                                      (c:make-leaf w3))
+                                nil)))
+      ;; One workspace, two panes: ours on the left, three on the right.
+      (c:remove-child (c:world-workspaces r:*world*) 0)
+      (c:insert-child (c:world-workspaces r:*world*) 0 split)
+      (setf (c:world-cursor r:*world*) '(0 0))
+      (setf (c:leaf-window (focused-leaf)) w1)
+      (setf tb::*live-windows* (lambda () (list w1 w2 w3)))
+      (tb:tab-here)
+      (tb:tab-add "two")            ; visible = two, group = (w1 w2)
+      (is (= 2 (length (tb:group-of (focused-leaf)))))
+      (tb:tab-send "three")
+      ;; Our pane keeps one member and shows it.
+      (is (= 1 (length (tb:group-of (focused-leaf))))
+          "one member left here")
+      (is (eq w1 (tb:visible-window (focused-leaf)))
+          "showing the survivor, not an empty pane")
+      ;; The destination pane is now a group of (three, two), showing two.
+      (let ((destination (c:child-at split 1)))
+        (is (typep destination 'c:leaf))
+        (is (equal (list w3 w2) (tb:group-of destination))
+            "the newcomer joined the destination group")
+        (is (eq w2 (tb:visible-window destination))
+            "and is what that pane shows")))))
+
+(test tab-send-refuses-a-destination-inside-the-same-group
+  (with-tabs
+    (let ((w1 (make-window "one"))
+          (w2 (make-window "two"))
+          (r::*echo-message* nil))
+      (setf tb::*live-windows* (lambda () (list w1 w2)))
+      (a-two-tab-pane w1 w2)
+      (is (null (tb:tab-send "one")))
+      (is (= 2 (length (tb:group-of (focused-leaf)))) "the group is untouched")
+      (is-true (search "already in this group" (car r::*echo-message*))))))

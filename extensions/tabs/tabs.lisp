@@ -185,6 +185,197 @@ SEND-TO-WORKSPACE would have moved it, minus the workspace."
                          (c:node-path-to (c:world-root r:*world*) leaf)))
               app-id))))))))
 
+;;; ------------------------------------------------------------ #36: order, names
+;;;
+;;; The group is an ordered list on the leaf, so reordering is moving a window in
+;;; that list and nothing else -- no z-index, no second structure.  The visible
+;;; member is the leaf's window, so a reorder that kept the selection pointing at
+;;; the same window is the one thing that must not happen by accident: TAB-MOVE
+;;; moves the window the user is looking at, which is what "bring this tab
+;;; forward" means.
+
+(defun a-group-with-order (leaf)
+  "LEAF's group, pruned, or NIL when it is not a group worth reordering.
+
+PRUNED FIRST, because a group holding two dead windows and one live one is not
+a two-member group, and MOD against a stale length is how a reorder lands
+somewhere nobody asked for."
+  (when leaf
+    (prune-group leaf)
+    (let ((group (group-of leaf)))
+      (and group (> (length group) 1) group))))
+
+(p:define-argument-type :tab-direction "tab direction: "
+  :documentation "Forward (towards the end of the group) or backward."
+  :candidates '("forward" "backward")
+  :parse (lambda (text)
+           (let ((word (string-downcase (string-trim " " text))))
+             (cond ((string= word "forward") :forward)
+                   ((string= word "backward") :backward)
+                   (t (error "~a is not forward or backward" text))))))
+
+(r:defcommand tab-move (direction)
+  "Move the visible tab one place BACKWARD or FORWARD in its group, wrapping.
+
+The window you are looking at is the one that moves, and it stays visible:
+reordering tabs is arranging them, not choosing one, and a reorder that also
+switched what you were looking at would make the key unusable for its purpose."
+  (:interactive :tab-direction)
+  (let ((leaf (r:current-leaf)))
+    (let ((group (a-group-with-order leaf)))
+      (cond
+        ((null group) (r:notify "this pane holds no tabs to reorder") nil)
+        (t
+         (let* ((visible (visible-window leaf))
+                (here (position visible group))
+                (there (ecase direction
+                         (:forward (mod (1+ here) (length group)))
+                         (:backward (mod (1- here) (length group)))))
+                ;; A MOVE, not a swap: exchanging the two places would drag the
+                ;; neighbour the other way, which is not what "move this tab
+                ;; forward" says and is why the wrapping case looked wrong.
+                (rest (remove visible group)))
+           (setf (group-of leaf)
+                 (append (subseq rest 0 there) (list visible) (subseq rest there)))
+           (settle-switch)
+           (r:mark-dirty)
+           (r:notify "tab ~d of ~d" (1+ there) (length group))
+           visible))))))
+
+(p:define-argument-type :tab-position "tab number: "
+  :documentation "A place in the group: 1 is the first tab."
+  :parse (lambda (text)
+           (let ((n (parse-integer (string-trim " " text) :junk-allowed t)))
+             (if (and n (plusp n))
+                 n
+                 (error "~a is not a tab number" text)))))
+
+(r:defcommand tab-move-to (index)
+  "Put the visible tab at position INDEX in its group, counting from 1.
+
+No wrapping: a number out of range is a mistake, not a request to go round, and
+moving to position 40 in a group of three should say so rather than landing
+somewhere plausible."
+  (:interactive :tab-position)
+  (let ((leaf (r:current-leaf)))
+    (let ((group (a-group-with-order leaf)))
+      (cond
+        ((null group) (r:notify "this pane holds no tabs to reorder") nil)
+        ((not (<= 1 index (length group)))
+         (r:notify "no tab ~d in a group of ~d" index (length group)) nil)
+        (t
+         (let* ((visible (visible-window leaf))
+                (rest (remove visible group))
+                (place (min (1- index) (length rest))))
+           (setf (group-of leaf)
+                 (append (subseq rest 0 place) (list visible) (subseq rest place)))
+           (settle-switch)
+           (r:mark-dirty)
+           (r:notify "tab ~d of ~d" index (length group))
+           visible))))))
+
+(p:define-argument-type :tab-name "tab name: "
+  :documentation "What this tab should be called.  Empty clears the name.")
+
+(r:defcommand tab-rename (name)
+  "Call the visible tab NAME, or clear the name with an empty one.
+
+THE NAME STICKS TO THE WINDOW, not to the pane, because that is what it is
+describing: UNTAB and TAB-ADD move a window between panes, and a name that
+stayed behind would end up labelling whatever moved in instead.  It is the
+window's label -- the same prop a window rule's :LABEL sets -- so a rename is
+visible everywhere a label is, and a rule can name a window for you."
+  (:interactive :tab-name)
+  (let ((leaf (r:current-leaf)))
+    (let ((visible (and leaf (visible-window leaf))))
+      (cond
+        ((null visible) (r:notify "no tab to rename") nil)
+        (t
+         (let ((name (and name (string-trim " " name))))
+           (if (or (null name) (zerop (length name)))
+               (progn (setf (c:prop visible :label) nil)
+                      (r:notify "tab name cleared"))
+               (progn (setf (c:prop visible :label) name)
+                      (r:notify "tab named ~a" name)))
+           (r:mark-dirty)
+           (r:request-manage)
+           name))))))
+
+(r:defcommand tab-send (app-id)
+  "Move the visible tab into the group holding APP-ID, creating it if it is
+not a group yet.
+
+The other half of TAB-ADD: that one pulls a window in from anywhere, this one
+pushes a tab out to a *named* destination, which is the sentence people
+actually say -- `this terminal belongs over in that group'.  The destination
+is named by a window rather than by coordinates so it does not depend on the
+layout, and the group being left dissolves if this was its last member: one
+window does not need tabs."
+  (:interactive :live-app-id)
+  (let* ((leaf (r:current-leaf))
+         (group (and leaf (group-of leaf)))
+         (visible (and leaf (visible-window leaf))))
+    (cond
+      ((null group) (r:notify "this pane holds no tabs to send") nil)
+      ((null app-id) (r:notify "which window marks the destination?") nil)
+      (t
+       (let* ((windows (funcall (or *live-windows* #'r:all-windows)))
+              (target (find app-id windows
+                            :key #'c:window-app-id :test #'equal)))
+         (cond
+           ((null target) (r:notify "no live window ~a" app-id) nil)
+           ((eq target visible) (r:notify "that is this tab") nil)
+           (t
+            (let ((target-leaf (leaf-holding-tab (c:world-root r:*world*) target)))
+              (cond
+                ((null target-leaf)
+                 (r:notify "~a is not in the layout" app-id) nil)
+                ((eq target-leaf leaf)
+                 (r:notify "~a is already in this group" app-id) nil)
+                (t
+                 ;; out of this group, and this group keeps its selection
+                 (let ((rest (remove visible group)))
+                   (setf (group-of leaf) rest)
+                   (when rest (activate-in leaf (first rest))))
+                 ;; into the destination's, becoming its visible member
+                 (unless (group-of target-leaf)
+                   (setf (group-of target-leaf) (list target)))
+                 (setf (group-of target-leaf)
+                       (append (group-of target-leaf) (list visible)))
+                 (activate-in target-leaf visible)
+                 ;; THE CURSOR COMES BACK to the pane you sent it from, which
+                 ;; is where you are: a tab sent elsewhere is a window put
+                 ;; away, not a journey, and the pane you were working in
+                 ;; should not lose the keyboard for having given something up.
+                 (let ((home (c:node-path-to (c:world-root r:*world*) leaf)))
+                   (when home
+                     (p:jump-cursor (p:current-policy) r:*world* home)))
+                 (settle-switch)
+                 (r:mark-dirty)
+                 (r:notify "sent ~a to the group at ~a"
+                           (or (c:prop visible :label)
+                               (c:window-app-id visible))
+                           app-id)
+                 visible)))))))))) 
+
+(defun leaf-holding-tab (root window)
+  "The leaf whose visible window, or whose hidden group member, is WINDOW.
+
+C:LEAF-HOLDING cannot answer this: it looks at what each leaf is *showing*, and
+a hidden tab is exactly a window a group holds without showing.  Sending a tab
+to its own group, or to a group that is currently showing something else, both
+go through here."
+  (labels ((walk (node)
+             (cond
+               ((typep node 'c:leaf)
+                (and (or (eq (c:leaf-window node) window)
+                         (member window (group-of node)))
+                     node))
+               ((c:container-p node)
+                (some (lambda (address) (walk (c:child-at node address)))
+                      (c:container-addresses node))))))
+    (walk root)))
+
 (defun cycle-tab (leaf step)
   "Move STEP places through LEAF's group, wrapping."
   (let* ((n (progn (prune-group leaf)

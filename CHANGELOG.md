@@ -26,6 +26,12 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Tabs now have a lifecycle, not just a switch.** `tab-move forward` /
+  `tab-move backward` reorder the tab you are looking at (it stays visible —
+  you are arranging, not choosing), `tab-move-to 1` puts it at an absolute
+  place, `tab-rename "mail"` names it (the name follows the window between
+  panes), and `tab-send "firefox"` pushes it into the group that holds that
+  window — the other half of `tab-add`, which only pulls in. (#36)
 - **Stack your floating windows: raise, lower, pin.** `raise-window` /
   `lower-float` move the focused float to the top or bottom of the pile;
   `pin-window` keeps it above the others no matter what you raise afterwards —
