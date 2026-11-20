@@ -178,6 +178,16 @@ letters are what you use on your hundredth.
 #+CLAIM:          ("Super+bracketright" "tab-next") ("Super+z" "undo")
 #+CLAIM:          ("Super+Shift+z" "redo")))
 
+=M-x snap= puts the focused window in a place -- =left=, =right=, =top=,
+=bottom=, a corner, =maximize= or =center= -- and it floats there. The places
+are cut from the space the tiled layout gets, so your gaps and your status bar
+are respected. A window rule can say it instead: =((:app-id "mpv") :snap :right)=
+opens it there every time.
+
+=M-x focus-mode= chooses whether the pointer moves the keyboard (=follows=),
+needs a click (=click=), both, or neither; =M-x toggle-focus-follows-mouse= is
+the one-key version.
+
 =M-x focus-back= goes to the window you were in before this one, and again for
 the one before that; =M-x focus-forward= comes back. Windows that have closed
 since are stepped over, and =M-x focus-history= lists the walk.

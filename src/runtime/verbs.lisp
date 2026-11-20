@@ -245,6 +245,115 @@ cursor follows it there."
      window)))
 ;;; ============================================================ structure
 
+;;; --------------------------------------------------------------- snapping
+;;;
+;;; #14.  A place, a key, and a rule -- the imperative half and the declarative
+;;; half of the same idea.  SNAP-RECT (policy/layout.lisp) is the geometry and
+;;; this is the verb; neither knows about the other.
+
+(defun snap-window (window output place)
+  "Put WINDOW at PLACE on OUTPUT, floating.  Returns the rectangle or NIL."
+  (when (and window output (p:snap-place-p place))
+    (let ((rect (guarded "snap-rect" (p:snap-rect (policy) output place))))
+      (when rect
+        ;; Floating first, so that a tiled window leaves the tree and the float
+        ;; exists to be given the rectangle.  TRANSITION-WINDOW is the one way a
+        ;; window changes state (#25), so this is that state and no other.
+        (transition-window window :floating)
+        (let ((float (c:float-of-window *world* window)))
+          (when float
+            (setf (c:float-rect float) rect)
+            (setf (c:world-focused-float *world* p:*seat*) float)))
+        rect))))
+
+(defcommand snap (place &key output)
+  "Put the focused window in one of the screen's regions, floating.
+
+The regions are LEFT, RIGHT, TOP, BOTTOM, the four corners, MAXIMIZE and CENTER
+-- the set every window manager agrees on, because it is the set a dragged
+window can unambiguously land in.  The space is the same one the tiled layout
+uses, so the gaps, the panel reserved by a status bar and the union of a shared
+group all apply: a snapped window sits in the screen you have, not in an ideal
+one.
+
+MAXIMIZE is not fullscreen.  Fullscreen is river's: it hides the bars and
+ignores the layout.  This fills the space a window is allowed to occupy.
+
+Snapping is deterministic, so it is also the declarative half's target: a window
+rule with :SNAP opens there, on the same rectangle, with no command run."
+  (:interactive :snap-place)
+  (let* ((window (focused-window))
+         (output (or output (current-output))))
+    (cond
+      ((null window) (notify "no window to move"))
+      ((null output) (notify "no screen to move it on"))
+      ((null (p:snap-place-p place)) (notify "not a place: ~(~a~)" place))
+      (t (let ((rect (snap-window window output place)))
+           (if rect
+               (progn (mark-dirty) (relayout)
+                      (notify "~a: ~(~a~) ~dx~d" (p:name-of-window window)
+                              place (c:rect-w rect) (c:rect-h rect)))
+               (notify "could not place it there")))))))
+
+;;; ------------------------------------------------------------ how focus works
+;;;
+;;; #27.  Focus behaviour is two options (*FOCUS-FOLLOWS-MOUSE* and
+;;; *CLICK-TO-FOCUS*) that are read where they happen to be consulted, and until
+;;; now the only way to change either was to edit a config and reload.  A
+;;; session that wants `hover sometimes, click other times' had no way to say so.
+
+(defun focus-behaviour ()
+  "The current focus behaviour as a keyword, for reporting and for FOCUS-MODE."
+  (cond ((and p:*focus-follows-mouse* p:*click-to-focus*) :both)
+        (p:*focus-follows-mouse* :follows)
+        (p:*click-to-focus* :click)
+        (t :none)))
+
+(defun (setf focus-behaviour) (behaviour)
+  "Set both options at once, and answer BEHAVIOUR -- not what was set.
+
+One writer for two knobs, because they are two knobs that mean one thing: a
+config file that sets them one at a time can land in a combination, and a
+session that cannot say what its mode is cannot be asked to change it.
+
+The four names are the four combinations, and there is no fifth.  FOLLOWS is
+`the pointer moves the cursor', which needs nothing from clicking: the window
+under the pointer is already focused by the time the button goes down."
+  (ecase behaviour
+    (:both    (setf p:*focus-follows-mouse* t p:*click-to-focus* t))
+    (:follows (setf p:*focus-follows-mouse* t p:*click-to-focus* nil))
+    (:click   (setf p:*focus-follows-mouse* nil p:*click-to-focus* t))
+    (:none    (setf p:*focus-follows-mouse* nil p:*click-to-focus* nil)))
+  behaviour)
+
+(defun say-focus-behaviour ()
+  (notify "focus: ~(~a~)" (ecase (focus-behaviour)
+                            (:both "pointer moves it, click moves it")
+                            (:follows "pointer moves it")
+                            (:click "click moves it")
+                            (:none "neither -- keyboard only"))))
+
+(defcommand focus-mode (behaviour)
+  "Choose how the keyboard follows the pointer: FOLLOWS, CLICK, BOTH or NONE.
+
+FOLLOWS moves the cursor to whatever pane the pointer is over.  CLICK leaves it
+where it is until you click.  NONE takes both away, which is the keyboard-only
+mode a session with a mouse it does not trust wants.  This is the deterministic
+half of the pair below: a config file or a profile can set it."
+  (:interactive :focus-behaviour)
+  (setf (focus-behaviour) behaviour)
+  (say-focus-behaviour))
+
+(defcommand toggle-focus-follows-mouse ()
+  "Switch between the pointer moving the cursor and clicking to move it.
+
+Live, with no restart and no config file: the two modes are what most people
+mean by `focus behaviour', and this is the one key for it.  Both options are
+consulted where they are used, so the extensions that refine them
+(focus-follows-mouse) follow this switch immediately."
+  (setf (focus-behaviour) (if (eq (focus-behaviour) :follows) :click :follows))
+  (say-focus-behaviour))
+
 ;;; ------------------------------------------------------------- by name
 ;;;
 ;;; #128.  Tags gave windows names and FOCUS-WINDOW-BY-NAME made a name a way to

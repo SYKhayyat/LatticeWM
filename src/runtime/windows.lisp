@@ -193,10 +193,18 @@ nothing."
 (defun float-window-now (policy window)
   "Give WINDOW a floating rectangle and put it on the float list."
   (let* ((output (or (current-output) (first (all-outputs))))
-         (rect (if output
-                   (guarded "default-float-rect"
-                     (p:default-float-rect policy window output))
-                   (c:make-default-float-rect 100 100))))
+         ;; A WINDOW RULED TO A PLACE OPENS THERE (#14), which is the declarative
+         ;; half of snapping: `(:app-id "mpv") :snap :right' in *window-rules*
+         ;; needs no command and no key, and it asks SNAP-RECT the same question
+         ;; the command does.
+         (place (and output
+                     (let ((place (c:prop window :snap-place)))
+                       (and (p:snap-place-p place) place))))
+         (rect (cond
+                 (place (guarded "snap-rect" (p:snap-rect policy output place)))
+                 (output (guarded "default-float-rect"
+                           (p:default-float-rect policy window output)))
+                 (t (c:make-default-float-rect 100 100)))))
     (setf (c:window-floating-p window) t)
     (let ((float (make-instance 'c:floating-window
                                 :window window

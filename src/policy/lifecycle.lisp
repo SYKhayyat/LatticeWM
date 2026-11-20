@@ -114,7 +114,7 @@ this."
 ;;; with no schema, unknown-key rejection is not optional.
 
 (defparameter +window-rule-keys+
-  '(:float :workspace :path :focus :fullscreen :minimize
+  '(:float :workspace :path :focus :fullscreen :minimize :snap
     :border-color :border-width :decoration :capabilities :tags :label
     :priority)
   "Every key a window rule may set.  Anything else is a typo, said out loud.
@@ -314,6 +314,10 @@ them back."
              (:capabilities (setf (c:prop window :capabilities) value))
              (:tags (setf (c:window-tags window)
                           (if (listp value) value (list value))))
+             ;; #14: a rule may say WHERE, not only whether.  Stored on the props
+             ;; because FLOAT-WINDOW-NOW is in the runtime and asks the same
+             ;; question for a window opened by rule and one floated by a key.
+             (:snap (setf (c:prop window :snap-place) value))
              (:label (setf (c:prop window :label) value))))
   window)
 
@@ -432,7 +436,9 @@ Every documented rule key is honoured here, which took three of them from
     (setf (c:window-floating-p window)
           (if (member :float rule)
               (and (getf rule :float) t)
-              (and (guarded "should-float-p" (should-float-p policy window)) t)))
+              (or (and (getf rule :snap) t)
+                  (and (guarded "should-float-p" (should-float-p policy window))
+                       t))))
     (when (getf rule :fullscreen)
       (setf (c:window-fullscreen-p window) t))
     (cond

@@ -194,6 +194,14 @@ LatticeWM commands.
   List every window focus has been through, most recent first, marking where
   the walk stands and which entries are no longer on a screen.
 
+(focus-mode behaviour)
+  Choose how the keyboard follows the pointer: FOLLOWS, CLICK, BOTH or NONE.
+  
+  FOLLOWS moves the cursor to whatever pane the pointer is over.  CLICK leaves it
+  where it is until you click.  NONE takes both away, which is the keyboard-only
+  mode a session with a mouse it does not trust wants.  This is the deterministic
+  half of the pair below: a config file or a profile can set it.
+
 (focus-next)
   Move the cursor to the next pane in layout order, wrapping.
 
@@ -563,6 +571,22 @@ LatticeWM commands.
   output is the leader and keeps the workspace; the other screen joins it.  Give
   it again to span three or four; the output joins the group already there.
 
+(snap place &key output)
+  Put the focused window in one of the screen's regions, floating.
+  
+  The regions are LEFT, RIGHT, TOP, BOTTOM, the four corners, MAXIMIZE and CENTER
+  -- the set every window manager agrees on, because it is the set a dragged
+  window can unambiguously land in.  The space is the same one the tiled layout
+  uses, so the gaps, the panel reserved by a status bar and the union of a shared
+  group all apply: a snapped window sits in the screen you have, not in an ideal
+  one.
+  
+  MAXIMIZE is not fullscreen.  Fullscreen is river's: it hides the bars and
+  ignores the layout.  This fills the space a window is allowed to occupy.
+  
+  Snapping is deterministic, so it is also the declarative half's target: a window
+  rule with :SNAP opens there, on the same rectangle, with no command run.
+
 (spawn &rest command)
   Run COMMAND as a detached process.
   
@@ -642,6 +666,14 @@ LatticeWM commands.
   
   Floating is per window and chosen, never inferred and forced: SHOULD-FLOAT-P
   only supplies the initial guess, and this is how you overrule it.
+
+(toggle-focus-follows-mouse)
+  Switch between the pointer moving the cursor and clicking to move it.
+  
+  Live, with no restart and no config file: the two modes are what most people
+  mean by `focus behaviour', and this is the one key for it.  Both options are
+  consulted where they are used, so the extensions that refine them
+  (focus-follows-mouse) follow this switch immediately.
 
 (toggle-fullscreen)
   Make the focused window the only thing on its output, or stop.

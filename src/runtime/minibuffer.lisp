@@ -400,6 +400,29 @@ characters at any scale without this function knowing how wide a glyph is."
            (or (parse-integer (string-trim " " text) :junk-allowed t)
                (error "~a is not a number of pixels" text))))
 
+(define-argument-type :snap-place "place: "
+  :documentation "left, right, top, bottom, a corner, maximize or center."
+  :candidates (mapcar #'string-downcase
+                      (mapcar #'symbol-name p:+snap-places+))
+  :parse (lambda (text)
+           (let* ((word (string-downcase (string-trim " " text)))
+                  (place (find word p:+snap-places+
+                               :test (lambda (a b)
+                                       (string= a (string-downcase
+                                                   (symbol-name b)))))))
+             (or place
+                 (error "~a is not one of ~{~(~a~)~^, ~}" text
+                        p:+snap-places+)))))
+
+(define-argument-type :focus-behaviour "focus: "
+  :documentation "follows, click, both or none -- see M-x focus-mode."
+  :candidates '("follows" "click" "both" "none")
+  :parse (lambda (text)
+           (let ((word (string-downcase (string-trim " " text))))
+             (or (find word '(follows click both none)
+                       :test (lambda (a b) (string= a (string b))))
+                 (error "~a is not follows, click, both or none" text)))))
+
 (define-argument-type :command "command: "
   :documentation "The name of one of our own commands."
   :candidates (mapcar #'command-name (all-commands)))

@@ -112,6 +112,14 @@ may not add a second layout entry, and the workspace invariant must still move
 a stranger off a shared index -- and those are the ones that keep the
 exception the feature needs from becoming the collapse it replaced.")
 
+(def-suite placement :in model
+  :description "Where a window sits when you say where: SNAP-RECT (#14) and the
+rule that opens a window there.  Pure geometry, so this is the one part of
+snapping that needs no compositor at all -- and the parts worth checking are the
+awkward ones: an odd-sized screen (a half that is not the half a naive division
+gives), the space being the *layout's* space rather than the output's, and a rule
+that says :SNAP without saying :FLOAT still getting a float.")
+
 (def-suite states :in model
   :description "What state a window is in, derived rather than stored (#25).
 Two rulings are the whole of it: fullscreen is a second axis (river renders a

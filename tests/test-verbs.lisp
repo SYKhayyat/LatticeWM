@@ -920,3 +920,41 @@ would attribute to this command."
         (declare (ignore first))
         (r:with-window second "not-a-command")
         (is-true (search "no such command" (car r::*echo-message*)))))))
+
+;;; -------------------------------------------------------------- focus mode
+;;;
+;;; #27.  Two options that decide whether the pointer moves the keyboard.  The
+;;; mode is one value over both, because `follows the mouse but clicking does
+;;; nothing' is a mode nobody means to be in.
+
+(test focus-mode-sets-both-options-together
+  "One writer for two knobs.  Every mode names what BOTH options are, so a
+session can never be left in the combination that exists only by accident."
+  (let ((p:*focus-follows-mouse* nil)
+        (p:*click-to-focus* nil)
+        (r::*echo-message* nil))
+    (r:focus-mode :follows)
+    (is-true p:*focus-follows-mouse*)
+    (is (null p:*click-to-focus*)
+        "the pointer already focused it; clicking has nothing left to do")
+    (is (eq :follows (r:focus-behaviour)))
+    (r:focus-mode :click)
+    (is (null p:*focus-follows-mouse*))
+    (is-true p:*click-to-focus*)
+    (r:focus-mode :none)
+    (is (null p:*focus-follows-mouse*))
+    (is (null p:*click-to-focus*) "keyboard only, on purpose")
+    (is (eq :none (r:focus-behaviour)))
+    (is (stringp (car r::*echo-message*)) "and it says which mode you are in")))
+
+(test toggle-focus-follows-mouse-is-one-key
+  "The live switch, which is what the key binding is for: no config file, no
+restart, and it lands in a mode where clicking still works."
+  (let ((p:*focus-follows-mouse* nil)
+        (p:*click-to-focus* nil)
+        (r::*echo-message* nil))
+    (r:toggle-focus-follows-mouse)
+    (is (eq :follows (r:focus-behaviour)) "click -> follows")
+    (r:toggle-focus-follows-mouse)
+    (is (eq :click (r:focus-behaviour)) "and back")
+    (is-true p:*click-to-focus* "and the pointer still works, by clicking")))

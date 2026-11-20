@@ -464,6 +464,67 @@ Four things, in this order:
                     (c:prop (first group) :workspace))))))
       stack)))
 
+;;; ------------------------------------------------------------ where a window sits
+;;;
+;;; #14.  Snapping is not a second layout engine: it is a *place*, computed from
+;;; the same rectangle the tiled layout uses, and a window put there is floating.
+;;; That is the whole design, and it is why SNAP-RECT is a pure function of the
+;;; policy, the output and a keyword -- the command, a window rule and a test all
+;;; ask the same question and none of them has its own copy of the arithmetic.
+
+(defparameter +snap-places+
+  '(:left :right :top :bottom
+    :top-left :top-right :bottom-left :bottom-right
+    :maximize :center)
+  "Every place SNAP-RECT understands, in the order an inspector should list them.
+
+NINE REGIONS AND A CENTRE, which is the set Aero Snap and every tiling
+compositor's `drag to the edge' gesture agrees on.  They are deliberately not
+arbitrary fractions: a place has to be reachable by dragging a window at it, and
+`the left third' is not something a pointer can mean unambiguously.")
+
+(defun snap-place-p (place)
+  (and place (member place +snap-places+) t))
+
+(defun snap-rect (policy output place)
+  "The rectangle PLACE means on OUTPUT, inside the space windows may use.
+
+THE SAME SPACE THE LAYOUT USES -- OUTER-RECT, so the gaps, the panels reserved
+by a layer surface and (#96) a shared group's union are all already accounted
+for.  A snapped window that overlapped a status bar, or ignored the gap it was
+given, would be a second opinion about where the screen is.
+
+:MAXIMIZE is not fullscreen.  Fullscreen is river's, it hides the bars and
+ignores the layout; this fills the space a window is allowed to occupy, which is
+what `maximize' means everywhere else.
+
+:CENTER is a window of half the space, centred in it.  Centring the size a window
+already has would need the window, and then this is not a place -- it is a
+command that moves something.  The predictable answer is worth more here than
+the specific one, and a window you wanted at its own size has not been resized
+by snapping it there."
+  (let* ((base (outer-rect policy output))
+         (x (c:rect-x base))
+         (y (c:rect-y base))
+         (w (c:rect-w base))
+         (h (c:rect-h base))
+         (half-w (floor w 2))
+         (half-h (floor h 2)))
+    (ecase place
+      (:maximize base)
+      (:left     (c:make-rect x y half-w h))
+      (:right    (c:make-rect (+ x half-w) y (- w half-w) h))
+      (:top      (c:make-rect x y w half-h))
+      (:bottom   (c:make-rect x (+ y half-h) w (- h half-h)))
+      (:top-left     (c:make-rect x y half-w half-h))
+      (:top-right    (c:make-rect (+ x half-w) y (- w half-w) half-h))
+      (:bottom-left  (c:make-rect x (+ y half-h) half-w (- h half-h)))
+      (:bottom-right (c:make-rect (+ x half-w) (+ y half-h)
+                                  (- w half-w) (- h half-h)))
+      (:center   (c:make-rect (+ x (floor (- w half-w) 2))
+                              (+ y (floor (- h half-h) 2))
+                              half-w half-h)))))
+
 (defmethod outer-rect ((policy layout-policy) (output c:output))
   "The rectangle the tree may use, less the gaps and anything reserved.
 

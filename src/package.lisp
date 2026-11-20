@@ -278,6 +278,7 @@ You never edit this package.")
    #:clip-rect #:outer-rect #:reserved-space #:run-reserve-hooks
    #:*solo-windows* #:solo-window #:output-solo-window #:solo-node-p
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
+   #:+snap-places+ #:snap-place-p #:snap-rect
    #:echo-content #:cursor-place-name #:window-name #:name-of-window
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
@@ -580,6 +581,7 @@ keybindings, the command registry, and the session loop.")
    ;; layout, and emptied by the batch verb that consumes it.
    #:*selection* #:selected-windows #:mark-selected #:clear-selected
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
+   #:focus-behaviour #:snap-window
    #:float-away-from-tree #:transition-window #:*window-transitions*
    #:*focus-override* #:with-focus-on #:focused-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command

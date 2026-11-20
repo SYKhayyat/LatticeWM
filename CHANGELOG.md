@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Snap a window to any region of the screen.** `M-x snap` takes a place —
+  `left`, `right`, `top`, `bottom`, the four corners, `maximize` or `center` —
+  and puts the focused window there, floating. The regions are cut from the
+  same rectangle the tiled layout uses, so gaps, reserved panels and a shared
+  group's union all apply; `maximize` fills that space without being river's
+  fullscreen. A window rule can say where instead: `((:app-id "mpv") :snap
+  :right)` opens it there, no command and no key. (#14)
+- **One switch for how focus follows the pointer.** `focus-mode` chooses
+  `follows`, `click`, `both` or `none`, and `toggle-focus-follows-mouse` flips
+  between the two ordinary ones — live, with no config file and no restart.
+  The four names are the four combinations of the two options, and reading the
+  mode back gives the one you set. (#27)
 - **Go back to the window you were in.** `focus-back` and `focus-forward` walk
   the focus history (most recent first, 50 deep, `*focus-history-size*`),
   stepping over windows that have closed or been put away since; `focus-history`
