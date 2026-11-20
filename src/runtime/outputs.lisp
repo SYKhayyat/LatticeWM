@@ -200,8 +200,24 @@ the compositor's side."
     (logmsg :info "output removed: ~s" output))
   nil)
 
+(defun set-plane (leader index)
+  "Make LEADER's group -- or LEADER alone -- display workspace INDEX."
+  (let ((group (or (c:output-share-group leader) (list leader))))
+    (dolist (member group)
+      (setf (c:prop member :workspace) index)))
+  index)
+
 (defun show-workspace-on (output index)
   "Make OUTPUT display workspace INDEX, and trade with whoever had it.
+
+A SHARED GROUP IS ONE PLANE, SO IT MOVES AS ONE (#126).  Switching workspace on
+either screen of a shared pair used to leave the other screen blank: the leader
+went on presenting the union of both rectangles -- laid out for its *own* plane
+-- while the follower, which presents nothing by design, showed a workspace
+nobody could see.  The windows on it were in the world and on no screen.  Asking
+a follower is asking the group, so the switch is handed to the leader and every
+member takes the new index; asking the leader takes the followers with it, and
+whatever screen was already showing the target trades as before.
 
 THE ONE WRITER OF :WORKSPACE, which is what was missing.  Six places set that
 property directly and each of them was individually right; between them they
@@ -222,15 +238,32 @@ moved it to another monitor would be answering a question nobody asked.
 If the other output had nothing to trade back it is left with no workspace, and
 ENSURE-WORKSPACES-FOR-OUTPUTS gives it one before anything is drawn."
   (when (and output (integerp index))
-    (let ((other (p:output-showing *world* index))
-          (was (c:prop output :workspace)))
-      (when (and other (not (eq other output)))
-        (setf (c:prop other :workspace) was)
-        (logmsg :debug "~a takes workspace ~@[~d~] from ~a"
-                (or (c:output-name other) "an output")
-                (and was (1+ was))
-                (or (c:output-name output) "an output")))
-      (setf (c:prop output :workspace) index))))
+    ;; A FOLLOWER IS NOT A SCREEN YOU SWITCH.  It draws nothing, so a switch
+    ;; asked of it is a switch of the group; the leader is the member that
+    ;; keeps the index and lays the plane out, so it is the one asked.
+    (let ((follower-group (c:output-share-group output)))
+      (when (and follower-group (not (eq output (first follower-group))))
+        (return-from show-workspace-on
+          (show-workspace-on (first follower-group) index))))
+    (let* ((group (c:output-share-group output))
+           (leader (if group (first group) output))
+           (showing (p:output-showing *world* index))
+           ;; The output already showing INDEX may itself be one screen of a
+           ;; group, in which case the trade is with the group, not the screen:
+           ;; giving one member a different plane is the divergence #126 was.
+           (other-group (and showing (c:output-share-group showing)))
+           (other (if other-group (first other-group) showing))
+           (was (c:prop leader :workspace)))
+      (cond
+        ((eq other leader) nil)          ; already showing it; nothing to trade
+        (t
+         (when (and other (not (eq other output)))
+           (set-plane other was)
+           (logmsg :debug "~a takes workspace ~@[~d~] from ~a"
+                   (or (c:output-name other) "an output")
+                   (and was (1+ was))
+                   (or (c:output-name output) "an output")))
+         (set-plane leader index))))))
 
 (defun rehome-orphaned-workspace (index)
   "Make sure the workspace INDEX was showing is still on a screen somewhere.

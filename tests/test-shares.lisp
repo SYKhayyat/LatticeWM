@@ -170,3 +170,90 @@ user meets first, and it must say so."
         (is-true (search "left" page) "naming one screen")
         (is-true (search "right" page) "and the other")
         (is-true (search "1" page) "and the workspace they share")))))
+
+;;; ------------------------------------------- switching workspace while sharing
+;;;
+;;; #126.  A shared group is one plane, so a workspace switch is a switch of the
+;;; group and never of one screen in it.  Left unhandled, the leader went on
+;;; presenting the union of both rectangles -- laid out for its own plane --
+;;; while the follower, which presents nothing by design, showed a workspace
+;;; nobody could see.  Four checks, one per way the question can arrive.
+
+(test asking-a-follower-to-switch-switches-the-group
+  "A follower is not a screen you switch: it draws nothing, so the request goes
+to the leader and every member takes the new index."
+  (multiple-value-bind (world left middle right) (three-output-world)
+    (declare (ignore middle))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:share-workspace :right)                ; left leads, middle follows
+      (is (/= 0 (c:prop right :workspace)) "the third screen is elsewhere")
+      (let ((wanted (c:prop right :workspace))
+            (follower (second (c:world-outputs world))))
+        (r::show-workspace-on follower wanted)
+        (is (= wanted (c:prop left :workspace)) "the leader moved to it")
+        (is (= wanted (c:prop follower :workspace)) "and the follower with it")
+        (is (= 2 (length (r::output-contents p:*policy*)))
+            "one entry for the pair, one for the screen that is not in it")
+        (is (c:rect-equal (c:output-share-rect left)
+                          (c:make-rect 0 0 2000 800))
+            "drawn across both screens, not one")
+        (is (null (c:output-share-rect follower)) "and the follower draws nothing")))))
+
+(test switching-a-leader-takes-its-group-along
+  "The other direction, and the one that used to blank a screen: the leader
+moves, and the follower moves with it rather than being left on a plane no
+screen is showing."
+  (multiple-value-bind (world left middle right) (three-output-world)
+    (declare (ignore middle))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:share-workspace :right)
+      (let ((wanted (c:prop right :workspace))
+            (follower (second (c:world-outputs world))))
+        (r::show-workspace-on left wanted)
+        (is (= wanted (c:prop follower :workspace))
+            "the follower went with the leader")
+        (is (= 2 (length (r::output-contents p:*policy*)))
+            "still one plane, still one entry for it")
+        ;; and the screen that lost the plane to the trade kept one.
+        (is (integerp (c:prop right :workspace))
+            "the third screen was given something in trade")
+        (is (not (eql (c:prop right :workspace) wanted))
+            "something other than the plane it just handed over")))))
+
+(test switching-onto-a-shared-plane-trades-with-the-group
+  "A target held by a shared pair is held by the pair: the trade gives the
+whole group the old plane instead of pulling one member out of it."
+  (multiple-value-bind (world left middle right) (three-output-world)
+    (declare (ignore middle))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:share-workspace :right)                ; left + middle share
+      (let ((shared (c:prop left :workspace))
+            (follower (second (c:world-outputs world)))
+            (elsewhere (c:prop right :workspace)))
+        (r::show-workspace-on right shared)      ; the third screen asks for it
+        (is (= shared (c:prop right :workspace)) "it got what it asked for")
+        (is (= elsewhere (c:prop left :workspace))
+            "the group took the plane the third screen was showing")
+        (is (= elsewhere (c:prop follower :workspace))
+            "both members, together, as one plane")
+        (is (= 2 (length (r::output-contents p:*policy*)))
+            "the group and the third screen, two entries")))))
+
+(test the-invariant-repairs-siblings-that-have-drifted-apart
+  "The belt to SHOW-WORKSPACE-ON's braces: a property written directly -- by a
+state file, an extension, or a bug -- is repaired by the leader's answer on the
+next layout."
+  (multiple-value-bind (world left middle right) (three-output-world)
+    (declare (ignore right))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:share-workspace :right)
+      (let ((follower (second (c:world-outputs world))))
+        (setf (c:prop follower :workspace) 2)   ; drift, behind the command
+        (p:ensure-workspaces-for-outputs world)
+        (is (= (c:prop left :workspace) (c:prop follower :workspace))
+            "the group is one plane again")
+        (is (c:rect-equal (c:output-share-rect left)
+                          (c:make-rect 0 0 2000 800))
+            "and the leader still draws both screens")
+        (is (= 2 (length (r::output-contents p:*policy*)))
+            "the follower is not a screen of its own, and the third one is")))))

@@ -415,13 +415,15 @@ So it is asserted before every layout now (see RELAYOUT) as well as when an
 output arrives, and it is idempotent and cheap: when the counts already agree
 it is a LENGTH, a comparison and one pass over the outputs.
 
-Three things, in this order:
+Four things, in this order:
 
   * grow the stack until there are at least as many workspaces as outputs.
     MAKE-WORKSPACE, not MAKE-LEAF: a monitor plugged in after startup must get
     the same kind of workspace as the ones made at startup, or the second
     screen shows a pane where the first shows a plane;
   * give a workspace to any output that has not got one;
+  * keep one shared group on one workspace, by the leader's answer, because a
+    plane that two screens disagree about is a screen drawing nothing (#126);
   * and move an output off a workspace another output is already showing, or
     off an index that is no longer in range.  That third clause is the one the
     original lacked, and it is what makes this a repair rather than a
@@ -447,7 +449,19 @@ Three things, in this order:
                    (setf index (free-workspace-index taken count position)
                          (c:prop output :workspace) index))
                  (push index taken)
-                 (push output settled)))
+                 (push output settled))
+        ;; A GROUP SHOWS ONE PLANE (#126).  The loop above is about screens
+        ;; that are *not* sharing landing on one workspace; this is the
+        ;; opposite failure -- siblings that have drifted onto two -- and it is
+        ;; the same repair with the leader's answer winning.  SHOW-WORKSPACE-ON
+        ;; moves a group together, so what reaches here is what did not go
+        ;; through it: a state file, an extension writing the property, or a
+        ;; bug.  A follower's answer was never its own, so the leader's wins.
+        (dolist (output outputs)
+          (let ((group (c:output-share-group output)))
+            (when (and group (not (eq output (first group))))
+              (setf (c:prop output :workspace)
+                    (c:prop (first group) :workspace))))))
       stack)))
 
 (defmethod outer-rect ((policy layout-policy) (output c:output))

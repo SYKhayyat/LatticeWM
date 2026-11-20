@@ -30,7 +30,10 @@ be able to do before anyone else can depend on it.
   you are on and spreads it across the next screen in the direction you name:
   the layout spans the union of the two rectangles, so a cell, a split or a
   window can straddle the seam, and the gaps go round the arrangement rather
-  than round each monitor in it. Give it again to reach a third screen;
+  than round each monitor in it. Switching workspace moves the whole group —
+  one plane cannot be on two — and trades with whichever screen was showing the
+  one you asked for; asking a screen that draws nothing is asking the group.
+  Give it again to reach a third screen;
   `unshare-workspace` gives this screen a workspace back and `list-shared` says
   who is showing what. This is the honest form of "sharing" a Wayland
   compositor allows — a surface has one geometry, so two outputs cannot display

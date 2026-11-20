@@ -263,6 +263,11 @@ mean is one plane across several monitors, which is the reading above and the
 one a lattice was always going to need. A second screen showing a copy of the
 first is a different feature and is not this one; see issue #96.
 
+Switching workspace moves the whole group, because a shared group is one plane:
+give either screen a different workspace and both go there, trading workspaces
+with whatever screen was showing the one you asked for. Asking a screen that is
+not drawing anything — a follower — is asking the group.
+
 Sharing complicates exactly one invariant: two outputs must never show one
 workspace, because every window would be placed twice, or were it not for the
 one exception — the members of a shared group, one of which lays the plane out
