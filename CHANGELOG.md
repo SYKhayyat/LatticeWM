@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Go back to the window you were in.** `focus-back` and `focus-forward` walk
+  the focus history (most recent first, 50 deep, `*focus-history-size*`),
+  stepping over windows that have closed or been put away since; `focus-history`
+  lists the walk and `clear-focus-history` forgets it. Back-back-back walks
+  rather than oscillating, because a jump the history asked for does not reset
+  it — only an unexpected focus change does. (#17)
+- **Any command can be aimed at a window you name.** `with-window` runs a verb
+  with the window you choose as the one it acts on — `M-x with-window` then
+  `close-window`, say — which works for verbs an extension adds, because every
+  one of them already asks "who am I acting on". The window is not focused:
+  nothing is told it has the keyboard, and focus is exactly where it was
+  afterwards. (#128)
 - **"What state is this window in?" has one answer.** It used to be five facts
   read from three places — three booleans on the window, tree membership in the
   world, and the scratchpad — and the five verbs that changed them each knew

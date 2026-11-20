@@ -178,6 +178,16 @@ letters are what you use on your hundredth.
 #+CLAIM:          ("Super+bracketright" "tab-next") ("Super+z" "undo")
 #+CLAIM:          ("Super+Shift+z" "redo")))
 
+=M-x focus-back= goes to the window you were in before this one, and again for
+the one before that; =M-x focus-forward= comes back. Windows that have closed
+since are stepped over, and =M-x focus-history= lists the walk.
+
+=M-x with-window= runs any command with the window *you name* as the one it acts
+on — =M-x with-window=, choose the window, choose =close-window=. It works for
+verbs an extension adds, because every one of them asks "who am I acting on",
+and it does not move the keyboard: the named window is the subject, not the
+focus.
+
 Minimize leaves the tiling tree rather than collapsing it, so restoring puts
 the window back where it was. Floating and unfloating do the same, so looking
 at something and putting it back is symmetric.
