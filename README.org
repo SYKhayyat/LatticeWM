@@ -240,6 +240,36 @@ in any direction and nothing changes.
 for when you are in the middle of one. It has no binding on purpose: the arrow
 keys already do it.
 
+** One workspace across two screens
+
+=M-x share-workspace= takes the workspace you are on and spreads it across the
+next screen in whichever direction you name. The layout then spans the union of
+both rectangles, so a cell, a split or a window can straddle the seam, and the
+gaps go round the arrangement instead of round each monitor in it. Give it again
+to reach a third screen. =M-x unshare-workspace= gives this screen a workspace
+of its own again; the rest of the group stays shared. =M-x list-shared= says
+which planes are shared and who is showing them.
+
+#+begin_src lisp
+(define-key *keymap* "Super+Ctrl+Shift+s" '("share-workspace" :right))
+(define-key *keymap* "Super+Ctrl+Shift+u" '("unshare-workspace"))
+#+end_src
+
+You may expect this to mean "show the same windows on both screens", and it
+cannot: a Wayland surface is one window with one geometry, so two outputs
+cannot display the *same* window twice — that would need two surfaces for one
+client, which no protocol here offers. What sharing a workspace can honestly
+mean is one plane across several monitors, which is the reading above and the
+one a lattice was always going to need. A second screen showing a copy of the
+first is a different feature and is not this one; see issue #96.
+
+Sharing complicates exactly one invariant: two outputs must never show one
+workspace, because every window would be placed twice, or were it not for the
+one exception — the members of a shared group, one of which lays the plane out
+and the others of which draw nothing. That exception is one group wide, and the
+workspace invariant still moves a screen that lands on a shared workspace
+without joining it.
+
 ** When a window opens
 
 By default it *splits the focused pane*, along whichever side is longer so

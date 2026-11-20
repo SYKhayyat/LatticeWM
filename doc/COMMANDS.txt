@@ -251,6 +251,9 @@ LatticeWM commands.
 (list-selected)
   Show the marked windows, in the order they were marked.
 
+(list-shared)
+  List every shared workspace and the screens showing it.
+
 (list-tags)
   Show every tag and the windows carrying it.
 
@@ -519,6 +522,16 @@ LatticeWM commands.
   there when you are sure, and until then the cost of being wrong is one more
   prompt.
 
+(share-workspace direction)
+  Show the workspace you are on across the output DIRECTION too.
+  
+  Both screens become one plane: the layout spans the union of their rectangles,
+  so a cell, a split or a window can straddle the seam.  It is the one honest
+  form of "sharing" a Wayland compositor allows — a surface has one geometry,
+  so two outputs cannot display the *same* window twice; see #96.  The cursor's
+  output is the leader and keeps the workspace; the other screen joins it.  Give
+  it again to span three or four; the output joins the group already there.
+
 (spawn &rest command)
   Run COMMAND as a detached process.
   
@@ -621,6 +634,13 @@ LatticeWM commands.
 
 (undo-history)
   Show what UNDO would walk back through.
+
+(unshare-workspace)
+  Stop sharing the workspace you are on; this screen shows its own again.
+  
+  The rest of the group keeps sharing among themselves.  The plane that was
+  shared stays on the leader; the screen you are on is given the next free
+  workspace, because the one it was looking at is still the group's.
 
 (untab)
   Dissolve the nearest enclosing stack back into a split.

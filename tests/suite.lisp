@@ -29,6 +29,7 @@
            #:container #:hooks #:minibuffer #:ipc #:state #:tags #:verbs #:wire
            #:devices
            #:capture
+           #:shares
            #:boundaries #:pixels #:versions #:wait-until
            #:*extension-suites* #:register-extension-suite
            ;; shared fixtures for extension suites (#120)
@@ -99,6 +100,16 @@ permanent keyword to the package every protocol key lives in.")
 compositor: which windows a name reaches, what a picker offers for two of them
 that share one, and whether choosing an entry lands on it.  #34 is the first
 inhabitant -- the door that lets you reach a window you have not labelled.")
+
+(def-suite shares :in model
+  :description "One workspace across several monitors (#96), which is the one
+place a display question and a model question meet: a group draws one plane
+over the union of its rectangles and every member but the leader draws
+nothing.  Checkable with no compositor, because an output is a rectangle and a
+name.  Two of these checks are about what the feature must NOT do -- a follower
+may not add a second layout entry, and the workspace invariant must still move
+a stranger off a shared index -- and those are the ones that keep the
+exception the feature needs from becoming the collapse it replaced.")
 
 (def-suite state :in model
   :description "The saved layout, as a file: what a reader sees while it is

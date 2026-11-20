@@ -272,3 +272,137 @@ events race."
             (logmsg :info "output ~a has scale ~d"
                     (or (c:output-name output) id) scale)
             (mark-dirty)))))))
+;;; ========================================================== shared workspaces
+;;; #96: ONE PLANE ACROSS SEVERAL OUTPUTS.
+;;;
+;;; "Share a workspace" cannot mean what the phrase first suggests, and saying
+;;; why is the whole of the design.  A Wayland surface is one window with one
+;;; geometry, so two outputs cannot display the *same* window twice: that would
+;;; be two surfaces for one client, which no protocol in the tree offers.  What
+;;; this file does instead is present one workspace across the union of the
+;;; outputs in a group, so a cell, a split or a window can straddle the seam.
+;;; That is a real reading of "share a plane across screens" and it is the one
+;;; the lattice — a plane of cells with a cursor that is a place in a model —
+;;; was always going to need.  The other half of #96, MIRROR (the second screen
+;;; showing a copy), is not expressible here for the same reason and is filed
+;;; separately; see the issue.
+
+(defun cursor-output ()
+  "The output the cursor's workspace is showing on."
+  (and *world* (p:output-showing *world* (first (current-path)))))
+
+(defun output-in-direction-not-sharing (from direction)
+  "The nearest output DIRECTION of FROM that is not already in its group.
+
+P:OUTPUT-IN-DIRECTION answers `the next screen that way', which is the right
+answer for moving the cursor and the wrong one for growing a group: from the
+leader it returns the first follower, which is already sharing, so a group
+could never reach three screens.  Same geometry, one exclusion — nearest first
+by the gap along the axis of travel."
+  (when from
+    (let ((horizontal (c:direction-horizontal-p direction))
+          (sign (c:direction-sign direction))
+          (best nil)
+          (best-gap nil))
+      (multiple-value-bind (from-x from-y) (c:rect-center (c:output-rect from))
+        (dolist (output (all-outputs) best)
+          (unless (or (eq output from) (c:share-siblings-p from output))
+            (multiple-value-bind (x y) (c:rect-center (c:output-rect output))
+              (let ((gap (* sign (if horizontal (- x from-x) (- y from-y)))))
+                (when (and (plusp gap) (or (null best-gap) (< gap best-gap)))
+                  (setf best output best-gap gap))))))))))
+
+(defun install-share (group)
+  "Record GROUP as sharing one workspace: the first member's.
+
+The first member is the leader and the only one that lays the plane out; it
+also owns the group's workspace index, which is the plane being shared.  A
+group of one is dissolved rather than recorded, so a lone output never carries
+a :SHARE-GROUP it does not use."
+  (let ((group (remove-duplicates group :test #'eq)))
+    (if (= 1 (length group))
+        (setf (c:output-share-group (first group)) nil)
+        (let ((index (c:prop (first group) :workspace)))
+          (dolist (member group)
+            (setf (c:output-share-group member) group
+                  (c:prop member :workspace) index))))
+    (c:refresh-share-rects *world*)
+    group))
+
+(defun unshare-output (output)
+  "Make OUTPUT leave whatever group it is in, alone or with the others."
+
+  (let ((group (c:output-share-group output)))
+    (when group
+      (let ((rest (remove output group :test #'eq)))
+        (dolist (member group)
+          (setf (c:output-share-group member) nil
+                (c:output-share-rect member) nil))
+        ;; The rest of the group keeps sharing among themselves, under the same
+        ;; leader and the same plane; a group of one is nothing at all.
+        (install-share rest)
+        (c:refresh-share-rects *world*)))
+    (p:ensure-workspaces-for-outputs *world*)
+    (mark-dirty)
+    (relayout)
+    (request-manage)))
+
+(defcommand share-workspace (direction)
+  "Show the workspace you are on across the output DIRECTION too.
+
+Both screens become one plane: the layout spans the union of their rectangles,
+so a cell, a split or a window can straddle the seam.  It is the one honest
+form of \"sharing\" a Wayland compositor allows — a surface has one geometry,
+so two outputs cannot display the *same* window twice; see #96.  The cursor's
+output is the leader and keeps the workspace; the other screen joins it.  Give
+it again to span three or four; the output joins the group already there."
+  (:interactive :direction)
+  (let* ((here (cursor-output))
+         (target (and here (output-in-direction-not-sharing here direction))))
+    (cond
+      ((null here) (notify "no output to share from"))
+      ((null target) (notify "no screen further ~(~a~) to share with" direction))
+      (t
+       (let* ((gh (or (c:output-share-group here) (list here)))
+              (gt (or (c:output-share-group target) (list target)))
+              (merged (append gh gt)))
+         ;; TARGET's old group, if any, loses it but keeps sharing.
+         (when (cdr gt)
+           (install-share (remove target gt :test #'eq)))
+         (install-share (remove-duplicates merged :test #'eq))
+         (mark-dirty) (relayout) (request-manage)
+         (notify "sharing with ~a" (or (c:output-name target)
+                                       "that output")))))))
+
+(defcommand unshare-workspace ()
+  "Stop sharing the workspace you are on; this screen shows its own again.
+
+The rest of the group keeps sharing among themselves.  The plane that was
+shared stays on the leader; the screen you are on is given the next free
+workspace, because the one it was looking at is still the group's."
+  (let ((output (cursor-output)))
+    (if (null (and output (c:output-share-group output)))
+        (notify "this workspace is not shared")
+        (progn
+          (unshare-output output)
+          (notify "no longer sharing")))))
+
+(defcommand list-shared ()
+  "List every shared workspace and the screens showing it."
+  (let ((groups '()))
+    (dolist (output (all-outputs))
+      (let ((group (c:output-share-group output)))
+        (when (and group (not (member group groups :test #'eq)))
+          (push group groups))))
+    (if (null groups)
+        (notify "no workspace is shared")
+        (show-help-page
+         (format nil "shared -- ~d" (length groups))
+         (loop for group in (sort groups (lambda (a b) (< (length a) (length b))))
+               for index from 1
+               collect (cons (format nil "~d" index)
+                             (format nil "workspace ~d across ~{~(~a~)~^, ~}"
+                                     (1+ (or (c:prop (first group) :workspace) 0))
+                                     (mapcar (lambda (member)
+                                               (or (c:output-name member) "?"))
+                                             group))))))))

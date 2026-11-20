@@ -26,6 +26,19 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **One workspace across two screens.** `share-workspace` takes the workspace
+  you are on and spreads it across the next screen in the direction you name:
+  the layout spans the union of the two rectangles, so a cell, a split or a
+  window can straddle the seam, and the gaps go round the arrangement rather
+  than round each monitor in it. Give it again to reach a third screen;
+  `unshare-workspace` gives this screen a workspace back and `list-shared` says
+  who is showing what. This is the honest form of "sharing" a Wayland
+  compositor allows — a surface has one geometry, so two outputs cannot display
+  the *same* window twice — and the second reading, one screen mirroring
+  another, is a different feature (still #96). It complicates one invariant and
+  no more: two outputs may share a workspace only while they are one group, and
+  the invariant still moves a screen off a shared workspace it never joined.
+  (#96)
 - **The build now asks whether a command is tested.** There are twenty-three
   gates and gate 23 is new: every command a session ships must be named by a
   test, or be on a written-down list of the ones that cannot be, with the

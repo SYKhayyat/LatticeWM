@@ -52,6 +52,70 @@ read.")
   (let ((count (output-capture-sessions output)))
     (and count (plusp count))))
 
+;;; ------------------------------------------------------ shared outputs
+;;;
+;;; #96: one plane across several monitors.  The word "share" needs a
+;;; definition before the code, because the obvious reading is not
+;;; expressible: a Wayland surface is one window with one geometry, so two
+;;; outputs cannot display *the same window* twice -- that would need two
+;;; surfaces for one client.  What a window manager CAN do is present one
+;;; workspace across the union of the monitors in a group, so a cell, a split
+;;; or a window straddles the seam.  That is what SHARE-WORKSPACE makes, and
+;;; MIRROR (the other half of #96) is filed separately rather than faked: see
+;;; the issue for the two candidate readings and why neither is this.
+
+(defun output-share-group (output)
+  "The outputs OUTPUT shares one workspace with, leader first, or NIL.
+
+The list is the *group*, stored on every member so that no table has to be
+kept in step with the outputs themselves: an output that is detached takes its
+answer with it, and a group whose leader is gone is repaired by the member
+that is still present.  Every member holds the same list, and identity -- not
+equality -- is what decides membership, because two outputs are not
+interchangeable just because they describe the same rectangle."
+  (prop output :share-group))
+
+(defun (setf output-share-group) (group output)
+  (setf (prop output :share-group) group))
+
+(defun output-share-rect (output)
+  "The rectangle OUTPUT presents, which is its group's union when it is shared.
+
+NIL for a follower: a follower draws nothing, because the leader laid the
+shared plane out over the group's whole area.  The two facts are kept apart on
+purpose -- GROUP says `we are sharing', RECT says `this is the area I draw' --
+so that a policy can tell `not shared' from `shared and not the one drawing'."
+  (prop output :share-rect))
+
+(defun (setf output-share-rect) (rect output)
+  (setf (prop output :share-rect) rect))
+
+(defun share-follower-p (output)
+  "Is OUTPUT in a shared group but not the member drawing it?"
+  (let ((group (output-share-group output)))
+    (and group (not (eq output (first group))) t)))
+
+(defun share-siblings-p (a b)
+  "Do A and B belong to one shared group?  NIL when neither is shared."
+  (let ((group (output-share-group a)))
+    (and group (eq group (output-share-group b)) t)))
+
+(defun refresh-share-rects (world)
+  "Recompute every group's rectangle from where its monitors actually are.
+
+Called before each layout, because an output can be moved, resized or
+unplugged between frames and the union is a fact about the *current*
+arrangement.  Cheap: a pass over the outputs and a reduction per group, which
+is the same order as the workspace invariant RELAYOUT already asserts."
+  (dolist (output (world-outputs world) (world-outputs world))
+    (let ((group (output-share-group output)))
+      (setf (output-share-rect output)
+            (and group
+                 (eq output (first group))
+                 (rect-union (mapcar (lambda (member)
+                                       (output-rect member))
+                                     group)))))))
+
 (defmethod print-object ((o output) stream)
   (print-unreadable-object (o stream :type t :identity nil)
     (format stream "~a ~dx~d+~d+~d" (or (output-name o) "?")

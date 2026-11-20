@@ -379,6 +379,22 @@ being called out of order rather than a case that happens."
                 unless (member index taken) return index)
           0)))
 
+(defun held-by-a-stranger-p (others output index)
+  "Does any output other than OUTPUT hold INDEX, and is it not in OUTPUT's group?
+
+THE SHARING EXCEPTION, AND NOTHING MORE.  Two outputs on one workspace is still
+the collapse #96's own code calls it — every window placed twice, the second
+placement winning — unless the two of them are one shared group, in which case
+exactly one of them lays the plane out across both and the other draws nothing.
+The distinction is made here, at the invariant, rather than in the sharing code,
+because this is the only place that knows which outputs are showing what: a
+second opinion would be a second chance to disagree."
+  (some (lambda (other)
+          (and (not (eq other output))
+               (eql index (c:prop other :workspace))
+               (not (c:share-siblings-p output other))))
+        others))
+
 (defun ensure-workspaces-for-outputs (world)
   "Every output shows a workspace, and no two outputs show the same one.
 
@@ -421,15 +437,17 @@ Three things, in this order:
                                        (make-workspace (current-policy) world index))
                                      (c:make-leaf)))))
       (let ((count (c:container-count stack))
-            (taken '()))
+            (taken '())
+            (settled '()))
         (loop for output in outputs
               for position from 0
               for index = (c:prop output :workspace)
               do (unless (and (integerp index) (< -1 index count)
-                              (not (member index taken)))
+                              (not (held-by-a-stranger-p settled output index)))
                    (setf index (free-workspace-index taken count position)
                          (c:prop output :workspace) index))
-                 (push index taken)))
+                 (push index taken)
+                 (push output settled)))
       stack)))
 
 (defmethod outer-rect ((policy layout-policy) (output c:output))
@@ -441,8 +459,17 @@ result without knowing why it is that shape.
 
 The outer gap goes when one window is alone on the screen — see *SMART-GAPS*.
 The reserved space does not: a status bar asked for its strip because it is
-drawing in it, and the number of windows underneath is not its business."
-  (let ((rect (c:rect-inset (c:output-rect output)
+drawing in it, and the number of windows underneath is not its business.
+
+THE RECTANGLE ASKED ABOUT IS THE SHARED ONE WHEN THERE IS ONE (#96).  An output
+presenting a workspace shared with its neighbours presents the union of the
+group, so the gaps go round the whole arrangement rather than round each
+monitor in it: a shared plane with a gap down the seam would be two planes with
+a border between them, which is the thing sharing exists to remove.  The
+reserved space is the leader's own, because that is the output the surfaces
+were drawn for — one status strip per group, not one per monitor."
+  (let ((rect (c:rect-inset (or (c:output-share-rect output)
+                                (c:output-rect output))
                             (if (output-solo-window output) 0 *outer-gaps*))))
     (destructuring-bind (top right bottom left) (reserved-space policy output)
       (c:make-rect (+ (c:rect-x rect) left)

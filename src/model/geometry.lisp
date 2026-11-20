@@ -62,6 +62,27 @@ what gets handed to river's set_content_clip_box."
     (when (and (< x r) (< y bt))
       (make-rect x y (- r x) (- bt y)))))
 
+(defun rect-union (rects)
+  "The smallest rectangle containing every rectangle in RECTS, or NIL.
+
+Used by workspace sharing (#96) and by nothing else yet, so it is here rather
+than beside its one caller: a rectangle that contains two others is a fact
+about rectangles, and the next thing that needs one should not have to write a
+second version of it.
+
+NIL for an empty list rather than a zero-sized rectangle, because `no
+rectangle' and `a rectangle of no size' are different answers and only one of
+them is what an empty group means.  An empty or absent rectangle in the list is
+ignored rather than treated as the origin, which would silently drag every
+union back to (0, 0)."
+  (let ((live (remove-if #'rect-empty-p rects)))
+    (when live
+      (let* ((x (reduce #'min live :key #'rect-x))
+             (y (reduce #'min live :key #'rect-y))
+             (right (reduce #'max live :key #'rect-right))
+             (bottom (reduce #'max live :key #'rect-bottom)))
+        (make-rect x y (- right x) (- bottom y))))))
+
 (defun rect-inset (r amount &optional (vertical amount))
   "R shrunk by AMOUNT on the left and right and VERTICAL top and bottom.
 

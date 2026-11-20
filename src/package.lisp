@@ -145,6 +145,7 @@ deliberately decomposed so that policy can redirect it.")
    #:make-default-float-rect #:*default-float-width* #:*default-float-height*
    #:rect-p #:copy-rect #:rect-right #:rect-bottom #:rect-contains-p
    #:rect-intersect #:rect-empty-p #:rect-equal #:rect-inset #:rect-center
+   #:rect-union
    #:divide-rect
    ;; directions
    #:+directions+ #:direction-p #:direction-axis #:direction-sign
@@ -225,6 +226,8 @@ deliberately decomposed so that policy can redirect it.")
    #:float-of-window
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
+   #:output-share-group #:output-share-rect #:share-follower-p
+   #:share-siblings-p #:refresh-share-rects
    #:output-capture-sessions #:output-captured-p #:world-captures
    #:world-node-at #:world-leaf-at #:world-window-at #:world-focus-window
    #:current-workspace #:workspace-path #:world-workspaces))

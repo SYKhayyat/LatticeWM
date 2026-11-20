@@ -75,10 +75,16 @@ Asking before either of them also makes the answer *consistent*: the second
 call happened after P:*SOLO-WINDOWS* was set, so a policy whose OUTPUT-CONTENT
 read it would have seen two different worlds within one relayout."
   (let ((out '()))
+    (c:refresh-share-rects *world*)
     (dolist (output (all-outputs) (nreverse out))
-      (multiple-value-bind (node prefix)
-          (guarded "output-content" (p:output-content policy *world* output))
-        (push (list output node prefix) out)))))
+      ;; A FOLLOWER IN A SHARED GROUP ASKS NOTHING AND DRAWS NOTHING (#96): the
+      ;; leader lays the one plane out across the whole group, so an entry for
+      ;; the follower would be the duplicate-node mistake this file diagnoses
+      ;; three paragraphs down, arrived at deliberately.
+      (unless (c:share-follower-p output)
+        (multiple-value-bind (node prefix)
+            (guarded "output-content" (p:output-content policy *world* output))
+          (push (list output node prefix) out))))))
 
 (defun compute-layout (&optional (policy (p:current-policy))
                                  (contents (output-contents policy)))
@@ -111,7 +117,10 @@ call this with no arguments, which is what it is exported for."
              ;; made it expensive is that nothing anywhere said a word.
              ;; ENSURE-WORKSPACES-FOR-OUTPUTS makes it unreachable for the
              ;; shipped policy; this is what an extension gets instead of a
-             ;; black screen.
+             ;; black screen.  Since #96 the one honest way two outputs show
+             ;; one node is a shared group, and that answer is *one* entry
+             ;; built by OUTPUT-CONTENTS above -- a duplicate reaching here is
+             ;; a group whose leader is not the one the layout was asked for.
              (when (and node (member node shown))
                (note-once :duplicate-output-content
                           "~a and another output are showing the same node, so ~
