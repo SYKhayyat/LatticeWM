@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-69 generics, 115 options.  Generated from the running image.
+69 generics, 116 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -657,6 +657,7 @@ For side effects: raising a float, warping the pointer, updating a bar.
 Return value ignored.  Errors here are caught and logged rather than allowed
 to abort the motion.
 
+  answered from: *focus-history-size*
   methods:
     (motion-policy t t t)               ; defaults-motion.lisp
 
@@ -1781,6 +1782,24 @@ something can teleport you across your desktop.
   now: NIL
   read by: attach-seat, on-pointer-enter
   Move the cursor to whatever pane the pointer is over.
+
+*focus-history-size*
+  now: 50
+  read by: on-focus-change (motion-policy t t t)
+  How many windows the focus history remembers, most recent first.
+
+The history behind FOCUS-BACK.  Fifty is enough to walk back through a working
+session and small enough that a torn-off window is dropped rather than kept
+alive; a window in this list holds no reference the model would not otherwise
+be using, and dead and minimized windows are skipped when the walk looks for
+somewhere to go.
+
+The list is the *world's*, not one per output, and that is deliberate: the
+cursor is a place in one model rather than a consequence of which screen is
+active (D18, and the same argument *REMEMBER-PLACE* makes), so `back' means the
+window you were in, wherever it was being drawn.  A per-output history would
+answer `the window you were in on this screen', which is a question nobody
+asks.
 
 *focus-new-windows*
   now: T

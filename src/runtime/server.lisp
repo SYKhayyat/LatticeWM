@@ -408,6 +408,26 @@ inside a key press gets without saying anything)."
 deliberately empty, which is an ordinary state and not an error."
   (and *world* (c:world-window-at *world* path)))
 
+(defvar *focus-override* nil
+  "The window that counts as focused for the duration of a WITH-WINDOW, or NIL.
+
+A dynamic variable rather than a change to the world, for three reasons that are
+all the same reason seen from different ends: the override must end when the
+call does (including on an error), it must not reach the compositor -- nothing
+is being told that this window has the keyboard -- and it must nest, so that
+WITH-WINDOW inside WITH-WINDOW restores what it found.  With-window binds it;
+LISTENING commands that must not be fooled by it (the echo area, the pointer)
+read WORLD-FOCUS-WINDOW themselves.
+
+The point of it is #128: every verb in the system asks FOCUSED-WINDOW who it is
+acting on, so one binding turns `close the thing I tagged browser' from a
+feature request into a wrapper, without a &key (window ...) on five hundred
+commands.")
+
+(defmacro with-focus-on (window &body body)
+  "Run BODY with WINDOW as `the focused window'."
+  `(let ((*focus-override* ,window)) ,@body))
+
 (defun focused-window ()
   "The window that currently has keyboard focus, float or tiled.
 
@@ -416,7 +436,8 @@ exactly when a floating window is focused, and every command that acts on \"the
 window\" — close, minimize, fullscreen, float — means this one.  Getting that
 wrong is not subtle in use: you press close, and the window behind the dialog
 you were looking at disappears."
-  (and *world* (c:world-focus-window *world* p:*seat*)))
+  (or *focus-override*
+      (and *world* (c:world-focus-window *world* p:*seat*))))
 
 (defun node-rect-now (node)
   "The rectangle NODE was last laid out at, or NIL.

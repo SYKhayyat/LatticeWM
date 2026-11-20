@@ -748,3 +748,175 @@ to navigate to the thing first.  You stay where you are and it comes to you."
             "holding both windows, side by side")
         (is (= 2 (length (c:node-windows (c:world-root world))))
             "and nothing was lost doing it")))))
+
+;;; ---------------------------------------------------------- focus history
+;;;
+;;; #17.  The recency list was already there (:MRU consults it when the focused
+;;; window closes); what this adds is the *walk* -- back, forward, list, clear.
+;;; The checks that matter are the ones about not lying: a window that closed is
+;;; stepped over, and walking back does not reset the walk.
+
+(defun a-row-of-windows (count)
+  "A world with COUNT windows in one split, the cursor on the first.
+Values: (values WORLD WINDOWS)."
+  (let* ((windows (loop for i below count collect (win (format nil "w~d" i))))
+         (world (c:make-world
+                 :root (c:make-stack
+                        (list (c:make-split :horizontal
+                                            (loop for window in windows
+                                                  collect (c:make-leaf window))))
+                        0))))
+    (values world windows)))
+
+(test focus-history-records-where-you-have-been
+  "A move is recorded by the movers, not by a caller remembering to."
+  (multiple-value-bind (world windows) (a-row-of-windows 3)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second third) windows
+        ;; A history begins at the first *change*, so the fixture says where it
+        ;; starts rather than assuming the cursor's arrival was announced.
+        (r:focus-existing-window first)
+        (r:focus-existing-window second)
+        (r:focus-existing-window third)
+        (is (equal (mapcar #'c:window-app-id (list third second first))
+                   (mapcar #'c:window-app-id (p:focus-history-of world)))
+            "most recent first")
+        (is (= 0 (p:focus-history-cursor world)) "and the walk starts at now")))))
+
+(test focus-back-walks-and-focus-forward-comes-back
+  "Repeated back steps *walk*.  This is the thing a naive version gets wrong:
+the jump focuses a window, the focus change records it, and the walk starts
+again from the top -- so back-back-back lands on one window and stays."
+  (multiple-value-bind (world windows) (a-row-of-windows 3)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second third) windows
+        (r:focus-existing-window first)
+        (r:focus-existing-window second)
+        (r:focus-existing-window third)
+        (r:focus-back)
+        (is (eq second (r:focused-window)) "one step back")
+        (r:focus-back)
+        (is (eq first (r:focused-window)) "and another")
+        (r:focus-forward)
+        (is (eq second (r:focused-window)) "forward returns")
+        (r:focus-forward)
+        (is (eq third (r:focused-window)) "and forward again")))))
+
+(test focus-back-steps-over-a-window-that-is-gone
+  "A history is a list of where you have been, and some of those places stop
+existing.  Landing on nothing would make the key feel broken."
+  (multiple-value-bind (world windows) (a-row-of-windows 3)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second third) windows
+        (r:focus-existing-window first)
+        (r:focus-existing-window second)
+        (r:focus-existing-window third)
+        (setf (c:window-live-p second) nil)
+        (r:focus-back)
+        (is (eq first (r:focused-window))
+            "the dead window was stepped over, not returned")))))
+
+(test focus-back-says-so-when-there-is-nothing-that-way
+  (multiple-value-bind (world windows) (a-row-of-windows 2)
+    (declare (ignore windows))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
+          (r::*echo-message* nil))
+      (is (stringp (r:focus-back)) "it answers in the echo area")
+      (is-true (search "history" (car r::*echo-message*)) "and says which"))))
+
+(test the-focus-history-is-bounded-by-its-option
+  "A setting, not a literal: the list is what the world holds, and it must not
+grow without end in a session that lasts a week."
+  (multiple-value-bind (world windows) (a-row-of-windows 6)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
+          (p:*focus-history-size* 3))
+      (dolist (window windows) (r:focus-existing-window window))
+      (r:focus-existing-window (first windows))
+      (is (= 3 (length (p:focus-history-of world)))
+          "the oldest entries fall off the end"))))
+
+(test focus-history-lists-what-it-will-walk
+  (multiple-value-bind (world windows) (a-row-of-windows 2)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
+          (r::*help-visible* nil) (r::*echo-message* nil))
+      (destructuring-bind (first second) windows
+        (declare (ignore second))
+        (is (stringp (r:focus-history)) "no history yet: it says so")
+        (r:focus-existing-window first)
+        (is-true (r:focus-history) "and with a history, a page")))))
+
+(test clear-focus-history-forgets-everything-but-now
+  (multiple-value-bind (world windows) (a-row-of-windows 3)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second third) windows
+        (declare (ignore first second))
+        (r:focus-existing-window third)
+        (r:clear-focus-history)
+        (is (= 1 (length (p:focus-history-of world))) "one entry left")
+        (is (= 0 (p:focus-history-cursor world)) "and the walk is at it")))))
+
+;;; ------------------------------------------------------------- with-window
+;;;
+;;; #128.  Every verb asks FOCUSED-WINDOW who it acts on, so a name is enough to
+;;; aim any of them -- including an extension's, which knows nothing about this.
+
+(test with-window-aims-a-verb-at-a-named-window
+  "The point of the exercise: act on a window that does not have the keyboard."
+  (multiple-value-bind (world windows) (a-row-of-windows 3)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second third) windows
+        (declare (ignore first))
+        (r:focus-existing-window third)
+        (r:with-window second "toggle-fullscreen")
+        (is (equal '(:tiled :fullscreen) (c:window-state world second))
+            "the named window was the subject")
+        (is (equal '(:tiled) (c:window-state world third))
+            "and the focused one was left alone")))))
+
+(test with-window-leaves-the-keyboard-where-it-was
+  "Not `focus it and then run the command': nothing is told that the window has
+the keyboard, and afterwards focus is exactly where it was."
+  (multiple-value-bind (world windows) (a-row-of-windows 3)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second third) windows
+        (declare (ignore first second))
+        (r:focus-existing-window third)
+        (r:with-window second "toggle-fullscreen")
+        (is (eq third (r:focused-window)) "focus is unchanged")
+        (is (equal '(:tiled) (c:window-state world third))
+            "and the window it is focused on was not the subject")))))
+
+(test with-window-restores-the-override-when-the-command-fails
+  "A dynamic binding, so a signalled command unwinds through it.  A world where
+this leaked would run the next verb on the wrong window, which is a bug nobody
+would attribute to this command."
+  (multiple-value-bind (world windows) (a-row-of-windows 2)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (destructuring-bind (first second) windows
+        (r:focus-existing-window first)
+        (handler-case
+            (r:with-focus-on second (error "the command failed"))
+          (error () nil))
+        (is (null r:*focus-override*) "the override is gone")
+        (is (eq first (r:focused-window))
+            "and what `focused' means is the model's answer again")))))
+
+(test with-window-refuses-a-name-that-reaches-nothing
+  (multiple-value-bind (world windows) (a-row-of-windows 2)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
+          (r::*echo-message* nil))
+      (destructuring-bind (first second) windows
+        (declare (ignore first))
+        (r:with-window nil "toggle-float")
+        (is (stringp (r:with-window nil "toggle-float")) "it answers")
+        (is (equal '(:tiled) (c:window-state world second))
+            "and ran nothing")))))
+
+(test with-window-refuses-a-command-that-is-not-one
+  (multiple-value-bind (world windows) (a-row-of-windows 2)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
+          (r::*echo-message* nil))
+      (destructuring-bind (first second) windows
+        (declare (ignore first))
+        (r:with-window second "not-a-command")
+        (is-true (search "no such command" (car r::*echo-message*)))))))

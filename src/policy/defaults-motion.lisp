@@ -95,6 +95,86 @@ does not reveal a hidden tab."
     (:next (or (c:next-leaf-path (c:world-root world) suggested) suggested))
     (:mru (or (mru-path world) suggested))))
 
+(define-option *focus-history-size* 50
+  "How many windows the focus history remembers, most recent first.
+
+The history behind FOCUS-BACK.  Fifty is enough to walk back through a working
+session and small enough that a torn-off window is dropped rather than kept
+alive; a window in this list holds no reference the model would not otherwise
+be using, and dead and minimized windows are skipped when the walk looks for
+somewhere to go.
+
+The list is the *world's*, not one per output, and that is deliberate: the
+cursor is a place in one model rather than a consequence of which screen is
+active (D18, and the same argument *REMEMBER-PLACE* makes), so `back' means the
+window you were in, wherever it was being drawn.  A per-output history would
+answer `the window you were in on this screen', which is a question nobody
+asks.")
+
+(defun focus-history-of (world)
+  "The windows focus has been through, most recent first, as a list.
+
+Called -OF because the *command* of the plain name is FOCUS-HISTORY, which
+lists them; two different answers to `the focus history' in one package would
+have been a name conflict in the user package, and the command is the one
+people type."
+  (c:prop world :focus-history))
+
+(defun (setf focus-history-of) (history world)
+  (setf (c:prop world :focus-history) history))
+
+(defun focus-history-cursor (world)
+  "How far back down the history the cursor is standing.  0 is `now'."
+  (or (c:prop world :focus-history-cursor) 0))
+
+(defun (setf focus-history-cursor) (index world)
+  (setf (c:prop world :focus-history-cursor) index))
+
+(defun forget-focus-history (world)
+  "Forget everything but the window currently focused.
+
+FORGET- rather than CLEAR- because CLEAR-FOCUS-HISTORY is the command, and the
+two would have collided in the user package."
+  (setf (focus-history-of world) (let ((now (c:world-focus-window world *seat*)))
+                                (and now (list now)))
+        (focus-history-cursor world) 0)
+  (focus-history-of world))
+
+(defun focus-history-entries (world)
+  "The history, most recent first, each as (WINDOW . REACHABLE-P).
+
+The unreachable ones are worth keeping and worth showing: a window on the
+scratchpad is still a window you were in, and hiding it would make the list
+disagree with the count FOCUS-BACK walks."
+  (loop for window in (focus-history-of world)
+        collect (cons window
+                      (and (c:window-live-p window)
+                           (not (c:window-minimized-p window))
+                           (or (c:float-of-window world window)
+                               (c:leaf-holding (c:world-root world) window))))))
+
+(defun focus-history-step (world step)
+  "The window STEP entries along the history from where the walk stands, or NIL.
+
+STEP is +1 for `back' and -1 for `forward'.  Entries that cannot be reached any
+more -- the window closed, or was put away since -- are stepped over rather than
+returned, so a walk back never lands on nothing.  The cursor moves, which is
+what makes repeated calls walk instead of oscillating between two windows."
+  (let* ((entries (focus-history-of world))
+         (count (length entries))
+         (cursor (focus-history-cursor world))
+         (found nil)
+         (found-index nil))
+    (loop for index = (+ cursor step) then (+ index step)
+          while (and (not found) (<= 0 index) (< index count))
+          do (let ((window (nth index entries)))
+               (when (and (c:window-live-p window)
+                          (not (c:window-minimized-p window)))
+                 (setf found window found-index index))))
+    (when found
+      (setf (focus-history-cursor world) found-index))
+    found))
+
 (defun mru-path (world)
   "The path of the most recently focused surviving window, or NIL.
 
@@ -106,13 +186,28 @@ is exactly the kind of state an *option* wants and the core does not."
         when leaf return (c:node-path-to (c:world-root world) leaf)))
 
 (defmethod on-focus-change ((policy motion-policy) world old new)
-  "Record the window we are leaving, so that :MRU has something to consult."
+  "Record the window we are leaving, so that :MRU and FOCUS-BACK have something
+to consult.
+
+A JUMP WE ASKED FOR DOES NOT RESET THE WALK.  FOCUS-BACK moves the cursor down
+the history and then focuses what it found, and that focus change arrives here
+like any other; if this method tidied the list every time, back-back-back would
+land on one window and stay.  The test is exact -- the window being focused is
+the one the cursor already points at -- so an *unexpected* focus change still
+resets the walk to 0, which is what makes the history describe what happened
+rather than what was asked for."
   (declare (ignore old))
   (let ((window (c:world-window-at world new)))
     (when window
-      (setf (c:prop world :focus-history)
-            (cons window (remove window (c:prop world :focus-history)
-                                 :count 1)))))
+      (let ((history (focus-history-of world)))
+        (unless (eq window (nth (focus-history-cursor world) history))
+          (let ((history (cons window (remove window history :count 1))))
+            (setf (focus-history-of world)
+                  (if (and *focus-history-size*
+                           (> (length history) *focus-history-size*))
+                      (subseq history 0 *focus-history-size*)
+                      history)
+                  (focus-history-cursor world) 0))))))
   nil)
 
 (defmethod focus-target ((policy motion-policy) world)

@@ -63,6 +63,9 @@ LatticeWM commands.
   
   The window itself is closed; what survives is the place.
 
+(clear-focus-history)
+  Forget every window but the one you are in now.
+
 (clear-selection)
   Unmark every window.
 
@@ -163,6 +166,14 @@ LatticeWM commands.
   the cell next door, entering through the edge you crossed.  Bumping the edge of
   the world does nothing, and that is not an error.
 
+(focus-back &optional (step 1))
+  Focus the window you were in before this one.  Give it a number to walk back
+  further; each one is a window you have actually been in, most recent first.
+  
+  Windows that have closed or been put away since are stepped over, so this does
+  not land on nothing, and walking back does not reset the walk -- only an
+  unexpected focus change does.  FLIP: FOCUS-FORWARD comes back the way you went.
+
 (focus-float &optional (step 1))
   Move keyboard focus to the next floating window, or back to the tree.
   
@@ -175,6 +186,13 @@ LatticeWM commands.
   leaves floats with no way to be focused at all, and a floating window you
   cannot type into is not a floating window.  WORLD-FOCUSED-FLOAT is the one slot
   that fixes it, and this is the verb that sets it.
+
+(focus-forward &optional (step 1))
+  Focus the window you walked back away from.  The other half of FOCUS-BACK.
+
+(focus-history)
+  List every window focus has been through, most recent first, marking where
+  the walk stands and which entries are no longer on a screen.
 
 (focus-next)
   Move the cursor to the next pane in layout order, wrapping.
@@ -670,6 +688,21 @@ LatticeWM commands.
   This is what appears by itself the first time LatticeWM runs.  Super+/ is the
   complete keymap; this is the short version, and it ends with how to quit
   because a window manager you cannot leave is a frightening thing to try.
+
+(with window command)
+  Run COMMAND with the window you name as the one it acts on.
+  
+  Every verb in this system asks FOCUSED-WINDOW who it is working on, so naming a
+  window here is enough to aim any of them at it -- including verbs an extension
+  adds, which need to know nothing about this.  COMMAND is then asked for its own
+  arguments as usual, which is why this is a wrapper and not a `&key (window ...)'
+  on five hundred commands.
+  
+  The window is not *focused*: nothing is told that it has the keyboard, and after
+  the command runs the keyboard is wherever it was.  That distinction matters for
+  anything that reads the world rather than FOCUSED-WINDOW -- the echo area, the
+  pointer, the compositor -- and it is why the override is a dynamic binding
+  rather than a change to the focus model.
 
 (workspace number)
   Switch to workspace NUMBER, creating it and any before it if needed.

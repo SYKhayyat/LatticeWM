@@ -315,6 +315,23 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   default: NIL
   Move the cursor to whatever pane the pointer is over.
 
+*FOCUS-HISTORY-SIZE*
+  default: 50
+  How many windows the focus history remembers, most recent first.
+  
+  The history behind FOCUS-BACK.  Fifty is enough to walk back through a working
+  session and small enough that a torn-off window is dropped rather than kept
+  alive; a window in this list holds no reference the model would not otherwise
+  be using, and dead and minimized windows are skipped when the walk looks for
+  somewhere to go.
+  
+  The list is the *world's*, not one per output, and that is deliberate: the
+  cursor is a place in one model rather than a consequence of which screen is
+  active (D18, and the same argument *REMEMBER-PLACE* makes), so `back' means the
+  window you were in, wherever it was being drawn.  A per-output history would
+  answer `the window you were in on this screen', which is a question nobody
+  asks.
+
 *FOCUS-NEW-WINDOWS*
   default: T
   Move the cursor onto a window when it appears.

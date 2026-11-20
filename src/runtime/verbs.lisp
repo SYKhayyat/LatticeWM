@@ -245,6 +245,99 @@ cursor follows it there."
      window)))
 ;;; ============================================================ structure
 
+;;; ------------------------------------------------------------- by name
+;;;
+;;; #128.  Tags gave windows names and FOCUS-WINDOW-BY-NAME made a name a way to
+;;; reach one.  This makes a name an *argument* to everything else: `close the
+;;; thing I tagged browser', from a key binding, without caring which window
+;;; happens to have the keyboard.
+
+(defcommand (with-window "with") (window command)
+  "Run COMMAND with the window you name as the one it acts on.
+
+Every verb in this system asks FOCUSED-WINDOW who it is working on, so naming a
+window here is enough to aim any of them at it -- including verbs an extension
+adds, which need to know nothing about this.  COMMAND is then asked for its own
+arguments as usual, which is why this is a wrapper and not a `&key (window ...)'
+on five hundred commands.
+
+The window is not *focused*: nothing is told that it has the keyboard, and after
+the command runs the keyboard is wherever it was.  That distinction matters for
+anything that reads the world rather than FOCUSED-WINDOW -- the echo area, the
+pointer, the compositor -- and it is why the override is a dynamic binding
+rather than a change to the focus model."
+  (:interactive :window :command)
+  (let ((inner (find-command command)))
+    (cond
+      ((null window) (notify "no window matches"))
+      ((null inner) (notify "no such command: ~a" command))
+      ((eq inner (find-command "with"))
+       (notify "with-window cannot run itself"))
+      (t
+       (let ((arguments (command-arguments inner)))
+         (if (and arguments (not (command-interactive-p inner)))
+             (notify "~a takes ~{~(~a~)~^ ~} -- run it from a REPL"
+                     (command-name inner) (command-lambda-list inner))
+             (with-focus-on window
+               (if (null arguments)
+                   (progn (run-command (command-name inner)) (after-command))
+                   (read-arguments
+                    inner arguments
+                    (lambda (values)
+                      (apply #'run-command (command-name inner) values)
+                      (after-command)))))))))))
+
+;;; ------------------------------------------------------------ focus history
+;;;
+;;; #17.  The recency list already existed -- :MRU consults it when the window
+;;; you close is the focused one -- so what was missing was the walk.  These are
+;;; the four commands, and they are thin on purpose: the list, the cursor and
+;;; the stepping rules live in the policy (P:FOCUS-HISTORY-STEP), because they
+;;; are about focus and not about keys.
+
+(defun focus-history-jump (window)
+  "Go to WINDOW and say where it is, or say there was nothing to go to."
+  (if (null window)
+      (notify "no window that way in the focus history")
+      (progn
+        (when (c:window-minimized-p window) (restore-window window))
+        (focus-existing-window window)
+        (notify "~a (~a)" (p:name-of-window window) (window-place-name window)))))
+
+(defcommand focus-back (&optional (step 1))
+  "Focus the window you were in before this one.  Give it a number to walk back
+further; each one is a window you have actually been in, most recent first.
+
+Windows that have closed or been put away since are stepped over, so this does
+not land on nothing, and walking back does not reset the walk -- only an
+unexpected focus change does.  FLIP: FOCUS-FORWARD comes back the way you went."
+  (focus-history-jump (p:focus-history-step *world* step)))
+
+(defcommand focus-forward (&optional (step 1))
+  "Focus the window you walked back away from.  The other half of FOCUS-BACK."
+  (focus-history-jump (p:focus-history-step *world* (- step))))
+
+(defcommand focus-history ()
+  "List every window focus has been through, most recent first, marking where
+the walk stands and which entries are no longer on a screen."
+  (let ((rows (loop for (window . reachable) in (p:focus-history-entries *world*)
+                    for index from 0
+                    collect (cons (if (= index (p:focus-history-cursor *world*))
+                                      (format nil "~d*" index)
+                                      (format nil "~d" index))
+                                  (format nil "~a~@[ (~a)~]~:[ -- gone~;~]"
+                                          (p:name-of-window window)
+                                          (window-place-name window)
+                                          reachable)))))
+    (if (null rows)
+        (notify "no focus history yet")
+        (show-help-page (format nil "focus history -- ~d" (length rows)) rows))))
+
+(defcommand clear-focus-history ()
+  "Forget every window but the one you are in now."
+  (let ((left (p:forget-focus-history *world*)))
+    (notify "focus history cleared~@[ (~d left)~]" (and left (length left)))))
+
 (defcommand (split-pane "split") (&optional axis (side :after))
   "Split the focused pane, leaving an *empty* pane beside it.
 

@@ -282,6 +282,8 @@ You never edit this package.")
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change #:focus-target
+   #:*focus-history-size* #:focus-history-of #:focus-history-cursor
+   #:focus-history-step #:focus-history-entries #:forget-focus-history
    #:find-motion-target #:move-cursor #:jump-cursor #:descend-to-leaf
    #:repair-cursor #:motion-rects #:best-aligned-address
    #:mru-path #:node-rect #:place-node
@@ -579,6 +581,7 @@ keybindings, the command registry, and the session loop.")
    #:*selection* #:selected-windows #:mark-selected #:clear-selected
    #:float-window-now #:unfloat-window #:minimize-window #:restore-window
    #:float-away-from-tree #:transition-window #:*window-transitions*
+   #:*focus-override* #:with-focus-on #:focused-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
    ;; things that happen because time passed rather than because a client
