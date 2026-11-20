@@ -17,7 +17,7 @@ not need this page at all.
 git clone https://github.com/SYKhayyat/LatticeWM.git
 cd LatticeWM
 ./bootstrap.sh          # fetches the two dependencies; idempotent
-make check              # build, twenty-two gates, the unit suite, integration
+make check              # build, twenty-three gates, the unit suite, integration
 ```
 
 `make check` is what CI runs and what the nix build runs. If it is green on
@@ -28,7 +28,7 @@ worth reporting on its own.
 
 ## What will fail your branch, up front
 
-There are twenty-two build gates. They are not style checks; each one exists
+There are twenty-three build gates. They are not style checks; each one exists
 because something silently rotted and nobody noticed. That makes them
 excellent for a maintainer and a wall for a newcomer, so here is the wall,
 described before you hit it.
@@ -51,9 +51,14 @@ described before you hit it.
 | 19 | the version, the licence or the gate count disagreeing between files |
 | 20 | a method in `src/policy/protocol.lisp` |
 | 22 | a protocol request called from outside `src/wire/` — add an alias and call that |
+| 23 | a command no test names, unless it is on the list of ones that cannot be, with a reason |
 
 Two of these bite first-time contributors in ways that feel arbitrary and are
 not:
+
+- **Gate 23.** A new command needs a test that names it, or a line in
+  `*untested-commands*` in `tools/gates.lisp` saying why it cannot have one.
+  The list only shrinks: when a command gains a test, delete its line.
 
 - **Gate 16.** Export a symbol in the same commit as the thing that uses it.
   An export with no reader is a promise to a stranger with nothing behind it,

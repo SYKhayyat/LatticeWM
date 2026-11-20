@@ -205,7 +205,7 @@ fi
 # ------------------------------------------------------------- the compositor
 
 # A warning rather than an error, deliberately: everything except actually
-# running the window manager — the build, all twenty-two gates, all the unit tests —
+# running the window manager — the build, all twenty-three gates, all the unit tests —
 # works with no compositor at all, and refusing to bootstrap on a machine that
 # is only ever going to compile would be wrong.
 #
@@ -385,6 +385,6 @@ for s in $SYSTEMS; do say "  $s"; done
 say ""
 say "done.  Next:"
 say ""
-say "  make            build, twenty-two gates, the unit suite"
+say "  make            build, twenty-three gates, the unit suite"
 say "  make run        river nested inside this session"
 say "  ./install.sh    install it, and offer it at the login screen"

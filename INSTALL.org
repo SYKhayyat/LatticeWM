@@ -6,7 +6,7 @@
 #+begin_src sh
 git clone … && cd LatticeWM
 ./bootstrap.sh        # fetches the Lisp dependencies into ./.deps/
-make                  # build, twenty-two gates, and the unit suite
+make                  # build, twenty-three gates, and the unit suite
 make image            # dump ./latticewm, one executable, 13 MB
 ./install.sh          # into ~/.local, and offer it at the login screen
 #+end_src
@@ -97,7 +97,7 @@ instead of 13 and is fine for development. Everything except the image —
 SBCL with no compression at all.
 
 *The bottom of that range is run rather than reasoned about.* The whole build
-— twenty-two gates, the unit suite and =make surface= — is green on SBCL
+— twenty-three gates, the unit suite and =make surface= — is green on SBCL
 2.2.6, on 2.2.9 and on 2.6.6, and the six generated documents come out
 byte-identical on all three. That last part is not a bonus: the documents are
 regenerated and diffed on every push, so a generator whose output depended on
@@ -224,7 +224,7 @@ when your distribution has nothing, or has something below the floor.
 =bootstrap.sh= warns if it finds a river that is not the vendored release —
 reading the release out of =src/protocol/PINNED=, so the warning cannot drift
 from what the program will accept — and does not stop: everything except
-actually running the window manager — the build, all twenty-two gates, all the tests
+actually running the window manager — the build, all twenty-three gates, all the tests
 — works with no compositor on the machine at all.
 
 If you use nix, you do not have to think about any of this: =shell.nix= reads
@@ -440,7 +440,7 @@ file-chooser, no hardware acceleration.
 * Checking that it worked
 
 #+begin_src sh
-make            # the twenty-two gates, then the unit suite
+make            # the twenty-three gates, then the unit suite
 ./latticewm --version
 ./latticewm --list-commands | head
 river -c "$PWD/latticewm --log-level debug"

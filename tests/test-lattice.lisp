@@ -2070,3 +2070,142 @@ answer the root when the root is one."
       (is (eq grid found))
       (is (null address) "no cell, because the path names none")
       (is (null base) "and the plane is the root"))))
+
+;;; ------------------------------------------- the lattice's own verbs (#119)
+;;;
+;;; The verbs that ARE the lattice: the camera, the address book and the broom.
+;;; The suite has tested the functions underneath these for a long time (TIDY-
+;;; GRID, SET-ZOOM, GOTO-CELL), and gate 23 asked the other question -- whether
+;;; the *commands* are named by anything -- and found twelve of them named by
+;;; nothing at all.  A command is what a key runs; a suite that only calls what
+;;; the command calls is a suite that would not notice the command passing the
+;;; wrong argument.
+
+(test zooming-in-and-out-is-a-round-trip
+  "Stepping out and back returns to exactly where you were, which is DESIGN
+D7's ruling that zoom is a camera and not an edit."
+  (with-lattice-world ()
+    (let* ((grid (l:current-grid))
+           (viewport (l:grid-viewport grid))
+           (before (l:zoom-index viewport)))
+      (l:zoom-out)
+      (is (> (l:zoom-index (l:grid-viewport grid)) before)
+          "out is further out on the ladder")
+      (l:zoom-in)
+      (is (= before (l:zoom-index (l:grid-viewport grid)))
+          "and in is the same trip back")
+      (l:zoom-out 3)
+      (l:zoom-reset)
+      (is (= 0 (l:zoom-index (l:grid-viewport grid)))
+          "reset is the first rung: one cell filling the screen"))))
+
+(test zoom-fit-finds-the-rung-that-holds-everything
+  "The command exists because the ladder is a list of rungs and the right rung
+for a given plane is a fact about the plane, not something to try by hand."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:child-at grid (l:cell 0 0)) (leaf "a"))
+      (setf (c:child-at grid (l:cell 3 2)) (leaf "b"))
+      (l:set-zoom grid 0 :focus (l:cell 0 0))
+      (l:zoom-fit)
+      (let ((viewport (l:grid-viewport grid)))
+        (is (>= (* (l:viewport-cols viewport) (l:viewport-rows viewport)) 4)
+            "four by three is on no rung, so the viewport holds at least one
+cell per axis of what is occupied")
+        (is (<= (l:viewport-cols viewport) 8)
+            "and it did not zoom out past the far end of the ladder")))))
+
+(test the-address-book-names-a-cell-and-goes-back-to-it
+  "Names, not numbers (D1 layer 3): the name is what you remember three days
+later, and the coordinate it stores is what the machine uses."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:child-at grid (l:cell 2 1)) (leaf "editor"))
+      (l:goto 2 1)
+      (is (equal (l:cell 2 1) (l:current-cell)) "GOTO is the escape hatch")
+      (l:name-cell "code")
+      (is (equal (l:cell 2 1) (gethash "code" (l:grid-names grid)))
+          "the cell is stored by the name it was given")
+      (l:goto 0 0)
+      (is (equal (l:cell 0 0) (l:current-cell)) "we walked away")
+      (l:goto-name "code")
+      (is (equal (l:cell 2 1) (l:current-cell))
+          "and the name brought us back")
+      (l:goto-name "nobody-named-this")
+      (is (equal (l:cell 2 1) (l:current-cell))
+          "an unknown name leaves you where you are rather than jumping to nothing"))))
+
+(test goto-next-occupied-skips-the-gap
+  "The spreadsheet Ctrl+Arrow idiom, and the reason plain motion stays one cell:
+distance stays predictable, and skipping is the modified key."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:child-at grid (l:cell 0 0)) (leaf "here"))
+      (setf (c:child-at grid (l:cell 5 0)) (leaf "there"))
+      (l:goto 0 0)
+      (l:goto-next-occupied :right)
+      (is (equal (l:cell 5 0) (l:current-cell))
+          "the first occupied cell to the right, not the first cell"))))
+
+(test move-cell-takes-the-pane-with-it-and-leaves-a-hole
+  "D13: moving a pane off a cell leaves the cell behind as a hole rather than
+an empty pane, and that hole is what TIDY is the broom for."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:child-at grid (l:cell 0 0)) (leaf "mover"))
+      (l:goto 0 0)
+      (l:move-cell :right)
+      (is-true (c:child-at grid (l:cell 1 0)) "the pane is one cell right")
+      (is (= 1 (length (c:node-windows (c:world-root r:*world*))))
+          "nothing was copied on the way")
+      (is (equal (l:cell 1 0) (l:current-cell))
+          "and the cursor followed it, which is :FOLLOW T"))))
+
+(test tidy-sweeps-the-holes-and-keeps-the-one-you-are-in
+  "The broom: a hole you made by walking across it is litter, but the one you
+are standing in is where you are."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (dotimes (x 4)
+        (setf (c:child-at grid (l:cell x 0)) (leaf (format nil "w~d" x))))
+      (dotimes (x 4)
+        (when (/= x 2)
+          (setf (c:child-at grid (l:cell x 0))
+                (make-instance 'c:leaf))))
+      (l:goto 2 0)
+      (l:tidy)
+      (is-true (c:child-at grid (l:cell 2 0)) "the cell you are in survives")
+      (is-false (c:child-at grid (l:cell 0 0)) "the empty ones do not")
+      (is-false (c:child-at grid (l:cell 3 0))))))
+
+(test resizing-a-row-is-one-verb-for-every-column
+  "A row is a row across the whole sheet (D8): the verb takes one axis and the
+geometry supplies the other, which is why there is no RESIZE-ROW-BY-COLUMN."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:child-at grid (l:cell 0 1)) (leaf "tall"))
+      (l:goto 0 1)
+      (let ((before (l:row-height grid 1)))
+        (l:resize-row)
+        (is (> (l:row-height grid 1) before) "the row got taller")
+        (is (= before (+ (l:row-height grid 1) -1/10))
+            "and only by the amount asked for")))))
+
+(test lattice-status-says-where-you-are
+  "The answer to `where am I', in one line, because the coordinates are on
+screen only at some zooms."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:child-at grid (l:cell 1 2)) (leaf "a"))
+      (l:goto 1 2)
+      (let ((text (with-output-to-string (*standard-output*)
+                    (l:lattice-status))))
+        (is (search "1" text) "the cell it reports is the one you are in")
+        (is (search "occupied" text) "and what is on the plane")))))
+
+(test the-plane-undo-history-shows-what-undo-would-walk-back
+  "The list is the ring, so with nothing on it the command has to say so
+rather than show an empty page."
+  (with-lattice-world ()
+    (is (stringp (l:plane-undo-history))
+        "an empty history says so in the echo area, not on a page")))

@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The build now asks whether a command is tested.** There are twenty-three
+  gates and gate 23 is new: every command a session ships must be named by a
+  test, or be on a written-down list of the ones that cannot be, with the
+  reason.  It found thirty-eight commands named by nothing; twenty-five of them
+  now have suites (the lattice's camera, address book and broom; the
+  scratchpad, tag, screen and input verbs; the master-stack and
+  scrolling-columns widths), and thirteen are allowlisted — the session's own
+  life support (`restart-wm`, `reload-config`, `reload-input`), the minibuffer
+  prompts, the seats and the filesystem.  The list only shrinks: a command that
+  gains a test must be deleted from it.  (#119)
 - **Focus any window by name.** `focus-window-by-name` completes over every
   window the session has — on any workspace, in a lattice cell, put away on the
   scratchpad, or floating — and focuses the one you pick where it is, with

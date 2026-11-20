@@ -127,3 +127,14 @@ file, the result is a valid strip -- at least one column."
     (is (typep back 'sc:strip))
     (is (plusp (c:container-count back))
         "an empty file still yields a usable strip")))
+
+(test the-width-verb-shows-that-many-columns-and-at-least-one
+  "STRIP-WIDTH is the strip's zoom: how many columns are on screen at once.
+#119: it was the extension's only command no suite named."
+  (with-strip (:windows 5 :visible 2)
+    (let ((strip (c:resolve-path (c:world-root r:*world*) '(0))))
+      (sc:strip-width 3)
+      (is (= 3 (sc:strip-visible strip)) "three columns, as asked")
+      (sc:strip-width 0)
+      (is (= 1 (sc:strip-visible strip))
+          "and a strip showing nothing is clamped to one"))))

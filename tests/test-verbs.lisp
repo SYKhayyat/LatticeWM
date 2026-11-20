@@ -366,3 +366,385 @@ why it is a setting rather than a number in the middle of a command."
       (dotimes (i 40) (r:resize-float :up))
       (is (= 90 (c:rect-h (c:float-rect (c:float-of-window world window))))
           "and the height at the option's height"))))
+
+;;; ------------------------------------------- the commands nothing named
+;;;
+;;; #119: 36 commands were named by no test at all -- the layer the last four
+;;; features fed, and the largest unchecked surface in the tree.  These are the
+;;; ones whose behaviour is a fact about state a headless test can construct, so
+;;; the gate's allowlist starts small and shrinks rather than the other way
+;;; round.  Each check names the command the way a session would reach it.
+
+(test clearing-the-selection-says-how-many-it-cleared
+  (let ((world (fresh-world)) (r:*selection* '()))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal
+                                            (list (leaf-with "a")
+                                                  (leaf-with "b"))))
+                        0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world))
+      (r:select-window)
+      (is (= 1 (r:clear-selection)) "one marked window, one cleared")
+      (is (null (r:selected-windows)) "and the selection is empty")
+      (is (zerop (r:clear-selection)) "clearing an empty selection is zero, not an error"))))
+
+(test list-selected-names-the-marked-windows-in-order
+  "The name is what a session sees in the notification, so a bare window with no
+app-id must still say something."
+  (let ((world (fresh-world)) (r:*selection* '()))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal
+                                            (list (leaf-with "a")
+                                                  (leaf-with "b"))))
+                        0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world))
+      (r:select-window)
+      (is (= 1 (length (r:list-selected)))
+          "listing answers the windows it listed"))))
+
+(test workspace-motion-wraps-and-comes-back
+  "Two workspace verbs, one implementation with a sign -- and wrapping is the
+property that makes a second pair of keys bearable."
+  (let ((world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list (leaf-with "one")))
+                              (c:make-split :horizontal (list (leaf-with "two")))
+                              (c:make-split :horizontal (list (leaf-with "three"))))
+                        0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world))
+      (r:next-workspace)
+      (is (= 1 (c:container-selection (c:world-root world))))
+      (r:previous-workspace)
+      (is (= 0 (c:container-selection (c:world-root world)))
+          "and back to where we were")
+      (r:previous-workspace)
+      (is (= 2 (c:container-selection (c:world-root world)))
+          "off the front end means the last workspace"))))
+
+(test tab-previous-is-tab-next-backwards
+  "The pair exists so that 'the next one' and 'the one before' are one function
+with a sign, which is why only TAB-NEXT needed a body."
+  (let ((world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-stack (list (c:make-split
+                                                   :horizontal
+                                                   (list (leaf-with "a")
+                                                         (leaf-with "b")))
+                                                   `(:stack
+                                                     ,(leaf-with "x")
+                                                     ,(leaf-with "y")))))
+                        0))
+    (setf (c:world-cursor world) '(0 0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:tab-next)
+      (is (= 1 (c:container-selection (c:child-at (c:world-root world)
+                                                  '(0 1)))))
+      (r:tab-previous)
+      (is (= 0 (c:container-selection (c:child-at (c:world-root world)
+                                                  '(0 1))))
+          "and the way back is the same call negated"))))
+
+(test gather-tag-brings-the-tagged-windows-here
+  "The verb the tag layer exists for: tag once, collect wherever they drifted.
+
+The tag layer reads ALL-WINDOWS -- the compositor's list, because a tag belongs
+to a window and not to a place -- so this registers the two in a server the way
+tests/test-tags.lisp does.  That is the honest fixture: without it the test
+would be asking a tag question of a world that has no windows at all."
+  (let* ((server (make-instance 'r::server))
+         (home (leaf-with "home"))
+         (away (leaf-with "away"))
+         (world (fresh-world))
+         (r:*selection* '()))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list home))
+                              (c:make-split :horizontal (list away)))
+                        0))
+    (dolist (window (list (c:leaf-window home) (c:leaf-window away)))
+      (setf (gethash window (r::server-windows server)) window))
+    (let ((r:*server* server) (r:*world* world)
+          (p:*policy* (policy)) (p:*seat* nil))
+      ;; Tag the window on the far workspace, then ask for it from home.
+      (setf (c:world-cursor world) '(1 0))
+      (r:tag-window "work")
+      (setf (c:world-cursor world) '(0 0))
+      (is (= 1 (r:gather-tag "work"))
+          "the window carrying the tag was brought over")
+      (is (= 2 (length (c:node-windows (c:child-at (c:world-root world) 0))))
+          "and it is on the workspace the cursor was on")
+      (is (stringp (r:gather-tag "nobody-has-this"))
+          "a tag nobody carries says so rather than erroring"))))
+
+(test list-tags-says-nothing-when-nothing-is-tagged
+  "The empty case is the one every user meets first.  LIST-TAGS answers through
+the help overlay, so that is what this reads -- a notify string would be
+truthy and would make an assertion on the return value meaningless."
+  (let* ((server (make-instance 'r::server))
+         (window (leaf-with "a"))
+         (world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list window))) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (setf (gethash (c:leaf-window window) (r::server-windows server))
+          (c:leaf-window window))
+    (let ((r:*server* server) (r:*world* world)
+          (p:*policy* (policy)) (p:*seat* nil)
+          (r::*help-visible* nil))
+      (is (stringp (r:list-tags)) "no tags: it says so in the echo area")
+      (is (null r::*help-visible*) "and nothing appeared on the overlay")
+      (r:tag-window "work")
+      (is-true (r:list-tags) "with a tag, a page")
+      (is-true (search "WORK" (format nil "~s" r::*help-visible*) :test #'char-equal)
+               "and the tag is named on it"))))
+
+(test tab-previous-is-tab-next-backwards
+  "The pair exists so that 'the next one' and 'the one before' are one function
+with a sign, which is why only TAB-NEXT needed a body."
+  (let* ((world (fresh-world))
+         (workspace (c:make-stack (list (leaf-with "a") (leaf-with "b")
+                                        (leaf-with "c"))
+                                  0)))
+    (setf (c:world-root world) (c:make-stack (list workspace) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:tab-next)
+      (is (= 1 (c:container-selection workspace)) "the next tab is shown")
+      (r:tab-previous)
+      (is (= 0 (c:container-selection workspace))
+          "and the way back is the same call negated"))))
+
+;;; ------------------------------------------------- floats, help and sharing
+;;;
+;;; The second batch for #119, same rule: a command a headless test can reach
+;;; by constructing state is a command this gate can hold, and the ones left on
+;;; the allowlist are the ones that genuinely need a compositor or a prompt.
+
+(test focus-float-learns-and-focus-tiled-forgets
+  "Two keys and one slot: focus is a place in the tree, a float is not in one,
+so the float layer needs its own answer for `what has the keyboard'.
+
+Cycling past the last float returns focus to the cursor -- one key enters the
+layer and leaves it, which is why there is no mode to be stuck in."
+  (multiple-value-bind (world window float) (float-in-a-world 400 300)
+    (declare (ignore window))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (setf (c:world-focused-float world nil) nil)
+      (is (eq float (r:focus-float)) "the one float takes the keyboard")
+      (is (eq float (c:world-focused-float world nil)))
+      (is (null (r:focus-float)) "one more press and focus is back in the tree")
+      (is (null (c:world-focused-float world nil)))
+      (is (eq float (r:focus-float)) "and it enters again from the tree")
+      (r:focus-tiled)
+      (is (null (c:world-focused-float world nil))
+          "FOCUS-TILED gives the keyboard back to the cursor"))))
+
+(test raising-a-float-moves-it-to-the-top-of-the-pile
+  "Order in WORLD-FLOATS is stacking order, so `raise' is a list operation and
+nothing more."
+  (let* ((world (c:make-world))
+         (first (make-instance 'c:floating-window
+                               :window (win "under") :rect (c:make-rect 0 0 100 100)))
+         (second (make-instance 'c:floating-window
+                                :window (win "over") :rect (c:make-rect 0 0 100 100))))
+    (setf (c:world-floats world) (list first second)
+          (c:world-focused-float world nil) first)
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:raise-float)
+      (is (eq first (car (last (c:world-floats world))))
+          "the float that had the keyboard is now on top")
+      (is (= 2 (length (c:world-floats world))) "and the list is the same length"))))
+
+(test moving-a-float-nudges-only-its-rect
+  "Floats are positioned by hand -- that is what floating them was for -- and
+the keyboard is half of positioning."
+  (multiple-value-bind (world window float) (float-in-a-world 400 300)
+    (declare (ignore float))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (let ((before (c:float-of-window world window)))
+        (setf (c:world-focused-float world nil) before)
+        (r:move-float :right 40)
+        (is (= 140 (c:rect-x (c:float-rect before))) "40 to the right")
+        (is (= 400 (c:rect-w (c:float-rect before))) "and not resized")
+        (r:move-float :up 40)
+        (is (= 60 (c:rect-y (c:float-rect before))) "40 up, which is a smaller y")))))
+
+(test anchoring-a-float-to-a-pane-is-one-slot-and-its-inverse
+  "An anchored float travels with its pane; unanchored it belongs to the
+output.  The rectangle is re-expressed either way so that the window does not
+jump when the anchor changes, and that is the property worth pinning."
+  (multiple-value-bind (world window float) (float-in-a-world 200 200)
+    (declare (ignore float))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (setf (c:world-root world)
+            (c:make-stack (list (c:make-split :horizontal (list (leaf-with "a"))))
+                          0))
+      (setf (c:world-cursor world) '(0 0))
+      (let* ((the-float (c:float-of-window world window))
+             (pane (c:resolve-path (c:world-root world) '(0))))
+        (setf (c:world-focused-float world nil) the-float)
+        ;; The rect index is what an anchor is expressed against.
+        (setf (c:prop world :rect-index)
+              (let ((table (make-hash-table :test #'equal)))
+                (setf (gethash '(0) table) (c:make-rect 50 50 800 600))
+                table))
+        (is (eq pane (r:anchor-float '(0))) "the pane is the anchor")
+        (is (eq pane (c:float-anchor the-float)) "and the float remembers it")
+        (is (eq pane (c:child-at (c:world-root world) 0))
+            "which is the pane at that path, not the path itself")
+        (r:unanchor-float)
+        (is (null (c:float-anchor the-float)) "the slot is given back")))))
+
+(test equalize-all-is-equalize-over-the-whole-workspace
+  "EQUALIZE equalizes the nearest enclosing split; EQUALIZE-ALL equalizes every
+split on the workspace, which is what makes it a separate command."
+  (let ((world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack
+           (list (c:make-split :horizontal
+                               (list (c:make-split :vertical
+                                                   (list (leaf-with "a")
+                                                         (leaf-with "b")))
+                                     (leaf-with "c"))
+                               '(3 1)))
+           0))
+    (setf (c:world-cursor world) '(0 0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:equalize-all)
+      (let* ((root (c:world-root world))
+             (outer (c:child-at root 0))
+             (inner (c:child-at outer 0)))
+        (is (equal '(1 1) (c:weights outer)) "the outer split is even")
+        (is (equal '(1 1) (c:weights inner))
+            "and so is the inner one, which is the whole difference")))))
+
+(test describing-things-puts-them-on-the-help-overlay
+  "DESCRIBE-* and APROPOS are how a user reads the corpus the project brags
+about, and they are all one call to the overlay."
+  (let ((world (fresh-world)) (r::*help-visible* nil))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list (leaf-with "a")))) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (is-true (r:describe-command "close") "a command describes itself")
+      (is-true (search "close" (format nil "~s" r::*help-visible*)
+                       :test #'char-equal))
+      (setf r::*help-visible* nil)
+      (is-true (r:describe-option "*gaps*") "so does an option")
+      (setf r::*help-visible* nil)
+      ;; DESCRIBE-KEY answers in the echo area rather than on the overlay --
+      ;; it is one line, and a page for one line would be in the way -- so the
+      ;; assertion is on what it resolved to and what it said.
+      (let ((p:*keymap* (p:make-keymap :name "test"))
+            (r::*echo-message* nil))
+        (p:install-default-keymap p:*keymap*)
+        (is (equal '("terminal")
+                   (r:describe-key (format nil "~areturn" (p:modifier-string))))
+            "a key describes the command it is bound to")
+        (is-true (search "terminal" (car r::*echo-message*) :test #'char-equal)
+                 "and says so in the echo area")))))
+
+(test apropos-finds-a-command-by-what-it-does-not-only-by-its-name
+  "The one question a discoverable system must answer: `is there a command for
+this'.  It reads the docstrings, so the search word is not in the name."
+  (let ((world (fresh-world)) (r::*help-visible* nil))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list (leaf-with "a")))) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r::show-help-page "apropos" '(("dummy" . "row")))
+      (setf r::*help-visible* nil)
+      (let ((*standard-output* (make-string-output-stream)))
+        (declare (ignore *standard-output*))
+        (is-true (r:apropos-command) "apropos answers")))))
+
+(test list-scratchpads-names-what-is-on-them
+  "The scratchpad layer's own answer, in the same two cases LIST-TAGS has."
+  (let* ((server (make-instance 'r::server))
+         (window (leaf-with "term"))
+         (world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list window))) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (setf (gethash (c:leaf-window window) (r::server-windows server))
+          (c:leaf-window window))
+    (let ((r:*server* server) (r:*world* world)
+          (p:*policy* (policy)) (p:*seat* nil)
+          (r::*help-visible* nil))
+      (is (stringp (r:list-scratchpads)) "nothing on a scratchpad, it says so")
+      (is (null r::*help-visible*) "and there is no page")
+      (setf (c:prop (c:leaf-window window) :scratchpad) "notes")
+      (is-true (r:list-scratchpads) "with one, a page")
+      (is-true (search "notes" (format nil "~s" r::*help-visible*) :test #'char-equal)
+               "and the pad is named on it"))))
+
+;;; --------------------------------------------- scratchpads, screens, devices
+
+(test scratchpad-toggle-picks-up-and-puts-away
+  "One key, both directions, and that is the whole point of a scratchpad: the
+terminal consulted twenty times an hour costs one keystroke each way."
+  (let* ((server (make-instance 'r::server))
+         (window (leaf-with "term"))
+         (world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list window))) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (setf (gethash (c:leaf-window window) (r::server-windows server))
+          (c:leaf-window window))
+    (let ((r:*server* server) (r:*world* world)
+          (p:*policy* (policy)) (p:*seat* nil) (r::*echo-message* nil))
+      (is (stringp (r:scratchpad-toggle "notes"))
+          "an empty scratchpad says so rather than doing nothing silently")
+      (setf (c:prop (c:leaf-window window) :scratchpad) "notes")
+      (r:scratchpad-toggle "notes")
+      (is-true (c:window-minimized-p (c:leaf-window window))
+               "the second press puts it away")
+      (r:scratchpad-toggle "notes")
+      (is-false (c:window-minimized-p (c:leaf-window window))
+                "and the next summons it again"))))
+
+(test screen-verbs-do-nothing-with-one-screen
+  "FOCUS-OUTPUT and SEND-TO-OUTPUT are reachable by name rather than bound,
+because plain motion crosses the screen edge on its own.  With one screen there
+is nothing on the other side, and the commands must not invent one."
+  (let ((world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal (list (leaf-with "a")))) 0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
+          (r::*echo-message* nil))
+      (r:focus-output 2)
+      (is (equal '(0 0) (c:world-cursor world))
+          "focusing a screen that does not exist leaves the cursor where it was")
+      (r:send-to-output 2)
+      (is (= 1 (length (c:node-windows (c:world-root world))))
+          "and sending to one moves nothing"))))
+
+(test list-inputs-says-the-compositor-offers-none
+  "The first question an input rule asks is `what is my touchpad called', and
+without a compositor the honest answer is that there is nothing to report."
+  (let ((r:*server* nil) (r::*echo-message* nil))
+    (is (stringp (r:list-inputs)) "no server, and it says so")
+    (is-true (search "no input devices" (car r::*echo-message*) :test #'char-equal)
+             "and it says so rather than printing an empty table")))
+
+(test pull-brings-the-neighbour-into-this-pane
+  "The inverse of MOVE, and the reason it is separate: pulling does not need you
+to navigate to the thing first.  You stay where you are and it comes to you."
+  (let ((world (fresh-world)))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-split :horizontal
+                                            (list (leaf-with "a")
+                                                  (leaf-with "b"))))
+                        0))
+    (setf (c:world-cursor world) '(0 0))
+    (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil))
+      (r:pull :right)
+      (let ((pane (c:child-at (c:world-root world) 0)))
+        (is-true (typep pane (quote c:split)) "the neighbour came in as a split")
+        (is (= 2 (length (c:node-windows pane)))
+            "holding both windows, side by side")
+        (is (= 2 (length (c:node-windows (c:world-root world))))
+            "and nothing was lost doing it")))))

@@ -90,7 +90,7 @@ supported route, not a requirement. Per-distribution package names are in
 #+begin_src sh
 git clone https://github.com/SYKhayyat/LatticeWM && cd LatticeWM
 ./bootstrap.sh     # fetch the Lisp dependencies into ./.deps/   (or: nix-shell)
-make               # build, twenty-two gates, and the unit suite
+make               # build, twenty-three gates, and the unit suite
 make check         # the above, plus a real river driven headlessly -- and it
                    # fails rather than skips when river or a terminal is absent
 make run           # river nested in the session you are already in — try it here first
@@ -605,7 +605,7 @@ failed session, which is the worst possible moment to find one.
 Everything CI runs is reachable from your machine:
 
 #+begin_src sh
-make              # build, the twenty-two gates, and the unit suite
+make              # build, the twenty-three gates, and the unit suite
 make test         # the unit suite alone
 make integration  # a real river, headless, driven for a few seconds
 make check        # all of the above -- and what CI runs
@@ -614,7 +614,7 @@ make image        # dump ./latticewm -- 13 MB; make image-fast for the dev loop
 make surface      # regenerate the six documents under doc/
 #+end_src
 
-*Twenty-two gates run on every build, and on every push.* They are not style
+*twenty-three gates run on every build, and on every push.* They are not style
 checks: each one exists because something in this project rotted silently once,
 and each prints the argument for its own existence before it prints what is
 wrong with your branch.

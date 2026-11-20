@@ -169,3 +169,26 @@ interactively, which a constructed test cannot answer."
            (ms:fewer-masters)
            (is (= 1 (ms:master-count p:*policy*))))
       (ms:disable))))
+
+(test the-wider-and-narrower-keys-move-the-master-column-and-stop-at-the-ends
+  "The pair is one function with a sign, and the clamp is the part worth
+pinning: a master column of nothing is not a layout, and neither is one that
+has taken the whole screen.  #119: these two commands were the extension's only
+surface no suite named."
+  (with-fresh-world
+    (open-windows 3)
+    (ms:enable)
+    (unwind-protect
+         (let ((before (ms:master-ratio p:*policy*)))
+           (ms:master-wider)
+           (is (> (ms:master-ratio p:*policy*) before) "wider means wider")
+           (ms:master-narrower)
+           (is (= before (ms:master-ratio p:*policy*))
+               "and narrower is the same amount back")
+           (dotimes (i 40) (ms:master-wider))
+           (is (= 9/10 (ms:master-ratio p:*policy*))
+               "it stops at nine tenths rather than swallowing the stack")
+           (dotimes (i 40) (ms:master-narrower))
+           (is (= 1/10 (ms:master-ratio p:*policy*))
+               "and at one tenth rather than vanishing"))
+      (ms:disable))))

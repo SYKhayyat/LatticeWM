@@ -3433,7 +3433,240 @@ of them is what anybody runs"
             (length offenders) (reverse offenders))
       (format t "  the wire layer is the only thing that speaks to river~%")))
 
+;;; --------------------------------------------------------------- gate 23
+
+(defun commands-a-session-ships ()
+  "Every command name a file under src/, lattice/ or extensions/ defines.
+
+THE EXAMPLES ARE READ, NOT SHIPPED, AND THE GATE HAS TO KNOW THAT.  Gate 6
+loads every file in examples/ so that a worked example that stopped loading is
+a failure, and one of those examples defines commands of its own --
+CONVENTIONAL, to demonstrate a policy swap.  A gate that asked the *loaded
+image* would then demand a test for a verb that no session has ever had, which
+is the same species of mistake as counting a docstring as a caller: the
+instrument answering a question that was not asked.  So a command counts as
+shipped when a file outside examples/ defines it, and the examples are reported
+separately rather than silently dropped."
+  (let ((names (make-hash-table :test #'equal)))
+    (dolist (pattern '("src/**/*.lisp" "lattice/*.lisp" "extensions/**/*.lisp"))
+      (dolist (path (directory (merge-pathnames pattern *root*)))
+        (let ((text (code-of path)))
+          (loop with start = 0
+                for at = (search "defcommand " text :start2 start)
+                while at
+                do (setf start (+ at (length "defcommand ")))
+                   (let* ((from start)
+                          (to (or (position-if
+                                   (lambda (character)
+                                     (member character
+                                             '(#\Space #\( #\) #\Newline #\Tab)))
+                                   text :start from)
+                                  (length text))))
+                     (when (> to from)
+                       (setf (gethash (string-downcase (subseq text from to))
+                                      names)
+                             t)))))))
+    names))
+
+(banner 23 "every command is named by a test, or by a reason it cannot be")
+;; ISSUE #119: THE 38 COMMANDS NO TEST NAMED.
+;;
+;; Gate 2 certifies that every command is documented, and gate 5 counts how
+;; much of the behaviour is answered from outside src/.  Neither asks whether a
+;; *command* is answered: a verb is a promise about what pressing a key does,
+;; and the only reader in a position to check that promise is a test.  When the
+;; four extensions landed, the count of commands no suite named was thirty
+;; eight -- a third of the shipped surface with no test, and the layer every
+;; new feature since #32 had fed.
+;;
+;; THIS GATE MAKES "NAMES A TEST" A PROPERTY THE BUILD CHECKS, IN THE SHAPE OF
+;; GATE 16'S ALLOWLIST: hole one feature at a time, never the other way round.
+;; The allowlist holds the commands no test names and, for each, the reason it
+;; cannot.  A command named by a test must be *absent* -- the list only
+;; shrinks, and it shrinks by the work that made a reason obsolete.  Three
+;; checks, each in the gate's own words:
+;;
+;;   1. A command no test names with no reason is a failure.  The gate cannot
+;;      tell you whether the test is missing or the command is, only that the
+;;      promise has no reader; and a new command enters this gate demanding
+;;      either a test or a written reason, which is what turns a habit into a
+;;      rule.
+;;
+;;   2. A reason for a command a test *does* name is a failure.  The list
+;;      exists to shrink, and something that grew without its reason turning
+;;      into a test is the list quietly going the wrong way.  This is the
+;;      check gate 16's own history says is the point: its version filed the
+;;      five dead exports as "reached by nothing" and then kept them
+;;      exempted, and the exemption is what the FINALIZING closed.
+;;
+;;   3. A reason for a command that does not exist is a failure.  A misspelt
+;;      entry in the list is a promise about a ghost, and a gate that passes
+;;      while naming a ghost is gate 17's disease.
+;;
+;; WHY TESTS AND NOT REACHED-BY-CALL-SITES.  Commands are reached by *name*
+;; from a keymap and from M-x; gate 16's own preamble says that a command with
+;; no caller is the normal state for every one of them.  "Someone mentioned it"
+;; is answered by the keymap generating its own surface.  The question here is
+;; the test question: does a suite exercise the behaviour behind the name?
+;;
+;; *WHAT COUNTS AS NAMING.*  Tests are read as FORMS rather than as text,
+;; which is gate 16's instrument and for gate 16's reason: a docstring that
+;; mentions a command is prose, and a prose mention must not satisfy a gate
+;; that exists to catch prose.  Naming is a symbol written in a form -- the
+;; `r:gather-tag' in `(r:gather-tag "work")' names it, and a paragraph
+;; explaining GATHER-TAG does not.  The suite files are searched in the same
+;; places the test driver loads them from: tests/, every extension's tests/
+;; for the extensions this image knows, and the integration suite, which is
+;; the only one that needs a compositor and still spells the commands by name.
+;;
+;; WHAT STAYS ALLOWLISTED, AND WHY.  Thirteen commands remain, and each entry
+;; is a different reason:
+;;
+;;   browser           -- hands the URL to the session's opener(1);
+;;                        there is no unit fact to pin headlessly.
+;;   eval-expression   -- the whole command is the minibuffer prompt.
+;;   goto-named-cell   -- its only logic is READ-STRING; the jump it performs
+;;                        is FOCUS-WINDOW-BY-NAME's, which is tested.
+;;   load-extension    -- mutates the running module table; the extension
+;;                        suites already exercise the load path's substance.
+;;   load-font         -- reads a font file from the filesystem.
+;;   name-this         -- same as GOTO-NAMED-CELL: the prompt is the command.
+;;   next-keyboard-layout -- binds seats and layouts that only a session has;
+;;                        with nothing bound it is a no-op by design.
+;;   reload-config     -- re-runs the session's own configuration file.
+;;   reload-input      -- rebuilds seats from the compositor's devices.
+;;   restart-wm        -- the session exiting; asking it to do so in a test
+;;                        would be the test ending the build.
+;;   run-command-by-name -- the prompt is the command (M-x itself).
+;;   set-input         -- writes a rule and asks the compositor to apply it.
+;;
+;; Each line names its command as the string a session uses (downcased, as the
+;; picker spells them) and stays until a test makes it a lie.
+
+(defparameter *untested-commands*
+  '(("browser"   . "hands the URL to the session's opener(1); no unit fact to pin")
+    ("eval-expression" . "the command is the minibuffer prompt")
+    ("goto-named-cell" . "its only logic is READ-STRING; the jump it makes is FOCUS-WINDOW-BY-NAME's, tested")
+    ("load-extension" . "mutates the running module table; the extension suites exercise the load path")
+    ("keyboard-layout" . "rebinds the seats' layouts; with no compositor there are no seats")
+    ("load-font" . "reads a font file from the filesystem")
+    ("name-this" . "the prompt is the command")
+    ("next-keyboard-layout" . "needs a session's seats; unbound it is a no-op by design")
+    ("reload-config" . "re-runs the session's own configuration file")
+    ("reload-input" . "rebuilds seats from the compositor's devices")
+    ("restart-wm" . "the session exiting; a test of it would end the build")
+    ("run-command-by-name" . "the prompt is the command (M-x itself)")
+    ("set-input" . "writes a rule and asks the compositor to apply it")))
+
+(flet ((suite-files ()
+         "The files a suite could name a command from, in the places the test
+driver loads them: tests/ for the core, lattice/tests/ for the lattice, every
+extension's tests/ for the extensions this image knows, and the integration
+suite beside them.  The driver finds those systems through ASDF; this gate
+finds their files the same way -- by looking where they are."
+         (append
+          (directory (merge-pathnames "tests/*.lisp" *root*))
+          (directory (merge-pathnames "*/tests/*.lisp" *root*))
+          (directory (merge-pathnames "extensions/*/tests/*.lisp" *root*))
+          (list (probe-file (merge-pathnames "tools/integration.lisp" *root*)))))
+       (raw-of (path)
+         "PATH as written, strings and comments intact, for the one question
+the blanked text cannot answer: does a test name this command as a string."
+         (handler-case
+             (with-open-file (in path :external-format :utf-8)
+               (let ((buffer (make-string (file-length in))))
+                 (subseq buffer 0 (read-sequence buffer in))))
+           (error () "")))
+       (names-p (name text)
+         "True when TEXT names the command NAME, as a name.
+:CODE-OF BLANKS STRINGS AND COMMENTS, which is the instrument gate 14 uses and
+for gate 14's reason: a docstring explaining GATHER-TAG is prose, and prose must
+not be able to satisfy a gate that exists to catch prose.  What is left is code,
+where a command is written one of four ways -- (r:verb, 'r:verb, #'r:verb and
+:verb as a keyword argument -- and in all four the character before the name is
+one of #\(, #\:, #\', #\# and the character after it ends the name rather than
+continuing it.  Both boundaries are checked, because `tab-next' is a prefix of
+nothing here but `next-workspace' is a prefix of `previous-workspace' seen from
+the wrong end, and a gate that cannot tell those apart is a gate that counts
+substrings."
+         (let ((constituent (lambda (character)
+                              (and character
+                                   (or (alphanumericp character)
+                                       (member character
+                                               '(#\- #\_ #\* #\! #\? #\< #\>
+                                                 #\= #\/ #\+ #\. #\&)))))))
+           (loop with start = 0
+                 for at = (search name text :start2 start)
+                 while at
+                 do (setf start (1+ at))
+                    (let ((before (and (plusp at) (char text (1- at))))
+                          (after (let ((end (+ at (length name))))
+                                   (and (< end (length text)) (char text end)))))
+                      (when (and before
+                                 (member before '(#\( #\: #\' #\#))
+                                 (not (funcall constituent after)))
+                        (return t)))
+                 finally (return nil)))))
+  (let* ((all (call "latticewm/runtime:all-commands"))
+         (texts (loop for file in (suite-files)
+                      when file collect (cons (code-of file)
+                                              (raw-of file))))
+         (untested '()) (stale '()) (ghosts '())
+         (tested (lambda (name)
+                   (some (lambda (pair)
+                           (or (names-p name (car pair))
+                               ;; AND BY NAME, AS A WHOLE STRING.  The
+                               ;; integration suite drives commands the way a
+                               ;; session does -- (VERB "focus-next") -- so a
+                               ;; command reached only there is reached by a
+                               ;; test and not only by prose.  The string must
+                               ;; be the entire literal, which is gate 16's
+                               ;; :TOOL rule and is why a sentence containing
+                               ;; the word does not count.
+                               (search (format nil "\"~a\"" name) (cdr pair))))
+                         texts))))
+    (let ((shipped (commands-a-session-ships))
+          (examples 0))
+      (dolist (command (sort (copy-list all) #'string<
+                             :key (lambda (c)
+                                    (call "latticewm/policy:command-name" c))))
+        (let* ((name (string-downcase
+                      (call "latticewm/policy:command-name" command)))
+               (reason (assoc name *untested-commands* :test #'string=)))
+          (cond ((not (gethash name shipped)) (incf examples))
+                ((and reason (funcall tested name)) (push name stale))
+                ((and (null reason) (not (funcall tested name)))
+                 (push name untested)))))
+      (format t "  commands an example defines, not shipped~46t~d~%" examples))
+    (dolist (entry *untested-commands*)
+      (unless (find (car entry) all :test #'string=
+                    :key (lambda (c)
+                           (string-downcase
+                            (call "latticewm/policy:command-name" c))))
+        (push (car entry) ghosts)))
+    (format t "  commands~46t~d~%  allowlisted~46t~d~%"
+            (length all) (length *untested-commands*))
+    (cond
+      (ghosts
+       (fail 23 "~d allowlist entr~(pretty:)~p for a command that does not ~
+exist:~{~%    ~a~}~%~4tThe list must name commands a session could run; a ~
+misspelt entry is a promise about a ghost."
+             (length ghosts) (length ghosts) (sort ghosts #'string<)))
+      (stale
+       (fail 23 "~d allowlist entr~(pretty:)~p now have a test naming ~
+them:~{~%    ~a~}~%~4tThe allowlist only shrinks.  Each of these grew a ~
+suite; delete the line and let the coverage be the reason."
+             (length stale) (length stale) (sort stale #'string<)))
+      (untested
+       (fail 23 "~d command~:p no test names, and no reason they cannot ~
+be tested:~{~%    ~a~}~%~4tEvery verb is a promise about what pressing a key ~
+does, and the only reader in a position to check it is a test.  Either write ~
+the suite that names it, or add the reason to *UNTESTED-COMMANDS* here."
+             (length untested) (sort untested #'string<)))
+      (t (format t "  every command is named by a suite or written down here~%")))))
+
 ;;; ---------------------------------------------------------------- verdict
+
 
 (format t "~&~%~76,,,'=<~>~%")
 (if *failures*

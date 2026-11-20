@@ -28,8 +28,17 @@ an issue number triage.csv does not know (verified by feeding it #999).
 a plain `defun` — no `--list-commands` line, no M-x, nothing for a binding to
 name. Now an `r:defcommand`; README drops the wrong `r:` namespace and shows a
 binding. +4 checks.
-- [ ] #119 38 of 90 commands are named by no test at all — a gate in the
-shape of gate 16, with an allowlist that shrinks as coverage grows.
+- [x] #119 38 of 90 commands were named by no test at all. Gate 23 asks the
+command question the build never asked, in gate 16's allowlist shape: a
+command is shipped when a file outside `examples/` defines it (the examples
+are read, not shipped, so their verbs are counted and skipped), naming is a
+symbol written in test code plus the whole-string form the integration suite
+drives with `(verb "focus-next")`, and prose in a docstring answers for
+nothing. 75 of 90 shipped commands now have a test; 13 are allowlisted with
+the reason each cannot be tested (`restart-wm`, `reload-config`,
+`eval-expression` and the minibuffer prompts, the compositor's seats, the
+filesystem).  An allowlist entry that gains a test fails the gate, so the list
+can only shrink. +29 checks.
 - [x] #123 float geometry was three magic spellings of one thing. The default
 size is `c:*default-float-width*`/`-height*` + `c:make-default-float-rect`
 (fresh per call, used by the class initform and both fallbacks); the resize
