@@ -326,3 +326,82 @@ and `that terminal belongs over in that group' is the sentence."
       (is (null (tb:tab-send "one")))
       (is (= 2 (length (tb:group-of (focused-leaf)))) "the group is untouched")
       (is-true (search "already in this group" (car r::*echo-message*))))))
+
+;;; ========================================================= #39 persistence
+
+(defun tabs-in-serialized (form)
+  "The :TABS field the file has for FORM's first leaf, or NIL.
+
+Read STRUCTURALLY rather than by searching the printed text: the printer here
+is bounded by *PRINT-LEVEL* and *PRINT-LENGTH*, so a string search would pass or
+fail depending on how deep the leaf happened to be."
+  (labels ((walk (node)
+             (cond
+               ((and (consp node) (eq (first node) :leaf))
+                (getf (rest node) :extra))
+               ((consp node) (some #'walk node))
+               (t nil))))
+    (getf (walk form) :tabs)))
+
+(test a-tab-group-survives-a-save-and-restore
+  "The round trip that #39 asked for: serialize the tree the way the state file
+does, deserialize it into a fresh world with an identifier->window index, and
+the group comes back with its member order and its selection."
+  (with-tabs
+    (let ((w1 (make-window "one"))
+          (w2 (make-window "two"))
+          (w3 (make-window "three")))
+      (setf tb::*live-windows* (lambda () (list w1 w2 w3)))
+      (a-two-tab-pane w1 w2)
+      (tb:tab-add "three")          ; visible = three, group = (one two three)
+      (is (equal (list w1 w2 w3) (tb:group-of (focused-leaf))))
+      (let* ((form (r:serialize-node (c:world-root r:*world*)))
+             ;; the file has no window objects in it -- only identifiers
+             (index (make-hash-table :test #'equal)))
+        (dolist (window (list w1 w2 w3))
+          (setf (gethash (c:window-identifier window) index) window))
+        (is (equal (list (c:window-identifier w1)
+                         (c:window-identifier w2)
+                         (c:window-identifier w3))
+                   (tabs-in-serialized form))
+            "the group is in the file at all -- it was not, before")
+        (let ((rebuilt (r:read-node form index)))
+          (let ((leaf (first (c:node-leaves rebuilt))))
+            (is (equal (list w1 w2 w3) (tb:group-of leaf))
+                "members and order restored")
+            (is (eq w3 (tb:visible-window leaf))
+                "and the tab that was showing is still the one showing")))))))
+
+(test a-restored-group-drops-a-member-that-is-gone
+  "A state file describes a moment, and one of the windows may have closed in
+between.  The group comes back with what still exists; and a group cut down to
+one member is not a group, which is the rule UNTAB already follows."
+  (with-tabs
+    (let ((w1 (make-window "one"))
+          (w2 (make-window "two")))
+      (setf tb::*live-windows* (lambda () (list w1 w2)))
+      (a-two-tab-pane w1 w2)
+      (let* ((form (r:serialize-node (c:world-root r:*world*)))
+             ;; only ONE of the two identifiers is still a live window
+             (index (make-hash-table :test #'equal)))
+        (setf (gethash (c:window-identifier w2) index) w2)
+        (let ((leaf (first (c:node-leaves (r:read-node form index)))))
+          (is (eq w2 (tb:visible-window leaf)) "the survivor is showing")
+          (is (null (tb:group-of leaf))
+              "one window does not need tabs"))))))
+
+(test a-file-without-tab-facts-still-loads
+  "The forward-compatibility path, which is the one that matters to a user who
+upgrades: an old file has no :EXTRA, and a leaf reads back as an ordinary pane."
+  (with-tabs
+    (let ((w1 (make-window "one")))
+      (setf (c:leaf-window (focused-leaf)) w1)
+      (tb:tab-here)                 ; a group of ONE is not written
+      (let* ((form (r:serialize-node (c:world-root r:*world*)))
+             (index (make-hash-table :test #'equal)))
+        (setf (gethash (c:window-identifier w1) index) w1)
+        (is (null (tabs-in-serialized form))
+            "a one-member group is not worth a field")
+        (let ((leaf (first (c:node-leaves (r:read-node form index)))))
+          (is (eq w1 (tb:visible-window leaf)))
+          (is (null (tb:group-of leaf))))))))

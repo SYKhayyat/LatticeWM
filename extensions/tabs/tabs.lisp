@@ -446,6 +446,45 @@ tabs."
            (r:mark-dirty)
            visible))))))
 
+;;; ------------------------------------------------- persistence (#39)
+;;;
+;;; A group lives in a prop on a leaf, and a prop is exactly what the state file
+;;; used to drop: a session's tabs came back as one window per pane, at every
+;;; login, while the windows themselves came back.  The core grew one seam for
+;;; this -- NODE-EXTRA-FACTS, a method per kind, consulted while the leaf is
+;;; written -- so the file format does not learn the word "tabs" and a second
+;;; extension wanting the same thing is a method rather than an edit.
+
+(defmethod c:node-extra-facts ((node c:leaf))
+  "A leaf's tab group, as the order of its members' river identifiers."
+  (let ((group (group-of node)))
+    (when (and group (> (length group) 1))
+      (list :tabs (mapcar #'c:window-identifier group)))))
+
+(defmethod c:restore-node-extra-facts ((node c:leaf) facts index)
+  "Rebuild the group FACTS describes from the windows INDEX already has.
+
+A member whose identifier no longer maps to a live window is dropped rather
+than restored as NIL: the file describes a moment, and a window that is gone is
+gone.  One survivor is not a group -- one window does not need tabs, the same
+rule UNTAB follows when it dissolves the last pair.
+
+The selected member is the leaf's own :WINDOW, which the core has already put
+there, so a restored group opens on the tab that was showing when the layout was
+saved."
+  (let* ((identifiers (getf facts :tabs))
+         (windows (remove nil (mapcar (lambda (id) (gethash id index))
+                                      identifiers)))
+         (visible (c:leaf-window node)))
+    (when (> (length windows) 1)
+      ;; The visible window must be a member, or the group would disagree with
+      ;; the pane: a hand-edited file can name a group that does not contain the
+      ;; window the same leaf says it is showing.
+      (when (and visible (not (member visible windows)))
+        (setf windows (cons visible windows)))
+      (setf (group-of node) windows)))
+  nil)
+
 ;;; =============================================================== plumbing
 
 (defun enable ()

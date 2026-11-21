@@ -170,6 +170,7 @@ deliberately decomposed so that policy can redirect it.")
    #:default-address #:empty-pane-p
    #:container-alternatives-p #:container-selection #:container-splits-along-p
    #:serialize-node #:deserialize-node
+   #:node-extra-facts #:restore-node-extra-facts
    #:*insertion-weight-function* #:default-insertion-weight
    #:insertion-weight-for
    ;; the container protocol, describing itself.  The sibling of

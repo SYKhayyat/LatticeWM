@@ -287,6 +287,37 @@ copy whose weights are silently all equal.
 Adding a container kind means adding one method here, and inheriting the
 CONTAINER method means the children are already handled."))
 
+(defgeneric node-extra-facts (node)
+  (:documentation
+   "What NODE knows that the core does not, as a plist; NIL by default.
+
+THE SEAM THAT LETS AN EXTENSION SURVIVE A RESTART WITHOUT THE CORE LEARNING ITS
+NAME.  The tabs extension keeps a group as a prop on a leaf, and a prop is
+exactly what SERIALIZE-NODE used to drop: #39 was a session's tab groups dying
+at every login while the *windows* came back, because the file described the
+tree and a tab group is not in the tree.
+
+Three answers were available and two were worse: teaching the core file format
+about :TABS gives the core a field it cannot validate and every future extension
+the same edit; letting an extension replace SERIALIZE-NODE for LEAF means the
+second extension to want this silently wins.  A method per kind, consulted while
+the leaf is written, is the version where adding a third extension is a method
+and not a merge.
+
+Values must be READABLE -- this goes in a file a human edits.  Window objects
+come back as their river identifiers, which is the same rule the window itself
+follows."))
+
+(defgeneric restore-node-extra-facts (node facts index)
+  (:documentation
+   "Put FACTS (from NODE-EXTRA-FACTS) back onto NODE, or ignore them.
+
+The default does nothing, which is the forward-compatibility path: a file
+written by an image that had an extension loaded, read by one that does not,
+degrades to what the core can carry -- each tab window on its own pane -- rather
+than failing to load.  A result is not needed because the node is already built;
+this fills it in."))
+
 (defgeneric serialize-node (node)
   (:documentation
    "NODE as a readable s-expression: a tag keyword followed by a plist.
@@ -384,8 +415,13 @@ container that does not care is a protocol with a trap in it."
   (node-id node))
 
 (defmethod node-signature ((node leaf))
-  "A leaf is its identity and what is in it — so filling an empty pane counts."
-  (list (node-id node) (leaf-window node)))
+  "A leaf is its identity and what is in it — so filling an empty pane counts.
+
+AND ITS EXTRA FACTS, because a tab group's member order is part of the
+arrangement: reordering hidden tabs changes nothing a user can see at that
+moment, and everything they see the next time they cycle the group.  A policy
+or extension that answers NODE-EXTRA-FACTS gets undo noticing for free."
+  (list (node-id node) (leaf-window node) (node-extra-facts node)))
 
 (defmethod node-signature ((c container))
   "Identity, which child is current, and every child's own answer."

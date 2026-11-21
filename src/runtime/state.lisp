@@ -85,14 +85,19 @@ the file is to be readable enough to edit."
       (c:make-leaf)))
 
 (defmethod serialize-node ((node c:leaf))
-  (list :leaf :window (let ((window (c:leaf-window node)))
-                        (and window (c:window-identifier window)))
-              :label (c:node-label node)))
+  ;; :EXTRA is written only when an extension has something to say, so a session
+  ;; without extensions writes the same file it always did (#39).
+  (let ((extra (c:node-extra-facts node)))
+    (append (list :leaf :window (let ((window (c:leaf-window node)))
+                                  (and window (c:window-identifier window)))
+                  :label (c:node-label node))
+            (when extra (list :extra extra)))))
 
 (defmethod deserialize-node ((tag (eql :leaf)) plist index)
   (let* ((identifier (getf plist :window))
          (leaf (c:make-leaf (and identifier (gethash identifier index)))))
     (setf (c:node-label leaf) (getf plist :label))
+    (c:restore-node-extra-facts leaf (getf plist :extra) index)
     leaf))
 
 (defmethod serialize-node ((node c:split))
