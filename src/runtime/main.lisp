@@ -562,6 +562,10 @@ debug it (connecting, binding, the first manage sequence) is still after it."
   (setf *world* (c:make-world)
         p:*policy* (or p:*policy* (make-instance 'p:conventional-policy)))
   (install-default-keymap)
+  ;; #15: reads the scratchpad claims and connects them to newly opened
+  ;; windows.  Before the configuration, because a config that claims a
+  ;; scratchpad at load time is a claim like any other.
+  (install-scratchpad-claims)
   (when config (load-config))
   ;; :DEFAULT rather than the option's value as a default argument, because a
   ;; default argument is evaluated by the *caller* — so reading *SWANK-PORT* in

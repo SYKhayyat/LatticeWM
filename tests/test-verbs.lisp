@@ -958,3 +958,94 @@ restart, and it lands in a mode where clicking still works."
     (r:toggle-focus-follows-mouse)
     (is (eq :click (r:focus-behaviour)) "and back")
     (is-true p:*click-to-focus* "and the pointer still works, by clicking")))
+
+;;; ------------------------------------------------------ scratchpad claims
+;;;
+;;; #15.  Membership already survived a restart through WINDOW-FACTS; what did
+;;; not is a scratchpad whose *window* did not come back.  A claim is a
+;;; statement about an application, and these checks are about the three
+;;; moments it matters: written, read back, and honoured at window-open.
+
+(defmacro with-a-claims-file (&body body)
+  "Run BODY with an empty claims list and the file already considered read.
+
+No file is touched: the tests that exercise reading and writing name their own
+path, and the ones about the *moment* the claim is honoured must not depend on
+where the session's own file happens to be."
+  `(let ((r:*scratchpad-claims* '())
+         (r::*scratchpad-claims-loaded-p* t))
+     ,@body))
+
+(test a-scratchpad-claim-is-written-and-read-back
+  "The claim is the durable half: it names an application, not a window, so it
+has to be in a file -- a claim held only in memory dies with the thing it was
+protecting."
+  (with-a-claims-file
+    (let ((path (merge-pathnames "latticewm-test-claims-roundtrip.lisp"
+                                 (uiop:temporary-directory))))
+      (unwind-protect
+           (progn
+             (r:claim-scratchpad "music" "spotify")
+             (r:save-scratchpad-claims path)
+             (setf r::*scratchpad-claims* '())
+             (r:load-scratchpad-claims path)
+             (is (equal '(("music" . "spotify")) r::*scratchpad-claims*))
+             (is-true (search "MUSIC" (string-upcase
+                                       (symbol-name
+                                        (r::claim-for "spotify"))))
+                      "and it answers for the application"))
+        (ignore-errors (delete-file path))))))
+
+(test a-claimed-window-puts-itself-away-when-it-opens
+  "The moment the promise is kept: a window from a claimed application joins
+the scratchpad and is hidden.  Left visible it would be the opposite of the
+bargain -- the thing you asked to be out of the way arriving on top of your
+work.
+
+The test runs the hook the way ATTACH-WINDOW does rather than calling
+CLAIM-WINDOW directly, because the wiring is half of what it is testing:
+a claim that fires when called by hand is not a claim."
+  (with-a-claims-file
+    (let ((r:*scratchpad-claims* '(("music" . "spotify")))
+          (p:*hooks* (make-hash-table :test #'eq)))
+      (with-window-world (world window "spotify")
+        (p:add-hook :window-opened 'r:claim-window)
+        (p:run-hooks :window-opened window)
+        (is-true (c:window-minimized-p window) "hidden on arrival")
+        (is (equal "music" (string-downcase
+                            (symbol-name (c:prop window :scratchpad))))
+            "and on the scratchpad that claimed it")))))
+
+(test an-unclaimed-window-opens-normally
+  "The control, and the one that keeps the feature from being a surprise: a
+window nothing claims is not touched."
+  (with-a-claims-file
+    (let ((r:*scratchpad-claims* '(("music" . "spotify")))
+          (p:*hooks* (make-hash-table :test #'eq)))
+      (with-window-world (world window "editor")
+        (p:add-hook :window-opened 'r:claim-window)
+        (p:run-hooks :window-opened window)
+        (is (null (c:window-minimized-p window)))
+        (is (null (c:prop window :scratchpad)))))))
+
+(test unclaiming-forgets-the-application-and-keeps-the-members
+  (with-a-claims-file
+    (let ((r:*scratchpad-claims* '(("music" . "spotify"))))
+      (r:unclaim-scratchpad "music")
+      (is (null r:*scratchpad-claims*))
+      (is (null (r::claim-for "spotify")) "nothing claims it now"))))
+
+(test scratchpad-claim-from-the-boundary-of-a-key
+  "The command form of a claim: what M-x has to be able to do, and what a
+config file can call.  LIST-SCRATCHPAD-CLAIMS is the same request read back,
+because a claim you cannot see is a claim you cannot undo."
+  (with-a-claims-file
+    (let ((r::*echo-message* nil) (r::*help-visible* nil))
+      (is (equal "music" (r:scratchpad-claim "Music" "spotify"))
+          "it answers with the scratchpad's name, canonicalised")
+      (is-true (search "will claim spotify" (car r::*echo-message*)))
+      (is-true (r:list-scratchpad-claims) "and the list shows it")
+      (r:scratchpad-unclaim "music")
+      (is (null r::*scratchpad-claims*))
+      (is (stringp (r:list-scratchpad-claims))
+          "with nothing left, it says so rather than an empty page"))))

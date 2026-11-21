@@ -660,6 +660,13 @@ keybindings, the command registry, and the session loop.")
    #:tag-window #:untag-window #:jump-to-tag #:gather-tag
    #:scratchpad-put #:scratchpad-show #:scratchpad-toggle
    #:list-scratchpads #:list-tags
+   ;; #15: a claim names an application rather than a window, so it survives
+   ;; the window it was about.
+   #:scratchpad-claim #:scratchpad-unclaim #:list-scratchpad-claims
+   #:claim-scratchpad #:unclaim-scratchpad #:claim-window #:claim-for
+   #:install-scratchpad-claims #:scratchpad-claim-names
+   #:ensure-scratchpad-claims #:*scratchpad-claims*
+   #:load-scratchpad-claims #:save-scratchpad-claims
    #:all-tags #:windows-tagged #:window-tagged-p #:normalize-tag
    #:all-scratchpads #:scratchpad-windows #:focus-existing-window
    ;; input devices: keyboards, mice, touchpads.  The commands are exported

@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A scratchpad can outlive its window.** Membership already survived a
+  restart, but a scratchpad whose *window* did not come back — a reboot, a
+  crash, a closed terminal — came back empty. `scratchpad-claim music spotify`
+  says that windows from that application belong on the `music` scratchpad, and
+  from then on they arrive hidden and ready for the one key that summons them.
+  `scratchpad-unclaim` forgets a claim, `list-scratchpad-claims` shows them, and
+  the file is `~/.local/state/latticewm/scratchpad-claims.lisp` — plain Lisp,
+  readable and editable. (#15)
 - **Tabs now have a lifecycle, not just a switch.** `tab-move forward` /
   `tab-move backward` reorder the tab you are looking at (it stays visible —
   you are arranging, not choosing), `tab-move-to 1` puts it at an absolute

@@ -400,6 +400,23 @@ characters at any scale without this function knowing how wide a glyph is."
            (or (parse-integer (string-trim " " text) :junk-allowed t)
                (error "~a is not a number of pixels" text))))
 
+(define-argument-type :app-id "application: "
+  :documentation "A program's application id, as its windows announce it."
+  :candidates (lambda ()
+                (sort (delete-duplicates
+                       (remove nil (mapcar #'c:window-app-id (all-windows)))
+                       :test #'string=)
+                      #'string<))
+  :parse (lambda (text)
+           (let ((name (string-trim " " text)))
+             (if (zerop (length name))
+                 (error "an application id, please")
+                 name))))
+
+(define-argument-type :scratchpad-with-claim "scratchpad claimed: "
+  :documentation "A scratchpad that claims a window."
+  :candidates #'scratchpad-claim-names)
+
 (define-argument-type :snap-place "place: "
   :documentation "left, right, top, bottom, a corner, maximize or center."
   :candidates (mapcar #'string-downcase

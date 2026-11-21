@@ -284,6 +284,9 @@ LatticeWM commands.
   is in force, not what the configuration asked for, so the two disagreeing is
   visible rather than mysterious.
 
+(list-scratchpad-claims)
+  Show which application goes on which scratchpad.
+
 (list-scratchpads)
   Show every named scratchpad and what is on it.
 
@@ -483,6 +486,14 @@ LatticeWM commands.
   and that is what lets the keymap be the commands you use often rather than the
   only ones that exist.
 
+(scratchpad-claim name app-id)
+  Put every window from APP-ID on the NAME scratchpad from now on.
+  
+  The durable half of a scratchpad: the membership already survives a restart,
+  but a scratchpad whose *window* did not come back needs a statement about the
+  application rather than about a window.  Claim it once and its next window
+  joins by itself -- put away, ready for the one key that summons it.
+
 (scratchpad-put name)
   Put the focused window away under a name, to be summoned by that name later.
   
@@ -500,6 +511,9 @@ LatticeWM commands.
   One key, both directions.  That is the whole point of a scratchpad: the
   terminal you consult twenty times an hour should cost one keystroke each way
   and should never need to be found.
+
+(scratchpad-unclaim name)
+  Stop claiming a window for the NAME scratchpad.  Its current members stay.
 
 (select-window)
   Mark the focused window for a batch verb, or unmark it.

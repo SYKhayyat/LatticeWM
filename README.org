@@ -172,6 +172,7 @@ letters are what you use on your hundredth.
 | =M-x tab-send=      | send this tab into another group     |
 | =Super+z=           | undo the last layout change (=Shift+Super+z= redoes) |
 | =Super+-=           | show/hide a named scratchpad (=Shift+Super+-= puts one away) |
+| =M-x scratchpad-claim= | keep that application on a scratchpad, every time |
 | =Super+t=           | tag this window (=Shift+Super+t= jumps to a tag) |
 
 #+CLAIM: (every (lambda (row) (equal (rest row) (lookup-key *keymap* (kbd (first row)))))

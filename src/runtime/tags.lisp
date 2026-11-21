@@ -289,6 +289,160 @@ and should never need to be found."
        nil)
       (t (scratchpad-show name)))))
 
+;;; ------------------------------------------------ claims: the part that lasts
+;;;
+;;; #15.  A named scratchpad already survives a restart, because membership is a
+;;; prop on the window and WINDOW-FACTS writes props (#117's neighbours made
+;;; that true for tags and it was true for this too).  What does not survive is
+;;; a scratchpad whose *window* did not come back -- a reboot, a crash, a closed
+;;; terminal -- and that is the case the issue is really about: `my music player
+;;; belongs on the music scratchpad' is a statement about an application, not
+;;; about a window that happens to exist right now.
+;;;
+;;; So a claim is (NAME . APP-ID): when a window with that application id opens,
+;;; it joins that scratchpad and is put away, exactly as if you had typed the
+;;; command.  This is the tmux bargain -- the slot survives, and whatever comes
+;;; back into it is filled -- without pretending we can start programs for you
+;;; (that is #97's job, and it is a different one).
+;;;
+;;; Stored in its own small file: claims are user data, they outlive a layout,
+;;; and they are read before any window exists.
+
+(defvar *scratchpad-claims* '()
+  "A list of (SCRATCHPAD-NAME . APP-ID), as strings.")
+
+(defvar *scratchpad-claims-loaded-p* nil
+  "Have the claims been read from disk yet?  Loading is lazy and once.")
+
+(defun scratchpad-claims-file ()
+  "Where claims are kept: $XDG_STATE_HOME/latticewm/scratchpad-claims.lisp."
+  (merge-pathnames
+   "latticewm/scratchpad-claims.lisp"
+   (or (uiop:getenv-absolute-directory "XDG_STATE_HOME")
+       (merge-pathnames ".local/state/" (user-homedir-pathname)))))
+
+(defun save-scratchpad-claims (&optional (path (scratchpad-claims-file)))
+  "Write the claims out.  Never signals; see SAVE-STATE's argument."
+  (guarded "save scratchpad claims"
+    (ensure-directories-exist path)
+    (call-with-replacement-file
+     path
+     (lambda (out)
+       (let ((*print-readably* nil) (*print-pretty* t))
+         (format out ";;;; LatticeWM scratchpad claims.  (#;(\"name\" . \"app-id\") ...)~%")
+         (write *scratchpad-claims* :stream out)
+         (terpri out))))
+    path))
+
+(defun load-scratchpad-claims (&optional (path (scratchpad-claims-file)))
+  "Read the claims, keeping whatever is in memory if the file is unusable.
+
+A file somebody edited by hand is untrusted input, the same ruling READ-NODE
+makes: a claim that is not a (name . app-id) pair is skipped, and a file that
+cannot be read at all keeps the claims this session already has rather than
+throwing them away."
+  (setf *scratchpad-claims-loaded-p* t)
+  (guarded "load scratchpad claims"
+    (when (probe-file path)
+      (multiple-value-bind (form ok)
+          (with-open-file (in path :if-does-not-exist nil)
+            (let ((*read-eval* nil) (*package* (find-package :keyword)))
+              (if in (values (read in nil nil) t) (values nil nil))))
+        (when (and ok (listp form))
+          (setf *scratchpad-claims*
+                (remove-if-not (lambda (claim)
+                                 (and (consp claim) (stringp (car claim))
+                                      (stringp (cdr claim))))
+                               form))))))
+  *scratchpad-claims*)
+
+(defun ensure-scratchpad-claims ()
+  (unless *scratchpad-claims-loaded-p* (load-scratchpad-claims)))
+
+(defun scratchpad-claim-names ()
+  "The scratchpad names something is claimed for, as completion wants them.
+
+A function rather than the variable, because the argument type that offers these
+lives in a file loaded before this one -- and a compile-time reference to
+*SCRATCHPAD-CLAIMS* from there is an undefined variable, which is at least a
+warning and was a build failure."
+  (ensure-scratchpad-claims)
+  (mapcar #'car *scratchpad-claims*))
+
+(defun claim-for (app-id)
+  "The scratchpad name APP-ID is claimed by, or NIL."
+  (ensure-scratchpad-claims)
+  (let ((found (find app-id *scratchpad-claims*
+                     :key (lambda (claim) (cdr claim)) :test #'string=)))
+    (when found (normalize-tag (car found)))))
+
+(defun claim-scratchpad (name app-id)
+  "Say that windows from APP-ID belong on the NAME scratchpad.  Writes the file."
+  (let ((name (string-downcase (string name))))
+    (setf *scratchpad-claims*
+          (cons (cons name app-id)
+                (remove name *scratchpad-claims* :key #'car :test #'string=)))
+    (save-scratchpad-claims)
+    name))
+
+(defun unclaim-scratchpad (name)
+  "Forget the claim on NAME.  Members already on it stay there."
+  (setf *scratchpad-claims*
+        (remove (string-downcase (string name)) *scratchpad-claims*
+                :key #'car :test #'string=))
+  (save-scratchpad-claims))
+
+(defun claim-window (window)
+  "Put a newly opened WINDOW on the scratchpad that claims it, and hide it.
+
+The named function behind :window-opened, so ADD-HOOK can replace it rather
+than accumulating a fresh closure each time ENABLE runs."
+  (let ((name (claim-for (c:window-app-id window))))
+    (when name
+      (setf (c:prop window :scratchpad) name)
+      (pushnew name (c:window-tags window) :test #'tag-name=)
+      ;; Hidden, because that is what a scratchpad member is: assigning a window
+      ;; to a scratchpad in i3 does not leave it on screen either.  A window that
+      ;; arrives and covers your work is the opposite of the promise.
+      (minimize-window window)
+      (logmsg :info "~a claimed for the ~(~a~) scratchpad" (p:name-of-window window) name)
+      window)))
+
+(defun install-scratchpad-claims ()
+  "Connect the claims to newly opened windows, and read them once.  Idempotent."
+  (p:add-hook :window-opened 'claim-window)
+  (load-scratchpad-claims)
+  t)
+
+(defcommand scratchpad-claim (name app-id)
+  "Put every window from APP-ID on the NAME scratchpad from now on.
+
+The durable half of a scratchpad: the membership already survives a restart,
+but a scratchpad whose *window* did not come back needs a statement about the
+application rather than about a window.  Claim it once and its next window
+joins by itself -- put away, ready for the one key that summons it."
+  (:interactive :name :app-id)
+  (let ((canonical (claim-scratchpad name app-id)))
+    (notify "~(~a~) will claim ~a" canonical app-id)
+    canonical))
+
+(defcommand scratchpad-unclaim (name)
+  "Stop claiming a window for the NAME scratchpad.  Its current members stay."
+  (:interactive :scratchpad-with-claim)
+  (unclaim-scratchpad name)
+  (notify "~(~a~) claims nothing now" name)
+  nil)
+
+(defcommand list-scratchpad-claims ()
+  "Show which application goes on which scratchpad."
+  (ensure-scratchpad-claims)
+  (if (null *scratchpad-claims*)
+      (notify "no scratchpad claims -- M-x scratchpad-claim")
+      (show-help-page
+       (format nil "scratchpad claims -- ~d" (length *scratchpad-claims*))
+       (loop for (name . app-id) in *scratchpad-claims*
+             collect (cons name app-id)))))
+
 (defcommand list-scratchpads ()
   "Show every named scratchpad and what is on it."
   (let ((names (all-scratchpads)))
