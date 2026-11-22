@@ -145,6 +145,50 @@ thing draws the thing it always drew, with its +N."
       (is (null (p:cell-picture p:*policy* node)))
       (is (null *stub-calls*) "and nothing was captured for it"))))
 
+(test a-stack-of-four-shows-the-window-that-is-on-screen
+  "A tab group is the one cell where a picture is both unambiguous and worth
+most: it has a selected child, so one of its four windows is the one the cell
+is a picture of.  Before this it drew an empty box, which is the deck declining
+to answer its own question."
+  (with-the-module ()
+    (let* ((windows (list (a-window "one") (a-window "two")
+                          (a-window "three") (a-window "four")))
+           (stack (c:make-stack (mapcar #'a-leaf-holding windows) 1)))
+      (is (eq (second windows) (first (c:node-windows (c:visible-node stack))))
+          "the selected child is the visible one")
+      (is (p:cell-picture p:*policy* stack) "so the cell has a picture")
+      (is (equal (list (second windows)) *stub-calls*)
+          "and exactly one window was captured: the visible one"))))
+
+(test a-stack-of-stacks-peels-to-the-thing-that-is-on-screen
+  "Four tabs, one of which is itself a group of two.  A selection is a question
+you can ask again."
+  (with-the-module ()
+    (let* ((one (a-window "one"))
+           (inner (c:make-stack (list (a-leaf-holding (a-window "two-a"))
+                                      (a-leaf-holding (a-window "two-b")))
+                                1))
+           (outer (c:make-stack (list (a-leaf-holding one) inner) 1)))
+      (is (eq (c:visible-node outer) (c:visible-node inner))
+          "the selection was asked twice")
+      (is (eq (second (c:node-windows inner))
+              (first (c:node-windows (c:visible-node outer))))
+          "and the answer is the window on screen")
+      (is (p:cell-picture p:*policy* outer))
+      (is (= 1 (length *stub-calls*)) "and one capture, not two"))))
+
+(test a-stack-whose-visible-child-is-a-split-keeps-its-box
+  "The visible child must be *one window*.  A tab that is a four-way split is
+still four pictures and one box, and a picture of one of them would be a
+picture of something that is not what is selected."
+  (with-the-module ()
+    (let* ((split (c:make-split :vertical
+                              (list (a-leaf-holding (a-window "foot"))
+                                    (a-leaf-holding (a-window "firefox")))))
+           (stack (c:make-stack (list split (a-leaf-holding (a-window "mail"))) 0)))
+      (is (null (p:cell-picture p:*policy* stack)))
+      (is (null *stub-calls*) "and nothing was captured for it"))))
+
 (test a-cell-of-no-windows-draws-nothing
   (with-the-module ()
     (is (null (p:cell-picture p:*policy* (c:make-stack '() 0))))

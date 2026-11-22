@@ -107,16 +107,23 @@ CANVAS-BLIT is a copy."
   (picture-of (funcall *picture-source* window)))
 
 (defun picture-for (node)
-  "The picture to draw for NODE: a window it holds, if it holds exactly one.
+  "The picture to draw for NODE: the window it shows, when it shows one.
 
-ONE WINDOW, NOT THE FIRST OF SEVERAL.  A cell holding a stack of four windows is
-four pictures and one box, and drawing whichever happens to be first would be a
+ONE WINDOW, NOT THE FIRST OF SEVERAL.  A cell holding four tiled windows is four
+pictures and one box, and drawing whichever happens to be first would be a
 thumbnail of a window that may not even be the visible one.  Those cells keep
-their box and their \"foot +3\" -- which is what the deck drew before there were
+their box and their count -- which is what the deck drew before there were
 pictures, and is the honest drawing of a cell that is not one thing.
+
+A STACK IS NOT THAT CASE, and it was treated as one (#137): a tab group of four
+has a visible window, chosen by STACK-SELECTED, so a picture of it is a picture
+of the cell.  So the question is asked of the part that is on screen rather than
+of the whole cell: a leaf answers with its window, a stack with its selected
+child, and a split with nothing.
   "
-  (let ((windows (c:node-windows node)))
-    (when (= 1 (length windows))
+  (let* ((shown (c:visible-node node))
+         (windows (and shown (c:node-windows shown))))
+    (when (and windows (= 1 (length windows)))
       (let* ((window (first windows))
              (cached (gethash window *pictures* :none)))
         (cond

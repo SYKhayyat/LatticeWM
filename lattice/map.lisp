@@ -127,8 +127,21 @@ still does the only thing it knows how to do."
 
 Through P:NAME-OF-WINDOW rather than reading the app id, so a window rule's
 :LABEL reaches the map as well as the status line.  One question asked in one
-place is the whole of that decision -- see P:WINDOW-NAME."
-  (let ((names (remove nil (mapcar #'p:name-of-window (c:node-windows node)))))
+place is the whole of that decision -- see P:WINDOW-NAME.
+
+THE NAME COMES FROM THE VISIBLE PART FIRST, and it did not: a tab group of four
+was captioned with whichever child happened to be first, which is the one thing
+on that cell a reader can be sure is *not* what they are looking at.  C:VISIBLE-
+NODE is that question -- a split answers itself, a stack answers its selection --
+so the visible window leads and the count behind it still follows."
+  (let ((names (remove nil (mapcar #'p:name-of-window
+                                   (c:node-windows node))))
+        (visible (and (c:visible-node node)
+                      (first (c:node-windows (c:visible-node node))))))
+    (when visible
+      (let ((name (p:name-of-window visible)))
+        (when name
+          (setf names (cons name (remove name names :test #'equal))))))
     (cond ((null names) "")
           ((null (rest names)) (first names))
           (t (format nil "~a +~d" (first names) (1- (length names)))))))

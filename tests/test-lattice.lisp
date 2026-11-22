@@ -2855,3 +2855,44 @@ the commands visible in it."
            (is (find-symbol "ZOOM-OUT" package)
                "and the commands are visible there"))
       (delete-package package))))
+
+;;; ------------------------------------- what a cell says it is showing
+
+(test a-stack-cell-is-captioned-with-the-window-that-is-on-screen
+  "A tab group used to be captioned with whichever child happened to be first,
+which is the one thing on that cell a reader can be sure they are *not* looking
+at.  The caption leads with the visible window and still says how many are
+behind it."
+  (let* ((buried (t*::win "buried"))
+         (shown (t*::win "on-screen"))
+         (stack (c:make-stack (list (c:make-leaf buried)
+                                    (c:make-leaf shown)
+                                    (c:make-leaf (t*::win "also-buried")))
+                              1))
+         (p:*policy* (t*::policy))
+         (text (l::window-summary stack)))
+    (is (eql 0 (search (p:name-of-window shown) text))
+        "the caption leads with the visible window: ~s" text)
+    (is (search "+2" text)
+        "and still says how many are behind it: ~s" text)))
+
+(test a-split-cell-is-captioned-with-what-it-is
+  "Nothing about a split is hidden, so the caption is just the windows in it."
+  (let* ((left (t*::win "left"))
+         (right (t*::win "right"))
+         (split (c:make-split :vertical
+                              (list (c:make-leaf left) (c:make-leaf right))))
+         (text (l::window-summary split)))
+    (is (search (p:name-of-window left) text))
+    (is (search "+1" text) "with the count behind it: ~s" text)))
+
+(test the-caption-before-the-fix-is-what-it-was
+  "C:VISIBLE-NODE is the question the caption asks; it answers a leaf for a
+leaf, the selection for a stack, and the node itself for an empty stack rather
+than an error."
+  (let ((leaf (c:make-leaf (t*::win "a"))))
+    (is (eq leaf (c:visible-node leaf))
+        "a leaf shows itself"))
+  (let ((empty (c:make-stack '() 0)))
+    (is (c:node-empty-p (c:visible-node empty))
+        "an empty stack shows nothing, and asking must not signal")))

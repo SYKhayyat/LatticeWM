@@ -1720,6 +1720,40 @@ The last thing it needs is a *wait*, and a wait inside a drawing path is where a
 
 **An event count is not a clock, and the difference is a hang.** The first version pumped the event loop "until 2000 events have gone by", which bounds how much traffic a wait may *consume* and says nothing whatsoever about a wait for an event that never arrives: such a wait consumes zero events, and `dispatch-one-event` sits in a blocking read for as long as the compositor stays silent. It hung the integration harness twice, for minutes, on exactly the frame this file was written to fetch — and the sentence above asserting the limit was already in this document when it happened. The wait is a poll on the display's socket now (`sb-unix:unix-simple-poll` on wayflan's socket fd, in 20 ms slices) with a two-second deadline behind it, so a compositor that stops answering costs a dropped thumbnail.
 
-**`unix-simple-poll` answers a number, and `0` is true.** The first fix polled with `(not (null (unix-simple-poll fd :input 0)))`, which reads as "is anything waiting" and actually means "did the call succeed" — `0` revents is not NIL in Lisp, so an empty socket counted as readable and the loop dispatched into a block anyway. `(plusp revents)` is the check, and the integration run that "fixed" the hang by shortening the deadline is what made it visible: the deadline then truncated a frame that was genuinely on its way, and the capture came back `NIL x NIL`.
+**Polling the socket is the wrong question, twice.** The first fix reached into wayflan for the display's fd and polled it with `sb-unix:unix-simple-poll` — and got two things wrong at once. It answers *is this descriptor ready*, a boolean, so `(and (integerp revents) (plusp revents))` — the shape C's `poll(2)` hands a C programmer — was always false, every poll fell through to the deadline, and every capture stalled the full two seconds before giving up. The session still *worked*, which is why it took an unrelated warning line (`manage sequence took 2.009 seconds`) to notice. Worse, the whole approach asks the wrong object: wayflan reads the socket into its own buffer and dispatches from there, so an event can be **buffered and undispatched** while the socket is empty, and a poll on the fd reports nothing to do while the next `dispatch-event` would have returned at once.
+
+What it wanted was `wl-display-listen`, which wayflan *exports*: it does the non-blocking read itself and answers whether a whole or partial message is now available, buffered or not. The wait is that plus a five-millisecond sleep and a two-second deadline. Reaching into another library's private slots when it has a public name for the question is the more expensive mistake of the two.
 
 **A test that drives a toggle is a test whose third call closes what its second opened.** The deck is opened by `preview`, which *toggles*, so the integration section that called it three times — open, "redraw", close — was measuring a closed deck and an emptied cache, and its "closing forgets the cache" check passed for the opposite of the intended reason. Drive the edges (`PREVIEW-BEGIN`, `DRAW-PREVIEW-CELL`, `PREVIEW-END`) when the subject is the cache; use the toggle only when the subject is the toggle.
+
+* A stack is not "a cell holding several windows"
+#130 drew pictures for cells holding exactly one window and left every other cell
+as a box with a count.  That is right for a split — four tiled leaves have no
+single visible window to picture — and wrong for a stack, which is a group of
+*alternatives* with one of them selected: exactly one of its four windows is on
+screen, and it is the one a thumbnail of that cell should show.  The deck was
+declining to answer its own question, in the one kind of cell where the answer is
+unambiguous.
+
+The fix is not a `typep` on `stack`.  The container protocol already carries the
+question — `container-alternatives-p` says "one of these is current" and
+`container-selection` says which — so `c:visible-node` peels by asking those, and
+works for a container kind outside the core that holds alternatives.  Two things
+followed from writing it that way:
+
+- **A question about what is on screen has to be answerable of everything on
+  screen.**  Peeling ends at a leaf, so the last question asked was
+  `container-alternatives-p` of a leaf, and the answer was
+  NO-APPLICABLE-METHOD.  A leaf does not hold alternatives; a protocol whose
+  question errors on the commonest node in the tree has a trap in it.
+- **The same bug was in the text.**  The map's caption read the first window of
+  a stack, so a tab group was labelled with whichever child happened to be
+  first — the one thing on that cell a reader could be sure they were *not*
+  looking at.  Both the picture and the caption now ask `visible-node`, because
+  the bug was one question being answered in two places, differently.
+
+What the deck still refuses: a stack whose visible child is a four-way split.
+The selected thing there is not one window, and a picture of one of its leaves
+would be a picture of something that is not what is selected.  That cell keeps
+its box and its count, which is the honest drawing of a cell that is not one
+thing.

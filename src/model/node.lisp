@@ -407,6 +407,17 @@ something, and every verb that fills one has to be able to say so."
   (declare (ignore c))
   nil)
 
+(defmethod container-alternatives-p ((node node))
+  "A LEAF DOES NOT HOLD ALTERNATIVES, and it used to be an error to ask.
+
+VISIBLE-NODE asks this question of whatever it is peeling towards, and peeling
+ends at a leaf -- so the last question asked was whether this leaf held
+alternatives, and the answer was NO-APPLICABLE-METHOD.  That is not the leaf's
+fault: a question about what is on screen has to be answerable of everything on
+screen.  A node with no children shows itself, which is what NIL here means."
+  (declare (ignore node))
+  nil)
+
 (defmethod container-selection ((c container))
   "A container with no notion of a current child has none."
   (declare (ignore c))
@@ -829,6 +840,27 @@ status line asks for that integer on every draw.  This walks and counts."
   "The leaf under ROOT whose window is WINDOW, or NIL."
   (find-node-if (lambda (n) (and (typep n 'leaf) (eq (leaf-window n) window)))
                 root))
+
+(defun visible-node (node)
+  "The part of NODE that is actually on screen: NODE itself, or the child its
+alternatives select, peeled as far as the selections go.
+
+A SPLIT SHOWS ALL OF ITSELF; A STACK SHOWS ONE CHILD.  Four tiled leaves have no
+single thing to point at; a tab group of four has exactly one, and it is the one
+that is on screen.  Anything that wants to say what is there in one window, one
+name or one picture asks this question rather than reading a child index, and
+because it asks through CONTAINER-ALTERNATIVES-P and CONTAINER-SELECTION it works
+for a container kind outside the core that holds alternatives too.
+
+A stack of stacks peels repeatedly -- four tabs, one of which is itself a group
+of two -- because a selection is a question you can ask again."
+  (loop with current = node
+        for address = (and (container-alternatives-p current)
+                           (container-selection current))
+        for next = (and address (child-at current address))
+        while next
+        do (setf current next)
+        finally (return current)))
 
 (defgeneric node-empty-p (node)
   (:documentation

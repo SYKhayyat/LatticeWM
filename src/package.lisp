@@ -195,6 +195,7 @@ deliberately decomposed so that policy can redirect it.")
    #:copy-node #:copy-node-slots #:node-signature #:node-empty-p #:simplify-node
    #:default-address #:empty-pane-p
    #:container-alternatives-p #:container-selection #:container-splits-along-p
+   #:visible-node
    #:serialize-node #:deserialize-node
    #:node-extra-facts #:restore-node-extra-facts
    #:*insertion-weight-function* #:default-insertion-weight

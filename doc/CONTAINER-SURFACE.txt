@@ -96,6 +96,7 @@ written.
 
   methods:
     (stack)                             ; node.lisp
+    (node)                              ; node.lisp
     (container)                         ; node.lisp
 
 ----------------------------------------------------------------------------

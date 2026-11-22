@@ -1270,6 +1270,44 @@ are what a person means by the arrangement, and both are copy-stable."
                                          2))
                             "with the last edge up, T, and the last one down, NIL")
                      (call "DISABLE"))))
+                ;; A TAB GROUP IS THE ONE CELL WHERE A PICTURE IS CERTAIN:
+                ;; one of its children is selected, so it is one window and it
+                ;; is the one on screen (#137).
+                ;; THE SECOND WINDOW IS NOT A CLIENT: it exists to be the tab
+                ;; that is selected, and opening a real one would leave it in
+                ;; the tree for every section below to trip over.  A window
+                ;; object the compositor has never heard of captures as NIL,
+                ;; which is the honest answer and still proves which window
+                ;; the deck asked about.
+                (let ((other (make-instance 'c:window :app-id "latticewm-tab")))
+                  (cond
+                    ((not (drawn)) (skip "no overlay canvas for a tab group"))
+                    (t
+                     (call "ENABLE")
+                     (wm (lambda () (funcall begin)))
+                     ;; THE DECK DRAWS ITSELF on the next frame, and that
+                     ;; paint captures what it captures: settle first, so the
+                     ;; snapshot below is about this cell and not about the
+                     ;; whole wall.
+                     (settle)
+                     (let* ((before (count-of "*CAPTURES*"))
+                            (hidden (c:make-leaf other))
+                            (stack (c:make-stack
+                                    (list (c:make-leaf node) hidden) 1)))
+                       (when (some #'r::overlay-canvas (all-overlays))
+                         (wm (lambda ()
+                               (funcall draw (some #'r::overlay-canvas (all-overlays))
+                                        (c:make-rect 0 0 160 100) "tab" stack))))
+                       (check (= 1 (- (count-of "*CAPTURES*") before))
+                              "a tab group captures its selected window, once")
+                       (multiple-value-bind (picture present)
+                           (gethash other (count-of "*PICTURES*"))
+                         (declare (ignore picture))
+                         (check present
+                                "and the window cached is the one on screen, ~
+                                 not the one behind it"))
+                       (wm (lambda () (funcall finish)))
+                       (call "DISABLE")))))
                 ;; THE PIXEL COPY, on a canvas we own: a 2x2 picture of four
                 ;; known colours drawn into the whole of it, then read back.
                 (let ((shm (server-shm *server*)))

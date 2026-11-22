@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A tab group in the deck shows the tab you are on (#137).** #130 gave a
+  picture only to a cell holding *exactly one* window, which is right for a
+  four-way split and wrong for a stack: a tab group has a selected child, so one
+  of its windows is the one on screen and is what a cell is a picture of. The
+  question is now asked of `c:visible-node` — a leaf answers itself, a stack
+  answers its selection, peeled as far as the selections go, and a stack whose
+  visible child is itself a split keeps its box and its count. The drawn map's
+  caption asks the same question, so a tab group is no longer captioned with
+  whichever child happened to be first, which was the one thing on that cell a
+  reader could be sure they were not looking at.
 - **The lattice's vocabulary verb has a name of its own: `install-lattice-vocabulary`.**
   It was `install-vocabulary`, which is exactly what `r:install-vocabulary` is
   called, so the two collided in `latticewm/user` and the runtime's meaning was

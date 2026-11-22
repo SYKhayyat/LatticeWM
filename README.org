@@ -306,10 +306,14 @@ capture per frame would be a video feed wearing a deck's clothes.  The cache is
 emptied at both edges of a look, so opening the deck again shows the session as
 it is now; there is no refresh timer, so a picture is as old as the look it
 belongs to, and says so by being one.  =M-x thumbnails-forget= drops the cache
-mid-look.  A cell holding several windows keeps its box and its count -- a
-picture of one of four would be a picture of a window that may not be the
-visible one -- and a compositor without the capture protocols, or a window the
-compositor will not name, draws the same box it always did.
+mid-look.
+
+A cell holding several *tiled* windows keeps its box and its count -- four
+pictures and one box would be a picture of a window that may not be the
+visible one -- but a *tab group* shows the picture of the tab you are on, since
+that is one window and it is the one on screen.  A compositor without the
+capture protocols, or a window it will not name, draws the same box it always
+did.
 
 A container can change what it *is* without moving anything out of it.  =M-x
 restyle split= tiles, =M-x restyle stack= goes back to one window at a time, =M-x
