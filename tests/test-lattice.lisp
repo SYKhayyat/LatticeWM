@@ -2316,3 +2316,120 @@ a mode after all."
     (l:peek-off)
     (is (null (l:peek-active-p)))
     (is (null (l:peek-off)) "taking down nothing answers NIL")))
+
+;;; ================================================== clicking on the map (#30)
+;;;
+;;; The map is a picture of the cells with their addresses on it, so a click on
+;;; one is a request to go there.  The decode is a point looked up in the same
+;;; rectangles the picture is drawn from, which makes it testable with no
+;;; compositor and impossible to disagree with what is on screen.
+
+(defun a-plane-on-a-screen (grid rect)
+  "Put GRID in a fresh world with one output of RECT, and answer the world."
+  (let ((world (c:make-world :root (c:make-stack (list grid) 0))))
+    (setf (c:world-outputs world)
+          (list (make-instance 'c:output :name "DP-1" :rect rect)))
+    (setf (c:world-cursor world) (list 0 (l:cell 0 0)))
+    world))
+
+(defun centre-of (rect)
+  "The point in the middle of RECT, as two values."
+  (values (+ (c:rect-x rect) (floor (c:rect-w rect) 2))
+          (+ (c:rect-y rect) (floor (c:rect-h rect) 2))))
+
+(defun a-two-cell-plane ()
+  "A world with two named cells side by side, and the pieces the tests need."
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (rect (c:make-rect 0 0 800 600))
+         (world (a-plane-on-a-screen grid rect)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "editor")
+          (c:child-at grid (l:cell 1 0)) (leaf "web"))
+    (values grid rect world)))
+
+(test a-point-on-the-map-names-the-cell-under-it
+  "The decode is the picture: the same CELL-RECTS the drawer walks, so the cell
+a click lands in is the cell the pointer is visually on."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*peek* nil))
+      (let ((r:*world* world))
+        (l:peek-begin)
+        (dolist (address (list (l:cell 0 0) (l:cell 1 0)))
+          (let ((drawn (cdr (assoc address
+                                   (l:cell-rects policy grid rect
+                                                 :viewport (l:peek-viewport grid))
+                                   :test #'equal))))
+            (multiple-value-bind (x y) (centre-of drawn)
+              (is (equal address (l:map-cell-at policy grid
+                                                (first (c:world-outputs world))
+                                                x y))
+                  "the middle of a cell names that cell"))))
+        (l:peek-end)))))
+
+(test a-point-off-the-plane-is-no-cell-at-all
+  "A click that lands on nothing must do nothing rather than guess the nearest
+-- the same rule a name four windows share follows."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*peek* nil)
+          (output (first (c:world-outputs world))))
+      (let ((r:*world* world))
+        (l:peek-begin)
+        (is (null (l:map-cell-at policy grid output -4000 -4000))
+            "far outside the plane is no cell")
+        (is (null (l:map-cell-at policy grid output 4000 4000))
+            "and so is past the last one")
+        (l:peek-end)))))
+
+(test a-press-on-the-map-is-claimed-and-the-cursor-goes-there
+  "Super+click means `move a window' everywhere else in this program, so on the
+map it has to mean something or nothing.  Claimed means the drag never starts:
+a press that both jumped the cursor and grabbed a window would leave the window
+stuck to the pointer."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*peek* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (is (null (p:pointer-press policy world 400 300 :move))
+            "no map, no claim: Super+click still drags a window")
+        (l:peek-begin)
+        (let* ((output (first (c:world-outputs world)))
+               (drawn (cdr (assoc (l:cell 1 0)
+                                  (l:cell-rects policy grid rect
+                                                :viewport (l:peek-viewport grid))
+                                  :test #'equal))))
+          (multiple-value-bind (x y) (centre-of drawn)
+            (is-true (p:pointer-press policy world x y :move)
+                     "with the map up the press is claimed")
+            (is (equal (list 0 (l:cell 1 0)) (c:world-cursor world))
+                "and the cursor is in the cell that was clicked")
+            (is (null r::*server*)
+                "and no drag was started, which needs a seat to have one")))))))
+
+(test go-to-cell-makes-a-cell-that-is-not-there
+  "An empty cell is not somewhere to stand -- the cursor in a cell you cannot
+see into is a cursor behind a door -- so clicking one creates it, which is what
+the map is offering when it draws a square with no name on it."
+  (with-lattice-world ()
+    (let ((grid (l:current-grid)))
+      (setf (c:world-cursor world) (list 0 (l:cell 0 0)))
+      (is (null (c:child-at grid (l:cell 3 2))))
+      (l:goto-cell (l:cell 3 2))
+      (is-true (c:child-at grid (l:cell 3 2)) "the cell exists now")
+      (is (equal (list 0 (l:cell 3 2)) (c:world-cursor world))
+          "and the cursor is in it"))))
+
+(test goto-pointer-says-so-when-there-is-nothing-under-it
+  "A verb that silently does nothing is the complaint this whole issue is
+about, one layer down -- and with no seat at all, `nothing there' is the
+honest answer rather than an error."
+  (let ((r::*echo-message* nil))
+    (with-lattice-world ()
+      (let ((output (make-instance 'c:output :name "DP-1"
+                                   :rect (c:make-rect 0 0 800 600))))
+        (setf (c:world-outputs world) (list output))
+        (l:peek-begin)
+        (is (null (l:goto-pointer output)) "nothing under the pointer")
+        (is-true (search "not over a cell" (car r::*echo-message*)))
+        (l:peek-end)))))

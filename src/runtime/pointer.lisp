@@ -187,7 +187,17 @@ costs nothing and cannot swallow an ordinary click."
   (c:prop seat :pointer-bindings))
 
 (defun pointer-binding-pressed (seat kind)
-  "A bound pointer button went down: start dragging whatever is under it."
+  "A bound pointer button went down: start dragging whatever is under it.
+
+UNLESS THE POLICY CLAIMS THE PRESS.  A drawing on screen can want the same
+button -- the lattice's map has nothing to drag and everything to click -- and
+P:POINTER-PRESS is how it says so.  Claimed means the drag never starts, which
+is the whole point: a press that both jumped the cursor and began a drag would
+leave the window it grabbed stuck to the pointer."
+  (when (guarded "pointer-press"
+          (p:pointer-press (p:current-policy) *world*
+                           (seat-pointer-x seat) (seat-pointer-y seat) kind))
+    (return-from pointer-binding-pressed :claimed))
   (let ((window (or (seat-pointer-window seat)
                     (window-under-pointer seat))))
     (when window

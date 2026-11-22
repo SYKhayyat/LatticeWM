@@ -51,6 +51,8 @@ edits nothing under src/."
      ;; after map, because the peek is the map drawn over the session rather
      ;; than instead of it: MAP-SHOWN-P is the question PEEK answers yes to.
      (:file "peek")
+     ;; after peek: a press claims the map, and the map is what the peek shows.
+     (:file "pointer")
      (:file "overlay")))))
 
 (defsystem "lattice/tests"

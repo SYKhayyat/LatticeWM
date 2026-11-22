@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The map is clickable.** While the lattice map is showing — deep zoom, or a
+  peek — Super+click puts the cursor in the cell under the pointer and
+  Super+right-click moves the focused window there. Both chords mean move and
+  resize everywhere else in the program, so a user who has dragged a window has
+  already found them; over the map there is nothing to drag and everything to
+  aim at. An empty cell is created rather than clicked through. New in the
+  policy surface: `pointer-press`, which lets anything drawn on screen claim a
+  bound press before it starts a drag. (#30)
 - **Peek at the whole plane without touching a window.** `M-x peek-on` (or
   `peek-toggle`) draws the lattice map over your session; nothing is resized,
   nothing is re-laid-out, and the next key you press takes it down and then does

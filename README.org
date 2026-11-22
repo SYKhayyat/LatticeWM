@@ -61,7 +61,7 @@ rather than the program itself.* Sixty-nine generic functions decide what
 happens; the shipped methods are the defaults; specialising one is how you
 change behaviour, live, without touching the core.
 
-#+CLAIM: (= 69 (length (policy-generics)))
+#+CLAIM: (= 70 (length (policy-generics)))
 
 The test of that is =lattice/= — an infinite two-dimensional plane of cells,
 which is a different layout model with a container kind the core has never heard

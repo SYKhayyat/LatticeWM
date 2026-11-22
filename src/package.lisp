@@ -421,7 +421,7 @@ You never edit this package.")
    ;; --- input ----------------------------------------------------------
    #:key-unbound #:on-key #:pointer-focus #:capture-keys #:capture-wanted-p
    #:*readline-chords*
-   #:pointer-drag-rect #:pointer-resize-edges
+   #:pointer-drag-rect #:pointer-resize-edges #:pointer-press
    #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
    #:*click-to-focus* #:*click-to-raise* #:*float-on-drag*
    #:*honour-client-move-requests* #:*pointer-resize-minimum* #:*pointer-snap*
@@ -567,7 +567,7 @@ keybindings, the command registry, and the session loop.")
    ;; OUTPUT-SHOWING-WORKSPACE was here and is P:OUTPUT-SHOWING now, so that
    ;; motion -- which has to ask the same question and may not call the runtime
    ;; -- asks it of the one function that answers it.
-   #:output-at #:output-for-rect #:output-of-window
+   #:output-at #:output-for-rect #:output-of-window #:pointer-binding-pressed
    #:node-rect-now
    #:overlay-for #:all-overlays #:destroy-overlay #:forget-overlays-for-output
    #:hide-overlays #:overlay-kind #:overlay-output #:overlay-name

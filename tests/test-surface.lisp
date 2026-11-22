@@ -215,8 +215,22 @@
   ;; stays in seats.lisp because the minibuffer cannot read a line if the
   ;; bindings are disabled, so it is an invariant rather than a decision, and
   ;; the other two are the shipped method.
+  ;; SIXTY-NINE TO SEVENTY IS THE TENTH MOVE, AND IT IS THE THIRD KIND AGAIN: a
+  ;; hardcoded answer crossing the line with no knob added.  POINTER-PRESS is
+  ;; the question "does anything want this press before it starts a drag?", and
+  ;; the answer used to be a fact rather than a decision -- POINTER-BINDING-
+  ;; PRESSED began a drag, always, because nothing on screen had ever wanted a
+  ;; click.  The lattice's map is drawn *over* the session, so from the day it
+  ;; existed, Super+click on a cell both could not drag anything and could not
+  ;; be told what to do instead.
+  ;;
+  ;; The shipped method answers NIL, which is exactly the old behaviour, so the
+  ;; count of generics answered from outside src/ goes up by one while nothing
+  ;; a user can see changes without the lattice loaded.  That is the shape this
+  ;; comment has asked for at every move: a boundary correction, argued, and
+  ;; named against the line of code it replaced.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 69) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 70) "the extension surface has ~d generics" n)))
 
 (test the-surface-is-what-takes-a-policy-and-nothing-else
   "POLICY-GENERICS used to mean 'every exported generic in the package'.

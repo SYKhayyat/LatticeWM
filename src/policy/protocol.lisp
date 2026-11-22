@@ -629,6 +629,20 @@ pointer leaves the screen and comes back.
 Specialize this for snapping, for edge resistance, for a grid, or to make a
 resize keep its aspect ratio."))
 
+(defgeneric pointer-press (policy world x y kind)
+  (:documentation
+   "Claim a bound pointer press at (X, Y), or answer NIL to let it drag.
+
+KIND is :MOVE, :RESIZE or whatever an extension taught POINTER-DRAG-RECT about.
+The shipped method answers NIL always, which is the behaviour this had before
+the generic existed: the pointer goes down on a window and the window moves.
+
+The generic exists because a *drawing* can want the same button.  The lattice's
+map is drawn over the session, so Super+click on it has nothing to drag; a
+policy that says so here gets the press instead, and the drag is never started.
+Answering non-NIL means claimed -- the value itself is the policy's own
+business, and the runtime does not read it."))
+
 (defgeneric pointer-resize-edges (policy window x y)
   (:documentation
    "Which edges of WINDOW a resize started at (X, Y) should move.

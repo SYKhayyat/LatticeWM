@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-69 generics, 116 options.  Generated from the running image.
+70 generics, 116 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -1091,7 +1091,7 @@ underneath for people who do.
 
 ============================================================================
 INPUT-POLICY -- keys, the pointer, and the devices
-12 generics
+13 generics
 ============================================================================
 
 ----------------------------------------------------------------------------
@@ -1346,6 +1346,25 @@ resize keep its aspect ratio.
   answered from: *pointer-resize-minimum*
   methods:
     (input-policy t t t t t t)          ; defaults-motion.lisp
+
+----------------------------------------------------------------------------
+pointer-press (latticewm/policy:policy latticewm/policy::world
+               latticewm/policy::x latticewm/policy::y latticewm/policy::kind)
+----------------------------------------------------------------------------
+Claim a bound pointer press at (X, Y), or answer NIL to let it drag.
+
+KIND is :MOVE, :RESIZE or whatever an extension taught POINTER-DRAG-RECT about.
+The shipped method answers NIL always, which is the behaviour this had before
+the generic existed: the pointer goes down on a window and the window moves.
+
+The generic exists because a *drawing* can want the same button.  The lattice's
+map is drawn over the session, so Super+click on it has nothing to drag; a
+policy that says so here gets the press instead, and the drag is never started.
+Answering non-NIL means claimed -- the value itself is the policy's own
+business, and the runtime does not read it.
+
+  methods:
+    (input-policy world t t t)          ; defaults-motion.lisp
 
 ----------------------------------------------------------------------------
 pointer-resize-edges (latticewm/policy:policy latticewm/policy::window

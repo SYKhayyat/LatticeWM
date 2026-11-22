@@ -337,6 +337,16 @@ is when a drag most needs to land where you are pointing."
                ((member :bottom edges) (setf h (max minimum-h (+ h dy)))))
          (c:make-rect x y w h))))))
 
+(defmethod pointer-press ((policy input-policy) (world c:world) x y kind)
+  "The shipped answer: no press is claimed, so the pointer drags the window.
+
+Stated as a method rather than left to a default because an absent default is a
+NO-APPLICABLE-METHOD waiting for the first person who drags a window, and
+because a policy that wants the press should be able to say so in one line
+without knowing what the shipped answer was."
+  (declare (ignore world x y kind))
+  nil)
+
 (defmethod pointer-resize-edges ((policy input-policy) (window c:window) x y)
   "The quadrant of the window the pointer is in.
 

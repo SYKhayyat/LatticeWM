@@ -62,6 +62,9 @@ motion runs straight through the cell boundary as though it were not there.")
    ;; window is resized for the privilege.
    #:*peek* #:peek-active-p #:peek-begin #:peek-end
    #:peek-viewport #:plane-viewport
+   ;; #30: the map is a picture with addresses on it, so a click on one is a
+   ;; request to go there.
+   #:map-cell-at #:map-area #:goto-cell #:goto-pointer
    #:draw-coordinate-overlay-on #:copy-viewport
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell))
