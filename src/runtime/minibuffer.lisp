@@ -47,7 +47,14 @@ that assumes it is cannot be edited.")
   "Called with the finished string, or with NIL if cancelled.")
 
 (defvar *completions* '()
-  "Candidate strings for TAB completion, or NIL.")
+  "Candidate strings for TAB completion, or NIL, or a function of the input.
+
+A LIST is the ordinary case and is what every argument type uses: the
+candidates are known when the prompt opens.  A FUNCTION is for a prompt whose
+candidates depend on what has been typed -- the launcher's, where `2+2' is a
+candidate that only exists once you have typed it.  It is called on every
+keystroke through COMPLETION-LIST, which is one place because the echo area
+and TAB must agree about what the candidates are.")
 
 (defvar *kill* ""
   "The last text killed with C-k, C-u or C-w, for C-y.  One string rather than
@@ -89,8 +96,9 @@ distinct things you did rather than through how many times you did them."
   "Prompt in the echo area and call CALLBACK with what was typed.
 
 CALLBACK receives NIL if the user pressed Escape.  COMPLETIONS is a list of
-candidate strings for Tab.  HISTORY names a ring that Up and Down walk, and
-that the finished string is added to."
+candidate strings for Tab, or a function of the input so far returning one --
+see COMPLETION-LIST.  HISTORY names a ring that Up and Down walk, and that
+the finished string is added to."
   (setf *prompt* prompt
         *input* (or initial "")
         *point* (length *input*)
@@ -117,16 +125,28 @@ that the finished string is added to."
 
 ;;; ------------------------------------------------------------ completion
 
+(defun completion-list (&optional (input *input*))
+  "The candidate strings, asking the function when *COMPLETIONS* is one.
+
+Guarded: a candidate function is user code reached by typing, and it runs on
+the path that draws the echo area -- where a signal would stop the prompt
+from drawing at all.  A function that fails contributes no candidates and
+says so in the log."
+  (if (functionp *completions*)
+      (or (guarded "completion-list" (funcall *completions* input)) '())
+      *completions*))
+
 (defun candidates-for (input)
   "Completions matching INPUT, best first.
 
 The ranking is a policy decision — see COMPLETE-CANDIDATES — because it is the
 most personal thing in the minibuffer and the shipped answer is a default
 rather than a law."
-  (if (null *completions*)
-      '()
-      (guarded "complete-candidates"
-        (p:complete-candidates (p:current-policy) input *completions*))))
+  (let ((completions (completion-list input)))
+    (if (null completions)
+        '()
+        (guarded "complete-candidates"
+          (p:complete-candidates (p:current-policy) input completions)))))
 
 (defun common-prefix (strings)
   "The longest string every one of STRINGS starts with."
@@ -148,7 +168,7 @@ and silently rewriting what you typed into it is not."
   (remove-if-not (lambda (candidate)
                    (and (<= (length input) (length candidate))
                         (string-equal input candidate :end2 (length input))))
-                 *completions*))
+                 (completion-list input)))
 
 (defun complete-input ()
   "Tab: extend what is typed as far as the candidates agree."

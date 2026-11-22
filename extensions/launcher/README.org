@@ -1,0 +1,92 @@
+#+TITLE: launcher
+#+OPTIONS: toc:nil num:nil
+
+One searchable surface for everything you can start.
+
+A launcher seems to want to be its own little daemon with a window and a
+config file, and every one of those is a thing LatticeWM already has: a
+resident process, a prompt with completion, a command registry, a
+configuration language, a notification path.  So this module is only the
+*candidates* and the ranking -- nothing else was missing.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "launcher")
+#+end_src
+
+Then press the key you bind to =M-x launcher= and type part of a name:
+=3le= finds Firefox long before you finish the word.  What you can find:
+
+- every *desktop application* (XDG =~/.desktop= files);
+- every *executable on =$PATH=*;
+- every registered *project* (when the =projects= extension is loaded);
+- the *answer to a sum* you type -- =2+2= and Return offers 4;
+- every *action* you defined.
+
+Selecting one runs it in this process.  There is no shell involved and no
+`eval` of what you type, and both are about the same thing: this prompt
+accepts anything a person can type, so nothing it accepts may be executed as
+code.  An entry that names a program becomes an argv list; a calculation is
+parsed as arithmetic, which is why =firefox= is never read as a variable.
+
+* Actions
+
+#+begin_src lisp
+(launcher:define-action "notes"
+  "Today's notes"
+  (lambda () (latticewm/runtime:spawn "emacs" "~/notes/today.md")))
+#+end_src
+
+=define-action= takes a name, a description and a function.  The name is what
+you type; the description is the subtitle.  =remove-action= forgets one.
+
+* Sources
+
+A source is a function of no arguments returning records.  A record is a
+plist:
+
+#+begin_src lisp
+(:title "The thing you type and see"
+ :subtitle "a second line, optional"
+ :source "who provides it"
+ :action (lambda () ...))   ; called when selected
+#+end_src
+
+Adding a source is a call, not an edit:
+
+#+begin_src lisp
+(launcher:define-source "crates.io"
+  (lambda () (mapcar ...)))
+#+end_src
+
+The shipped sources are =desktop=, =path=, =projects= and =actions=; the
+=DESKTOP= and =PATH= ones can be turned off with =*enable-desktop-source*=
+and =*enable-path-source*=.  A source that signals is skipped and logged,
+because one unreadable directory must not make it impossible to start a
+program.
+
+* Ranking
+
+Ranking is =fuzzy-score= + =rank-records= — one function each, documented,
+and the whole file has no other place anything is ordered.  If you want
+frecency, replace =rank-records=: nothing else needs to know.
+
+* The calculator
+
+=expression-p= decides whether a string is arithmetic (digits, operators,
+no letters — that last one keeps =firefox= out); =calculate= answers it with
+precedence, parentheses and a unary minus; the answer is offered as a
+candidate and copies itself to the clipboard (=wl-copy=, =xclip= or =xsel=,
+whichever is installed) when you select it.  Division by zero and a string
+that is not quite arithmetic answer "no candidate", which is the truthful
+way to say no.
+
+* Not built, and why
+
+No frecency persists yet — the ranking question is answered with one
+replaceable function and the storage would be a second file to corrupt and a
+second policy to argue about.  No network search, for the same reason no
+native renderer: this module is a prompt with sources, and both of those are
+deliberately left to be added as sources if the day calls for them.

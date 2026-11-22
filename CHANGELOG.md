@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A launcher, built from the pieces already here.** The `launcher` extension
+  adds `M-x launcher`: type three letters, press Return. Candidates come from
+  XDG desktop entries, `$PATH` executables, the `projects` registry, arithmetic
+  (`2+2` offers 4, and copies it) and any action you define with
+  `launcher:define-action`. Ranking is one replaceable function; a source is a
+  function returning records, so adding one is a call rather than an edit. No
+  second daemon, no second window, no second configuration language — and no
+  shell and no `eval` of what you type. (#97)
 - **A saved layout is a library, not one name.** The `layout-persistence`
   extension grows `list-layouts` (each name with its panes and applications),
   `forget-layout`, `rename-layout`, `use-layout` (opens an arrangement in a new
