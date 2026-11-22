@@ -347,7 +347,7 @@ and =river-xkb-bindings-v1=, version 3), not summaries.
 | Keybindings | ~river_xkb_bindings_v1.get_xkb_binding(seat, id, keysym, modifiers)~ → ~enable~ |
 | Emacs-style key sequences | ~ensure_next_key_eaten~ / ~ate_unbound_key~ |
 | Hold-Super-to-zoom-out | ~modifiers_watch~ / ~modifiers_update~ |
-| Multi-monitor | ~river_output_v1.position(x,y)~ + ~dimensions(w,h)~ in logical space |
+| Multi-monitor | ~river_output_v1.position(x,y)~ + ~dimensions(w,h)~ events, in logical space — *events*, so the compositor says where an output is and this program cannot say otherwise. No clone, no group, no output requests at all beyond ~destroy~ and ~set_presentation_mode~. Mirroring one output onto another is therefore upstream (#125). |
 | Minimap / overview UI | ~get_shell_surface(id, surface)~; shell surfaces get their own ~get_node~ |
 | Drag windows between cells, drag-to-pan | ~op_start_pointer~ → ~op_delta(dx,dy)~ (cumulative) → ~op_release~ → ~op_end~ |
 | Driving our own animation | ~manage_dirty~ |

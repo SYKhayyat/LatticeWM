@@ -261,9 +261,16 @@ a direction, and the screen it left trades for what that one was showing instead
 of going blank; =:follow= takes the keyboard with it.  =M-x list-outputs= says
 what each screen is called, how big it is, which workspace it shows, and whether
 it is one plane with another.  Workspace numbers mean the same workspace on
-every screen -- there is one stack of workspaces and one viewport per output --
-and mirroring, in the sense of one picture on two monitors, is not something a
-Wayland client can do: =M-x share-workspace= is the useful half.
+every screen -- there is one stack of workspaces and one viewport per output.
+
+There is no =M-x mirror=, and it is not an omission.  One picture on two
+monitors would mean either the same window drawn twice, which a Wayland client
+cannot be asked to do (a surface has one geometry), or the compositor drawing one
+output's scene into another output's buffer -- and =river_output_v1= has no
+clone request, and does not even accept a position for an output from the window
+manager: =position= and =dimensions= are events the compositor sends.  What a
+projector wants that is achievable is =M-x share-workspace=: both screens become
+one plane with more pixels than either, which is why it is the useful half.
 
 =M-x list-hidden= says what is alive and on no screen -- there is no taskbar
 here, so a window you put away is in no list until you ask for one -- and =M-x

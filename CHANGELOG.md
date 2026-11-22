@@ -26,6 +26,11 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **There is no `mirror`, and the docs now say why.** `river_output_v1` has no
+  clone request and does not accept a position for an output from the window
+  manager (`position` and `dimensions` are *events*), so one picture on two
+  monitors is upstream. `M-x share-workspace` is the achievable half: two screens
+  become one plane with more pixels than either.
 - **`grid`: a grid arrangement, as a container kind.** `M-x grid N` turns the
   current workspace into a rectangle of `N` columns filled in reading order;
   `M-x grid-columns N` changes the width afterwards (the grid's zoom), and

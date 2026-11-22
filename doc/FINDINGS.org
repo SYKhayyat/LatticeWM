@@ -1635,3 +1635,28 @@ file interns a *new* symbol there and changes nothing at all, silently. The surf
 ~every-option-is-reachable-from-a-config-file~ is the check that caught it, and
 it caught it on the first run -- which is the whole argument for having written
 that test when the same class of bug was found in the core's own options.
+
+* Mirroring an output is upstream, and the evidence in the issue was wrong
+#125 asked to ship ~mirror~, or to say it is not this program's to ship. It is
+not, and the reason is sharper than the one the issue recorded: the issue listed
+~river_output_v1.set_position~ and ~set_dimensions~ as requests the window
+manager can send. Read the XML: in =river_output_v1= they are **events**. The
+whole request list is ~destroy~ and ~set_presentation_mode~. So this program
+cannot move or size an output at all -- it is told where outputs are -- and even
+the fallback I considered while reading the issue (give two outputs the same
+scene rectangle so the compositor draws the same region twice) is unavailable,
+because there is no request to give it.
+
+That settles the choice between the three readings: the pixel-identical one
+needs a compositor feature that does not exist (~wlr-output-clone~-style), and
+the arrangement-copy one is a second canvas with one geometry per surface, which
+is the contradiction #96 already ran into. What a projector actually wants has a
+name and already ships: ~share-workspace~ makes two screens one plane with more
+pixels than either, and ~list-shared~ says who is in it.
+
+**The general lesson, which is the fourth time this project has learned it:** an
+issue's evidence is a claim, and a claim about a protocol belongs in a grep of
+the vendored XML rather than in the summary of it. The row in DESIGN.org's
+capability table has been corrected from "position + dimensions" to "*events*,
+so the compositor says where an output is and this program cannot say
+otherwise", with the missing clone request named beside it.
