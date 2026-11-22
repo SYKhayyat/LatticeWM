@@ -1485,3 +1485,40 @@ it is somewhere else, because a pin you cannot see take effect is a table entry
 rather than a rule; and the pin table is keyed by **workspace number** while the
 runtime speaks internal indexes, with the conversion in one function, so that the
 table a human reads and the table the runtime consults cannot drift.
+
+* Infinite workspaces: the stack already grew, and the *relative* step was the
+  wall
+#1 reads as a request for unbounded workspaces and is really a request about
+one keystroke. The stack at the root of the tree has always grown --
+=M-x workspace 40= makes forty and every one of them is whatever the policy says
+a workspace is -- so `infinite workspaces' cost nothing the day the workspace
+became a container. What somebody hit was this: at the last workspace, press the
+key that means *next*, and be returned to the first. That is not a limit. It is
+a *reading* of the end of the list, and it was the only reading the program had.
+
+Both readings are right and they are about different desks, which is why the
+answer is an option rather than a better guess:
+
+- =:wrap= is the fixed set of numbered workspaces -- i3 and the tiling tradition,
+  and what this program did before #1. It stays the default, because an option
+  that changed behaviour on upgrade is a surprise dressed as a feature;
+- =:grow= is infinite workspaces taken literally: the workspace after the last
+  one is a new one.
+
+Three details that took a decision each. **What grows is the far end only**: a
+step *back* from the first workspace always wraps, because there is nothing
+behind it and a workspace numbered zero would undo the one thing every number in
+this program agrees about. **The decision lives at one seam**
+(=workspace-step-target=), which the switching verb and the sending verb both
+read, because two implementations of `the next workspace' would be two answers
+the moment either changed. And **a typo behaves as it did**: the option is read
+through =grow-workspace-nav-p=, so =:grows= or a string leaves the desktop
+wrapping rather than stopping every relative step dead -- the same ruling
+*WORKSPACE-PINS* gets for a screen that is not plugged in.
+
+The Z-axis question #1 raises answers itself once the model is looked at: a
+numbered workspace *is* a plane, there is exactly one stack of them, and the
+number is the index into it. `Next' and `behind' are the same movement, which is
+why growing the list and growing the map cannot disagree -- and it is why the
+status line has said =workspace 3/5= since the day the vocabulary file stopped
+calling a workspace a tab.

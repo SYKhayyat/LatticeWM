@@ -354,6 +354,7 @@ without a compositor — which is the whole model."
      (:file "test-animation")
      (:file "test-shortcuts")
      (:file "test-pins")
+     (:file "test-workspace-nav")
      (:file "test-placement")
      (:file "test-stacking")
      (:file "test-tree")

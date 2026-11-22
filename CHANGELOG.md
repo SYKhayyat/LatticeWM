@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Infinite workspaces, taken literally.** `*workspace-nav*` decides what the
+  far end of the workspace stack is: `:wrap` (the default, and what every
+  version before this did — the next workspace after the last one is the first)
+  or `:grow` (the next workspace after the last one is a new one). Stepping
+  *back* from the first workspace always wraps, whatever the option says.
+  `M-x send-next-workspace` / `M-x send-previous-workspace` move the focused
+  pane relatively and read the same answer, so `next` and `send next` cannot
+  disagree about where the next workspace is.
 - **A workspace can be pinned to a screen.** `M-x pin-workspace 3 HDMI-A-1`
   (or `*workspace-pins*` in a config file, `((3 . "HDMI-A-1"))`), `M-x
   unpin-workspace` to let it go, `M-x pins` to see the table and whether each

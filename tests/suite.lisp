@@ -128,6 +128,12 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite workspace-nav :in model
+  :description "What the end of the workspace stack is (#1).  `Infinite
+workspaces' shipped with the container; what was missing was a relative step
+that grows at the edge instead of wrapping, and the sending verb that follows
+the same answer.")
+
 (def-suite pins :in model
   :description "A workspace that belongs to a screen (#132).  The rule this
 collides with is #126's trade, so the answer taken -- the pin wins, and the

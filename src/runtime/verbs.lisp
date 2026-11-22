@@ -815,16 +815,41 @@ grows."
         ;; mirroring the first.  See SHOW-WORKSPACE.
         (show-workspace stack index)))))
 
+(defun workspace-step-target (stack step)
+  "Where STEP from the current workspace lands: (values INDEX GROW-P).
+
+GROW-P is true when the step runs off the far end and *WORKSPACE-NAV* says the
+end of the stack is not a wall (#1).  One function for the switching verb and the
+sending one, because two implementations of `the next workspace' would be two
+answers the moment either changed."
+  (let* ((count (max 1 (c:container-count stack)))
+         (here (c:container-selection stack))
+         (target (+ here step)))
+    (if (and (plusp step) (>= target count) (p:grow-workspace-nav-p))
+        (values target t)
+        (values (mod target count) nil))))
+
 (defcommand next-workspace (&optional (step 1))
-  "Switch to the next workspace, wrapping."
+  "Switch to the next workspace.
+
+What happens at the end is *WORKSPACE-NAV*'s decision (#1): :wrap returns to the
+first workspace, :grow makes a new one and keeps going.  Stepping *back* from the
+first always wraps, because there is nothing behind workspace one and a numbered
+workspace zero would undo the one thing every number here agrees about."
   (with-relayout
     (let ((stack (workspace-stack)))
       (when stack
-        (workspace (1+ (mod (+ (c:container-selection stack) step)
-                            (max 1 (c:container-count stack)))))))))
+        (multiple-value-bind (index grow) (workspace-step-target stack step)
+          (if grow
+              (progn (grow-workspaces-to stack index)
+                     (show-workspace stack index))
+              (workspace (1+ index))))))))
 
 (defcommand previous-workspace ()
-  "Switch to the previous workspace, wrapping."
+  "Switch to the previous workspace, wrapping at the first.
+
+Wrapping *backwards* is not a limitation and does not follow *WORKSPACE-NAV*:
+:grow is about the edge of the map, and there is no edge behind workspace one."
   (next-workspace -1))
 
 (defcommand new-workspace ()
@@ -930,6 +955,25 @@ workspaces, live in two places at once.
 Callers that ignore a surgery function's second value have a bug they have not
 noticed yet; this one had it for the life of the command."
   (send-path-to-workspace (current-path) number :follow follow))
+
+(defcommand send-next-workspace (&key (step 1) (follow nil))
+  "Send the focused pane to the next workspace, growing one if that is the edge.
+
+The relative half of SEND-TO-WORKSPACE, and the reason #1 asked for it: a
+`send it two workspaces right' you have to count out yourself is a command you
+use once.  What happens at the far end is *WORKSPACE-NAV*'s decision, the same
+one the switching verb reads, so `next' and `send next' cannot disagree about
+where the next workspace is."
+  (with-relayout
+    (let ((stack (workspace-stack)))
+      (when stack
+        (multiple-value-bind (index grow) (workspace-step-target stack step)
+          (when grow (grow-workspaces-to stack index))
+          (send-path-to-workspace (current-path) (1+ index) :follow follow))))))
+
+(defcommand send-previous-workspace (&key (step 1) (follow nil))
+  "Send the focused pane to the previous workspace, wrapping at the first."
+  (send-next-workspace :step (- step) :follow follow))
 
 (defun send-path-to-workspace (from number &key follow)
   "Move the pane at path FROM to workspace NUMBER.  The landed path, or NIL.

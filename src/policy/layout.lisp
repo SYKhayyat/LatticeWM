@@ -596,3 +596,34 @@ key standing in for a generic is the mistake *SMART-GAPS* made with an option."
           ((and window (c:window-floating-p window)) (push placement floating))
           (t (push placement tiled)))))
     (nconc (nreverse tiled) (nreverse floating) (nreverse pinned))))
+
+;;; --------------------------------------------------- where a step ends (#1)
+
+(define-option *workspace-nav* :wrap
+  "What the last workspace is: a wall (:wrap) or the edge of the map (:grow).
+
+  :wrap  the next workspace after the last one is the first, as it always was
+  :grow  the next workspace after the last one is a new one
+
+THE TWO ANSWERS ARE BOTH RIGHT AND THEY ARE ABOUT DIFFERENT DESKS.  Wrapping is
+what a fixed set of numbered workspaces wants -- i3 and the tiling tradition, and
+before this option the only answer this program had.  Growing is what infinite
+workspaces are for, and #1 exists because somebody switched to the end of their
+stack, pressed the key again, and found themselves back at the beginning, which
+reads as `the desktop is smaller than I thought' rather than as a decision.
+
+What grows is the *far end only*: stepping back from the first workspace wraps,
+because there is nothing behind it and a workspace numbered zero would undo the
+one thing every workspace number in this program agrees about.
+
+The numbered verb is untouched.  `M-x workspace 40' has always created what it
+needed, and the stack grows; this option only decides what happens when a
+*relative* step runs off the end.")
+
+(defun grow-workspace-nav-p ()
+  "True when a relative step off the far end grows instead of wrapping.
+
+A guard rather than a raw read, because *WORKSPACE-NAV* is a variable a config
+file sets: a typo -- :grows, \"grow\" -- must leave the desktop behaving as it
+did rather than stopping every relative step dead."
+  (eq *workspace-nav* :grow))

@@ -245,6 +245,12 @@ surface, and river has no animation request, so that is the compositor's call.
 What fades is what this program draws for you -- its own buffer on its own
 surface.
 
+Workspaces are unbounded — =M-x workspace 40= makes forty — and =*workspace-nav*=
+decides what the *far end* of the list is: =:wrap= (the default) comes back round
+to the first, =:grow= makes a new one and keeps going.  (=M-x send-next-workspace=
+=/= =M-x send-previous-workspace= move a window relatively and read the same
+option.)
+
 A workspace can be *pinned* to a screen -- =M-x pin-workspace 3 HDMI-A-1=, or
 =((3 . "HDMI-A-1"))= in =*workspace-pins*= -- and then asking any other screen
 for it takes you to the screen it lives on, rather than trading it away.  =M-x

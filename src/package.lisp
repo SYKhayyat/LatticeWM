@@ -445,6 +445,8 @@ You never edit this package.")
    ;; #11: the keys can be handed back to applications, keeping one way back.
    #:*keys-suspended* #:keys-suspended-p #:give-keys-away #:take-keys-back
    #:way-back-key
+   ;; #1: what a relative workspace step does at the far end.
+   #:*workspace-nav* #:grow-workspace-nav-p
    #:ease #:+animation-curves+ #:*animations* #:animation-for
    #:animation-key #:animation-transitions #:animation-forget
    #:animation-progress #:animation-finished-p #:*animation-duration*
