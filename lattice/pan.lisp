@@ -92,21 +92,88 @@ the hand actually travelled across the picture."
     (setf *drag-pan* nil)
     (r:mark-dirty)))
 
+(defvar *drag-dock* nil
+  "A window drag that may end in a cell drop, or NIL.
+
+A plist: :WINDOW, :FROM (the cell the window was in when the hand went down),
+and :X / :Y, the pointer's latest position so that the release can decode the
+cell it let go over without asking a seat for anything.")
+
+(defun cell-holding (grid window)
+  "The cell address of the leaf holding WINDOW in GRID, or NIL."
+  (loop for address in (occupied-cells grid)
+        for node = (c:child-at grid address)
+        when (c:leaf-holding node window) return address))
+
+(defun record-drag-dock (grid window x y)
+  "Note that WINDOW's drag may end in a drop onto a cell of GRID."
+  (setf *drag-dock* (list :window window :from (cell-holding grid window)
+                          :x x :y y)))
+
 ;;; ------------------------------------------------------------- the hooks
 
 (defun drag-pan-tracking (x y)
-  "The :POINTER-MOVED half: nothing at all unless a drag is running.
+  "The :POINTER-MOVED half: nothing at all unless something is being dragged.
 
 Unconditional and unthrottled is the right shape for the hook, and this is why:
 the check is here, so a session with no drag pays one NIL test per motion event
 and never a layout."
   (when (drag-panning-p)
-    (r:guarded "drag-pan" (drag-pan-update x y))))
+    (r:guarded "drag-pan" (drag-pan-update x y)))
+  (when *drag-dock*
+    (setf (getf *drag-dock* :x) x (getf *drag-dock* :y) y)))
+
+(defun dock-window-at (address)
+  "Put the dragged window into the cell ADDRESS, and say where it went.
+
+The window is a float at this moment -- the drag floated it, which is the
+visible half of every window drag -- so it is unfloated first and then moved
+into the target cell by the same path MOVE-TO-CELL uses.  Unfloat-then-move
+rather than a new placement: the only thing this adds to the keyboard verb is
+the *hand* that aims it."
+  (let ((window (getf *drag-dock* :window)))
+    (if (null (c:float-of-window r:*world* window))
+        nil
+        (progn
+          ;; Settle the drag record BEFORE moving: the tree and the plane both
+          ;; get written during the move, and a half-finished drag record
+          ;; reading state in the middle of that is a bug waiting for a second
+          ;; caller.
+          (setf *drag-dock* nil)
+          (let ((landed (r:unfloat-window window)))
+            (when landed
+              (move-path-to-cell landed (cell-x address) (cell-y address))
+              (r:notify "~a to ~a" (p:name-of-window window)
+                        (cell-label (current-grid) address))))))))
 
 (defun drag-pan-released (kind)
-  "The :POINTER-RELEASED half.  KIND is ignored: every button ends every drag."
+  "The :POINTER-RELEASED half.  KIND is ignored: every button ends every drag.
+
+Both of them: the plane handle lets go, and a window drag that ended over a
+cell -- the one next door, or one the map is showing -- becomes a move into that
+cell.  A window drag that ends over nothing stays a float, which is what it
+would have been before any of this existed."
   (declare (ignore kind))
-  (drag-pan-end))
+  (when (drag-panning-p) (drag-pan-end))
+  (when *drag-dock*
+    (let* ((x (getf *drag-dock* :x))
+           (y (getf *drag-dock* :y))
+           (output (and x y (r:output-at x y)))
+           (grid (and output (current-grid)))
+           (policy (p:current-policy))
+           (address (and x y grid output
+                         (map-cell-at policy grid output x y))))
+      (cond ((null address)
+             (setf *drag-dock* nil))
+            ((equal address (getf *drag-dock* :from))
+             ;; Let go where you picked it up and nothing happened: the drag is
+             ;; a drag, not a move.  The float is put back through the same
+             ;; verb a float always uses, so the tree keeps its shape.
+             (let ((window (getf *drag-dock* :window)))
+               (setf *drag-dock* nil)
+               (when (c:float-of-window r:*world* window)
+                 (r:unfloat-window window))))
+            (t (dock-window-at address))))))
 
 ;; Installed at load time rather than from ENABLE, and the reason is ordering:
 ;; ENABLE lives in COMMANDS.LISP, which is compiled before this file, so a call
@@ -128,7 +195,10 @@ seat, because a policy method is handed a world and a press and nothing else."
             for window = (c:float-window float)
             for rect = (and window (c:window-rect window))
             when (and rect (c:rect-contains-p rect x y)) return window)
-      (loop for window in (r:all-windows)
+      ;; NODE-WINDOWS, not ALL-WINDOWS: the latter reads the compositor's own
+      ;; hash, which is empty in a test and would make a press on a window look
+      ;; like a press on nothing.
+      (loop for window in (c:node-windows (c:world-root world))
             for rect = (c:window-rect window)
             when (and rect (c:window-live-p window)
                       (not (c:window-minimized-p window))
@@ -188,6 +258,15 @@ the plane, not to the windows on it."
                           (cell-label grid address)))))
            (t nil))
          t))
+      ;; A window that lives in a cell is a thing you can drop into ANOTHER
+      ;; cell: record the drag, and hand back NIL so the ordinary float-drag
+      ;; runs -- the window follows the pointer, which is the visible half of
+      ;; every window drag -- and the release hook decides where it landed.
+      ((and (eq kind :move)
+            (let ((window (a-window-at world x y)))
+              (and window grid (cell-holding grid window)
+                   (progn (record-drag-dock grid window x y) t))))
+       nil)
       ;; Empty space -- a gap between cells, or past the edge of the plane --
       ;; is a handle, and only the left button and the move chord.
       ((and (eq kind :move) (null (a-window-at world x y)))

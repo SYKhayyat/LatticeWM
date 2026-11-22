@@ -2604,3 +2604,126 @@ policy that answered only the middle one would never know the drag ended."
                (is (null (l:drag-panning-p))
                    "and the release ended the drag"))))
       (p:remove-hook :pointer-moved 'watch-motion))))
+
+;;; ======================================== dragging a window into a cell (#28)
+;;;
+;;; Pointer drags already move a window inside its output -- the drag floats it
+;;; and the float follows the pointer.  What was missing is the *cell* the hand
+;;; let go over: the plane is the workspace, so a drag that ends on a different
+;;; cell should land there rather than leaving the window floating on top of the
+;;; layout it was aimed through.
+
+(defun a-plane-with-a-window-at (policy world grid address app)
+  "Put APP into ADDRESS, and answer the window."
+  (let ((window (t*::win app)))
+    (setf (c:child-at grid address) (c:make-leaf window))
+    (setf (c:window-rect window) (c:make-rect 0 0 400 300))
+    (values window (p:name-of-window window))))
+
+(test a-press-on-a-window-that-lives-in-a-cell-remembers-where-it-came-from
+  "The press is NOT claimed: the ordinary float-drag has to run, because a
+window that does not follow the pointer is not a drag.  What is recorded is the
+cell it came from, so that letting go can tell a move from a drag in place."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*drag-pan* nil)
+          (l:*drag-dock* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (a-plane-with-a-window-at policy world grid (l:cell 0 0) "editor")
+        (setf (c:window-rect (c:leaf-window (c:child-at grid (l:cell 0 0))))
+              (c:make-rect 0 0 400 300))
+        (is (null (p:pointer-press policy world 100 100 :move))
+            "unclaimed, so the float-drag runs")
+        (is (equal (l:cell 0 0) (getf l:*drag-dock* :from))
+            "and the cell it came from is recorded")
+        (setf l:*drag-dock* nil)))))
+
+(test a-press-on-a-float-remembers-nothing
+  "A float is not in a cell, so there is no cell to drop it into and no reason
+to touch where it lands: dragging a float leaves a float, as it always did."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*drag-pan* nil)
+          (l:*drag-dock* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (let ((window (t*::win "mpv")))
+          (setf (c:window-rect window) (c:make-rect 0 0 400 300))
+          (setf (c:world-floats world)
+                (list (make-instance 'c:floating-window :window window
+                                     :rect (c:make-rect 0 0 400 300))))
+          (is (null (p:pointer-press policy world 100 100 :move)))
+          (is (null l:*drag-dock*) "nothing recorded"))))))
+
+(test letting-go-over-another-cell-puts-the-window-there
+  "The whole feature, from the press to the tree: a window picked up in cell 0,0
+and let go over cell 1,0 is in cell 1,0 afterwards and no longer floating."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*drag-pan* nil)
+          (l:*drag-dock* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (a-plane-with-a-window-at policy world grid (l:cell 0 0) "editor")
+        (let ((window (c:leaf-window (c:child-at grid (l:cell 0 0)))))
+          (setf (c:window-rect window) (c:make-rect 0 0 400 300))
+          (p:pointer-press policy world 100 100 :move)
+          ;; The drag floats it, exactly as a real one would.
+          (r:float-window-now policy window)
+          (is-true (c:window-floating-p window) "the drag floated it")
+          (let ((drawn (cdr (assoc (l:cell 1 0)
+                                   (l:cell-rects policy grid rect
+                                                 :viewport (l:grid-viewport grid))
+                                   :test #'equal))))
+            (multiple-value-bind (x y) (centre-of drawn)
+              (l:drag-pan-tracking x y)
+              (l:drag-pan-released :move)))
+          (is (null (c:window-floating-p window)) "and the drop unfloated it")
+          (is (eq window (c:leaf-window (c:leaf-holding (c:child-at grid (l:cell 1 0))
+                                                        window)))
+              "the window is in the cell the hand let go over"))))))
+
+(test letting-go-where-you-picked-it-up-moves-nothing
+  "A drag that ends where it began is a drag, not a move.  The window goes back
+into the tree it came out of and the plane keeps its shape."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*drag-pan* nil)
+          (l:*drag-dock* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (a-plane-with-a-window-at policy world grid (l:cell 0 0) "editor")
+        (let ((window (c:leaf-window (c:child-at grid (l:cell 0 0)))))
+          (setf (c:window-rect window) (c:make-rect 0 0 400 300))
+          (p:pointer-press policy world 100 100 :move)
+          (r:float-window-now policy window)
+          (let ((drawn (cdr (assoc (l:cell 0 0)
+                                   (l:cell-rects policy grid rect
+                                                 :viewport (l:grid-viewport grid))
+                                   :test #'equal))))
+            (multiple-value-bind (x y) (centre-of drawn)
+              (l:drag-pan-tracking x y)
+              (l:drag-pan-released :move)))
+          (is (null (c:window-floating-p window)))
+          (is (equal (l:cell 0 0) (l:cell-holding grid window))
+              "and it is back in the cell it came from"))))))
+
+(test letting-go-off-the-plane-leaves-the-window-floating
+  "Dropped over nothing, a window is a float -- which is what a drag has always
+meant, and what #13's stacking is for."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*drag-pan* nil)
+          (l:*drag-dock* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (a-plane-with-a-window-at policy world grid (l:cell 0 0) "editor")
+        (let ((window (c:leaf-window (c:child-at grid (l:cell 0 0)))))
+          (setf (c:window-rect window) (c:make-rect 0 0 400 300))
+          (p:pointer-press policy world 100 100 :move)
+          (r:float-window-now policy window)
+          (l:drag-pan-tracking -4000 -4000)
+          (l:drag-pan-released :move)
+          (is-true (c:window-floating-p window) "it is still a float")
+          (is (null l:*drag-dock*) "and the drag is forgotten"))))))

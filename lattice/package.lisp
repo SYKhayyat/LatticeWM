@@ -68,7 +68,7 @@ motion runs straight through the cell boundary as though it were not there.")
    ;; #29: the plane is a thing you can take hold of.
    #:*drag-pan* #:drag-panning-p #:drag-pan-begin #:drag-pan-update
    #:drag-pan-end #:drag-pan-tracking #:drag-pan-released #:cell-pitch
-   #:zoom-at-pointer
+   #:zoom-at-pointer #:*drag-dock* #:cell-holding #:record-drag-dock
    #:draw-coordinate-overlay-on #:copy-viewport
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell))

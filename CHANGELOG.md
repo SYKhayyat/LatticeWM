@@ -26,6 +26,11 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Drag a window into another cell.** Super+click a tiled window and let go
+  over a different cell and it lands there; let go where you picked it up and
+  nothing moves; let go over empty space and it stays floating, which is what a
+  drag has always meant. Works at any zoom, including over the map, so a window
+  can be dragged into a cell that is not currently on screen. (#28)
 - **Take hold of the plane and pull it.** Super+click on empty space — a gap
   between cells, or the margin around the map — is a handle: drag and the plane
   moves with your hand, a whole cell at a time. `M-x zoom-at-pointer in|out`
