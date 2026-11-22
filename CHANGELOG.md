@@ -26,6 +26,15 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Take hold of the plane and pull it.** Super+click on empty space — a gap
+  between cells, or the margin around the map — is a handle: drag and the plane
+  moves with your hand, a whole cell at a time. `M-x zoom-at-pointer in|out`
+  zooms anchored on the cell under the pointer instead of the one you are
+  standing in. Two new hooks make this expressible by anyone: `:pointer-moved`
+  (x, y) on every motion and `:pointer-released` (kind) on the end of a bound
+  drag. **Wheel scrolling is not implemented, and cannot be:** river's seat
+  protocol has no axis event at all, so there is nothing for a window manager to
+  read. (#29)
 - **The map is clickable.** While the lattice map is showing — deep zoom, or a
   peek — Super+click puts the cursor in the cell under the pointer and
   Super+right-click moves the focused window there. Both chords mean move and

@@ -64,7 +64,11 @@ motion runs straight through the cell boundary as though it were not there.")
    #:peek-viewport #:plane-viewport
    ;; #30: the map is a picture with addresses on it, so a click on one is a
    ;; request to go there.
-   #:map-cell-at #:map-area #:goto-cell #:goto-pointer
+   #:map-cell-at #:map-area #:goto-pointer
+   ;; #29: the plane is a thing you can take hold of.
+   #:*drag-pan* #:drag-panning-p #:drag-pan-begin #:drag-pan-update
+   #:drag-pan-end #:drag-pan-tracking #:drag-pan-released #:cell-pitch
+   #:zoom-at-pointer
    #:draw-coordinate-overlay-on #:copy-viewport
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell))

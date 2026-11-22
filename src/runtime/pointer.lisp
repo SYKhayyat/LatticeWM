@@ -210,7 +210,7 @@ leave the window it grabbed stuck to the pointer."
 
 (defun pointer-binding-released (seat kind)
   "A bound pointer button came up."
-  (declare (ignore kind))
+  (guarded "pointer-released" (p:run-hooks :pointer-released kind))
   (end-pointer-op seat))
 
 (defun window-under-pointer (seat)

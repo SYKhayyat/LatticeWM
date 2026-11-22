@@ -415,6 +415,24 @@ already NIL.")
 (defhook :pointer-op (kind window) "Run when an interactive pointer operation
 starts or ends.  KIND is :MOVE, :RESIZE or NIL for the end of one.")
 
+(defhook :pointer-moved (x y) "Run on every pointer motion, with the pointer's
+position on the output it is on.
+
+Unconditional and unthrottled, unlike :USER-ACTIVITY, because a *drag* cannot be
+driven from a hook that fires only when something else notices: a plane being
+pulled around, a slider, a window edge -- the motion itself is the input.  It is
+also why anything expensive belongs behind a check that the drag is running.
+
+The coordinates are the same ones P:OUTPUT-AT takes, so answering \"which
+screen\" is a function call rather than a guess.")
+
+(defhook :pointer-released (kind) "Run when a bound pointer button comes up,
+with the KIND whose binding it was.
+
+The end of a gesture that P:POINTER-PRESS may have claimed: the runtime ends the
+drag it knew about either way, and this is how a policy that started something
+of its own on the press learns that the press is over.")
+
 (defhook :input-added (device) "Run when an input device is announced, before
 anything has been configured on it.  The device knows its own proxy and little
 else at this point -- its name and its kind arrive in the events that follow --

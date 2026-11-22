@@ -46,6 +46,12 @@
                  ;; timers do not have to guess.  It runs before the focus
                  ;; work because it must run even when focus does not change.
                  (run-hooks :user-activity)
+                 ;; The motion itself, for whatever is being dragged.  A hook
+                 ;; rather than a method because a drag is a *gesture* -- it
+                 ;; begins, runs and ends -- and the generic for the middle of
+                 ;; one would be a knob per gesture.
+                 (run-hooks :pointer-moved (seat-pointer-x seat)
+                            (seat-pointer-y seat))
                  (when p:*focus-follows-mouse* (pointer-moved seat)))
                 ;; River tells us which window the pointer is over, including
                 ;; the borders it draws and the input regions of decoration

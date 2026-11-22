@@ -39,21 +39,6 @@ rather than a second calculation that happens to agree."
           when (c:rect-contains-p rect x y)
             return address)))
 
-(defun goto-cell (address)
-  "Put the cursor in the cell ADDRESS, opening it up if it is empty.
-
-An empty cell is not a place to stand: the cursor in a cell you cannot see into
-is a cursor behind a door, so an empty cell is *created* -- the same thing SPLIT
-does to an empty pane -- and the cursor lands in it.  A cell that already holds
-something is simply jumped to."
-  (let ((grid (current-grid)))
-    (when (and grid address)
-      (unless (c:child-at grid address)
-        (setf (c:child-at grid address) (c:make-leaf)))
-      (p:jump-cursor (p:current-policy) r:*world* (cell-path address))
-      (r:mark-dirty)
-      address)))
-
 (r:defcommand goto-pointer (&optional (output nil))
   "Put the cursor in the cell under the pointer.
 

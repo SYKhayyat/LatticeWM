@@ -53,6 +53,9 @@ edits nothing under src/."
      (:file "peek")
      ;; after peek: a press claims the map, and the map is what the peek shows.
      (:file "pointer")
+     ;; after pointer: a press on empty space is a handle, and the map decides
+     ;; what counts as empty.
+     (:file "pan")
      (:file "overlay")))))
 
 (defsystem "lattice/tests"

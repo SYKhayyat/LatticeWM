@@ -2391,8 +2391,17 @@ stuck to the pointer."
           (l:*peek* nil))
       (let ((r:*world* world)
             (p:*policy* policy))
-        (is (null (p:pointer-press policy world 400 300 :move))
-            "no map, no claim: Super+click still drags a window")
+        ;; Over a window -- which is what "Super+click drags" means -- nothing
+        ;; is claimed, with the map up or down.  Over empty space the press is
+        ;; the plane handle instead; see the drag-pan tests.
+        (let ((window (t*::win "editor")))
+          (setf (c:window-rect window) (c:make-rect 380 280 40 40))
+          (setf (c:world-root world) (c:make-stack (list (c:make-leaf window)) 0))
+          (is (null (p:pointer-press policy world 400 300 :move))
+              "no claim: Super+click on a window still drags it")
+          (is (null (l:drag-panning-p)) "and it is not a pan")
+          (setf (c:world-root world)
+                (c:make-stack (list grid) 0)))
         (l:peek-begin)
         (let* ((output (first (c:world-outputs world)))
                (drawn (cdr (assoc (l:cell 1 0)
@@ -2433,3 +2442,165 @@ honest answer rather than an error."
         (is (null (l:goto-pointer output)) "nothing under the pointer")
         (is-true (search "not over a cell" (car r::*echo-message*)))
         (l:peek-end)))))
+
+;;; ============================================== pulling the plane (#29)
+;;;
+;;; The wheel is not available: river's seat protocol has pointer_position,
+;;; pointer_enter, pointer_leave and press/release bindings, and no axis event
+;;; anywhere.  What the pointer CAN do is press, move and release, which is a
+;;; drag -- so the plane is a handle and the jump is aimed, and neither needs a
+;;; compositor to be true.
+
+(test a-drag-on-empty-space-takes-hold-of-the-plane
+  "Super+click over a gap between cells is a press on nothing, and nothing is
+exactly what a plane handle is.  Claimed, so no window drag starts."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*peek* nil)
+          (l:*drag-pan* nil))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (is (null (l:drag-panning-p)))
+        (is-true (p:pointer-press policy world 400 300 :move)
+                 "the press is claimed")
+        (is-true (l:drag-panning-p) "and a drag is running")
+        (l:drag-pan-end)
+        (is (null (l:drag-panning-p)))))))
+
+(test a-drag-over-a-window-is-a-window-drag-not-a-pan
+  "The one thing the plane handle must never take: a press on a window is how
+windows are moved, and it was before any of this."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let ((policy (pol))
+          (l:*drag-pan* nil)
+          (window (t*::win "editor")))
+      (setf (c:window-rect window) (c:make-rect 0 0 800 600))
+      (setf (c:world-root world)
+            (c:make-stack (list (c:make-leaf window)) 0))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (is (null (p:pointer-press policy world 400 300 :move))
+            "a press on a window is not claimed")
+        (is (null (l:drag-panning-p)))))))
+
+(test dragging-a-cell-width-pans-exactly-one-cell
+  "By cells, not by pixels: there is no half-cell to pan to, and moving the
+camera by pixels would relayout every window on screen sixty times a second and
+land on the same integer cell anyway."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let* ((policy (pol))
+           (l:*drag-pan* nil)
+           (output (first (c:world-outputs world)))
+           (viewport (l:grid-viewport grid)))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (setf (l:viewport-cols viewport) 2
+              (l:viewport-rows viewport) 2
+              (l:viewport-origin viewport) (l:cell 0 0))
+        (multiple-value-bind (pitch-x pitch-y) (l:cell-pitch policy grid output)
+          (declare (ignore pitch-y))
+          (l:drag-pan-begin policy grid output 400 300)
+          ;; Half a cell of motion is not a pan at all.
+          (l:drag-pan-update (round (+ 400 (/ pitch-x 2))) 300)
+          (is (equal (l:cell 0 0) (l:viewport-origin viewport))
+              "half a cell of drag moves nothing")
+          ;; A whole one is.  Dragged right, the plane comes right, so the
+          ;; camera goes left.
+          (l:drag-pan-update (round (+ 400 pitch-x)) 300)
+          (is (equal (l:cell -1 0) (l:viewport-origin viewport))
+              "one cell of drag, one cell of pan")
+          (l:drag-pan-end))))))
+
+(test a-drag-down-looks-up-the-plane
+  "Wayland +Y is down and lattice +Y is up, so a drag towards the bottom of the
+screen shows the cells ABOVE where you were.  The sign is worth a test because
+it is the one a reader guesses wrong."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let* ((policy (pol))
+           (l:*drag-pan* nil)
+           (output (first (c:world-outputs world)))
+           (viewport (l:grid-viewport grid)))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (setf (l:viewport-cols viewport) 2
+              (l:viewport-rows viewport) 2
+              (l:viewport-origin viewport) (l:cell 0 0))
+        (multiple-value-bind (pitch-x pitch-y) (l:cell-pitch policy grid output)
+          (declare (ignore pitch-x))
+          (l:drag-pan-begin policy grid output 400 300)
+          (l:drag-pan-update 400 (round (+ 300 pitch-y)))
+          (is (equal (l:cell 0 1) (l:viewport-origin viewport))
+              "the camera moved up")
+          (l:drag-pan-end))))))
+
+(test letting-go-ends-the-drag-and-motion-away-from-one-does-nothing
+  "The hook fires on every motion, so it is the check that has to be cheap and
+the release that has to be complete."
+  (let ((l:*drag-pan* nil))
+    (is (null (l:drag-pan-tracking 10 10))
+        "no drag, no work, no error")
+    (multiple-value-bind (grid rect world) (a-two-cell-plane)
+      (let* ((policy (pol))
+             (output (first (c:world-outputs world)))
+             (viewport (l:grid-viewport grid)))
+        (let ((r:*world* world))
+          (setf (l:viewport-origin viewport) (l:cell 0 0))
+          (l:drag-pan-begin policy grid output 400 300)
+          (l:drag-pan-released :move)
+          (is (null (l:drag-panning-p)) "the button coming up ends it")
+          (is (equal (l:cell 0 0) (l:viewport-origin viewport))
+              "and motion afterwards moves nothing"))))))
+
+(test zoom-at-pointer-anchors-on-the-cell-under-it
+  "Zooming toward the thing you are pointing at instead of the thing you are
+standing in -- the difference a map makes."
+  (multiple-value-bind (grid rect world) (a-two-cell-plane)
+    (let* ((policy (pol))
+           (l:*peek* nil)
+           (output (first (c:world-outputs world)))
+           (viewport (l:grid-viewport grid)))
+      (let ((r:*world* world)
+            (p:*policy* policy))
+        (setf (l:viewport-cols viewport) 2
+              (l:viewport-rows viewport) 2
+              (l:viewport-origin viewport) (l:cell 0 0)
+              (c:world-cursor world) (list 0 (l:cell 0 0)))
+        (let* ((drawn (cdr (assoc (l:cell 1 0)
+                                  (l:cell-rects policy grid rect
+                                                :viewport (l:grid-viewport grid))
+                                  :test #'equal))))
+          (multiple-value-bind (x y) (centre-of drawn)
+            (l:zoom-at-pointer :in)
+            (let ((origin (l:viewport-origin viewport)))
+              (is (member (list (l:cell-x origin) (l:cell-y origin))
+                          (list (list 1 0) (list 1 -1) (list 0 0) (list 0 -1))
+                          :test #'equal)
+                  "the zoom landed on the pointer's cell, not on the cursor"))))))))
+
+(defvar *seen-motion* nil "What the :pointer-moved hook was handed, newest first.")
+
+(defun watch-motion (x y)
+  (push (cons x y) *seen-motion*))
+
+(test the-drag-runs-on-the-seats-own-hooks
+  "Fired through RUN-HOOKS rather than by calling the functions, because the
+claim is about the seam: a press, a move and a release are three moments, and a
+policy that answered only the middle one would never know the drag ended."
+  (let ((l:*drag-pan* nil)
+        (*seen-motion* nil))
+    (p:add-hook :pointer-moved 'watch-motion)
+    (unwind-protect
+         (multiple-value-bind (grid rect world) (a-two-cell-plane)
+           (let* ((policy (pol))
+                  (output (first (c:world-outputs world)))
+                  (viewport (l:grid-viewport grid)))
+             (let ((r:*world* world))
+               (setf (l:viewport-origin viewport) (l:cell 0 0))
+               (l:drag-pan-begin policy grid output 400 300)
+               (p:run-hooks :pointer-moved 460 300)
+               (is (equal '((460 . 300)) *seen-motion*)
+                   "the hook was handed the pointer's position")
+               (p:run-hooks :pointer-released :move)
+               (is (null (l:drag-panning-p))
+                   "and the release ended the drag"))))
+      (p:remove-hook :pointer-moved 'watch-motion))))
