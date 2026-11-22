@@ -164,17 +164,67 @@ alpha is 255, so OR-ing the top byte in is the whole conversion."
 
 ;;; ------------------------------------------------------------- the frame
 
-(defun pump-until (display predicate &key (limit 2000))
-  "Dispatch events until PREDICATE answers T, or LIMIT events have gone by.
+(defun display-socket-fd (display)
+  "The file descriptor behind DISPLAY, or NIL if we cannot see it.
 
-A LIMIT RATHER THAN A BLOCKING WAIT, and it is the whole safety story of this
-file: a compositor that never answers must not hang the window manager inside a
-drawing routine.  Two thousand events is several seconds of ordinary traffic,
-and a deck that cannot get a picture in that time draws its boxes instead."
-  (let ((seen 0))
-    (loop until (or (funcall predicate) (> seen limit))
-          do (dispatch-one-event display)
-             (incf seen))
+WAYFLAN'S OWN INTERNALS, named here once and guarded: a display is a socket, the
+socket has an fd, and polling that fd is the only way to ask whether an event is
+waiting without blocking on the answer.  Both names are private to wayflan, so a wayflan that
+moves them answers NIL and PUMP-UNTIL falls back to the old unbounded dispatch
+rather than failing to compile -- the fallback is worse, not broken."
+  (ignore-errors
+    (%wl-display-socket-of display)))
+
+(defun %wl-display-socket-of (display)
+  "The DATA-SOCKET inside a WL-DISPLAY.  Split out so DISPLAY-SOCKET-FD's
+IGNORE-ERRORS covers the whole reach into wayflan's private slots."
+  (let* ((reader (find-symbol "%WL-DISPLAY-SOCKET" "XYZ.SHUNTER.WAYFLAN.CLIENT"))
+         (socket (and reader (funcall reader display))))
+    (and socket (slot-value socket 'xyz.shunter.wayflan.wire::%fd))))
+
+(defparameter +poll-slice-ms+ 20
+  "How long a single poll waits before the loop looks at its own clock again.
+
+Short enough that the deadline is honoured to within 20 ms, long enough that a
+waiting frame is picked up without spinning.")
+
+(defun pump-until (display predicate &key (limit 2000) (seconds 2))
+  "Dispatch events until PREDICATE answers T, LIMIT events have gone by, or
+SECONDS have elapsed.
+
+A LIMIT ALONE WAS NOT ENOUGH, and the integration harness proved it: the count
+bounds how many events a wait may *consume*, and a wait for an event that never
+arrives consumes none, so DISPATCH-ONE-EVENT sits in a blocking read forever.
+That is the exact failure this file exists to prevent -- a decoration hanging
+the window manager inside a drawing routine -- and it happened, twice, before
+this line existed.
+
+So the wait is a poll first: if nothing is waiting on the socket, the answer is
+not this frame rather than wait.  The clock is a second belt for a
+predicate that is being handed events and never satisfied."
+  (let ((fd (display-socket-fd display))
+        (seen 0)
+        (deadline (+ (get-internal-real-time)
+                     (* seconds internal-time-units-per-second))))
+    (loop until (funcall predicate)
+          while (< seen limit)
+          do (cond
+               ;; A COMPOSITOR THAT IS SILENT MUST NOT BE WAITED ON FOREVER.
+               ;; The poll is the clock: it returns at once when an event is
+               ;; waiting and after a short slice when one is not, so the loop
+               ;; re-checks PREDICATE and the deadline instead of sitting in a
+               ;; blocking read for an event that may never come.
+               ((null fd)
+                ;; Cannot see the socket (a wayflan that moved its slots):
+                ;; the old unbounded dispatch, which is worse and honest.
+                (dispatch-one-event display)
+                (incf seen))
+               ((let ((revents (sb-unix:unix-simple-poll fd :input +poll-slice-ms+)))
+                  (and (integerp revents) (plusp revents)))
+                (dispatch-one-event display)
+                (incf seen))
+               ((< (get-internal-real-time) deadline) nil)
+               (t (return))))
     (funcall predicate)))
 
 (defun capture-window (window &key (server *server*) (display (server-display *server*)))

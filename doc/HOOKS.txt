@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM hooks
-28 hooks.  Generated from the running image.
+29 hooks.  Generated from the running image.
 ============================================================================
 
 A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,
@@ -268,6 +268,20 @@ with the KIND whose binding it was.
 The end of a gesture that P:POINTER-PRESS may have claimed: the runtime ends the
 drag it knew about either way, and this is how a policy that started something
 of its own on the press learns that the press is over.
+
+
+----------------------------------------------------------------------------
+:PREVIEW-CHANGED (up)
+----------------------------------------------------------------------------
+Run after a wall of miniature workspaces has
+been put up or taken down, with UP true when it went up.
+
+*The hook that says a look started.*  A drawing that shows every workspace at
+once is the one place a picture of a window is worth taking, and a picture is
+worth taking once per look rather than once per frame: this fires on the edges,
+so a module that captures can throw its cache away when the deck closes and
+start clean when it opens.  Nothing else in the program fires it, and nothing
+needs to -- it is a statement about a particular drawing, not about the layout.
 
 
 ----------------------------------------------------------------------------

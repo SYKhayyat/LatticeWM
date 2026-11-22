@@ -329,7 +329,7 @@ lattice cells than between splits within a cell.
     (layout-policy t)                   ; layout.lisp
 #+end_example
 
-Read that as /you may not need a method at all/. Twenty-five of the seventy
+Read that as /you may not need a method at all/. Twenty-five of the seventy-one
 generics carry the line, and for those the decision is already tier-0: set the
 variable in your config file and the shipped answer changes. Write the method
 when you want a decision that a single value cannot express — one that depends
@@ -459,9 +459,9 @@ applies it to everything already plugged in.
 ~latticewm --extension-surface~ prints every one with its contract and with the
 methods that currently answer it — including yours, which is how you check that
 your file was actually loaded. Do not count them from this table; ask. There
-are seventy, and this table shows the dozen you are most likely to want.
+are seventy-one, and this table shows the dozen you are most likely to want.
 
-#+CLAIM: (= 70 (length (policy-generics)))
+#+CLAIM: (= 71 (length (policy-generics)))
 
 ** The six protocols
 
@@ -725,11 +725,11 @@ latticewm --hooks    # every hook, what it is called with, and when it fires
 thirteen of the program's seventeen, missing ~:layout-restored~ — which is the
 hook the lattice itself uses — and the three that report input devices, with
 "~(all-hooks)~ is authoritative" underneath, which is a true sentence that only
-helps somebody already at a REPL. There are twenty-eight, and the list is generated
+helps somebody already at a REPL. There are twenty-nine, and the list is generated
 from the running image now, like the other two surfaces, and installed beside
 them as =HOOKS.txt=.
 
-#+CLAIM: (= 28 (length (all-hooks)))
+#+CLAIM: (= 29 (length (all-hooks)))
 #+CLAIM: (every (lambda (row) (stringp (second row))) (all-hooks))
 
 The five that report touch gestures are the newest and they split in two: ~:gesture-start~ and ~:gesture-end~ bracket a recognised gesture and carry its plan, while ~:gesture-motion~, ~:gesture-scale~ and ~:gesture-fingers~ are the stream in between, for a pan, a zoom or a slider rather than a command. A gesture that runs a command needs only the first; a gesture that *manipulates* something needs the stream.
@@ -1162,8 +1162,8 @@ against the loaded image on every build. NIL fails, naming the file, the line,
 the form, and the sentence above it.
 
 #+begin_example
-There are seventy policy generics.
-#+CLAIM: (= 70 (length (policy-generics)))
+There are seventy-one policy generics.
+#+CLAIM: (= 71 (length (policy-generics)))
 #+end_example
 
 Consecutive =#+CLAIM:= lines are one run, and every complete form in the run is

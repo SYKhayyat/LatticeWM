@@ -265,6 +265,91 @@ build you scroll past."
                   (the fixnum (* 4 (+ (the fixnum (* y width)) x0)))
                   bytes))))))
 
+(defun picture-fit (rect width height)
+  "Where a WIDTH x HEIGHT picture goes inside RECT: (LEFT TOP DRAW-W DRAW-H).
+
+LETTERBOXED, NOT STRETCHED, and this function is the whole of that decision: the
+larger dimension decides the scale, the other keeps its ratio and is centred.  A
+picture stretched to fill a box lies about the shape of the window in it, which
+is the one question a thumbnail exists to answer.
+
+Split out of CANVAS-BLIT because it is arithmetic and CANVAS-BLIT is a pixel
+loop: one of the two can be checked without a compositor, and it is the one that
+can be wrong in a way that looks like nothing is wrong."
+  (when (and width height (plusp width) (plusp height)
+             (plusp (c:rect-w rect)) (plusp (c:rect-h rect)))
+    (let* ((scale (min (/ (c:rect-w rect) width) (/ (c:rect-h rect) height)))
+           (draw-w (max 1 (floor (* width scale))))
+           (draw-h (max 1 (floor (* height scale)))))
+      (values (+ (c:rect-x rect) (floor (- (c:rect-w rect) draw-w) 2))
+              (+ (c:rect-y rect) (floor (- (c:rect-h rect) draw-h) 2))
+              draw-w draw-h))))
+
+(defun canvas-blit (canvas picture rect &key background)
+  "Draw PICTURE inside RECT, scaled to fit and centred, or nothing if it cannot.
+
+PICTURE is a plist (:WIDTH W :HEIGHT H :DATA V) as P:CELL-PICTURE answers it:
+32-bit ARGB words, row-major, premultiplied.  The same words a canvas holds, so
+this is a copy with a scale factor rather than a conversion.
+
+LETTERBOXED, NOT STRETCHED.  A window is not the shape of the box it goes in,
+and a picture stretched to fill one lies about what the window looks like --
+which is the only question a thumbnail exists to answer.  So the larger
+dimension decides the scale, the other is centred, and the margin is painted
+BACKGROUND when the caller wants it painting.  A caller that passes nothing
+leaves whatever was under it, which is what a deck coloured per cell wants.
+
+NEAREST-NEIGHBOUR, DELIBERATELY.  A box average would look better on a
+downscale and costs four samples a pixel; a thumbnail is 200 pixels wide and is
+looked at for a second.  The one thing this must not do is read outside the
+picture, and the mapping below cannot: every source coordinate is clamped.
+
+The pixel loop has CANVAS-FILL's shape for CANVAS-FILL's reason -- it runs once
+per pixel of the picture on every redraw -- with declarations that keep the
+index arithmetic fixnum."
+  (let ((width (getf picture :width))
+        (height (getf picture :height))
+        (data (getf picture :data)))
+    (when (and width height data (plusp width) (plusp height)
+               (plusp (c:rect-w rect)) (plusp (c:rect-h rect)))
+      (let* ((left 0) (top 0) (draw-w 1) (draw-h 1)
+             (canvas-width (canvas-width canvas))
+             (canvas-height (canvas-height canvas))
+             (sap (canvas-data canvas)))
+        (declare (type fixnum width height draw-w draw-h left top
+                       canvas-width canvas-height))
+        (declare (type (simple-array (unsigned-byte 32) (*)) data))
+        (multiple-value-setq (left top draw-w draw-h)
+          (picture-fit rect width height))
+        (when background
+          (let ((color (the (unsigned-byte 32) background)))
+            (loop for y of-type fixnum from (max 0 (c:rect-y rect))
+                  below (min canvas-height (+ (c:rect-y rect) (c:rect-h rect)))
+                  do (loop for x of-type fixnum from (max 0 (c:rect-x rect))
+                           below (min canvas-width (+ (c:rect-x rect) (c:rect-w rect)))
+                           do (setf (sb-sys:sap-ref-32
+                                     sap (the fixnum (* 4 (+ (* y canvas-width) x))))
+                                    color)))))
+        ;; The visible part of the picture only: a 40-pixel panel showing a
+        ;; 1920-pixel window must not walk off the edge of the canvas.
+        (loop for y of-type fixnum from (max top 0)
+              below (min canvas-height (+ top draw-h))
+              do (let* ((src-y (min (1- height)
+                                    (max 0 (floor (* (- y top) height) draw-h))))
+                        (x-start (max left 0))
+                        (x-end (min canvas-width (+ left draw-w))))
+                   (declare (type fixnum src-y x-start x-end))
+                   (loop for x of-type fixnum from x-start below x-end
+                         do (let ((src-x (min (1- width)
+                                              (max 0 (floor (* (- x left) width)
+                                                           draw-w)))))
+                              (setf (sb-sys:sap-ref-32
+                                     sap (the fixnum (* 4 (+ (* y canvas-width) x))))
+                                    (the (unsigned-byte 32)
+                                         (aref data (the fixnum (+ (* src-y width)
+                                                                   src-x)))))))))
+        t))))
+
 (defun canvas-rect (canvas rect color &key (width 1))
   "Draw RECT's outline, WIDTH logical pixels thick, in COLOR."
   (let ((x (c:rect-x rect)) (y (c:rect-y rect))

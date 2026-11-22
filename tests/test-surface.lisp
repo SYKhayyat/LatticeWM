@@ -230,7 +230,7 @@
   ;; comment has asked for at every move: a boundary correction, argued, and
   ;; named against the line of code it replaced.
   (let ((n (length (p:policy-generics))))
-    (is (<= 10 n 70) "the extension surface has ~d generics" n)))
+    (is (<= 10 n 71) "the extension surface has ~d generics" n)))
 
 (test the-surface-is-what-takes-a-policy-and-nothing-else
   "POLICY-GENERICS used to mean 'every exported generic in the package'.

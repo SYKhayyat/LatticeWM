@@ -1185,6 +1185,121 @@ are what a person means by the arrangement, and both are copy-stable."
                           (or (getf report :checksum) 0)))))))))
 
        ;; ------------------------------------------------------------------
+       ;; THUMBNAILS (#130).  The capture is checked above; what is checked here
+       ;; is the half that turns a capture into a deck: the switch, the cache,
+       ;; and the pixel copy.  All three are invisible from a unit test -- one
+       ;; needs a compositor, one needs a frame being drawn twice, and one needs
+       ;; a real canvas whose memory can be read back.
+       (section "thumbnails in the deck"
+         ;; THE DECK LIVES IN AN EXTENSION, so this section has to have the
+         ;; lattice in the image before it can draw one.  Loaded here rather
+         ;; than only in the plane section further down because that section
+         ;; comes after this one, and a harness that depends on the order of its
+         ;; own sections is a harness whose next edit breaks something obscure.
+         (handler-bind ((warning #'muffle-warning))
+           (unless (find-package "LATTICE")
+             (ignore-errors (asdf:load-system "lattice")))
+           (unless (find-package "THUMBNAILS")
+             (ignore-errors (asdf:load-system "thumbnails"))))
+         (let ((node (window-named "latticewm-a" 1))
+               (begin (find-symbol "PREVIEW-BEGIN" "LATTICE"))
+               (finish (find-symbol "PREVIEW-END" "LATTICE"))
+               (draw (find-symbol "DRAW-PREVIEW-CELL" "LATTICE"))
+               (module (find-package "THUMBNAILS")))
+           (cond
+             ((or (null node) (null begin) (null draw) (null module))
+              (missing "nothing to draw: window ~a, deck ~a, module ~a"
+                       (and node t) (and begin t) (and module t)))
+             (t
+              (flet ((call (name &rest arguments)
+                       (apply (symbol-function (find-symbol name "THUMBNAILS"))
+                              arguments))
+                     (count-of (name)
+                       (symbol-value (find-symbol name "THUMBNAILS")))
+                     (drawn ()
+                       ;; A REAL CANVAS: the blit is a pixel loop, and a
+                       ;; pretend canvas would test the loop against nothing.
+                       (let ((canvas (some #'r::overlay-canvas (all-overlays))))
+                         (when canvas
+                           (wm (lambda ()
+                                 (funcall draw canvas (c:make-rect 0 0 160 100)
+                                          "latticewm-a" node)))
+                           t))))
+                ;; THE TWO EDGES BY HAND rather than the PREVIEW command, which
+                ;; toggles: a section that toggles its way through a cache test
+                ;; is a section whose third call closes what its second opened.
+                (call "DISABLE")
+                (let ((before (count-of "*CAPTURES*")))
+                  (cond
+                    ((not (drawn)) (missing "no overlay canvas, so nothing was drawn"))
+                    (t
+                     (check (= before (count-of "*CAPTURES*"))
+                            "with the module off, drawing the deck captured nothing")
+                     (check (zerop (hash-table-count (count-of "*PICTURES*")))
+                            "and cached nothing")
+                     ;; ON: the same draw, one capture.
+                     (call "ENABLE")
+                     (wm (lambda () (funcall begin)))
+                     (let ((before (count-of "*CAPTURES*")))
+                       (drawn)
+                       (check (= 1 (- (count-of "*CAPTURES*") before))
+                              "with it on, one look captured ~d picture~:p"
+                              (- (count-of "*CAPTURES*") before))
+                       (check (= 1 (hash-table-count (count-of "*PICTURES*")))
+                              "and cached it for the window in the cell")
+                       (let ((after (count-of "*CAPTURES*")))
+                         (drawn)
+                         (check (= after (count-of "*CAPTURES*"))
+                                "and drawing the deck again reused it rather ~
+                                 than capturing a second time")))
+                     ;; THE EDGES: taking the deck down forgets; a new look
+                     ;; starts from nothing.
+                     (wm (lambda () (funcall finish)))
+                     (check (zerop (hash-table-count (count-of "*PICTURES*")))
+                            "and taking the deck down forgot every picture")
+                     ;; THE HOOK THE MODULE HANGS ITS CACHE ON.  Named here so
+                     ;; gate 14 can see that something runs it, and asserted on
+                     ;; what it was handed: which edge it fired on.
+                     (check (fired :preview-changed)
+                            ":preview-changed fired ~d time~:p with the edge it was on"
+                            (length (fired :preview-changed)))
+                     (check (equal '((t) (nil))
+                                   (last (remove-if-not
+                                          (lambda (arguments) (= 1 (length arguments)))
+                                          (fired :preview-changed))
+                                         2))
+                            "with the last edge up, T, and the last one down, NIL")
+                     (call "DISABLE"))))
+                ;; THE PIXEL COPY, on a canvas we own: a 2x2 picture of four
+                ;; known colours drawn into the whole of it, then read back.
+                (let ((shm (server-shm *server*)))
+                  (cond
+                    ((null shm) (skip "no wl_shm, so no blit to check"))
+                    (t
+                     (let ((canvas (wm (lambda () (make-canvas shm 4 4)))))
+                       (cond
+                         ((null canvas) (check nil "a canvas could be created"))
+                         (t
+                          (let ((data (make-array 4 :element-type '(unsigned-byte 32)
+                                                    :initial-contents '(#xff112233 #xff445566
+                                                                        #xff778899 #xffaabbcc))))
+                            (wm (lambda ()
+                                  (canvas-blit canvas (list :width 2 :height 2 :data data)
+                                               (c:make-rect 0 0 4 4))))
+                            (flet ((pixel (x y)
+                                     (sb-sys:sap-ref-32 (r::canvas-data canvas)
+                                                        (* 4 (+ x (* y (r::canvas-width canvas)))))))
+                              (check (= #xff112233 (pixel 0 0))
+                                     "a 2x2 picture fills a same-shaped box: ~x" (pixel 0 0))
+                              (check (= #xff445566 (pixel 3 0))
+                                     "top-right, scaled: ~x" (pixel 3 0))
+                              (check (= #xff778899 (pixel 0 3))
+                                     "bottom-left, scaled: ~x" (pixel 0 3))
+                              (check (= #xffaabbcc (pixel 3 3))
+                                     "and bottom-right: ~x" (pixel 3 3)))
+                            (wm (lambda () (destroy-canvas canvas)))))))))))))))
+
+       ;; ------------------------------------------------------------------
        ;; A SECOND SEAT (#90).  DESIGN says "The lattice cursor (D18). One per
        ;; seat".  The code had one cursor and one focused float for the whole
        ;; machine, and derived keyboard focus only for the first seat: on a

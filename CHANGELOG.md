@@ -26,6 +26,26 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Thumbnails in the deck: `M-x thumbnails on`.** The deck showed every
+  workspace as boxes and names, because a window is somebody else's surface and
+  this program draws only what it draws. #135 removed that reason; this is the
+  deck using it. Each cell holding a single window draws a scaled, letterboxed
+  copy of it with the name over it, and stops drawing that the moment you turn
+  it off. Off by default, because a picture is a copy out of the compositor.
+  One picture per window per look, the cache emptied at both edges of a look,
+  and no refresh timer: a picture is as old as the look it belongs to. A cell
+  holding several windows keeps its box and its count, and a compositor that
+  cannot copy a window draws the deck it always drew. `M-x thumbnails` with no
+  argument toggles, `M-x thumbnails-forget` drops the cache mid-look, and the
+  module is one method on `p:cell-picture` plus a hook, so nothing else in the
+  program knows it exists.
+- **The wait for a captured frame is bounded by a clock, not only by a count.**
+  The first version of the capture path waited for a fixed number of *events*,
+  which bounds how much traffic a wait can consume and says nothing about a
+  compositor that sends none: the harness hung inside a blocking read, twice,
+  for minutes. The wait is now a poll on the display's socket with a deadline,
+  so a compositor that stops answering costs a dropped thumbnail rather than a
+  frozen session.
 - **Window pixels: `M-x capture-probe`.** The program draws only what it draws,
   so there has never been a way to show a picture of somebody else's window.
   It now speaks `ext-foreign-toplevel-list-v1`,

@@ -61,7 +61,7 @@ rather than the program itself.* Sixty-nine generic functions decide what
 happens; the shipped methods are the defaults; specialising one is how you
 change behaviour, live, without touching the core.
 
-#+CLAIM: (= 70 (length (policy-generics)))
+#+CLAIM: (= 71 (length (policy-generics)))
 
 The test of that is =lattice/= — an infinite two-dimensional plane of cells,
 which is a different layout model with a container kind the core has never heard
@@ -291,8 +291,25 @@ the one you start in.
 =M-x capture-probe= says whether this compositor will hand over a picture of a
 window -- the pixels of a window are the one thing this program cannot draw for
 itself -- and, when it will, captures one frame and reports its size and a
-checksum.  It is a diagnostic rather than a feature: the deck that draws with
-those pixels is still to come (#130).
+checksum.
+
+=M-x thumbnails on= makes the *deck* use that: every cell holding one window
+draws a scaled, letterboxed picture of it, with the name over it, instead of an
+empty box.  It is off by default and stays off until you ask, because a picture
+is a copy out of the compositor and a decoration that spends on behalf of
+somebody who did not ask is a decoration that makes the program worse.  Off is
+not a degraded deck, it is the deck: nothing is captured, and the boxes and
+names are drawn exactly as before.
+
+One picture per window per *look*: the deck is redrawn every frame, and a
+capture per frame would be a video feed wearing a deck's clothes.  The cache is
+emptied at both edges of a look, so opening the deck again shows the session as
+it is now; there is no refresh timer, so a picture is as old as the look it
+belongs to, and says so by being one.  =M-x thumbnails-forget= drops the cache
+mid-look.  A cell holding several windows keeps its box and its count -- a
+picture of one of four would be a picture of a window that may not be the
+visible one -- and a compositor without the capture protocols, or a window the
+compositor will not name, draws the same box it always did.
 
 A container can change what it *is* without moving anything out of it.  =M-x
 restyle split= tiles, =M-x restyle stack= goes back to one window at a time, =M-x

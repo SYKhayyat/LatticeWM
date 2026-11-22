@@ -308,6 +308,7 @@ You never edit this package.")
    #:output-content #:default-workspace-for #:ensure-workspaces-for-outputs
    #:+snap-places+ #:snap-place-p #:snap-rect
    #:echo-content #:cursor-place-name #:window-name #:name-of-window
+   #:cell-picture
    ;; --- motion and focus -----------------------------------------------
    #:step-address #:entry-address #:motion-escapes-p
    #:focus-after-remove #:on-focus-change #:focus-target
@@ -729,7 +730,8 @@ keybindings, the command registry, and the session loop.")
    #:start #:quit #:relayout #:mark-dirty #:compute-layout #:output-contents
    #:do-windows
    #:spawn #:notify #:*log-level* #:logmsg #:*server* #:*spawn-directory*
-   #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-text #:argb
+   #:overlay #:make-canvas #:canvas-fill #:canvas-rect #:canvas-blit
+   #:canvas-text #:picture-fit #:argb
    #:ensure-overlay #:overlay-commit #:overlay-hide #:overlay-rect
    #:overlay-drew #:canvas-drawn #:surface-damage
    #:text-width #:text-height

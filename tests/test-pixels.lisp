@@ -118,3 +118,35 @@ empty echo area would be indistinguishable from a probe that worked."
     (let ((message (r:capture-probe)))
       (is (stringp message))
       (is (search "no window pixels" message)))))
+
+;;; ============================================================ the letterbox
+
+(test a-picture-fills-the-box-it-is-the-same-shape-as
+  (multiple-value-bind (left top w h)
+      (r:picture-fit (c:make-rect 10 20 200 100) 4 2)
+    (is (= 10 left)) (is (= 20 top))
+    (is (= 200 w)) (is (= 100 h))))
+
+(test a-wider-picture-is-centred-with-room-above-and-below
+  "A window is not the shape of the box it goes in, and a picture stretched to
+fill one lies about what the window looks like."
+  (multiple-value-bind (left top w h)
+      (r:picture-fit (c:make-rect 0 0 200 200) 4 2)
+    (is (= 0 left)) (is (= 200 w))
+    (is (= 100 h) "half the height, because the picture is two wide for one tall")
+    (is (= 50 top) "and centred in the height it did not use")))
+
+(test a-taller-picture-is-centred-side-to-side
+  (multiple-value-bind (left top w h)
+      (r:picture-fit (c:make-rect 0 0 200 200) 1 2)
+    (is (= 0 top)) (is (= 200 h))
+    (is (= 100 w))
+    (is (= 50 left))))
+
+(test a-picture-that-cannot-be-drawn-fits-nowhere
+  "A zero-width box and a zero-width picture both answer NIL rather than a
+division by zero: a deck can be drawn into a panel too small to hold anything,
+and that is an ordinary frame, not a broken one."
+  (is (null (r:picture-fit (c:make-rect 0 0 0 20) 4 2)))
+  (is (null (r:picture-fit (c:make-rect 0 0 20 20) 0 2)))
+  (is (null (r:picture-fit (c:make-rect 0 0 20 20) nil nil))))

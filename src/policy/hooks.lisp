@@ -327,6 +327,16 @@ been emitted.  Fires often; keep it cheap.")
 (defhook :workspace-changed (index) "Run after switching to a different
 workspace.")
 
+(defhook :preview-changed (up) "Run after a wall of miniature workspaces has
+been put up or taken down, with UP true when it went up.
+
+*The hook that says a look started.*  A drawing that shows every workspace at
+once is the one place a picture of a window is worth taking, and a picture is
+worth taking once per look rather than once per frame: this fires on the edges,
+so a module that captures can throw its cache away when the deck closes and
+start clean when it opens.  Nothing else in the program fires it, and nothing
+needs to -- it is a statement about a particular drawing, not about the layout.")
+
 (defhook :draw-overlays () "Run inside every render sequence, for anything
 that draws pixels of its own: the echo area, the empty-pane cursor, the help
 screen, the lattice's coordinate overlay and map.

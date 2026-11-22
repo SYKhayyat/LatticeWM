@@ -53,13 +53,15 @@ disagree with what is drawn.")
 (defun preview-begin ()
   "Show every workspace over everything.  Moves no window and no camera."
   (prog1 (setf *preview* t)
-    (r:mark-dirty)))
+    (r:mark-dirty)
+    (p:run-hooks :preview-changed t)))
 
 (defun preview-end ()
   "Take the preview down.  Answers T when there was one to take down."
   (when *preview*
     (setf *preview* nil)
     (r:mark-dirty)
+    (p:run-hooks :preview-changed nil)
     t))
 
 ;;; --------------------------------------------------------------- the panels
@@ -141,7 +143,7 @@ panel drawn at a point are worked out by one function, so they cannot disagree
             ;; after it was turned off -- is drawn as the one box it is, with
             ;; what it holds.  An overview that refuses to draw what it does not
             ;; recognise is an overview that lies by omission.
-            (draw-preview-cell canvas inner (window-summary node)))))))
+            (draw-preview-cell canvas inner (window-summary node) node))))))
 
 (defun draw-preview-plane (canvas inner grid)
   "GRID's occupied cells, scaled to fit INNER."
@@ -163,17 +165,37 @@ panel drawn at a point are worked out by one function, so they cannot disagree
                                   (+ (c:rect-y inner) (* (- max-y (cell-y address)) h))
                                   w h))
                 (node (c:child-at grid address)))
-            (draw-preview-cell canvas box (window-summary node))))))))
+            (draw-preview-cell canvas box (window-summary node) node)))))))
 
-(defun draw-preview-cell (canvas box summary)
-  "One occupied cell's miniature: a filled box with as much of SUMMARY as fits."
-  (r:canvas-fill canvas (apply #'r:argb *map-cell-color*) box)
-  (let ((room (c:rect-w box)))
-    (when (and (> room 24) (> (c:rect-h box) (r:text-height :scale 1)))
-      (r:canvas-text canvas (+ (c:rect-x box) 2) (+ (c:rect-y box) 1)
-                     (r:truncate-text summary
-                                      (max 1 (floor (- room 4) (r:text-width "m"))))
-                     (apply #'r:argb *map-detail-color*)))))
+(defun draw-preview-cell (canvas box summary &optional node)
+  "One occupied cell's miniature: a picture of it if there is one, and its name.
+
+THE PICTURE COMES FROM THE POLICY (P:CELL-PICTURE) and the default answer is
+NIL, which is what a session with no thumbnails module loaded looks like: the
+box and the name, exactly as before.  So this file does not know whether
+pictures exist, and a compositor that cannot make one draws the same deck as a
+user who turned them off.
+
+WHEN THERE IS A PICTURE IT IS DRAWN INSIDE THE BOX AND THE NAME IS DRAWN OVER
+IT, not beside it: the deck's job is the shape of the session, and a caption
+strip under every thumbnail is height that comes out of the picture."
+  (let ((picture (and node (p:cell-picture (p:current-policy) node)))
+        (text-color (apply #'r:argb *map-detail-color*)))
+    (r:canvas-fill canvas (apply #'r:argb *map-cell-color*) box)
+    (when picture
+      (r:canvas-blit canvas picture box))
+    (let ((room (c:rect-w box)))
+      (when (and (> room 24) (> (c:rect-h box) (r:text-height :scale 1)))
+        (when picture
+          ;; The name is unreadable on an unknown colour, so it gets a band of
+          ;; its own: one row of the cell's colour, the height of the text.
+          (r:canvas-fill canvas (apply #'r:argb *map-cell-color*)
+                         (c:make-rect (c:rect-x box) (c:rect-y box)
+                                      (c:rect-w box) (+ (r:text-height :scale 1) 2))))
+        (r:canvas-text canvas (+ (c:rect-x box) 2) (+ (c:rect-y box) 1)
+                       (r:truncate-text summary
+                                        (max 1 (floor (- room 4) (r:text-width "m"))))
+                       text-color)))))
 
 (r:add-hook :draw-overlays 'draw-preview)
 

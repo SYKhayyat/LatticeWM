@@ -279,6 +279,32 @@ split it, move between the pieces, close one, and find everything else."))
       (c:window-title window)
       "a window"))
 
+(defgeneric cell-picture (policy node)
+  (:documentation
+   "A picture of NODE for a drawing that shows many nodes at once, or NIL.
+
+THE ANSWER IS A PLIST: (:WIDTH W :HEIGHT H :DATA V), where DATA is a vector of
+H*W 32-bit ARGB words, row-major and premultiplied -- the same words a canvas
+holds, which is what makes drawing one a copy rather than a conversion.
+
+THE DEFAULT ANSWERS NIL, AND THAT IS THE POINT OF THE GENERIC.  This program
+draws only what it draws: the map, the deck, the echo area and the overlays are
+all our own wl_shm canvases, and a *window* is somebody else's surface.  Asking
+for a picture of one is a question with a real answer on some compositors and no
+answer at all on others (#135), so the drawer asks and draws what it gets: a
+picture where there is one, and the boxes and names this program has always
+drawn everywhere else.
+
+DECLARED IN POLICY RATHER THAN IN A DRAWER because two things draw cells -- the
+plane map and the deck -- and two ways of getting a picture would be two answers
+to one question.  NIL is also what a session looks like with the thumbnails
+module off, which is the default: the same drawing, without the pictures."))
+
+(defmethod cell-picture ((policy policy) node)
+  "The shipped answer: no pictures.  See CELL-PICTURE's docstring."
+  (declare (ignore node))
+  nil)
+
 (defgeneric cursor-place-name (policy world)
   (:documentation
    "Where the cursor is, in whatever vocabulary this policy uses for places.
