@@ -191,9 +191,19 @@ its half."
 
 Must be called inside a manage sequence: river_xkb_binding_v1.enable is
 window-management state."
-  (let ((bindings (server-bindings *server*)))
+  (let ((bindings (server-bindings *server*))
+        (wanted (p:bindable-keys)))
     (unless bindings (return-from register-bindings nil))
-    (dolist (entry (p:bindable-keys))
+    ;; THE KEYS THE POLICY NO LONGER NAMES ARE *DISABLED*, NOT DESTROYED (#11).
+    ;;
+    ;; Registration used to be additive-only, which was right while the answer
+    ;; to `what may we read' was constant.  It is not: suspending the keys asks
+    ;; river for nothing but the way back, and a binding left enabled would keep
+    ;; being taken from the application -- river hands a registered keypress to
+    ;; the window manager by definition, so `ignore it' is not the same as
+    ;; `stop taking it'.  Disabled rather than destroyed, because resuming is
+    ;; the same set coming back and a destroyed object cannot be re-enabled.
+    (dolist (entry wanted)
       (let ((key (car entry)))
         (unless (gethash key (seat-bound-keys seat))
           (let ((binding (best-effort "get_xkb_binding"
@@ -221,8 +231,14 @@ window-management state."
                                             (after-command))))
                               (t nil))))))
                     (wl:wl-proxy-hooks binding))
-              (best-effort "enable binding" (w:binding-enable binding)))))))
-    (logmsg :info "~d key~:p bound" (hash-table-count (seat-bound-keys seat)))))
+              (best-effort "enable binding" (w:binding-enable binding))))))
+    (maphash (lambda (key binding)
+               (unless (assoc key wanted :test #'equal)
+                 (best-effort "disable binding" (w:binding-disable binding))))
+             (seat-bound-keys seat))
+    (logmsg :info "~d key~:p bound~@[, ~d held back~]"
+            (hash-table-count (seat-bound-keys seat))
+            (when (p:keys-suspended-p) (length wanted))))))
 
 (defun rebind-keys ()
   "Re-register bindings after the keymap changed at a REPL.

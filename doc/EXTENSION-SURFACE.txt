@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-70 generics, 122 options.  Generated from the running image.
+70 generics, 123 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -2207,7 +2207,7 @@ device's default, which is off.
 
 *modifier*
   now: :SUPER
-  read by: keys-hint (appearance-policy t), welcome-rows (appearance-policy), modifier-string
+  read by: keys-hint (appearance-policy t), welcome-rows (appearance-policy), modifier-string, way-back-key
   The modifier every default binding uses.
 
 :SUPER is the only one that does not collide with something an application
@@ -2593,6 +2593,18 @@ taught.
 :LONGER is the default because fixed-axis splitting produces slivers as soon
 as you go three deep, and everybody's first configuration change in the
 fixed-axis window managers is to add a 'split the other way' binding.
+
+*start-suspended*
+  now: NIL
+  read by: start
+  Start with the keyboard given to applications, keeping the way back.
+
+The declarative answer to #11's own question -- `should there be a way to
+temporarily disable global shortcuts?' -- for the case where the answer is
+`permanently, until I say otherwise': a kiosk, a games console, a session whose
+whole point is one application.  M-x resume-keys, or Super+Escape, ends it.
+Nothing here is a new mechanism; the option is the same command, run at startup
+because a config file said so.
 
 *startup-profile*
   now: NIL

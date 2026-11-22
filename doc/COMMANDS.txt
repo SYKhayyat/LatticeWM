@@ -322,6 +322,14 @@ LatticeWM commands.
 (gestures)
   List the gesture table: what each gesture runs, and whether it can fire.
 
+(global-shortcuts)
+  List every key the window manager takes, and what it does.
+  
+  These are global in the sense #11 asks about: river delivers a registered key to
+  the window manager and not to the focused window, so a bound key does not reach
+  the application even when the application has the keyboard.  What is *not* here
+  is the app's own shortcuts, which the application handles itself.
+
 (goto-named-cell)
   Type a name and jump to whatever has it.
   
@@ -358,6 +366,9 @@ LatticeWM commands.
   
   Persistent for the session but not across one: put it in *XKB-LAYOUT* to keep
   it.
+
+(keys-suspended)
+  Say whether the window manager is taking keys, and how to change that.
 
 (list-hidden)
   Show what is alive and on no screen, and where each one will come back to.
@@ -633,6 +644,9 @@ LatticeWM commands.
   To the slot it was minimized from if that slot still exists, and to the cursor
   otherwise.
 
+(resume-keys)
+  Take the keyboard back.
+
 (run-command-by-name)
   Type a command name and run it.  Emacs's M-x.
   
@@ -805,6 +819,14 @@ LatticeWM commands.
   first-class object rather than a gap waiting to be filled: you split a pane and
   leave one side empty, and the window occupies the rest.  The cursor moves into
   the new empty pane, where — per D19 — typing a key spawns something.
+
+(suspend-keys)
+  Give the keyboard to the focused application, keeping one chord back.
+  
+  For a game that wants Super, a multiplexer whose prefix is a chord, a remote
+  desktop session.  Every binding is disabled at the compositor -- not merely
+  ignored, because a registered key never reaches the application at all -- except
+  the way back, which is named in the message.
 
 (swap direction)
   Exchange the focused pane with the one DIRECTION of it.

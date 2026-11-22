@@ -442,6 +442,9 @@ You never edit this package.")
    #:parse-gesture-spec #:gesture-spec-text #:gesture-scale-for
    ;; #9: easing and the transition table.  The *shape* of an animation is
    ;; policy and a pure function of elapsed time; the clock is the runtime's.
+   ;; #11: the keys can be handed back to applications, keeping one way back.
+   #:*keys-suspended* #:keys-suspended-p #:give-keys-away #:take-keys-back
+   #:way-back-key
    #:ease #:+animation-curves+ #:*animations* #:animation-for
    #:animation-key #:animation-transitions #:animation-forget
    #:animation-progress #:animation-finished-p #:*animation-duration*
@@ -631,6 +634,10 @@ keybindings, the command registry, and the session loop.")
    #:+frame-interval+ #:start-animation #:stop-animation #:animation-value
    #:animation-elapsed #:animation-clock-running-p #:stop-all-animations
    #:animate-frame #:overlay-alpha #:faded-color
+   ;; #11: the report, exposed because an extension drawing a bar wants the
+   ;; same answer the report's page has.
+   #:shortcut-rows #:shortcut-summary #:shortcut-first-line
+   #:*start-suspended*
    #:*startup-profile* #:*profiles-directory*
    #:profiles-directory #:profiles-directory-name
    #:profile-names #:profile-path #:profile-name-p #:profile-exists-p

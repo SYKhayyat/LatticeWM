@@ -1411,3 +1411,38 @@ The split is the point, and it is the same split as the gesture table: the
 decision is a value a test can hold (=half a second into a half-second fade is
 0.5=), and the protocol half has exactly one question to answer — which surface,
 and how often. If river ever grows animations, the model does not change.
+
+* Global shortcuts: they were global already, and the missing half was the
+  other direction
+#11 asks for shortcuts that work even when an application has grabbed the
+keyboard, and names =wlroots-global-shortcuts= as the mechanism. What river
+actually does is simpler and stronger: a key registered through
+=river_xkb_binding_v1= is delivered to the window manager and *not* to the
+focused client. Registration is the grab. So every chord in the keymap was
+already global, and `per-application shortcuts' is not a feature to add — a
+bound key never reaches the application at all, which is why the issue's first
+question answers itself.
+
+That made the useful half the opposite one. A game that wants Super for its own,
+a terminal multiplexer whose prefix collides with a chord, a remote desktop where
+every key belongs to the remote: each of them wants the window manager to stop
+taking keys, and none of them can ask for it. =M-x suspend-keys= is the ask.
+
+THE IMPLEMENTATION DETAIL THAT MATTERS: a suspension cannot be `ignore the
+keypresses we still receive'. River gives a registered key to the window manager
+*by definition*, so a binding left enabled silently eats the application's
+input — the exact bug =bindable-keys=' docstring records finding seven letters
+through. Suspending therefore has to *disable* every binding at the compositor,
+which is why registration grew the pass that disables anything the policy no
+longer names (disabled, not destroyed: resuming is the same set coming back, and
+a destroyed object cannot be re-enabled), and why one chord stays registered —
+Super+Escape, the way back, made by =WAY-BACK-KEY= and named in the message.
+
+The handler refuses as well, for the frames already in flight. Both halves are
+one question, asked in the two places a key can be taken: =BINDABLE-KEYS= says
+what river is told about, =HANDLE-KEY= says what happens if one arrives anyway.
+
+And it composes with the rest the way every feature here is meant to: the
+declarative half is =*start-suspended*=
+(+M-x resume-keys+ or Super+Escape ends it), because "give the keyboard away for
+this session" is a line in a config file and not only a key you press.

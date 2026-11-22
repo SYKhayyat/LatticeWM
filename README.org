@@ -230,6 +230,13 @@ rather than an arbitrary one, and =M-x show-group= brings back the ones you put
 away.  One window may carry several tags, so groups compose, and a tag travels
 with the window rather than with a place, so a group survives rearrangement.
 
+Every chord here is global in the sense that matters: a key registered with river
+goes to the window manager and never to the focused window, so an application
+cannot take it away.  When you want the keyboard given *back*, =M-x
+suspend-keys= disables every binding except =Super+Escape=, which resumes --
+for a game that wants Super, a multiplexer whose prefix is a chord, a remote
+desktop.  =M-x global-shortcuts= lists every key the window manager takes.
+
 Pages fade in over =*animation-duration*= -- short, =:ease-out=, and set it to 0
 for instant.  =M-x animation open ease-in 0.4= gives one transition its own curve
 and duration and =M-x forget-animation= puts it back.  Windows themselves are not

@@ -1043,6 +1043,17 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   as you go three deep, and everybody's first configuration change in the
   fixed-axis window managers is to add a 'split the other way' binding.
 
+*START-SUSPENDED*
+  default: NIL
+  Start with the keyboard given to applications, keeping the way back.
+  
+  The declarative answer to #11's own question -- `should there be a way to
+  temporarily disable global shortcuts?' -- for the case where the answer is
+  `permanently, until I say otherwise': a kiosk, a games console, a session whose
+  whole point is one application.  M-x resume-keys, or Super+Escape, ends it.
+  Nothing here is a new mechanism; the option is the same command, run at startup
+  because a config file said so.
+
 *STARTUP-PROFILE*
   default: NIL
   The profile to load at startup, or NIL for none.

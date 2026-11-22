@@ -91,9 +91,18 @@ rainy day -- the same argument *HELP-VISIBLE* itself carries."
 (defun handle-key (key)
   "A bound key fired.  Returns T when it was handled.
 
+WHILE THE KEYS ARE SUSPENDED (#11) ONLY THE WAY BACK IS OURS.  The bindings are
+disabled at the compositor, so nothing should reach here -- but a binding
+disabled a manage sequence ago can still deliver a press that was already in
+flight, and a key the window manager quietly acted on while the user was told
+`the application has your keyboard now' is exactly the kind of surprise that
+loses a session's work.
+
 Order matters and is deliberate: a submap in progress wins over everything,
 because a half-entered chord that silently ran a global binding is the single
 most confusing thing a keymap can do."
+  (when (and (p:keys-suspended-p) (not (equal key (p:way-back-key))))
+    (return-from handle-key nil))
   (let ((policy (p:current-policy)))
     (cond
       ;; The help overlay is dismissed by anything, including the key that

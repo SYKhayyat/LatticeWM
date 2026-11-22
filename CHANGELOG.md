@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **`M-x suspend-keys` hands the keyboard to the application.** Every binding
+  is disabled at the compositor — not merely ignored, because river delivers a
+  registered key to the window manager and never to the window — except
+  `Super+Escape`, which resumes. For a game that wants Super, a multiplexer
+  whose prefix is a chord, a remote desktop. `M-x resume-keys` (or
+  `Super+Escape`), `M-x keys-suspended` to ask, `M-x global-shortcuts` for the
+  list of every key the window manager takes, and `*start-suspended*` to start
+  that way. **Every chord was already global** — registration with river is
+  what makes a key global — so this is the missing half, not a new protocol:
+  river has no `wlroots-global-shortcuts`, and does not need one
+  (`doc/FINDINGS.org`).
 - **Overlays fade in.** `show-help-page` — which every page in the program is
   drawn through — fades in over `*animation-duration*` (0.18 s, `:ease-out`;
   set it to 0 for instant). `M-x animation open ease-in 0.4` gives one

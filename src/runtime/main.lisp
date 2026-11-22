@@ -579,6 +579,12 @@ debug it (connecting, binding, the first manage sequence) is still after it."
   (when *startup-profile*
     (guarded "startup profile"
       (load-profile *startup-profile*)))
+  ;; #11's declarative half: the session that wants the keyboard given to its
+  ;; one application from the first second.  After the configuration, because
+  ;; the config file is what names it, and declared for the same load-order
+  ;; reason LOAD-PROFILE is.
+  (when *start-suspended*
+    (p:give-keys-away))
   ;; :DEFAULT rather than the option's value as a default argument, because a
   ;; default argument is evaluated by the *caller* — so reading *SWANK-PORT* in
   ;; the lambda list would have read it in MAIN, before this function had

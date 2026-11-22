@@ -313,6 +313,8 @@ system, an infinite zoomable plane of cells, is a proof of."
        ;; sequence, which owns the key rebind and manage ask a load needs.
        ;; #9: the frame clock.  After main, which owns ADD-TIMER, and after
        ;; echo, whose overlays are what fades.
+       ;; #11: handing the keyboard back, and the report of what we take.
+       (:file "shortcuts" :depends-on ("main" "echo" "help" "seats"))
        (:file "frames" :depends-on ("main" "echo" "help" "minibuffer"))
        (:file "profiles" :depends-on ("server" "minibuffer" "echo" "config" "sequence" "seats"))
        ;; #6: the hidden set, as a report and a picker.  After verbs, whose
@@ -350,6 +352,7 @@ without a compositor — which is the whole model."
      (:file "test-hidden")
      (:file "test-outputs")
      (:file "test-animation")
+     (:file "test-shortcuts")
      (:file "test-placement")
      (:file "test-stacking")
      (:file "test-tree")

@@ -77,6 +77,18 @@ would be a feature half the people who want it cannot use.  Set it to a string:
 A profile that fails to load is reported and the session continues, exactly as
 a broken init.lisp does.")
 
+;;; ------------------------------------------------------ the declarative half
+
+(p:define-option *start-suspended* nil
+  "Start with the keyboard given to applications, keeping the way back.
+
+The declarative answer to #11's own question -- `should there be a way to
+temporarily disable global shortcuts?' -- for the case where the answer is
+`permanently, until I say otherwise': a kiosk, a games console, a session whose
+whole point is one application.  M-x resume-keys, or Super+Escape, ends it.
+Nothing here is a new mechanism; the option is the same command, run at startup
+because a config file said so.")
+
 ;;; ------------------------------------------------------- the user's file
 
 (defun config-directory ()

@@ -128,6 +128,13 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite shortcuts :in model
+  :description "The keyboard in both directions (#11).  A keyriver was told
+about goes to the window manager and never to the focused window, so `global'
+is what registration already means; what is checked here is that only the keys
+the policy names are registered, and that handing the keyboard back keeps one
+way back registered.")
+
 (def-suite animation :in model
   :description "Timing the things this program draws (#9).  A window's
 animation is the compositor's call -- a Wayland client cannot move or fade

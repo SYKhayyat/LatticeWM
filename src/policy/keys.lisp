@@ -473,6 +473,40 @@ the whole point of having a registry."
              (keymap-entries keymap))
     (sort out #'string< :key (lambda (row) (key-to-string (car row))))))
 
+;;; ------------------------------------------------------- suspending the keys
+
+(defvar *keys-suspended* nil
+  "True while the window manager has handed its keys back to applications.
+
+#11 is `shortcuts that work even when an application has grabbed the keyboard',
+and the first half of the answer is that they always did: a key registered with
+river is delivered to the window manager and not to the focused client, which is
+what makes it global.  There is no second protocol to opt into; the
+`per-application' question in the issue is answered by the fact that a *bound*
+key never reaches the application at all.
+
+The half that was missing is the other direction -- giving the keys *back*.  A
+game that wants Super, a terminal multiplexer whose prefix is a chord, a remote
+desktop where every key belongs to the remote: each of them wants the window
+manager to stop taking keys, and none of them can ask for it.  *KEYS-SUSPENDED*
+is that ask, and BINDABLE-KEYS is where it takes effect, because that function
+is the one place that decides what river is told about.")
+
+(defun keys-suspended-p () *keys-suspended*)
+(defun give-keys-away ()
+  "Stop taking keys, except the one that undoes this."
+  (setf *keys-suspended* t)
+  t)
+(defun take-keys-back ()
+  (setf *keys-suspended* nil)
+  t)
+
+(defun way-back-key ()
+  "The chord that brings the keymap back.  Super+Escape, deliberately:
+Escape is where every modal thing in this program is left, and a chord for
+`resume' is exactly the one chord that cannot be unbound while suspended."
+  (kbd (format nil "~a+Escape" (string-downcase *modifier*))))
+
 (defun bindable-keys (&optional (keymap *keymap*))
   "Every key river should be told about: the first key of every chord, and
 nothing inside one.
@@ -495,13 +529,22 @@ had ever sat down and typed into a window.
 A submap's keys are reached through the capture bindings instead, the same way
 a prompt and an empty pane reach theirs -- see CAPTURE-WANTED-P, which asks the
 one question all three share."
-  (let ((out '()))
-    (labels ((walk (map)
-               (maphash (lambda (key target) (push (cons key target) out))
-                        (keymap-entries map))
-               (when (keymap-parent map) (walk (keymap-parent map)))))
-      (walk keymap))
-    (nreverse out)))
+  (if *keys-suspended*
+      ;; THE ONE KEY THAT IS STILL OURS (#11).  Suspending means river is told
+      ;; about nothing but the way back, so every other keypress goes to the
+      ;; application -- a game that wants Super for its own, a terminal
+      ;; multiplexer whose prefix collides with a chord.  The way back has to
+      ;; be *registered*, not merely `still handled': a binding river was not
+      ;; told about is a binding river gives to the focused window, and the
+      ;; user could never come back.
+      (list (cons (way-back-key) "resume-keys"))
+      (let ((out '()))
+        (labels ((walk (map)
+                   (maphash (lambda (key target) (push (cons key target) out))
+                            (keymap-entries map))
+                   (when (keymap-parent map) (walk (keymap-parent map)))))
+          (walk keymap))
+        (nreverse out))))
 
 (defun all-bound-keys (&optional (keymap *keymap*))
   "Every key bound anywhere under KEYMAP, as (KEY . TARGET) with chord prefixes
