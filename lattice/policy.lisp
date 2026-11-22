@@ -230,7 +230,7 @@ allowed to disagree with the track grid."
                      (+ (c:rect-y rect) (floor (- h nh) 2))
                      nw nh))))
 
-(defun cell-rects (policy grid rect)
+(defun cell-rects (policy grid rect &key (viewport nil viewport-p))
   "Rectangles for every visible cell, as an alist of (ADDRESS . RECT).
 
 THE SIGN INVERSION LIVES HERE, and nowhere else.  Lattice +Y is up (D2);
@@ -244,7 +244,7 @@ is a window drawn on top of somebody else's desktop.  This can only happen under
 :FIXED, where the tracks do not adapt to the space; :FIT tiles RECT exactly and
 nothing is ever dropped."
   (declare (ignorable policy))
-  (let* ((viewport (grid-viewport grid))
+  (let* ((viewport (if viewport-p viewport (grid-viewport grid)))
          (ox (cell-x (viewport-origin viewport)))
          (oy (cell-y (viewport-origin viewport)))
          (cols (viewport-cols viewport))

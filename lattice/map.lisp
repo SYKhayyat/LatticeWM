@@ -170,7 +170,7 @@ should."
       (r:overlay-hide overlay)
       (return-from draw-map-on nil))
     (let ((area (p:outer-rect policy output)))
-      (unless (map-mode-p grid area)
+      (unless (map-shown-p grid area)
         (r:overlay-hide overlay)
         (return-from draw-map-on nil))
       (let ((canvas (r:ensure-overlay overlay (c:rect-w area) (c:rect-h area))))
@@ -180,7 +180,12 @@ should."
                 (origin-y (c:rect-y area))
                 (text-color (apply #'r:argb *map-text-color*))
                 (current (current-cell)))
-            (loop for (address . rect) in (cell-rects policy grid area)
+            ;; A peek shows the WHOLE plane even while the viewport is one
+            ;; cell deep: it asked where the windows are, not where the camera
+            ;; points.  Without a peek this is the grid's own viewport and the
+            ;; drawing is exactly what it was.
+            (loop for (address . rect) in (cell-rects policy grid area
+                                                      :viewport (peek-viewport grid))
                   for node = (c:child-at grid address)
                   for occupied = (and node (not (c:node-empty-p node)))
                   for box = (c:make-rect (- (c:rect-x rect) origin-x)

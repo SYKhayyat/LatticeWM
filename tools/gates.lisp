@@ -3648,15 +3648,15 @@ substrings."
             (length all) (length *untested-commands*))
     (cond
       (ghosts
-       (fail 23 "~d allowlist entr~(pretty:)~p for a command that does not ~
+       (fail 23 "~d allowlist entr~:p for a command that does not ~
 exist:~{~%    ~a~}~%~4tThe list must name commands a session could run; a ~
 misspelt entry is a promise about a ghost."
-             (length ghosts) (length ghosts) (sort ghosts #'string<)))
+             (length ghosts) (sort ghosts #'string<)))
       (stale
-       (fail 23 "~d allowlist entr~(pretty:)~p now have a test naming ~
+       (fail 23 "~d allowlist entr~:p now have a test naming ~
 them:~{~%    ~a~}~%~4tThe allowlist only shrinks.  Each of these grew a ~
 suite; delete the line and let the coverage be the reason."
-             (length stale) (length stale) (sort stale #'string<)))
+             (length stale) (sort stale #'string<)))
       (untested
        (fail 23 "~d command~:p no test names, and no reason they cannot ~
 be tested:~{~%    ~a~}~%~4tEvery verb is a promise about what pressing a key ~

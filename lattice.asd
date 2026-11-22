@@ -48,6 +48,9 @@ edits nothing under src/."
      (:file "commands")
      (:file "undo")
      (:file "map")
+     ;; after map, because the peek is the map drawn over the session rather
+     ;; than instead of it: MAP-SHOWN-P is the question PEEK answers yes to.
+     (:file "peek")
      (:file "overlay")))))
 
 (defsystem "lattice/tests"

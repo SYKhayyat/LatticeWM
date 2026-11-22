@@ -56,7 +56,12 @@ motion runs straight through the cell boundary as though it were not there.")
    #:*overlay-scale* #:*overlay-background* #:*overlay-foreground*
    #:*overlay-min-cell* #:cell-label #:draw-coordinate-overlay
    #:*map-threshold* #:*map-background* #:*map-cell-color* #:*map-empty-color*
-   #:*map-text-color* #:*map-detail-color* #:map-mode-p #:draw-map #:draw-map-on
+   #:*map-text-color* #:*map-detail-color* #:map-mode-p #:map-shown-p
+   #:draw-map #:draw-map-on
+   ;; #38: a glance at the whole plane, drawn over the session so that no
+   ;; window is resized for the privilege.
+   #:*peek* #:peek-active-p #:peek-begin #:peek-end
+   #:peek-viewport #:plane-viewport
    #:draw-coordinate-overlay-on #:copy-viewport
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell))

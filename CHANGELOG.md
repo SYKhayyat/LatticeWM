@@ -26,6 +26,12 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Peek at the whole plane without touching a window.** `M-x peek-on` (or
+  `peek-toggle`) draws the lattice map over your session; nothing is resized,
+  nothing is re-laid-out, and the next key you press takes it down and then does
+  its own job. Zooming out to look costs two relayouts of every window on
+  screen — terminals rewrap — so the peek is the map drawn over what you have
+  instead of a zoom. (#38)
 - **A launcher, built from the pieces already here.** The `launcher` extension
   adds `M-x launcher`: type three letters, press Return. Candidates come from
   XDG desktop entries, `$PATH` executables, the `projects` registry, arithmetic

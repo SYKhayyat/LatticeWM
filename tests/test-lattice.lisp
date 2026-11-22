@@ -2209,3 +2209,110 @@ rather than show an empty page."
   (with-lattice-world ()
     (is (stringp (l:plane-undo-history))
         "an empty history says so in the echo area, not on a page")))
+
+;;; ============================================================ peek (#38)
+;;;
+;;; The peek is the map drawn over the session, so the two things worth
+;;; asserting are the ones its design rests on: it appears at a zoom where the
+;;; map would not, and it costs no relayout -- no window changes rectangle, and
+;;; the viewport does not move.
+
+(test a-peek-puts-the-map-up-at-a-zoom-where-it-would-not-be
+  "The map appears by itself only when cells are too small to render.  A peek
+is the request to see it anyway, over full-size windows, which is the whole
+difference between looking and zooming out."
+  (let* ((grid (grid-of '(0 0 nil)))
+         (l:*peek* nil)
+         (l:*map-threshold* 320)
+         (rect (c:make-rect 0 0 1920 1080)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "editor"))
+    (is (null (l:map-mode-p grid rect)) "one full-size cell is not the map")
+    (is (null (l:map-shown-p grid rect)))
+    (l:peek-begin)
+    (is-true (l:peek-active-p))
+    (is-true (l:map-shown-p grid rect) "and now it is")
+    (l:peek-end)
+    (is (null (l:map-shown-p grid rect)) "one keypress later it is not")))
+
+(test a-peek-resizes-nothing-and-moves-nothing
+  "The property the whole design is for: zooming costs two relayouts of every
+window on screen, and a peek costs none.  Asserted against the layout driver
+itself rather than against a viewport field, because the claim is about what a
+window is given."
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (policy (pol))
+         (l:*peek* nil)
+         (rect (c:make-rect 0 0 1920 1080)))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "editor"))
+    (setf (c:child-at grid (l:cell 1 0)) (leaf "web"))
+    (let ((before (p:layout-children policy grid rect))
+          (camera (l:grid-viewport grid)))
+      (l:peek-begin)
+      (is (equalp before (p:layout-children policy grid rect))
+          "the same windows, in the same rectangles")
+      (is (eq camera (l:grid-viewport grid))
+          "the camera itself never moved: a peek sets no zoom")
+      (l:peek-end)
+      (is (eq camera (l:peek-viewport grid))
+          "and with the peek down the drawing asks the camera where it is")
+      (is (equalp before (p:layout-children policy grid rect))))))
+
+(test the-peek-shows-the-whole-plane-not-the-visible-cell
+  "A peek from a one-cell viewport has to draw the cells the camera is NOT on,
+which is why it asks where the windows are instead of where the viewport is."
+  (let* ((grid (grid-of '(-2 3 nil) '(0 0 nil) '(1 1 nil)))
+         (l:*peek* nil))
+    (setf (c:child-at grid (l:cell -2 3)) (leaf "cold-storage"))
+    (setf (c:child-at grid (l:cell 0 0)) (leaf "editor"))
+    (setf (c:child-at grid (l:cell 1 1)) (leaf "web"))
+    (setf (l:viewport-cols (l:grid-viewport grid)) 1
+          (l:viewport-rows (l:grid-viewport grid)) 1
+          (l:viewport-origin (l:grid-viewport grid)) (l:cell 0 0))
+    (is (= 1 (l:viewport-cols (l:grid-viewport grid)))
+        "the camera is on one cell")
+    (l:peek-begin)
+    (let ((viewport (l:peek-viewport grid)))
+      (is (= 4 (l:viewport-cols viewport)) "-2..1 across")
+      (is (= 4 (l:viewport-rows viewport)) "3..0 is four rows, down to 0")
+      (is (equal '(-2 0) (list (l:cell-x (l:viewport-origin viewport))
+                               (l:cell-y (l:viewport-origin viewport))))
+          "the origin is the corner, not the cell the camera is on"))
+    (l:peek-end)
+    (is (eq (l:grid-viewport grid) (l:peek-viewport grid))
+        "and without a peek it is the grid's own viewport")))
+
+(test an-empty-plane-peeks-into-its-own-view
+  "The map of nothing has no bounding box; showing the viewport you are already
+looking at is the honest answer, rather than a width of zero."
+  (let* ((grid (grid-of))
+         (l:*peek* nil))
+    (l:peek-begin)
+    (is (eq (l:grid-viewport grid) (l:peek-viewport grid)))))
+
+(test any-key-takes-a-peek-down-and-still-does-its-own-job
+  "A peek is a glance, not a mode: the keystroke that ends it is the keystroke
+that reason for the look, and swallowing it is the one way this would feel like
+a mode after all."
+  (let ((l:*peek* nil)
+        (policy (pol))
+        (world (c:make-world)))
+    (l:peek-begin)
+    (is-true (l:peek-active-p))
+    (p:on-key policy world (cons 38 (list :none)))
+    (is (null (l:peek-active-p)) "the key ended the peek")
+    ;; And the key was not consumed: ON-KEY still answers with what it always
+    ;; answers with, which is what lets the caller run the binding.
+    (is (null (p:on-key policy world (cons 38 (list :none))))
+        "and the key was not swallowed")))
+
+(test peek-commands-toggle-the-picture
+  (let ((l:*peek* nil))
+    (l:peek-on)
+    (is-true (l:peek-active-p))
+    (l:peek-toggle)
+    (is (null (l:peek-active-p)) "the one chord puts it down")
+    (l:peek-toggle)
+    (is-true (l:peek-active-p) "and up again")
+    (l:peek-off)
+    (is (null (l:peek-active-p)))
+    (is (null (l:peek-off)) "taking down nothing answers NIL")))
