@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The examples are loaders.** `examples/01`–`04` no longer carry inline copies
+  of code that lives in `extensions/`; each is now what a user actually writes —
+  `load-extension` plus the table or the knob — so the teaching file cannot teach
+  the version from before the last three fixes. `examples/05-status-line.lisp`
+  stays an example on purpose: its content is taste, and the seam it teaches is
+  `echo-content`.
+- **`window-rules` docstrings** no longer name a `*rules*` knob the program does
+  not have; the extension's table is the table the configuration file fills in.
 - **`*view-commands*`: what a recorder must not replay.** The distinction
   between a *look* (zoom, pan, undo, redo, repeat) and a *move* (focus, split,
   workspace, send) was a private list inside `extensions/command-journal`; it is

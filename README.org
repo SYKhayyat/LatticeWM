@@ -424,9 +424,10 @@ that matches wins. To find
 out what to write, ask the running program — =(mapcar #'window-app-id
 (all-windows))= at =Super+;= is the same list a rule is matched against.
 
-=examples/02-window-rules.lisp= is the worked version, including the method to
-write when a table is not enough, and =latticewm --list-options= prints every
-override key with what it does.
+=examples/02-window-rules.lisp= is the worked version — the table, which is the
+part that is yours; ~extensions/window-rules~ is the module that consults it, and
+it exists so that every user's rules file is not a copy of the same method.
+=latticewm --list-options= prints every override key with what it does.
 
 *There is no limit and there is no configured count.* The workspace list is a
 stack at the root of the layout tree, and a stack grows: asking for one that is

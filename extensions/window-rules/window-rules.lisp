@@ -1,6 +1,6 @@
 ;;;; window-rules/window-rules.lisp --- The table, and the two doors it needs.
 ;;;;
-;;;; The example's shape, behind a switch: WINDOW-RULE-FOR consults *RULES*
+;;;; The example's shape, behind a switch: WINDOW-RULE-FOR consults the table
 ;;;; before the shipped answer, and ON-WINDOW-OPEN honours the rule's
 ;;;; :WORKSPACE by moving the cursor for the duration of the placement and
 ;;;; putting it back.  Both are :AROUND methods so DISABLE is exact: with the
@@ -34,7 +34,7 @@ is placed by whatever would have placed it anyway.")
 
 (defmethod p:window-rule-for :around ((policy p:conventional-policy)
                                       (win c:window))
-  "Consult *RULES* first; an unmatched window falls through to the shipped
+  "Consult the rule table first; an unmatched window falls through to the shipped
 answer unchanged."
   (when *enabled*
     (let ((overrides (rule-for win)))
@@ -81,7 +81,7 @@ is the mistake this surface exists to make unnecessary."
   (values))
 
 (defun disable ()
-  "Turn the rules off, live.  The rules stay in *RULES* and take effect again
+  "Turn the rules off, live.  The rules stay in the table and take effect again
 on the next ENABLE."
   (setf *enabled* nil)
   (values))

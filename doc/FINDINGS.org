@@ -1551,3 +1551,48 @@ The remaining item #5 listed -- record the *spawns* as part of a restartable
 layout -- is not a recorder either: it is =window-restarts= plus a saved layout,
 and it is a composition rather than a feature. Nothing here needs a module, so
 nothing here got one.
+
+* Examples are loaders now: an example that cannot be turned off is not teaching
+#3 was filed as housekeeping -- the four worked examples had already been
+promoted to extensions, so what was left was a decision about the duplicate
+files. The decision is *option 2*, keep them and make them call the modules, and
+what that turned up is the reason the file was worth having.
+
+The inline copies had already gone stale. Example 01's ~on-focus-change~ read
+~:rect-index~ with no answer for a world that had never been laid out, and its
+~pointer-focus~ had stopped calling ~call-next-method~, so it no longer composed
+with anything underneath it. Neither was a mistake anybody made on purpose: an
+example is *copied* code by definition, and the copy stops when the module keeps
+going. A teaching file that teaches the version from before the last three fixes
+is worse than no teaching file, because a reader trusts it.
+
+So what a user writes is now the call and the table, and what the module keeps is
+the methods. Two things fell out of that split that the examples had been
+hiding:
+
+- **An example could not be switched off.** 01 and 02 defined plain methods and
+  03 defined a *subclass*, so "back to how it was" was a restart. The modules are
+  ~:around~ plus a flag and a mixin plus ~change-class~, which is not decoration:
+  a layout model you cannot leave is a fork wearing an example's clothes.
+- **Gate 12 was passing because of a duplicate.** The docstring of
+  ~window-rule-for~ named a rule-table variable that nothing but the *example*
+  defined. With the example reduced to the table, the gate failed -- correctly:
+  the docstring named a knob the program did not have. The extension's own
+  docstrings had the same habit and now say "the rule table" instead, because a
+  name in a docstring is a promise a reader will type.
+
+**The one that stayed an example is the interesting case.** 05-status-line is
+the thing people ask for first, and promoting it would be the wrong move: what
+it adds -- a clock, a load average, a count of windows elsewhere -- is a matter
+of taste, and shipping our taste as the status line takes a decision out of the
+user's hands rather than giving them one. The other four were promoted because
+the module was the better *program* (a switch, tests, one copy). 05 is an example
+because the *content* is not ours to ship; the seam it teaches, ~echo-content~,
+is.
+
+And one line that is now a rule for this directory: **a loader must be safe in an
+empty image.** Gate 6 loads every example into a bare one, which is how ~(scrolling-
+columns:scrolling)~ sitting in example 04's body -- correct at a REPL, where
+there is a current workspace -- came to break the build. It is commented, with
+the reason, which is the same treatment ~define-option~ gets for a value that is
+only meaningful once something is running.

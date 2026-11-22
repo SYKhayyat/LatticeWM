@@ -19,6 +19,19 @@
 ;;;; bar has no idea what a workspace of yours contains.  That asymmetry is the
 ;;;; argument for the whole approach.
 ;;;;
+;;;; WHY THIS ONE IS STILL AN EXAMPLE AND NOT A MODULE (#3).  The other four
+;;;; were promoted because the module was the better *program*: an on/off
+;;;; switch, tests, and no second copy to drift.  This one is the opposite case.
+;;;; What it adds is a matter of taste -- a clock, a load average, a count of
+;;;; windows elsewhere -- and shipping our taste as the status line is not a
+;;;; feature, it is a decision taken out of the user's hands.  The seam is the
+;;;; thing being taught: ECHO-CONTENT is one generic returning a list of
+;;;; strings, and the whole of the difference between "the bar somebody else
+;;;; decided you want" and this is that you can call the shipped method and
+;;;; cons onto the answer.  It is also last on purpose: it is the only example
+;;;; that registers a timer, so a reader meeting ADD-TIMER here has already
+;;;; seen what a redraw is for.
+;;;;
 ;;;; It also shows the other half of a status line, which is that something has
 ;;;; to make it tick.  A segment that reads a clock is only as fresh as the
 ;;;; last redraw, and until ADD-TIMER existed there was nothing in this program

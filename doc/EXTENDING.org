@@ -257,8 +257,9 @@ sources make three different symbols of one name, on purpose.
 The table is deliberately not the whole answer. It covers what a declarative
 list can express, and ~window-rule-for~ is the generic underneath it — so a
 rule that needs to *look* at something, rather than match a string, is a tier-1
-method rather than a bigger table. ~examples/02-window-rules.lisp~ shows both
-halves and is the first place to read.
+method rather than a bigger table. ~examples/02-window-rules.lisp~ is the table
+and the module (~extensions/window-rules~) is the method; read the example
+first, because the table is the part that is yours.
 
 ** Which wins, the option or the generic
 
@@ -387,7 +388,10 @@ Three rules, and the third is the one that bites:
 
 =examples/05-status-line.lisp= adds the time, the load average and a count of
 the windows in workspaces you are not looking at — twenty lines, no new class,
-no state, on and off without a restart.
+no state, on and off without a restart. It is the one example that stayed an
+example when the other four were promoted to modules: what it adds is a matter
+of taste, and shipping our taste as the status line takes a decision out of your
+hands rather than giving you one. The seam it teaches is ~echo-content~.
 
 Every other window manager answers this with a *status bar*: a second program,
 a protocol between the two, a configuration language for the bar, and a list of
@@ -526,18 +530,27 @@ being a substrate, and it is smaller than it sounds.
 
 ** A new arrangement: one method
 
-=examples/03-master-stack.lisp= is dwm's layout — one large pane, everything
-else stacked beside it — in one ~layout-children~ method and one
-~step-address~ method. The tree is untouched; only the answer to "where do
-these children go" changed. Switch back and every window is where you left it.
+=extensions/master-stack~ is dwm's layout — one large pane, everything else
+stacked beside it — in one ~layout-children~ method. The tree is untouched; only
+the answer to "where do these children go" changed, so switching back puts every
+window exactly where it was. ~examples/03-master-stack.lisp~ is how you turn it
+on and adjust it, which is the whole of what a user writes.
+
+The example this came from was a *subclass*, and that was the flaw worth
+naming: a class you cannot leave, that cannot be composed with a second layout
+tweak, and that quietly replaced the shipped ~layout-children~ method instead of
+sitting on top of it. The module is a mixin installed with ~change-class~, so the
+same policy object comes through the switch carrying its state, and ~disable~ is
+a real answer rather than a restart.
 
 ** A new *kind* of container: about sixty lines
 
-=examples/04-scrolling-columns.lisp= is niri and PaperWM: an infinite
-horizontal strip that scrolls sideways. It subclasses
-~sequential-container~ — which supplies addressing, insertion and removal — and
-answers three questions: how it is drawn, how motion crosses it, and where you
-land arriving at it.
+=extensions/scrolling-columns~ is niri and PaperWM: an infinite horizontal strip
+that scrolls sideways. ~examples/04-scrolling-columns.lisp~ is the three lines
+that turn it on; =extensions/scrolling-columns/strip.lisp= is the code. It
+subclasses ~sequential-container~ — which supplies addressing, insertion and
+removal — and answers three questions: how it is drawn, how motion crosses it,
+and where you land arriving at it.
 
 *Read that file before reading =lattice/=.* It is the same shape at a tenth of
 the size, and the lattice is only larger because a plane has more data in it

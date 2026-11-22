@@ -1,3 +1,278 @@
+; compiling file "/home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/protocol/river-libinput-config-v1.lisp" (written 17 NOV 2026 06:27:43 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/protocol/river-libinput-config-v1-tmpGHU3ALSV.fasl
+; compilation finished in 0:00:01.603
+; compiling file "/home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/protocol/river-xkb-config-v1.lisp" (written 17 NOV 2026 06:27:45 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/protocol/river-xkb-config-v1-tmpAAURSO1.fasl
+; compilation finished in 0:00:00.555
+; compiling file "/home/shaul/LatticeWM/src/model/geometry.lisp" (written 20 NOV 2026 08:02:16 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/geometry-tmp5GEXGEG5.fasl
+; compilation finished in 0:00:00.299
+; compiling file "/home/shaul/LatticeWM/src/model/node.lisp" (written 22 NOV 2026 01:40:54 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/node-tmpAR3FSGEY.fasl
+; compilation finished in 0:00:00.511
+; compiling file "/home/shaul/LatticeWM/src/model/surface.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/surface-tmpJAIDFZTC.fasl
+; compilation finished in 0:00:00.226
+; compiling file "/home/shaul/LatticeWM/src/model/path.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/path-tmp8V3J6PE9.fasl
+; compilation finished in 0:00:00.114
+; compiling file "/home/shaul/LatticeWM/src/model/surgery.lisp" (written 18 NOV 2026 10:49:43 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/surgery-tmp9V47YWQF.fasl
+; compilation finished in 0:00:00.143
+; compiling file "/home/shaul/LatticeWM/src/model/window.lisp" (written 20 NOV 2026 01:28:51 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/window-tmp9BN22RMA.fasl
+; compilation finished in 0:00:00.048
+; compiling file "/home/shaul/LatticeWM/src/model/input.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/input-tmp1CXFJSK9.fasl
+; compilation finished in 0:00:00.060
+; compiling file "/home/shaul/LatticeWM/src/model/world.lisp" (written 20 NOV 2026 10:10:45 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/model/world-tmpX4BRKI0R.fasl
+; compilation finished in 0:00:00.201
+; compiling file "/home/shaul/LatticeWM/src/policy/options.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/options-tmpQ371UGST.fasl
+; compilation finished in 0:00:00.370
+; compiling file "/home/shaul/LatticeWM/src/policy/log.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/log-tmp2OWI3Q7U.fasl
+; compilation finished in 0:00:00.283
+; compiling file "/home/shaul/LatticeWM/src/policy/protocol.lisp" (written 21 NOV 2026 09:48:10 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/protocol-tmp9KKTJMYV.fasl
+; compilation finished in 0:00:00.176
+; compiling file "/home/shaul/LatticeWM/src/policy/hooks.lisp" (written 22 NOV 2026 12:53:37 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/hooks-tmpJU0JWO19.fasl
+; compilation finished in 0:00:00.350
+; compiling file "/home/shaul/LatticeWM/src/policy/conventional.lisp" (written 22 NOV 2026 12:14:09 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/conventional-tmpZX2WN8N4.fasl
+; compilation finished in 0:00:00.092
+; compiling file "/home/shaul/LatticeWM/src/policy/layout.lisp" (written 22 NOV 2026 06:37:23 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/layout-tmpOU81XRV0.fasl
+; compilation finished in 0:00:00.293
+; compiling file "/home/shaul/LatticeWM/src/policy/motion.lisp" (written 17 NOV 2026 11:54:49 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/motion-tmpY2ML9CFA.fasl
+; compilation finished in 0:00:00.092
+; compiling file "/home/shaul/LatticeWM/src/policy/defaults-motion.lisp" (written 21 NOV 2026 09:45:33 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/defaults-motion-tmpX2JYJDQE.fasl
+; compilation finished in 0:00:00.188
+; compiling file "/home/shaul/LatticeWM/src/policy/structure.lisp" (written 18 NOV 2026 10:18:46 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/structure-tmpOPCILR65.fasl
+; compilation finished in 0:00:00.229
+; compiling file "/home/shaul/LatticeWM/src/policy/lifecycle.lisp" (written 22 NOV 2026 12:23:37 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/lifecycle-tmpRV9F8A9A.fasl
+; compilation finished in 0:00:00.364
+; compiling file "/home/shaul/LatticeWM/src/policy/input.lisp" (written 22 NOV 2026 01:15:38 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/input-tmpK2ZAJT4I.fasl
+; compilation finished in 0:00:00.195
+; compiling file "/home/shaul/LatticeWM/src/policy/devices.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/devices-tmpUX5S4ADN.fasl
+; compilation finished in 0:00:00.096
+; compiling file "/home/shaul/LatticeWM/src/policy/surface.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/surface-tmp10401X32.fasl
+; compilation finished in 0:00:00.135
+; compiling file "/home/shaul/LatticeWM/src/policy/commands.lisp" (written 22 NOV 2026 07:13:53 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/commands-tmpZ7CBRM0G.fasl
+; compilation finished in 0:00:00.324
+; compiling file "/home/shaul/LatticeWM/src/policy/animation.lisp" (written 22 NOV 2026 04:10:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/animation-tmp9OZEQ0G2.fasl
+; compilation finished in 0:00:00.119
+; compiling file "/home/shaul/LatticeWM/src/policy/keys.lisp" (written 22 NOV 2026 04:53:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/keys-tmpB2JTL1W9.fasl
+; compilation finished in 0:00:00.295
+; compiling file "/home/shaul/LatticeWM/src/policy/keymap.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/keymap-tmpP3BI68WQ.fasl
+; compilation finished in 0:00:00.060
+; compiling file "/home/shaul/LatticeWM/src/policy/font.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/font-tmpQDARA81Z.fasl
+; compilation finished in 0:00:00.188
+; compiling file "/home/shaul/LatticeWM/src/policy/text.lisp" (written 17 NOV 2026 02:47:03 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/text-tmpYEMMM7SE.fasl
+; compilation finished in 0:00:00.135
+; compiling file "/home/shaul/LatticeWM/src/policy/appearance.lisp" (written 21 NOV 2026 11:50:36 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/policy/appearance-tmp73HU0RPK.fasl
+; compilation finished in 0:00:00.341
+; compiling file "/home/shaul/LatticeWM/src/wire/sequence.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/wire/sequence-tmpIO5N7K88.fasl
+; compilation finished in 0:00:00.043
+; compiling file "/home/shaul/LatticeWM/src/wire/wrappers.lisp" (written 22 NOV 2026 12:54:06 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/wire/wrappers-tmpCM21U60Z.fasl
+; compilation finished in 0:00:01.374
+; compiling file "/home/shaul/LatticeWM/src/runtime/server.lisp" (written 22 NOV 2026 12:52:52 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/server-tmp9DT7SEFG.fasl
+; compilation finished in 0:00:00.132
+; compiling file "/home/shaul/LatticeWM/src/runtime/keys.lisp" (written 22 NOV 2026 04:47:40 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/keys-tmp8065ESJT.fasl
+; compilation finished in 0:00:00.052
+; compiling file "/home/shaul/LatticeWM/src/runtime/font-table.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/font-table-tmp7S8Z6FGF.fasl
+; compilation finished in 0:00:00.278
+; compiling file "/home/shaul/LatticeWM/src/runtime/font.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/font-tmpSIT3QPKP.fasl
+; compilation finished in 0:00:00.040
+; compiling file "/home/shaul/LatticeWM/src/runtime/psf.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/psf-tmpE0PA0714.fasl
+; compilation finished in 0:00:00.096
+; compiling file "/home/shaul/LatticeWM/src/runtime/surface.lisp" (written 17 NOV 2026 07:33:10 AM):
+
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/surface-tmpJRWHHVG0.fasl
+; compilation finished in 0:00:00.899
+; compiling file "/home/shaul/LatticeWM/src/runtime/minibuffer.lisp" (written 22 NOV 2026 05:40:53 AM):
+
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/minibuffer-tmp4WZVROCX.fasl
+; compilation finished in 0:00:01.419
+; compiling file "/home/shaul/LatticeWM/src/runtime/echo.lisp" (written 21 NOV 2026 11:56:34 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/echo-tmpA0I3UKX8.fasl
+; compilation finished in 0:00:00.093
+; compiling file "/home/shaul/LatticeWM/src/runtime/help.lisp" (written 22 NOV 2026 04:14:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/help-tmp267Y2N80.fasl
+; compilation finished in 0:00:00.249
+; compiling file "/home/shaul/LatticeWM/src/runtime/cursor.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/cursor-tmpOUPE5FSJ.fasl
+; compilation finished in 0:00:00.288
+; compiling file "/home/shaul/LatticeWM/src/runtime/layer.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/layer-tmpIGHCU6ZA.fasl
+; compilation finished in 0:00:00.236
+; compiling file "/home/shaul/LatticeWM/src/runtime/pointer.lisp" (written 21 NOV 2026 10:24:49 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/pointer-tmpBO0TUGLK.fasl
+; compilation finished in 0:00:00.355
+; compiling file "/home/shaul/LatticeWM/src/runtime/config.lisp" (written 22 NOV 2026 04:45:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/config-tmpIIXPIQNW.fasl
+; compilation finished in 0:00:00.109
+; compiling file "/home/shaul/LatticeWM/src/runtime/welcome.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/welcome-tmpOHM494YR.fasl
+; compilation finished in 0:00:00.025
+; compiling file "/home/shaul/LatticeWM/src/runtime/emit.lisp" (written 20 NOV 2026 08:03:18 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/emit-tmpOVFB07XF.fasl
+; compilation finished in 0:00:00.797
+; compiling file "/home/shaul/LatticeWM/src/runtime/capture.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/capture-tmpG6VFGMYP.fasl
+; compilation finished in 0:00:00.031
+; compiling file "/home/shaul/LatticeWM/src/runtime/windows.lisp" (written 22 NOV 2026 12:23:37 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/windows-tmp4QIPRMOF.fasl
+; compilation finished in 0:00:00.252
+; compiling file "/home/shaul/LatticeWM/src/runtime/sequence.lisp" (written 22 NOV 2026 12:53:53 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/sequence-tmpGW0QV22K.fasl
+; compilation finished in 0:00:00.101
+; compiling file "/home/shaul/LatticeWM/src/runtime/swank.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/swank-tmp2K9J0HSR.fasl
+; compilation finished in 0:00:00.057
+; compiling file "/home/shaul/LatticeWM/src/runtime/outputs.lisp" (written 22 NOV 2026 05:53:00 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/outputs-tmpP44I4E0Y.fasl
+; compilation finished in 0:00:00.408
+; compiling file "/home/shaul/LatticeWM/src/runtime/seats.lisp" (written 22 NOV 2026 04:50:04 AM):
+
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/seats-tmp63LQ7EX6.fasl
+; compilation finished in 0:00:00.420
+; compiling file "/home/shaul/LatticeWM/src/runtime/gestures.lisp" (written 22 NOV 2026 01:22:04 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/gestures-tmp86F1A8FB.fasl
+; compilation finished in 0:00:00.208
+; compiling file "/home/shaul/LatticeWM/src/runtime/input.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/input-tmpH7D4HL98.fasl
+; compilation finished in 0:00:01.181
+; compiling file "/home/shaul/LatticeWM/src/runtime/session.lisp" (written 22 NOV 2026 12:53:57 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/session-tmpCDM7YXYI.fasl
+; compilation finished in 0:00:00.192
+; compiling file "/home/shaul/LatticeWM/src/runtime/ipc.lisp" (written 17 NOV 2026 09:39:55 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/ipc-tmpLM57P5P.fasl
+; compilation finished in 0:00:00.373
+; compiling file "/home/shaul/LatticeWM/src/runtime/history.lisp" (written 30 OCT 2026 08:08:14 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/history-tmpZE69DN33.fasl
+; compilation finished in 0:00:00.316
+; compiling file "/home/shaul/LatticeWM/src/runtime/verbs.lisp" (written 22 NOV 2026 06:47:40 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/verbs-tmpG8099TO3.fasl
+; compilation finished in 0:00:01.960
+; compiling file "/home/shaul/LatticeWM/src/runtime/tags.lisp" (written 22 NOV 2026 03:09:55 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/tags-tmpTASQCYAW.fasl
+; compilation finished in 0:00:00.684
+; compiling file "/home/shaul/LatticeWM/src/runtime/state.lisp" (written 20 NOV 2026 02:42:32 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/state-tmp35U57IV6.fasl
+; compilation finished in 0:00:00.574
+; compiling file "/home/shaul/LatticeWM/src/runtime/profiles.lisp" (written 22 NOV 2026 04:12:24 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/profiles-tmpTZOONXRW.fasl
+; compilation finished in 0:00:00.319
+; compiling file "/home/shaul/LatticeWM/src/runtime/main.lisp" (written 22 NOV 2026 04:53:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/main-tmpWN0UKDSV.fasl
+; compilation finished in 0:00:00.862
+; compiling file "/home/shaul/LatticeWM/src/runtime/shortcuts.lisp" (written 22 NOV 2026 04:53:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/shortcuts-tmpBF3HHBTQ.fasl
+; compilation finished in 0:00:00.112
+; compiling file "/home/shaul/LatticeWM/src/runtime/frames.lisp" (written 22 NOV 2026 04:14:21 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/frames-tmpGYUNPZCY.fasl
+; compilation finished in 0:00:00.135
+; compiling file "/home/shaul/LatticeWM/src/runtime/hidden.lisp" (written 22 NOV 2026 02:25:25 AM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/hidden-tmpD68Q8WCA.fasl
+; compilation finished in 0:00:00.162
+; compiling file "/home/shaul/LatticeWM/src/runtime/vocabulary.lisp" (written 19 NOV 2026 03:26:21 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/vocabulary-tmp7MK9KM9C.fasl
+; compilation finished in 0:00:00.042
+; compiling file "/home/shaul/LatticeWM/src/runtime/cli.lisp" (written 19 NOV 2026 04:23:32 PM):
+
+; wrote /home/shaul/.cache/common-lisp/sbcl-2.6.4-linux-x64/home/shaul/LatticeWM/src/runtime/cli-tmpJJ71X849.fasl
+; compilation finished in 0:00:00.303
 ============================================================================
 LatticeWM container protocol
 21 generics.  Generated from the running image.

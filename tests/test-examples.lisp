@@ -80,6 +80,31 @@ comes off."
   (dolist (row census)
     (setf (symbol-value (car row)) (cdr row))))
 
+(defun example-modules (name)
+  "The extension systems an example switches on, as names DISABLE can undo.
+
+The fourth entry in the list of globals an example can touch, added when 01-04
+became loaders (#3).  Their switches are ordinary specials in their own
+packages, so the method/option/timer censuses do not see them and an example
+that enables a module leaves it enabled for every suite that runs afterwards --
+which is exactly how the module's own `loading alone changes nothing' test came
+to fail while nothing was wrong with the module."
+  (cdr (assoc name '(("01-focus-follows-mouse.lisp" . ("focus-follows-mouse"))
+                     ("02-window-rules.lisp" . ("window-rules"))
+                     ("03-master-stack.lisp" . ("master-stack")))
+               :test #'equal)))
+
+(defun disable-module (name)
+  "Put the module called NAME back off, if it is loaded and has a DISABLE.
+
+A package prefix rather than a registered callback: nothing in the program
+needs to know that an extension has a switch, and inventing a registry so a
+test can call it would be a protocol nobody else asked for."
+  (let* ((package (find-package (string-upcase name)))
+         (disable (and package (find-symbol "DISABLE" package))))
+    (when (and disable (fboundp disable))
+      (handler-case (funcall disable) (error () nil)))))
+
 (defun timer-census ()
   "The name of every timer registered right now."
   (let ((out '()))
@@ -141,6 +166,8 @@ to put back, and it is now three long."
               (let ((*package* (find-package '#:latticewm/user)))
                 (load (example-path ,name)))
               ,@body)
+         (dolist (module (example-modules ,name))
+           (disable-module module))
          (restore-methods ,methods)
          (restore-options ,options)
          (restore-timers ,timers)))))
@@ -152,10 +179,21 @@ to put back, and it is now three long."
                                      :app-id (format nil "app~d" i)))))
 
 ;;; ------------------------------------------------------------------ 01
+;;;
+;;; 01-04 ARE LOADERS NOW (#3).  The code they used to carry lives in
+;;; extensions/, because an inline copy is a second version of one logic and it
+;;; had already drifted -- the focus-follows-mouse copy here had stopped calling
+;;; CALL-NEXT-METHOD and had no answer for a world that had never been laid out.
+;;; So what these tests assert is the property a loader can have: that the file
+;;; still loads, that it leaves the module it names switched ON, and that the
+;;; behaviour actually arrives.  The depth belongs to the module's own suite,
+;;; which is where a test of the module belongs.
 
-(test focus-follows-mouse-loads-and-respects-floats
+(test focus-follows-mouse-example-turns-the-module-on
   (with-example ("01-focus-follows-mouse.lisp")
-    (is-true p:*focus-follows-mouse* "the option was turned on")
+    (is-true p:*focus-follows-mouse* "the tier-0 option was turned on")
+    (is-true (funcall (read-from-string "focus-follows-mouse:enabled-p"))
+             "and the module that refines it is switched on")
     (open-windows 2)
     ;; Put a float over the whole screen and check the pointer is ignored.
     (let* ((window (make-instance 'c:window :app-id "floaty")))
@@ -172,13 +210,13 @@ to put back, and it is now three long."
           "the pointer is over a float, so the pane underneath is not focused"))))
 
 (test focus-can-change-before-anything-has-been-laid-out
-  "The example's ON-FOCUS-CHANGE reads :RECT-INDEX, which EMIT writes after a
+  "The module's ON-FOCUS-CHANGE reads :RECT-INDEX, which EMIT writes after a
 layout and which therefore does not exist yet on a world that has never been
-placed.  `(gethash node nil)' is a type error, not a miss, so the method used
-to take down every focus change that happened before the first frame — session
-restore, a config that opens a window, and every policy test that never
-renders.  It is installed on CONVENTIONAL-POLICY, so it took them down for
-extensions that had never heard of it."
+placed.  `(gethash node nil)' is a type error, not a miss, so a method that
+assumes took down every focus change that happened before the first frame --
+session restore, a config that opens a window, and every policy test that never
+renders.  This is the test that found it, kept here because the failing shape is
+a *world state* rather than a module detail."
   (with-example ("01-focus-follows-mouse.lisp")
     (open-windows 2)
     (is (null (c:prop r:*world* :rect-index))
@@ -189,8 +227,11 @@ extensions that had never heard of it."
 
 ;;; ------------------------------------------------------------------ 02
 
-(test window-rules-float-and-place
+(test window-rules-example-is-a-table-and-the-module-consults-it
   (with-example ("02-window-rules.lisp")
+    (is-true (funcall (read-from-string "window-rules:enabled-p")))
+    (is (= 6 (length (symbol-value (read-from-string "window-rules:*rules*"))))
+        "the example's table is the one in force")
     (let ((pinentry (make-instance 'c:window :app-id "pavucontrol")))
       (is (equal '(:float t) (p:window-rule-for p:*policy* pinentry)))
       (p:on-window-open p:*policy* r:*world* pinentry)
@@ -211,13 +252,17 @@ extensions that had never heard of it."
 
 ;;; ------------------------------------------------------------------ 03
 
-(test master-stack-is-a-layout-in-one-method
+(test master-stack-example-installs-a-layout-rather-than-a-class
+  "The mixin, not a subclass: enabling composes over whatever policy is
+installed and disabling hands it back, which is the property the inline example
+could not have."
   (with-example ("03-master-stack.lisp")
+    (is-true (typep p:*policy* (find-class (read-from-string
+                                            "master-stack:master-stack-mixin"))))
     (open-windows 4)
-    (let* ((tree-before (t*::shape (c:world-root r:*world*)))
-           (policy (make-instance (read-from-string "latticewm/user::master-stack-policy")))
-           (root (c:world-root r:*world*))
-           (placements (p:layout-node policy root (c:make-rect 0 0 1000 800)))
+    (let* ((root (c:world-root r:*world*))
+           (tree-before (t*::shape root))
+           (placements (p:layout-node p:*policy* root (c:make-rect 0 0 1000 800)))
            (leaves (remove-if-not (lambda (pl) (typep (first pl) 'c:leaf))
                                   placements)))
       (is (= 4 (length leaves)))
@@ -225,22 +270,25 @@ extensions that had never heard of it."
              (widths (remove-duplicates (mapcar #'c:rect-w rects))))
         (is (= 2 (length widths))
             "two column widths: the master and the stack, ~s" widths))
-      (is (equal tree-before (t*::shape (c:world-root r:*world*)))
+      (is (equal tree-before (t*::shape root))
           "and the TREE is untouched -- only the arrangement changed, which is
-why switching back puts every window exactly where it was"))))
+why switching back puts every window exactly where it was"))
+    (funcall (read-from-string "master-stack:disable"))
+    (is (not (typep p:*policy* (find-class (read-from-string
+                                             "master-stack:master-stack-mixin"))))
+        "and DISABLE gave the installed policy back")))
 
 (test master-stack-motion-follows-the-drawing
   (with-example ("03-master-stack.lisp")
     (open-windows 4)
-    (let* ((policy (make-instance (read-from-string "latticewm/user::master-stack-policy")))
-           (root (c:world-root r:*world*))
+    (let* ((root (c:world-root r:*world*))
            (first-leaf (c:first-leaf-path root)))
       ;; From the master column, Right must cross into the stack.
-      (let ((to (p:find-motion-target policy root first-leaf :right)))
+      (let ((to (p:find-motion-target p:*policy* root first-leaf :right)))
         (is-true to "Right from the master column goes somewhere")
         (is (not (c:path-equal to first-leaf))))
       ;; And Down must stay inside whichever column it started in.
-      (is-true (p:find-motion-target policy root
+      (is-true (p:find-motion-target p:*policy* root
                                      (c:next-leaf-path root first-leaf) :down)))))
 
 ;;; ------------------------------------------------------------------ 04
@@ -248,10 +296,10 @@ why switching back puts every window exactly where it was"))))
 (test scrolling-columns-is-a-container-kind-from-outside
   (with-example ("04-scrolling-columns.lisp")
     (open-windows 5)
-    (funcall (read-from-string "latticewm/user::scrolling") 2)
+    (funcall (read-from-string "scrolling-columns:scrolling") 2)
     (let* ((root (c:world-root r:*world*))
            (strip (c:resolve-path root '(0))))
-      (is (typep strip (read-from-string "latticewm/user::strip")))
+      (is (typep strip (find-class (read-from-string "scrolling-columns:strip"))))
       (is (= 5 (c:container-count strip)) "every window became a column")
       ;; Only two are drawn.
       (let* ((placements (p:layout-node p:*policy* root (c:make-rect 0 0 1000 800)))
@@ -260,12 +308,12 @@ why switching back puts every window exactly where it was"))))
                                      placements)))
         (is (= 2 (length visible)) "two columns on screen at a time"))
       ;; And moving right past the edge scrolls rather than refusing.
-      (let ((offset-before (funcall (read-from-string "latticewm/user::strip-offset")
-                                    strip)))
+      (let ((offset-before
+              (funcall (read-from-string "scrolling-columns:strip-offset") strip)))
         (p:find-motion-target p:*policy* root '(0 0) :right)
         (p:find-motion-target p:*policy* root '(0 1) :right)
         (is (< offset-before
-               (funcall (read-from-string "latticewm/user::strip-offset") strip))
+               (funcall (read-from-string "scrolling-columns:strip-offset") strip))
             "the strip scrolled to follow, which is the whole feature")))))
 
 ;;; ------------------------------------------------------------------ 05
