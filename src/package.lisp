@@ -440,6 +440,12 @@ You never edit this package.")
    #:*gestures* #:gesture-spec-p #:gesture-trigger #:gesture-plans
    #:gesture-add #:gesture-remove #:gesture-table-names #:gesture-command-of
    #:parse-gesture-spec #:gesture-spec-text #:gesture-scale-for
+   ;; #9: easing and the transition table.  The *shape* of an animation is
+   ;; policy and a pure function of elapsed time; the clock is the runtime's.
+   #:ease #:+animation-curves+ #:*animations* #:animation-for
+   #:animation-key #:animation-transitions #:animation-forget
+   #:animation-progress #:animation-finished-p #:*animation-duration*
+   #:*animation-curve*
    #:+gesture-directions+ #:+gesture-edges+ #:+gesture-pinches+
    #:+gesture-swipe-distance+ #:+gesture-pinch-scale+
    #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
@@ -620,6 +626,11 @@ keybindings, the command registry, and the session loop.")
    #:gesture-moved #:gesture-scaled #:gesture-fingers-changed
    ;; #12: profiles.  The directory and the two verbs are the surface an
    ;; extension or a status line needs; the commands are reachable by name.
+   ;; #9: the frame clock.  Overlays are the only thing a window manager can
+   ;; fade -- a client cannot animate another client's surface.
+   #:+frame-interval+ #:start-animation #:stop-animation #:animation-value
+   #:animation-elapsed #:animation-clock-running-p #:stop-all-animations
+   #:animate-frame #:overlay-alpha #:faded-color
    #:*startup-profile* #:*profiles-directory*
    #:profiles-directory #:profiles-directory-name
    #:profile-names #:profile-path #:profile-name-p #:profile-exists-p

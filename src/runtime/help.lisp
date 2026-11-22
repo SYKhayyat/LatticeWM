@@ -57,8 +57,11 @@ not looking."
                                         (ceiling (length entries) available)))))
                (rows (ceiling (length entries) columns))
                (column-width (floor (- (c:rect-w area) 40) columns))
-               (key-color (apply #'argb p:*help-key-color*))
-               (text-color (apply #'argb p:*help-text-color*))
+               ;; THE FADE, and the alpha comes from the clock rather than
+               ;; from the options: a page that is not fading is drawn at full
+               ;; strength, so this is the same line in both cases.
+               (key-color (apply #'argb (faded-color p:*help-key-color* :help)))
+               (text-color (apply #'argb (faded-color p:*help-text-color* :help)))
                ;; One left column, as wide as the widest thing in it, so that
                ;; every description starts at the same x.  Ragged descriptions
                ;; are what made the apropos screen read as a paragraph with
@@ -76,7 +79,7 @@ not looking."
                                                 (text-width (car entry)
                                                             :scale p:*help-scale*))))))
                (shown 0))
-          (canvas-fill canvas (apply #'argb p:*help-background*))
+          (canvas-fill canvas (apply #'argb (faded-color p:*help-background* :help)))
           (loop for entry in entries
                 for index from 0
                 for column = (floor index rows)
@@ -125,8 +128,14 @@ anything you bound yourself and cannot go out of date.  Any key dismisses it."
   *help-visible*)
 
 (defun show-help-page (title rows)
-  "Put TITLE and ROWS on the help overlay.  Any key takes it down again."
+  "Put TITLE and ROWS on the help overlay.  Any key takes it down again.
+
+IT FADES IN (#9).  This one function is what every page in the program is
+drawn through -- the keymap, apropos, describe-window, list-hidden, list-tags,
+list-outputs, animations -- so the fade arrives with all of them at once, and
+the pages that were worth a fade did not have to be found one by one."
   (setf *help-visible* (cons title rows))
+  (start-animation :help)
   (mark-dirty)
   t)
 

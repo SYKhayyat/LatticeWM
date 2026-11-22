@@ -2,6 +2,8 @@
 
 (in-package #:latticewm/runtime)
 
+(declaim (ftype (function (t) t) load-profile))
+
 ;;; ------------------------------------------------------ the dispatch loop
 ;;;
 ;;; wayflan's %find-proxy! signals WL-MESSAGE-ERROR when a message arrives for
@@ -570,6 +572,10 @@ debug it (connecting, binding, the first manage sequence) is still after it."
   ;; #12's declarative half: after the configuration, because a config file is
   ;; what names the profile, and guarded because a missing profile is a message
   ;; and not a session that does not start -- the same rule LOAD-CONFIG keeps.
+  ;; LOAD-PROFILE is declared rather than defined here: profiles.lisp loads
+  ;; after this file, and a forward *function* reference is a DECLAIM FTYPE
+  ;; while a forward *variable* reference is a gate-1 failure -- which is why
+  ;; the option itself lives in config.lisp, above this.
   (when *startup-profile*
     (guarded "startup profile"
       (load-profile *startup-profile*)))

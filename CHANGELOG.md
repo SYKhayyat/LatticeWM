@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Overlays fade in.** `show-help-page` — which every page in the program is
+  drawn through — fades in over `*animation-duration*` (0.18 s, `:ease-out`;
+  set it to 0 for instant). `M-x animation open ease-in 0.4` gives one
+  transition its own curve and duration, `M-x forget-animation` puts it back,
+  `M-x animations` lists what has been configured. **This is not window
+  animation, and cannot be**: a Wayland client cannot move or fade another
+  client's surface and river has no animation request, so a window's animation
+  is the compositor's call (`doc/FINDINGS.org`). What fades is what this program
+  draws — its own buffer on its own layer surface. The model (curves, table,
+  progress as a pure function of elapsed seconds) is policy; the frame clock is
+  one timer in the runtime that runs only while something is fading.
 - **Monitors: move a workspace to another screen, and see what each one shows.**
   `M-x move-workspace-to-output` sends the workspace you are on — windows and
   all — to the screen in a direction, and this screen trades for what that one

@@ -1380,3 +1380,34 @@ trackpad gestures, the table does not change and the plan does not change; only
 the object that gets configured does. That was worth doing deliberately rather
 than by accident, because the alternative — a table that names protocol objects
 — would have made the trackpad half a rewrite rather than an addition.
+
+* Animation: a window is not this program's to move, and an overlay is
+#9 asked for animated opens, closes, moves and resizes, and named the right
+place for them: *the compositor*. This file has said `the compositor' three
+times already in other costumes — =modifiers_watch= (#38), the absent axis event
+(#29), trackpad gestures (#16) — and this is the fourth, from the other side of
+the same wall. A Wayland client is given a buffer and a rectangle. It does not
+get to commit another client's surface, so it cannot fade it, scale it, or slide
+it; every animated frame of a window belongs to the compositor, and river has
+no =river_animation_v1= and nothing in =river_control= that would make one. A
+window manager that promised animated windows would be promising the
+compositor's work.
+
+What it *can* animate is what it draws. Every overlay in this program — the
+keymap page, the map, the peek, in future a status banner — is this program's
+own shm buffer on this program's own layer surface, and those it can fade. So
+the feature splits cleanly on the line the protocol draws:
+
+- *the model* is policy and arithmetic — =P:EASE=, a transition table, and
+  =P:ANIMATION-PROGRESS= as a pure function of (transition, seconds);
+- *the clock* is the runtime's, and it is the timer mechanism that already
+  existed (=ADD-TIMER=), registered under one name and running only while
+  something is actually fading;
+- *the consumer* is =SHOW-HELP-PAGE=, because every page in the program is
+  drawn through that one function, and a fade that arrives with all of them at
+  once is worth more than a fade wired into one page.
+
+The split is the point, and it is the same split as the gesture table: the
+decision is a value a test can hold (=half a second into a half-second fade is
+0.5=), and the protocol half has exactly one question to answer — which surface,
+and how often. If river ever grows animations, the model does not change.

@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-70 generics, 120 options.  Generated from the running image.
+70 generics, 122 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -1467,6 +1467,25 @@ There are none: gate 11 fails the build on the first one.
 
 A double float or NIL.  The scale is libinput's and is not linear; 0.3 is a
 noticeably brisk touchpad and 1.0 is faster than most people can aim.
+
+*animation-curve*
+  now: :EASE-OUT
+  read by: animation-for, animations
+  The shape of that fade: :linear, :ease-in, :ease-out or :ease-in-out.
+
+:out by default -- the eye reads something that arrives quickly and settles as
+having been *put* there, and something at constant speed as having been dragged
+in.
+
+*animation-duration*
+  now: 0.18
+  read by: animation-for, animations
+  How long a drawn overlay takes to arrive, in seconds.
+
+THE WHOLE OF THE ANSWER FOR ANYTHING A WINDOW MANAGER DRAWS ITSELF.  Windows are
+the compositor's; a keymap page, a map or a peek is this program's own buffer,
+and this is how long it takes to fade in.  Zero disables it, and the shipped
+0.18 is short enough that it reads as `this appeared' rather than as a wait.
 
 *announce-capture*
   now: T

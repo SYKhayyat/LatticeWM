@@ -62,6 +62,21 @@ prompt."
              (relayout :force t))
     (error (condition) (notify "~a" condition))))
 
+;;; ------------------------------------------------------ the declarative half
+
+(p:define-option *startup-profile* nil
+  "The profile to load at startup, or NIL for none.
+
+The declarative half of #12, and the reason it exists as an option rather than
+only as a command: the two ways to say `use my work settings' are a key you
+press and a line in init.lisp, and a feature that only offered one of them
+would be a feature half the people who want it cannot use.  Set it to a string:
+
+    (setf *startup-profile* \"work\")
+
+A profile that fails to load is reported and the session continues, exactly as
+a broken init.lisp does.")
+
 ;;; ------------------------------------------------------- the user's file
 
 (defun config-directory ()

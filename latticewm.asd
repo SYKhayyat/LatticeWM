@@ -237,6 +237,10 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:file "devices")
        (:file "surface")
        (:file "commands")
+       ;; #9: easing, the transition table and the two timing options.  After
+       ;; commands so the three animation commands can be defined here, and
+       ;; before appearance, which is what will ask for the curve.
+       (:file "animation")
        ;; keys before appearance: the status-line and which-key
        ;; composition reads *PENDING-KEYMAP* and the keymap tree.
        (:file "keys")
@@ -307,6 +311,9 @@ system, an infinite zoomable plane of cells, is a proof of."
        ;; Profiles (#12): named configuration files, loaded into a live session.
        ;; After config, which owns the directory they live in, and after
        ;; sequence, which owns the key rebind and manage ask a load needs.
+       ;; #9: the frame clock.  After main, which owns ADD-TIMER, and after
+       ;; echo, whose overlays are what fades.
+       (:file "frames" :depends-on ("main" "echo" "help" "minibuffer"))
        (:file "profiles" :depends-on ("server" "minibuffer" "echo" "config" "sequence" "seats"))
        ;; #6: the hidden set, as a report and a picker.  After verbs, whose
        ;; picker it reuses rather than reimplements, and after help, whose page
@@ -320,7 +327,7 @@ system, an infinite zoomable plane of cells, is a proof of."
        ;; themselves.
        (:file "vocabulary" :depends-on ("config"))
        (:file "state" :depends-on ("server" "minibuffer" "sequence" "history" "verbs" "tags"))
-       (:file "main" :depends-on ("server" "minibuffer" "help" "config" "welcome" "emit" "sequence" "swank" "input" "session" "ipc" "verbs" "state"))
+       (:file "main" :depends-on ("server" "minibuffer" "help" "config" "welcome" "emit" "sequence" "swank" "input" "session" "ipc" "verbs" "state" "profiles"))
        ;; #124: the command line, which calls back into MAIN for the one
        ;; branch that runs the window manager and needs nothing else from it.
        (:file "cli" :depends-on ("main"))))))))
@@ -342,6 +349,7 @@ without a compositor — which is the whole model."
      (:file "test-profiles")
      (:file "test-hidden")
      (:file "test-outputs")
+     (:file "test-animation")
      (:file "test-placement")
      (:file "test-stacking")
      (:file "test-tree")

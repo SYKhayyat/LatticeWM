@@ -83,6 +83,8 @@ first and a function whose home depends on load order is a bug waiting for a
 rainy day -- the same argument *HELP-VISIBLE* itself carries."
   (when *help-visible*
     (setf *help-visible* nil)
+    ;; Whatever fade was still running belongs to the page that just went away.
+    (stop-animation :help)
     (mark-dirty)
     t))
 

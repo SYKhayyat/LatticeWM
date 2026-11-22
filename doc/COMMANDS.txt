@@ -27,6 +27,23 @@ LatticeWM commands.
   is still the default, because most floats are dialogs and a dialog belongs to
   the screen rather than to a pane.
 
+(animation transition curve duration)
+  Give one transition its own curve and duration.
+  
+      M-x animation  open  ease-in  0.4
+  
+  The transition is a keyword -- `:open' for the keymap page arriving, `:peek' for
+  a glance at the whole plane -- and this is a table entry, not a mode: take it
+  away with M-x FORGET-ANIMATION and the shipped pair applies again.
+
+(animations)
+  The transitions that have a time of their own, and the shipped default.
+  
+  Nothing here is animated on a compositor's behalf: windows belong to the
+  compositor and river has no animation request.  What fades is what this program
+  draws itself -- the keymap page, the map, a peek -- and this lists the
+  transitions that have been given a time of their own.
+
 (apropos-command)
   Search every command by name and by documentation, and show what matches.
   
@@ -275,6 +292,11 @@ LatticeWM commands.
   on no screen, so `focus it where it is' would otherwise be a command that
   looks like it did nothing; RESTORE puts it back in the slot it left, and the
   cursor follows it there.
+
+(forget-animation transition)
+  Take a transition's own timing away; the shipped default applies again.
+  
+  Answers T when there was something to take away.
 
 (forget-gesture spec)
   Unbind a touch gesture.  `M-x forget-gesture 3 left'.

@@ -128,6 +128,13 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite animation :in model
+  :description "Timing the things this program draws (#9).  A window's
+animation is the compositor's call -- a Wayland client cannot move or fade
+another client's surface and river has no animation request -- so what is
+checked here is the half this program owns: curves, a transition table, and the
+progress of a fade as arithmetic.")
+
 (def-suite outputs :in model
   :description "Monitors (#8).  One stack of workspaces and one viewport per
 output means a number already means the same workspace on every screen, so what

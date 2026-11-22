@@ -488,6 +488,47 @@ characters at any scale without this function knowing how wide a glyph is."
                  (error "~s is not a profile name: letters, digits, dashes and ~
                          dots, and it may not begin with a dot" name)))))
 
+(define-argument-type :transition "transition: "
+  :documentation "Which thing fades: open, peek, map, and so on."
+  :candidates '("open" "peek" "map")
+  :parse (lambda (text)
+           (let ((word (string-trim " " text)))
+             (if (plusp (length word))
+                 (intern (string-upcase word) :keyword)
+                 (error "a name for a transition, please")))))
+
+(define-argument-type :animation-transition "transition: "
+  :documentation "A transition that has its own timing."
+  :candidates (mapcar #'string-downcase
+                      (mapcar #'symbol-name (p:animation-transitions)))
+  :parse (lambda (text)
+           (let ((key (intern (string-upcase (string-trim " " text)) :keyword)))
+             (if (member key (p:animation-transitions))
+                 key
+                 (error "~a has no timing of its own" text)))))
+
+(define-argument-type :animation-curve "curve: "
+  :documentation "linear, ease-in, ease-out or ease-in-out."
+  :candidates '("linear" "ease-in" "ease-out" "ease-in-out")
+  :parse (lambda (text)
+           (let ((key (intern (string-upcase (string-trim " " text)) :keyword)))
+             (if (member key p:+animation-curves+)
+                 key
+                 (error "~a is not one of ~{~(~a~)~^, ~}" text
+                        p:+animation-curves+)))))
+
+(define-argument-type :animation-duration "seconds: "
+  :documentation "How long the fade takes; 0 turns it off."
+  :parse (lambda (text)
+           (let ((value (ignore-errors
+                         (let ((*read-eval* nil))
+                           (multiple-value-bind (n end)
+                               (read-from-string (string-trim " " text))
+                             (and (= end (length (string-trim " " text))) n))))))
+             (if (and (realp value) (not (minusp value)))
+                 (float value 1.0)
+                 (error "~a is not a number of seconds" text)))))
+
 (define-argument-type :gesture-spec "gesture: "
   :documentation "fingers and gesture, e.g. 3 left, 2 pinch in, 1 edge top --
 see M-x gesture."
