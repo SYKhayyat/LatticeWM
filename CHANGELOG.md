@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **`M-x restyle` — a container can change what it is, keeping its windows.**
+  `M-x restyle split`, `M-x restyle stack`, `M-x restyle grid 3`: the container
+  the cursor is in becomes a container of another kind, holding the same children
+  in the same order, with the cursor repaired. Because it works on the container
+  *the cursor is in* rather than on the workspace, paradigms combine — a grid in
+  one half of a split and a strip in the other — and switching between them is
+  one command rather than a rearrangement by hand. Container kinds are a
+  registry (`define-container-kind`), so a module that defines one registers it;
+  `M-x container-kinds` lists what the session can make, and `M-x my-container`
+  says what you are standing in. `M-x grid` and `scrolling-columns:scrolling` now
+  go through the same seam.
 - **There is no `mirror`, and the docs now say why.** `river_output_v1` has no
   clone request and does not accept a position for an output from the window
   manager (`position` and `dimensions` are *events*), so one picture on two

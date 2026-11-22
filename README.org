@@ -288,6 +288,15 @@ command rather than one restart.  =M-x profiles= lists them, =M-x
 profile-delete= removes one, and =*startup-profile*= is the line that makes one
 the one you start in.
 
+A container can change what it *is* without moving anything out of it.  =M-x
+restyle split= tiles, =M-x restyle stack= goes back to one window at a time, =M-x
+restyle grid 3= arranges in three columns if the grid module is loaded — and
+because the command works on *the container the cursor is in*, not on the whole
+workspace, paradigms combine: split a window to the right, go there, and that
+half becomes a grid while the other half keeps whatever it had.  Any module that
+defines a container kind registers it, so =M-x container-kinds= lists what this
+session can make.  =M-x my-container= says what you are standing in.
+
 =M-x with-window= runs any command with the window *you name* as the one it acts
 on — =M-x with-window=, choose the window, choose =close-window=. It works for
 verbs an extension adds, because every one of them asks "who am I acting on",

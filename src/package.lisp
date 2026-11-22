@@ -644,6 +644,10 @@ keybindings, the command registry, and the session loop.")
    #:*start-suspended*
    ;; #132: the pin table, exported because an init.lisp writes it directly.
    #:*workspace-pins* #:pinned-output-for #:pinned-output-name
+   ;; #134: any container can change kind, keeping its children.
+   #:define-container-kind #:container-kind-names #:container-kind-registered-p
+   #:container-kind-description #:restyle-container #:cursor-container
+   #:kind-name #:kind-argument
    #:*startup-profile* #:*profiles-directory*
    #:profiles-directory #:profiles-directory-name
    #:profile-names #:profile-path #:profile-name-p #:profile-exists-p

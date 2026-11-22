@@ -126,6 +126,19 @@ error, and SIMPLIFY-NODE guarantees validity at the end."
                  (c:insert-child strip (c:container-count strip) child))))
     (c:simplify-node strip)))
 
+;;; -------------------------------------------------------------- the kind
+
+;;; Registered so M-x restyle strip works on any container, not only on a
+;;; workspace: a strip inside one half of a split is the same node as a strip
+;;; that fills the screen.
+(r:define-container-kind
+ :strip
+ (lambda (children &key argument)
+   (make-instance 'strip
+                  :visible (max 1 (or (and (integerp argument) argument) 2))
+                  :children (copy-list children)))
+ :description "columns on a scrollable strip")
+
 ;;; ------------------------------------------------------------- verbs
 
 (r:defcommand strip-width (columns)
@@ -138,19 +151,25 @@ error, and SIMPLIFY-NODE guarantees validity at the end."
       (r:relayout))))
 
 (r:defcommand scrolling (&optional (visible 2))
-  "Turn the current workspace into a scrolling strip of columns.
+  "Turn the container the cursor is in into a scrolling strip of columns.
 
 Every window that was in it becomes a column, in the order it was laid out --
-so nothing is lost and nothing is reordered."
+so nothing is lost and nothing is reordered.
+
+THE CONTAINER THE CURSOR IS IN, through the same RESTYLE seam every other
+paradigm uses (#134): the workspace when the cursor is in the workspace, and one
+half of a split when that is where you are, so a strip and a grid can sit beside
+each other in one workspace."
   (let* ((world r:*world*)
-         (path (c:workspace-path world))
-         (workspace (c:resolve-path (c:world-root world) path))
-         (columns (mapcar (lambda (leaf-path)
-                            (c:resolve-path workspace leaf-path))
-                          (c:leaf-paths workspace))))
-    (setf (c:world-root world)
-          (c:tree-replace-at (c:world-root world) path
-                             (make-instance 'strip :children columns
-                                                   :visible visible)))
-    (setf (c:world-cursor world) (c:repair-path (c:world-root world) path))
-    (r:relayout :force t)))
+         (container (and world (r:cursor-container (r:current-path)))))
+    (cond
+      ((null container) (r:notify "nothing here to make a strip of"))
+      (t
+       (let ((made (r:restyle-container container :strip :argument visible)))
+         (if (null made)
+             (r:notify "the strip could not be made here")
+             (progn
+               (r:relayout :force t)
+               (r:notify "strip: ~d column~:p, ~d on screen"
+                         (c:container-count made)
+                         (strip-visible made)))))))))

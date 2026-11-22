@@ -129,6 +129,9 @@ LatticeWM commands.
   still spawns something — and the applications are asked to close through the
   ordinary path rather than being torn down.  Returns how many went.
 
+(container-kinds)
+  List the container kinds M-x restyle can make.
+
 (describe-command name)
   Show a command's documentation, its arguments and the keys that run it.
   
@@ -479,6 +482,13 @@ LatticeWM commands.
   for, which is right when you are shipping a distraction away and wrong when you
   are following your work.
 
+(my-container)
+  Say what container the cursor is in, and of what kind.
+  
+  Named MY-CONTAINER and not CONTAINER because the model already exports
+  CONTAINER, and a command and a model type may not share a name -- the build
+  refuses the export, which is the good version of that failure.
+
 (name-this)
   Give the focused node a name, so it can be jumped to by it.
 
@@ -660,6 +670,23 @@ LatticeWM commands.
   
   To the slot it was minimized from if that slot still exists, and to the cursor
   otherwise.
+
+(restyle kind)
+  Change the arrangement of the container the cursor is in, keeping its windows.
+  
+      M-x restyle split     every window on screen, tiled
+      M-x restyle stack     one window at a time
+      M-x restyle grid 3    three columns, if the grid module is loaded
+  
+  Any container can be restyled, not only the workspace: split a window to the
+  right, go there, and `restyle grid' arranges that half as a grid while the other
+  half keeps whatever it had.  Nothing enters or leaves the tree -- the children
+  become the children of a container of another kind -- so the windows, their
+  order and your place among them are the same afterwards.
+  
+  The kinds are whatever is registered: the core ships SPLIT, STACK and TABS, and
+  a module that defines a container kind registers its own.  M-x container-kinds
+  prints the list.
 
 (resume-keys)
   Take the keyboard back.

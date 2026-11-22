@@ -324,6 +324,10 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:file "history" :depends-on ("server" "minibuffer" "echo" "help" "sequence"))
        (:file "verbs" :depends-on ("server" "minibuffer" "echo" "help" "config" "emit" "capture" "windows" "sequence" "outputs" "seats" "history"))
        (:file "tags" :depends-on ("server" "echo" "help" "windows" "sequence" "outputs" "verbs"))
+       ;; #134: changing what a container is without moving anything out of it.
+       ;; After verbs and outputs because it reports through the echo area and
+       ;; redraws, and before the modules that register their own kinds.
+       (:file "containers" :depends-on ("server" "echo" "help" "emit" "minibuffer" "verbs"))
        ;; #121: the one implementation of "make an extension's names
        ;; typable", which the lattice and two extensions had each solved for
        ;; themselves.
@@ -354,6 +358,7 @@ without a compositor — which is the whole model."
      (:file "test-animation")
      (:file "test-shortcuts")
      (:file "test-pins")
+     (:file "test-containers")
      (:file "test-workspace-nav")
      (:file "test-placement")
      (:file "test-stacking")

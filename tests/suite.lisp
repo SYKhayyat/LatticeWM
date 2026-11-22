@@ -134,6 +134,12 @@ workspaces' shipped with the container; what was missing was a relative step
 that grows at the edge instead of wrapping, and the sending verb that follows
 the same answer.")
 
+(def-suite containers :in model
+  :description "Changing what a container is without moving anything out of it
+(#134).  Every paradigm is a way of arranging SOME container, so this is the
+seam that makes them combinable: a grid in one half of a split, a strip in the
+other, and M-x restyle split when you want plain tiling again.")
+
 (def-suite pins :in model
   :description "A workspace that belongs to a screen (#132).  The rule this
 collides with is #126's trade, so the answer taken -- the pin wins, and the

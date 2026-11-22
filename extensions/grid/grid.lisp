@@ -196,6 +196,20 @@ guarantees validity at the end."
                  (c:insert-child grid (c:container-count grid) child))))
     (c:simplify-node grid)))
 
+;;; ---------------------------------------------------------- the kind
+
+;;; A GRID IS A KIND, not a command of its own: M-x restyle grid works because
+;;; the kind is registered, and so does any other command that asks the registry
+;;; what this program can arrange.  The constructor is what RESTYLE calls with
+;;; the children it finds in the container being changed.
+(r:define-container-kind
+ :grid
+ (lambda (children &key argument)
+   (make-instance 'grid-container
+                  :columns (and (integerp argument) (plusp argument) argument)
+                  :children (copy-list children)))
+ :description "cells in reading order, N columns wide")
+
 ;;; ------------------------------------------------------- reachability
 
 ;;; A CONFIGURATION FILE IS READ IN LATTICEWM/USER, so an option whose symbol
@@ -231,46 +245,40 @@ a grid, rather than refusing silently."
           (r:notify "grid: ~d columns" (column-count grid))))))
 
 (r:defcommand grid (&optional (columns nil))
-  "Turn the current workspace into a grid of COLUMNS columns.
+  "Turn the container the cursor is in into a grid of COLUMNS columns.
 
 Every window that was in it becomes a cell, in reading order -- nothing is lost
 and nothing is reordered.  With no argument the width is *GRID-COLUMNS* if it is
 set, and otherwise as square as the count allows.
 
-Running it on a workspace that is already a grid sets the width instead of
+THE CONTAINER THE CURSOR IS IN, not always the workspace: split a window to the
+right, go there, and M-x grid arranges that half as a grid while the other half
+keeps whatever it had.  That is what makes the paradigms combinable -- an
+arrangement belongs to a container, and every container can have its own.
+
+Running it on a container that is already a grid sets the width instead of
 nesting one grid inside another, because that is what a person means by running
-it twice, and a grid inside a grid is a thing you can still build by hand if you
-want one."
+it twice, and a grid inside a grid is still one M-x restyle away for anyone who
+wants one."
   (:interactive :number)
   (let* ((world r:*world*)
-         (path (c:workspace-path world))
-         (workspace (c:resolve-path (c:world-root world) path))
-         ;; THE CHAIN, not the node: the workspace is a stack holding the
-         ;; windows, and asking a stack to FIND-IF is a type error.  Walking
-         ;; root to cursor also catches a grid the user built inside one half
-         ;; of a split, which is the case somebody will hit first.
-         (existing (and workspace
-                        (find-if #'grid-p (c:resolve-chain workspace '()))))
-         (leaves (mapcar (lambda (leaf-path)
-                           (c:resolve-path workspace leaf-path))
-                         (c:leaf-paths workspace))))
+         (path (r:current-path))
+         (container (and world (r:cursor-container path))))
     (cond
-      ((null workspace)
-       (r:notify "there is no current workspace"))
-      (existing
-       (setf (grid-column-count existing)
-             (max 1 (or columns (grid-column-count existing)
-                        (grid-default-columns (c:container-count existing)))))
+      ((null container)
+       (r:notify "nothing here to make a grid of"))
+      ((grid-p container)
+       (setf (grid-column-count container)
+             (max 1 (or columns (grid-column-count container)
+                        (grid-default-columns (c:container-count container)))))
        (r:relayout :force t)
-       (r:notify "grid: ~d columns" (column-count existing)))
+       (r:notify "grid: ~d columns" (column-count container)))
       (t
-       (setf (c:world-root world)
-             (c:tree-replace-at (c:world-root world) path
-                                (make-instance 'grid-container
-                                               :columns columns
-                                               :children leaves)))
-       (setf (c:world-cursor world) (c:repair-path (c:world-root world) path))
-       (r:relayout :force t)
-       (r:notify "grid: ~d cell~:p, ~d column~:p"
-                 (length leaves)
-                 (column-count (c:resolve-path (c:world-root world) path)))))))
+       (let ((made (r:restyle-container container :grid :argument columns)))
+         (if (null made)
+             (r:notify "the grid could not be made here")
+             (progn
+               (r:relayout :force t)
+               (r:notify "grid: ~d cell~:p, ~d column~:p"
+                         (c:container-count made)
+                         (column-count made)))))))))

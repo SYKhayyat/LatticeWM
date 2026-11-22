@@ -1660,3 +1660,39 @@ the vendored XML rather than in the summary of it. The row in DESIGN.org's
 capability table has been corrected from "position + dimensions" to "*events*,
 so the compositor says where an output is and this program cannot say
 otherwise", with the missing clone request named beside it.
+
+* Every paradigm is a container kind, and that is what makes them combinable
+The module sweep ended with five paradigms shipping as five *independent*
+conversions: ~grid~ and ~scrolling~ each replaced the workspace's root, ~tabs~
+and stacking each had their own path through the tree, and there was no way back
+from any of them except retyping the windows. So the honest summary of the
+sweep was "you can have one paradigm per workspace, chosen once" -- which is the
+thing the sweep existed to disprove.
+
+~r:restyle-container~ is the seam that was missing, and it is small because the
+model was already right: a container is a list of children plus a way of
+arranging them, so changing the way is replacing the box and keeping the list.
+Nothing enters or leaves the tree, the leaves are the same *objects*, and the
+cursor's own path is repaired rather than reset -- which is what makes it safe to
+offer as a command you can try and undo instead of a decision you make once.
+
+Three rulings in it:
+
+**The kinds are a registry, not a COND.** A container kind is exactly what an
+extension defines, so a case statement over the three we ship would make every
+new kind a patch to the core -- the failure extensions exist to avoid. A kind is
+a keyword, a constructor and a sentence, and ~grid~ and ~scrolling-columns~
+register theirs on load (which is how ~M-x restyle grid 3~ works even though the
+core has never heard of a grid).
+
+**Plain tiling is a balanced binary tree.** ~(restyle split)~ on eight children
+does not make one split of eight: the resize verbs assume binary, and eight equal
+slots that can each be resized unequally is an arrangement no command can make
+sense of. It nests by halving and alternates the axis, so four children read as
+two by two -- the shape a person expects from "plain tiling".
+
+**The command works on the container the cursor is in, not the workspace.** That
+single choice is the difference between "one paradigm per screen" and "a grid in
+one half of a split and a strip in the other". It also gives the sweep's last
+missing verb for free: ~grid~ and ~scrolling~ became one-line callers of the same
+seam, so the three of them can never disagree about what a conversion means.
