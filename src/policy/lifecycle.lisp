@@ -443,6 +443,17 @@ Every documented rule key is honoured here, which took three of them from
                        t))))
     (when (getf rule :fullscreen)
       (setf (c:window-fullscreen-p window) t))
+    ;; WHETHER THIS ARRIVAL TAKES THE CURSOR, decided once and recorded (#19).
+    ;; Recorded because a window that floats never reaches the tiled branch
+    ;; below -- ON-WINDOW-OPEN answers NIL for it and the runtime gives it a
+    ;; rectangle -- and the float slot would otherwise be handed out by
+    ;; FLOAT-WINDOW-NOW on its own judgement.  One decision, one place; the
+    ;; runtime reads this prop rather than repeating the question.
+    (let ((take-focus (if (member :focus rule)
+                          (and (getf rule :focus) t)
+                          (and *focus-new-windows*
+                               (may-take-focus-p policy world window)))))
+      (setf (c:prop window :focus-on-open) take-focus))
     (cond
       ((c:window-floating-p window) nil)
       (t
@@ -483,11 +494,86 @@ Every documented rule key is honoured here, which took three of them from
            (when (getf rule :minimize)
              (on-minimize policy world window)
              (return-from on-window-open landed))
-           (when (if (member :focus rule)
-                     (getf rule :focus)
-                     *focus-new-windows*)
+           (when (c:prop window :focus-on-open)
              (jump-cursor policy world landed))
            landed))))))
+
+;;; ------------------------------------------------------- the user was here
+;;;
+;;; One timestamp and one function, because three call sites in the seat's event
+;;; path fire the same hook and every one of them is also evidence of a user
+;;; being present.  Focus stealing (#19) is the first reader: a window that
+;;; arrives a second after a keystroke is not the same event as one that arrives
+;;; after five minutes of silence, and the difference is worth recording once.
+;;;
+;;; Here rather than in hooks.lisp, which is where it belongs by subject: the
+;;; compiler macro on RUN-HOOKS needs HOOK-ARGUMENTS at compile time, and a
+;;; call from inside that file is one file too early for it.  The build gate
+;;; found that, which is what it is for.
+
+(defvar *last-user-activity* nil
+  "When a key was pressed or the pointer moved, on GET-INTERNAL-REAL-TIME.
+
+NIL before the first event of a session, which is deliberately different from
+`a very long time ago': a window that appears before anybody has touched the
+machine has not interrupted anything, and FOCUS-QUIET-P says so.")
+
+(defun note-user-activity ()
+  "Record that the user did something, and tell the :USER-ACTIVITY hooks.
+
+The runtime calls this from the seat's event path; nothing else should, because
+activity recorded by something that is not the user is not evidence of one."
+  (setf *last-user-activity* (get-internal-real-time))
+  (run-hooks :user-activity))
+
+(defun focus-quiet-p (&optional (seconds *focus-quiet-seconds*))
+  "True when nothing has been typed or clicked for SECONDS."
+  (or (null *last-user-activity*)
+      (>= (- (get-internal-real-time) *last-user-activity*)
+          (* seconds internal-time-units-per-second))))
+
+;;; ==================================================================
+;;; FOCUS STEALING (#19)
+;;; ==================================================================
+
+(defun may-take-focus-p (policy world window)
+  "May a newly opened WINDOW take the cursor?  See *FOCUS-STEAL-POLICY*.
+
+Three pieces of evidence, asked in the order that decides most arrivals
+fastest: is it the application you are using, is it a dialog of something on
+screen, and -- failing both -- has the machine been quiet long enough that this
+is probably what you asked for.
+
+Deliberately *not* a rule engine.  Per-application exceptions are window rules,
+which already exist, already win over this, and already have a syntax people
+have seen: `(((:app-id \"slack\") :focus nil))'.
+
+POLICY is here because a policy may answer differently -- a workspace-scoped
+rule, an allowlist of applications, a second monitor that never takes focus --
+and answering it by method is how every other placement question is answered."
+  (declare (ignore policy))
+  (let ((mode *focus-steal-policy*))
+    (cond
+      ((eq mode :never) nil)
+      ((eq mode :always) t)
+      (t ;; :SMART, and anything unrecognised behaves like the default
+       (or (same-application-p world window)
+           (dialog-p window)
+           (focus-quiet-p))))))
+
+(defun same-application-p (world window)
+  "Is WINDOW the same application as the window the cursor is on?"
+  (let* ((here (and world (c:world-focus-window world)))
+         (app (c:window-app-id window)))
+    (and here app (equal app (c:window-app-id here)))))
+
+(defun dialog-p (window)
+  "Did river report a parent for WINDOW?  Then it is a dialog of something.
+
+The cheapest and strongest evidence there is: a file picker, a print dialog and
+a preferences window all carry one, and none of them is an interruption -- they
+are the answer to a click."
+  (not (null (c:window-parent-window window))))
 
 (defun workspace-rule-path (world number)
   "The path of workspace NUMBER, counting from one, growing the list to reach it.

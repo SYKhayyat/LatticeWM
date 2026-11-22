@@ -45,7 +45,7 @@
                  ;; being present, and :user-activity exists so that idle
                  ;; timers do not have to guess.  It runs before the focus
                  ;; work because it must run even when focus does not change.
-                 (run-hooks :user-activity)
+                 (p:note-user-activity)
                  ;; The motion itself, for whatever is being dragged.  A hook
                  ;; rather than a method because a drag is a *gesture* -- it
                  ;; begins, runs and ends -- and the generic for the middle of
@@ -208,7 +208,7 @@ window-management state."
                               ;; cursor and focuses their window, which is the
                               ;; whole of what a second seat is for.
                               (:pressed (let ((p:*seat* (seat-key seat)))
-                                          (run-hooks :user-activity)
+                                          (p:note-user-activity)
                                           (when (handle-key key)
                                             (after-command))))
                               (t nil))))))
@@ -358,7 +358,7 @@ state — which is the sort of `works on the second try' that costs an afternoon
 (defun handle-captured-key (keysym modifiers)
   "A key arrived because we had asked for it.  Decide what it meant."
   ;; A key the user typed is evidence of presence, bound or not.
-  (run-hooks :user-activity)
+  (p:note-user-activity)
   (let ((character (when (<= #x20 keysym #x7e)
                      (let ((base (code-char keysym)))
                        ;; River sends the *unshifted* keysym with Shift in the

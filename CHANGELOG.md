@@ -26,6 +26,20 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Focus stealing, as a decision rather than a rule.** `M-x focus-steal` picks
+  `always` (the default and the old behaviour), `smart` or `never`.  `smart`
+  gives a new window the keyboard when it continues the application you are
+  using, or when river reports a parent for it (a dialog is an answer to a
+  click), or when nothing has been typed or clicked for `*focus-quiet-seconds*`
+  — the last being what "I just launched this" looks like, as opposed to the
+  chat popup that lands mid-sentence.  Window rules are the per-application
+  exception and win over the mode in both directions.  The decision is taken
+  once in `on-window-open` and recorded on the window, so a window that floats
+  gets the same answer: `float-window-now` gained `:focus` for exactly that
+  case, because a popup is the window that floats and the window that must not
+  take the cursor.  `p:note-user-activity` records the timestamp the "quiet"
+  test reads, in the one place the `:user-activity` hook was already being
+  fired. (#19)
 - **One echo message, and now one name for it.** `notify` wrote a variable in the
   runtime package's namespace and `current-message` read the policy's — so
   `r::*echo-message*` and `p:*echo-message*` were two different variables with

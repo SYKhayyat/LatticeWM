@@ -165,7 +165,8 @@ legal."
         (let ((path (guarded "on-window-open"
                       (p:on-window-open policy *world* window))))
           (when (and (null path) (c:window-floating-p window))
-            (float-window-now policy window))
+            (float-window-now policy window
+                              :focus (and (c:prop window :focus-on-open t) t)))
           (run-hooks :window-opened window)
           (logmsg :info "placed ~s at ~s" window path))))
     (when pending (mark-dirty))))
@@ -190,8 +191,16 @@ nothing."
 
 ;;; ------------------------------------------------------------- floating
 
-(defun float-window-now (policy window)
-  "Give WINDOW a floating rectangle and put it on the float list."
+(defun float-window-now (policy window &key (focus t))
+  "Give WINDOW a floating rectangle and put it on the float list.
+
+FOCUS NIL leaves the keyboard where it is, which is what FOCUS STEALING (#19)
+needs for a window that appears without being asked for: a popup is exactly the
+window that should not take the cursor, and a popup is exactly the window that
+floats.  The floating commands never pass it -- you floated this one on purpose.
+
+What ties the two halves together is the :FOCUS-ON-OPEN prop the policy writes
+in ON-WINDOW-OPEN; PLACE-UNPLACED-WINDOWS hands its value to this keyword."
   (let* ((output (or (current-output) (first (all-outputs))))
          ;; A WINDOW RULED TO A PLACE OPENS THERE (#14), which is the declarative
          ;; half of snapping: `(:app-id "mpv") :snap :right' in *window-rules*
@@ -213,7 +222,8 @@ nothing."
       ;; Focus follows the window you just floated.  Without this, floating
       ;; something takes the keyboard away from it — which is exactly backwards,
       ;; since you floated it in order to use it.
-      (setf (c:world-focused-float *world* p:*seat*) float))
+      (when focus
+        (setf (c:world-focused-float *world* p:*seat*) float)))
     ;; set_tiled is window-management state and is reconciled by the emitter in
     ;; the next manage sequence.  Sending it here would work from a key binding
     ;; and fail from a REPL.

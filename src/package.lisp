@@ -427,6 +427,10 @@ You never edit this package.")
    #:key-unbound #:on-key #:pointer-focus #:capture-keys #:capture-wanted-p
    #:*readline-chords*
    #:pointer-drag-rect #:pointer-resize-edges #:pointer-press
+   ;; #19: which new windows may take the cursor, and the evidence for it.
+   #:*focus-steal-policy* #:*focus-quiet-seconds* #:may-take-focus-p
+   #:same-application-p #:dialog-p #:*last-user-activity*
+   #:note-user-activity #:focus-quiet-p
    #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
    #:*click-to-focus* #:*click-to-raise* #:*float-on-drag*
    #:*honour-client-move-requests* #:*pointer-resize-minimum* #:*pointer-snap*

@@ -344,6 +344,24 @@ half of the pair below: a config file or a profile can set it."
   (setf (focus-behaviour) behaviour)
   (say-focus-behaviour))
 
+(defcommand focus-steal (policy)
+  "Choose which new windows may take the cursor: ALWAYS, SMART or NEVER.
+
+ALWAYS is the default and the behaviour every window manager has had for thirty
+years: a window appears and the cursor moves to it.  SMART is the answer to the
+half of those windows that nobody asked for — the chat popup, the crash
+reporter — and it decides on three pieces of evidence rather than a guess: the
+same application as the one you are using, a dialog with a parent, or a machine
+that has been quiet long enough that this is probably what you launched.  NEVER
+is for the person who moves their own cursor.
+
+Per-application exceptions are ordinary window rules, a list of app id and
+options -- `(((:app-id \"slack\") :focus nil))' -- and they win over all three."
+  (:interactive :focus-steal-policy)
+  (setf p:*focus-steal-policy* policy)
+  (notify "focus stealing: ~(~a~)" policy)
+  policy)
+
 (defcommand toggle-focus-follows-mouse ()
   "Switch between the pointer moving the cursor and clicking to move it.
 

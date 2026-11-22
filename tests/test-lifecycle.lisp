@@ -1526,3 +1526,156 @@ already coming")
     (is-true (r::manage-request-wanted-p)
              "and it is cleared before the body of the sequence runs, so the
 work done inside one can still ask for the next")))
+
+;;; ==================================================================
+;;; FOCUS STEALING (#19)
+;;; ==================================================================
+;;;
+;;; The problem is real and the naming has been wrong for thirty years: nobody
+;;; "steals" anything, the window manager *gives* the cursor away.  These checks
+;;; are about which arrivals get it.
+;;;
+;;; Every one of them opens a second window onto a session that is already using
+;;; the first, because that is the only arrangement in which the question has an
+;;; answer: with nothing focused, nothing can be stolen.
+
+(defun focus-after-open (world)
+  "The application the cursor is on, which is the cursor's own answer."
+  (let ((window (c:world-focus-window world)))
+    (and window (c:window-app-id window))))
+
+(test the-default-is-that-a-new-window-takes-the-cursor
+  (let ((world (fresh-world)) (pol (policy)))
+    (p:on-window-open pol world (win "a"))
+    (is (equal "a" (focus-after-open world)))
+    (p:on-window-open pol world (win "b"))
+    (is (equal "b" (focus-after-open world))
+        ":ALWAYS is what every window manager of the last thirty years does")))
+
+(test focus-stealing-off-means-the-cursor-stays-put
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :never))
+    (p:on-window-open pol world (win "a"))
+    (p:on-window-open pol world (win "b"))
+    (is (equal "a" (focus-after-open world))
+        "the window is placed and the cursor does not follow it")))
+
+(test focus-new-windows-off-is-still-the-master-switch
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-new-windows* nil)
+        (p:*focus-steal-policy* :always))
+    (p:on-window-open pol world (win "a"))
+    (p:on-window-open pol world (win "b"))
+    (is (equal "a" (focus-after-open world))
+        "the older switch still turns it off, whatever the newer mode says")))
+
+(test smart-focus-follows-a-window-from-the-same-application
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :smart))
+    (p:on-window-open pol world (win "editor"))
+    (p:note-user-activity)          ; the user is typing, right now
+    (p:on-window-open pol world (win "editor"))
+    (is (equal "editor" (focus-after-open world))
+        "a second window from the application you are using is a continuation
+of what you are doing, so it earns the cursor even mid-sentence")))
+
+(test smart-focus-follows-a-dialog-because-something-asked-for-it
+  "A dialog floats, so the decision is recorded on the window rather than
+applied by ON-WINDOW-OPEN -- which answers NIL for a floated window and lets
+PLACE-UNPLACED-WINDOWS give it a rectangle.  The float is made here the way the
+runtime makes it, from that same prop."
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :smart)
+        (parent (win "gimp"))
+        (dialog (win "gimp-preferences")))
+    (setf (c:window-parent-window dialog) parent)
+    (p:on-window-open pol world parent)
+    (p:note-user-activity)          ; busy, so nothing else would be allowed
+    (is (null (p:on-window-open pol world dialog)) "it floats, so it is untitled")
+    (is-true (c:prop dialog :focus-on-open)
+             "a window with a parent is an answer to a click that was made")
+    (let ((r:*world* world) (p:*policy* pol) (p:*seat* nil))
+      (r:float-window-now pol dialog :focus (c:prop dialog :focus-on-open))
+      (is (eq dialog (c:world-focus-window world))
+          "and the float slot is where the keyboard goes"))))
+
+(test a-popup-that-may-not-take-focus-does-not-take-the-float-slot
+  "The half of #19 that the float path would otherwise undo: FLOAT-WINDOW-NOW
+used to hand the keyboard to every window it was given a rectangle for."
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :smart)
+        (popup (win "chat-popup")))
+    (setf (c:window-parent-window popup) (win "chat"))
+    (p:on-window-open pol world (win "editor"))
+    (p:note-user-activity)
+    (p:on-window-open pol world popup)
+    (is-true (c:prop popup :focus-on-open)
+             "a dialog is allowed, which is why this one is asked for by a
+window that is live rather than a stranger")
+    (let ((p:*focus-steal-policy* :never))
+      (p:on-window-open pol world popup)
+      (is-false (c:prop popup :focus-on-open) "and this mode refuses it")
+      (let ((r:*world* world) (p:*policy* pol) (p:*seat* nil))
+        (r:float-window-now pol popup :focus (c:prop popup :focus-on-open))
+        (is (equal "editor" (focus-after-open world))
+            "so it is placed, and the cursor stays where the user put it")))))
+
+(test smart-focus-refuses-an-unasked-for-window-while-you-are-busy
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :smart)
+        (p:*float-dialogs* nil))
+    (p:on-window-open pol world (win "editor"))
+    (p:note-user-activity)
+    (p:on-window-open pol world (win "chat"))
+    (is (equal "editor" (focus-after-open world))
+        "different application, no parent, a keystroke half a second ago: this
+is an interruption and it does not get the keyboard")))
+
+(test smart-focus-accepts-the-same-window-after-silence
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :smart)
+        (p:*focus-quiet-seconds* 0))
+    (p:on-window-open pol world (win "editor"))
+    (p:note-user-activity)
+    (p:on-window-open pol world (win "mailer"))
+    (is (equal "mailer" (focus-after-open world))
+        "with the quiet threshold at zero, silence is what the machine has:
+a window arriving now is most likely the one you launched")))
+
+(test focus-quiet-p-reads-the-clock-and-not-a-mode
+  (let ((p:*focus-quiet-seconds* 60)
+        (p:*last-user-activity* nil))
+    (is-true (p:focus-quiet-p)
+             "nothing has happened yet, so nothing has been interrupted")
+    (p:note-user-activity)
+    (is-false (p:focus-quiet-p) "a keystroke a moment ago is not quiet")
+    (let ((p:*focus-quiet-seconds* 0))
+      (is-true (p:focus-quiet-p) "and a zero threshold is quiet immediately"))))
+
+(test a-rule-still-wins-over-the-focus-stealing-mode
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :never)
+        (p:*window-rules* '(((:app-id "chat") :focus t))))
+    (p:on-window-open pol world (win "editor"))
+    (p:on-window-open pol world (win "chat"))
+    (is (equal "chat" (focus-after-open world))
+        "per-application exceptions are ordinary window rules: a whitelist
+entry beats the mode, which is what makes the mode safe to switch on whole")))
+
+(test a-rule-can-also-refuse-under-the-always-mode
+  (let ((world (fresh-world)) (pol (policy))
+        (p:*focus-steal-policy* :always)
+        (p:*window-rules* '(((:app-id "chat") :focus nil))))
+    (p:on-window-open pol world (win "editor"))
+    (p:on-window-open pol world (win "chat"))
+    (is (equal "editor" (focus-after-open world))
+        "and a blacklist entry beats :ALWAYS, which is the case people file
+bugs about")))
+
+(test the-focus-stealing-command-sets-the-mode-and-says-so
+  (let ((p:*focus-steal-policy* :always)
+        (p:*echo-message* nil))
+    (r:focus-steal :never)
+    (is (eq :never p:*focus-steal-policy*) "the option moved")
+    (is (search "never" (car p:*echo-message*))
+        "and the echo area said which mode you are in")))

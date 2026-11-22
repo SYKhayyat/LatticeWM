@@ -200,6 +200,16 @@ opens it there every time.
 needs a click (=click=), both, or neither; =M-x toggle-focus-follows-mouse= is
 the one-key version.
 
+=M-x focus-steal= chooses which *new* windows may take the keyboard: =always=
+(the default, and what every window manager has done for thirty years), =smart=
+or =never=.  =smart= gives the keyboard to a window that continues the
+application you are using or that has a parent -- a dialog is an answer to a
+click -- and to anything else only if nothing has been typed or clicked for
+=*focus-quiet-seconds*=, because a window arriving out of silence is usually
+the one you launched and a window arriving mid-sentence usually is not.  A
+window rule is the per-application exception and wins over the mode:
+=(((:app-id "signal") :focus nil))= is a blacklist, =:focus t= a whitelist.
+
 =M-x focus-back= goes to the window you were in before this one, and again for
 the one before that; =M-x focus-forward= comes back. Windows that have closed
 since are stepped over, and =M-x focus-history= lists the walk.

@@ -335,6 +335,57 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
 *FOCUS-NEW-WINDOWS*
   default: T
   Move the cursor onto a window when it appears.
+  
+  The switch: NIL means a new window is placed and the cursor stays where it is.
+  For the harder question -- *which* new windows may take the cursor -- see
+  *FOCUS-STEAL-POLICY*, which is consulted only when this is true.
+
+*FOCUS-QUIET-SECONDS*
+  default: 0.8
+  How long nothing must have been typed or clicked for an unaccounted-for
+  window to take the cursor under :SMART focus stealing.
+  
+  Short enough to cover the gap between pressing Enter and a program drawing its
+  first window -- which is most of a second on a loaded machine, and the reason
+  the number is not smaller -- and long enough that a carefully typed sentence
+  does not get a chat window's worth of latency into the middle of it.
+  
+  Only read when *FOCUS-STEAL-POLICY* is :SMART, and only for a window that is
+  neither the current application's nor a dialog of something on screen.
+
+*FOCUS-STEAL-POLICY*
+  default: :ALWAYS
+  Which new windows may take the cursor.  :ALWAYS, :SMART or :NEVER.
+  
+  :ALWAYS is what every window manager of the last thirty years has done and what
+  this program did: a window appears, the cursor moves to it.  It is the default,
+  and it is the right default, because the majority of windows *are* answers to
+  something the user just did -- a file picker, a print dialog, the editor they
+  typed the name of.
+  
+  The cost of :ALWAYS is the notification popup, the chat window that opens
+  because somebody else said something, and the crash reporter for a process
+  nobody was watching.  Each of those takes the keyboard mid-sentence, and the
+  sentence lands in the wrong window.
+  
+  :SMART is the answer, and it is three pieces of evidence rather than a guess:
+  
+    1. THE CONTINUATION.  A window from the same application as the one you are
+       using is almost always a continuation of what you are doing -- a dialog,
+       a second document, a preview -- so it takes the cursor even mid-sentence.
+    2. THE CHILD.  A window river reports a parent for is a dialog: something
+       asked for it and it belongs to the window that asked.  Same rule.
+    3. THE SILENCE.  Failing both, a window may take the cursor only if nothing
+       has been typed or clicked for *FOCUS-QUIET-SECONDS*.  Silence before an
+       arrival is what launching something looks like; a keystroke half a second
+       ago is what being interrupted looks like.
+  
+  :NEVER is for the person who arranges their own desktop and wants the cursor to
+  move only when they move it.
+  
+  The per-application half is the ordinary window rules and no new list:
+  `(((:app-id "slack") :focus nil))' is a blacklist entry and `:focus t' is a
+  whitelist one, consulted before any of this and winning over all of it.
 
 *FOCUSED-BORDER-COLOR*
   default: (0.4 0.65 1.0 1.0)

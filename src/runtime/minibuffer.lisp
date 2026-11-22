@@ -460,6 +460,15 @@ characters at any scale without this function knowing how wide a glyph is."
                        :test (lambda (a b) (string= a (string b))))
                  (error "~a is not follows, click, both or none" text)))))
 
+(define-argument-type :focus-steal-policy "focus stealing: "
+  :documentation "always, smart or never -- see M-x focus-steal."
+  :candidates '("always" "smart" "never")
+  :parse (lambda (text)
+           (let ((word (string-downcase (string-trim " " text))))
+             (or (find word '(always smart never)
+                       :test (lambda (a b) (string= a (string b))))
+                 (error "~a is not always, smart or never" text)))))
+
 (define-argument-type :command "command: "
   :documentation "The name of one of our own commands."
   :candidates (mapcar #'command-name (all-commands)))
