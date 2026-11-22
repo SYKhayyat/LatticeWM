@@ -232,7 +232,7 @@ the member SET is unchanged and the selection is unchanged."
     (let ((w1 (make-window "one"))
           (w2 (make-window "two"))
           (w3 (make-window "three"))
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (setf tb::*live-windows* (lambda () (list w1 w2 w3)))
       (a-two-tab-pane w1 w2)
       (tb:tab-add "three")
@@ -240,7 +240,7 @@ the member SET is unchanged and the selection is unchanged."
       (tb:tab-move :forward)
       (is (equal (list w3 w1 w2) (tb:group-of (focused-leaf)))
           "wrapped to the front")
-      (is-true (search "tab 1" (car r::*echo-message*))
+      (is-true (search "tab 1" (car p:*echo-message*))
                "and reported its new place"))))
 
 (test tab-move-to-places-the-visible-tab-at-an-absolute-position
@@ -250,7 +250,7 @@ is a mistake and is said to be one."
     (let ((w1 (make-window "one"))
           (w2 (make-window "two"))
           (w3 (make-window "three"))
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (setf tb::*live-windows* (lambda () (list w1 w2 w3)))
       (a-two-tab-pane w1 w2)
       (tb:tab-add "three")          ; visible = three, at the end
@@ -262,7 +262,7 @@ is a mistake and is said to be one."
       (tb:tab-move-to 99)
       (is (equal (list w3 w1 w2) (tb:group-of (focused-leaf)))
           "out of range changes nothing")
-      (is-true (search "no tab 99" (car r::*echo-message*))
+      (is-true (search "no tab 99" (car p:*echo-message*))
                "and says why"))))
 
 (test tab-rename-gives-the-window-a-name-and-clears-it
@@ -320,12 +320,12 @@ and `that terminal belongs over in that group' is the sentence."
   (with-tabs
     (let ((w1 (make-window "one"))
           (w2 (make-window "two"))
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (setf tb::*live-windows* (lambda () (list w1 w2)))
       (a-two-tab-pane w1 w2)
       (is (null (tb:tab-send "one")))
       (is (= 2 (length (tb:group-of (focused-leaf)))) "the group is untouched")
-      (is-true (search "already in this group" (car r::*echo-message*))))))
+      (is-true (search "already in this group" (car p:*echo-message*))))))
 
 ;;; ========================================================= #39 persistence
 

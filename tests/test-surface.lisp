@@ -1382,3 +1382,17 @@ that wrote to T directly could not have been wrapped."
   ;; later gets the same treatment by using it rather than by remembering to.
   (is (macro-function (find-symbol "PRINTING" '#:latticewm/runtime))
       "RUNTIME::PRINTING is what every listing flag goes through"))
+
+;;; ------------------------------------------------- what the echo area says
+
+(test the-posted-message-is-the-message-that-is-current
+  "The assertion #129 asked for, kept as the guard it wanted to be: notify posts
+and CURRENT-MESSAGE answers, through one variable rather than two.
+
+It passed on the day it was written, which was the finding -- the issue was
+filed on the evidence of a duplicated export, not a duplicated variable."
+  (let ((p:*echo-message* nil))
+    (is (null (p:current-message)) "nothing said yet")
+    (r:notify "hello")
+    (is (equal "hello" (p:current-message))
+        "what was posted is what is read back")))

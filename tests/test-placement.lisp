@@ -129,10 +129,10 @@ floating at 640 x 480 and not where you asked."
 (test snap-refuses-with-nothing-to-move
   (with-a-screen (world output 800 600)
     (declare (ignore world))
-    (let ((r::*echo-message* nil))
+    (let ((p:*echo-message* nil))
       (is (stringp (r:snap :left :output output))
           "it answers, instead of crashing")
-      (is-true (search "no window" (car r::*echo-message*))))))
+      (is-true (search "no window" (car p:*echo-message*))))))
 
 ;;; --------------------------------------------------------------- the rule
 

@@ -638,12 +638,12 @@ about, and they are all one call to the overlay."
       ;; it is one line, and a page for one line would be in the way -- so the
       ;; assertion is on what it resolved to and what it said.
       (let ((p:*keymap* (p:make-keymap :name "test"))
-            (r::*echo-message* nil))
+            (p:*echo-message* nil))
         (p:install-default-keymap p:*keymap*)
         (is (equal '("terminal")
                    (r:describe-key (format nil "~areturn" (p:modifier-string))))
             "a key describes the command it is bound to")
-        (is-true (search "terminal" (car r::*echo-message*) :test #'char-equal)
+        (is-true (search "terminal" (car p:*echo-message*) :test #'char-equal)
                  "and says so in the echo area")))))
 
 (test apropos-finds-a-command-by-what-it-does-not-only-by-its-name
@@ -694,7 +694,7 @@ terminal consulted twenty times an hour costs one keystroke each way."
     (setf (gethash (c:leaf-window window) (r::server-windows server))
           (c:leaf-window window))
     (let ((r:*server* server) (r:*world* world)
-          (p:*policy* (policy)) (p:*seat* nil) (r::*echo-message* nil))
+          (p:*policy* (policy)) (p:*seat* nil) (p:*echo-message* nil))
       (is (stringp (r:scratchpad-toggle "notes"))
           "an empty scratchpad says so rather than doing nothing silently")
       (setf (c:prop (c:leaf-window window) :scratchpad) "notes")
@@ -714,7 +714,7 @@ is nothing on the other side, and the commands must not invent one."
           (c:make-stack (list (c:make-split :horizontal (list (leaf-with "a")))) 0))
     (setf (c:world-cursor world) '(0 0))
     (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (r:focus-output 2)
       (is (equal '(0 0) (c:world-cursor world))
           "focusing a screen that does not exist leaves the cursor where it was")
@@ -725,9 +725,9 @@ is nothing on the other side, and the commands must not invent one."
 (test list-inputs-says-the-compositor-offers-none
   "The first question an input rule asks is `what is my touchpad called', and
 without a compositor the honest answer is that there is nothing to report."
-  (let ((r:*server* nil) (r::*echo-message* nil))
+  (let ((r:*server* nil) (p:*echo-message* nil))
     (is (stringp (r:list-inputs)) "no server, and it says so")
-    (is-true (search "no input devices" (car r::*echo-message*) :test #'char-equal)
+    (is-true (search "no input devices" (car p:*echo-message*) :test #'char-equal)
              "and it says so rather than printing an empty table")))
 
 (test pull-brings-the-neighbour-into-this-pane
@@ -820,9 +820,9 @@ existing.  Landing on nothing would make the key feel broken."
   (multiple-value-bind (world windows) (a-row-of-windows 2)
     (declare (ignore windows))
     (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (is (stringp (r:focus-back)) "it answers in the echo area")
-      (is-true (search "history" (car r::*echo-message*)) "and says which"))))
+      (is-true (search "history" (car p:*echo-message*)) "and says which"))))
 
 (test the-focus-history-is-bounded-by-its-option
   "A setting, not a literal: the list is what the world holds, and it must not
@@ -838,7 +838,7 @@ grow without end in a session that lasts a week."
 (test focus-history-lists-what-it-will-walk
   (multiple-value-bind (world windows) (a-row-of-windows 2)
     (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
-          (r::*help-visible* nil) (r::*echo-message* nil))
+          (r::*help-visible* nil) (p:*echo-message* nil))
       (destructuring-bind (first second) windows
         (declare (ignore second))
         (is (stringp (r:focus-history)) "no history yet: it says so")
@@ -904,7 +904,7 @@ would attribute to this command."
 (test with-window-refuses-a-name-that-reaches-nothing
   (multiple-value-bind (world windows) (a-row-of-windows 2)
     (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (destructuring-bind (first second) windows
         (declare (ignore first))
         (r:with-window nil "toggle-float")
@@ -915,11 +915,11 @@ would attribute to this command."
 (test with-window-refuses-a-command-that-is-not-one
   (multiple-value-bind (world windows) (a-row-of-windows 2)
     (let ((r:*world* world) (p:*policy* (policy)) (p:*seat* nil)
-          (r::*echo-message* nil))
+          (p:*echo-message* nil))
       (destructuring-bind (first second) windows
         (declare (ignore first))
         (r:with-window second "not-a-command")
-        (is-true (search "no such command" (car r::*echo-message*)))))))
+        (is-true (search "no such command" (car p:*echo-message*)))))))
 
 ;;; -------------------------------------------------------------- focus mode
 ;;;
@@ -932,7 +932,7 @@ would attribute to this command."
 session can never be left in the combination that exists only by accident."
   (let ((p:*focus-follows-mouse* nil)
         (p:*click-to-focus* nil)
-        (r::*echo-message* nil))
+        (p:*echo-message* nil))
     (r:focus-mode :follows)
     (is-true p:*focus-follows-mouse*)
     (is (null p:*click-to-focus*)
@@ -945,14 +945,14 @@ session can never be left in the combination that exists only by accident."
     (is (null p:*focus-follows-mouse*))
     (is (null p:*click-to-focus*) "keyboard only, on purpose")
     (is (eq :none (r:focus-behaviour)))
-    (is (stringp (car r::*echo-message*)) "and it says which mode you are in")))
+    (is (stringp (car p:*echo-message*)) "and it says which mode you are in")))
 
 (test toggle-focus-follows-mouse-is-one-key
   "The live switch, which is what the key binding is for: no config file, no
 restart, and it lands in a mode where clicking still works."
   (let ((p:*focus-follows-mouse* nil)
         (p:*click-to-focus* nil)
-        (r::*echo-message* nil))
+        (p:*echo-message* nil))
     (r:toggle-focus-follows-mouse)
     (is (eq :follows (r:focus-behaviour)) "click -> follows")
     (r:toggle-focus-follows-mouse)
@@ -1040,10 +1040,10 @@ window nothing claims is not touched."
 config file can call.  LIST-SCRATCHPAD-CLAIMS is the same request read back,
 because a claim you cannot see is a claim you cannot undo."
   (with-a-claims-file
-    (let ((r::*echo-message* nil) (r::*help-visible* nil))
+    (let ((p:*echo-message* nil) (r::*help-visible* nil))
       (is (equal "music" (r:scratchpad-claim "Music" "spotify"))
           "it answers with the scratchpad's name, canonicalised")
-      (is-true (search "will claim spotify" (car r::*echo-message*)))
+      (is-true (search "will claim spotify" (car p:*echo-message*)))
       (is-true (r:list-scratchpad-claims) "and the list shows it")
       (r:scratchpad-unclaim "music")
       (is (null r::*scratchpad-claims*))

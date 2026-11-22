@@ -211,7 +211,15 @@ overlay including an extension's; NIL keeps every buffer forever.")
 ;;; because whether the minibuffer is reading is not a decision anybody wants
 ;;; to override.
 
-(defvar *echo-message* nil "A cons of text and the time it was posted.")
+(defvar *echo-message* nil
+  "A cons of text and the time it was posted, or NIL.
+
+WRITTEN BY THE RUNTIME, READ HERE.  R:NOTIFY posts into this variable and
+CURRENT-MESSAGE filters it by age, which works because the runtime package uses
+this one and there is only one symbol -- a fact that was reported as a bug
+(#129) on the evidence of two export lines in src/package.lisp naming the same
+object.  There is no second variable and there never was; the duplicate export
+is gone so the next reader is not sent looking for one.")
 
 (defun current-message ()
   "The message to show, or NIL once it has aged out.

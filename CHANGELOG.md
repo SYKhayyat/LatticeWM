@@ -26,6 +26,13 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **One echo message, and now one name for it.** `notify` wrote a variable in the
+  runtime package's namespace and `current-message` read the policy's — so
+  `r::*echo-message*` and `p:*echo-message*` were two different variables with
+  one name, and a test binding one of them read nothing. There is one variable
+  now (the policy's, the one `current-message` reads), `notify` names it
+  explicitly, and the duplicate export that made it look like two is gone. Every
+  suite that read the message reads the same symbol. (#129)
 - **`M-x preview` — the whole session, in miniature.** One panel per workspace,
   each showing that workspace's plane with its windows named, laid out as square
   a wall as the count allows; the workspace you are on is outlined in another

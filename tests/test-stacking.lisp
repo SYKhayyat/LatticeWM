@@ -90,9 +90,9 @@ in order -- so the move is the whole statement."
 that tiled windows do not overlap, which is a fact about the layout and not a
 failure."
   (with-window-world (world window "note")
-    (let ((r::*echo-message* nil))
+    (let ((p:*echo-message* nil))
       (is (stringp (r:raise-window)))
-      (is-true (search "overlap" (car r::*echo-message*)))
+      (is-true (search "overlap" (car p:*echo-message*)))
       (is (stringp (r:lower-window))))))
 
 ;;; --------------------------------------------------------------------- pin
@@ -146,14 +146,14 @@ pinning a tile floats it -- the same promise the window rule's :PIN makes."
 (test toggle-pin-flips-and-says-which
   (with-two-floats (world first second float-first float-second)
     (declare (ignore first float-first))
-    (let ((r::*echo-message* nil))
+    (let ((p:*echo-message* nil))
       (setf (c:world-focused-float world p:*seat*) float-second)
       (r:toggle-pin)
       (is-true (c:window-pinned-p second))
-      (is-true (search "pinned" (car r::*echo-message*)))
+      (is-true (search "pinned" (car p:*echo-message*)))
       (r:toggle-pin)
       (is (null (c:window-pinned-p second)))
-      (is-true (search "unpinned" (car r::*echo-message*))))))
+      (is-true (search "unpinned" (car p:*echo-message*))))))
 
 (test a-window-rule-opens-a-window-pinned-and-floating
   "The declarative half, and it costs no second mechanism: :PIN is a rule key

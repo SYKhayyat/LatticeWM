@@ -190,9 +190,9 @@ one in the middle of a word, and consecutive letters beat scattered ones."
 (test a-failing-action-is-reported-and-the-session-lives
   (with-launcher
     (l:define-action "boom" "Fails on purpose" (lambda () (error "kaboom")))
-    (let ((r::*echo-message* nil))
+    (let ((p:*echo-message* nil))
       (is (null (l:run-entry (l:entry-by-title "boom"))) "it reports, returns NIL")
-      (is-true (search "kaboom" (car r::*echo-message*))))))
+      (is-true (search "kaboom" (car p:*echo-message*))))))
 
 ;;; =========================================================== calculator
 

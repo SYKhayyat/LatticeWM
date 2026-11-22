@@ -2433,14 +2433,14 @@ the map is offering when it draws a square with no name on it."
   "A verb that silently does nothing is the complaint this whole issue is
 about, one layer down -- and with no seat at all, `nothing there' is the
 honest answer rather than an error."
-  (let ((r::*echo-message* nil))
+  (let ((p:*echo-message* nil))
     (with-lattice-world ()
       (let ((output (make-instance 'c:output :name "DP-1"
                                    :rect (c:make-rect 0 0 800 600))))
         (setf (c:world-outputs world) (list output))
         (l:peek-begin)
         (is (null (l:goto-pointer output)) "nothing under the pointer")
-        (is-true (search "not over a cell" (car r::*echo-message*)))
+        (is-true (search "not over a cell" (car p:*echo-message*)))
         (l:peek-end)))))
 
 ;;; ============================================== pulling the plane (#29)

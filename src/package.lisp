@@ -389,8 +389,13 @@ You never edit this package.")
    #:*modifier-aliases*
    #:+modifier-order+
    #:+named-keysyms+
-   #:*echo-message*
-   #:current-message
+   ;; *ECHO-MESSAGE* is the policy's variable (see src/policy/appearance.lisp),
+   ;; exported here rather than from the runtime's list: two export lines for
+   ;; one symbol is how it came to be reported as two variables with one name
+   ;; (#129).  The exports never disagreed -- R:NOTIFY writes this symbol
+   ;; because the runtime package uses this package -- but a list that names the
+   ;; same object twice reads as though there were two.
+   #:*echo-message* #:current-message
    #:keymap-choices
    #:pending-keymap-segments
    ;; how the system describes itself, as generics rather than defuns
@@ -540,7 +545,8 @@ You never edit this package.")
    #:*modifier-aliases*
    #:+modifier-order+
    #:+named-keysyms+
-   #:*echo-message* #:current-message #:keymap-choices
+   ;; no *ECHO-MESSAGE* here: it is the policy's, exported there.  See #129.
+   #:keymap-choices
    #:pending-keymap-segments
    #:binding-description
    #:help-entries
