@@ -469,6 +469,25 @@ characters at any scale without this function knowing how wide a glyph is."
                        :test (lambda (a b) (string= a (string b))))
                  (error "~a is not always, smart or never" text)))))
 
+(define-argument-type :profile "profile: "
+  :documentation "one of the profiles in ~/.config/latticewm/profiles/."
+  :candidates (lambda (input) (declare (ignore input)) (profile-names))
+  :parse (lambda (text)
+           (let ((name (string-trim " " text)))
+             (if (profile-exists-p name)
+                 name
+                 (error "no profile called ~a; there ~[is~:;are~] ~{~a~^, ~}"
+                        name (length (profile-names)) (profile-names))))))
+
+(define-argument-type :profile-name "save as: "
+  :documentation "a name for a new profile: letters, digits, dashes and dots."
+  :parse (lambda (text)
+           (let ((name (string-trim " " text)))
+             (if (profile-name-p name)
+                 name
+                 (error "~s is not a profile name: letters, digits, dashes and ~
+                         dots, and it may not begin with a dot" name)))))
+
 (define-argument-type :gesture-spec "gesture: "
   :documentation "fingers and gesture, e.g. 3 left, 2 pinch in, 1 edge top --
 see M-x gesture."

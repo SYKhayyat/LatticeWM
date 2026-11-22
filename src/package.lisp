@@ -618,6 +618,13 @@ keybindings, the command registry, and the session loop.")
    #:server-touch-gestures #:server-gestures-dirty #:sync-gestures
    #:gesture-seat-of #:attach-gesture-seat #:detach-gesture-seat
    #:gesture-moved #:gesture-scaled #:gesture-fingers-changed
+   ;; #12: profiles.  The directory and the two verbs are the surface an
+   ;; extension or a status line needs; the commands are reachable by name.
+   #:*startup-profile* #:*profiles-directory*
+   #:profiles-directory #:profiles-directory-name
+   #:profile-names #:profile-path #:profile-name-p #:profile-exists-p
+   #:load-profile #:write-profile #:delete-profile #:*current-profile*
+   #:option-changes #:profile-forms
    #:gesture-finished #:gesture-fired
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
    ;; things that happen because time passed rather than because a client

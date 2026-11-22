@@ -222,6 +222,15 @@ forget-gesture= unbinds one. These are *touchscreen* gestures: river consumes
 trackpad swipes itself and does not forward them, which is a limit of the
 compositor rather than of the table.
 
+=M-x profile-load work= applies a *profile* to the running session, and =M-x
+profile-save work= writes down what you have changed from the shipped
+configuration.  A profile is an ordinary configuration file in
+=~/.config/latticewm/profiles/=, so it can hold anything your init file can -- a
+keymap, a rule table, a lambda -- and switching between two of them is one
+command rather than one restart.  =M-x profiles= lists them, =M-x
+profile-delete= removes one, and =*startup-profile*= is the line that makes one
+the one you start in.
+
 =M-x with-window= runs any command with the window *you name* as the one it acts
 on — =M-x with-window=, choose the window, choose =close-window=. It works for
 verbs an extension adds, because every one of them asks "who am I acting on",

@@ -419,6 +419,31 @@ LatticeWM commands.
 (previous-workspace)
   Switch to the previous workspace, wrapping.
 
+(profile-current)
+  Say which profile was loaded most recently, if any.
+
+(profile-delete name)
+  Delete a profile file.  The window manager does not ask twice.
+
+(profile-load name)
+  Load a profile: a file of settings you can switch between.
+  
+  A profile is an ordinary configuration file in
+  ~/.config/latticewm/profiles/.  Loading one applies it to the running session --
+  options, key bindings, gestures, and anything else the file does -- so the
+  difference between two profiles is one command rather than one restart.
+
+(profile-save name)
+  Save this session's changes as a profile called NAME.
+  
+  What is written is what DIFFERS from the shipped configuration: options you
+  changed, the gesture table, and your key bindings.  That is deliberate -- a
+  profile that froze every value would pin you to the defaults of the release
+  that wrote it -- and the file is an ordinary config file you can edit.
+
+(profiles)
+  List the profiles in your configuration directory.
+
 (pull direction)
   Bring the pane DIRECTION of here *into* the focused pane, as a split.
   

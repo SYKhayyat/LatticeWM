@@ -304,6 +304,10 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:file "input" :depends-on ("server" "minibuffer" "echo" "outputs"))
        (:file "session" :depends-on ("server" "minibuffer" "windows" "sequence" "outputs" "seats" "input"))
        (:file "ipc" :depends-on ("server" "minibuffer" "sequence" "swank" "session"))
+       ;; Profiles (#12): named configuration files, loaded into a live session.
+       ;; After config, which owns the directory they live in, and after
+       ;; sequence, which owns the key rebind and manage ask a load needs.
+       (:file "profiles" :depends-on ("server" "minibuffer" "echo" "config" "sequence" "seats"))
        (:file "history" :depends-on ("server" "minibuffer" "echo" "help" "sequence"))
        (:file "verbs" :depends-on ("server" "minibuffer" "echo" "help" "config" "emit" "capture" "windows" "sequence" "outputs" "seats" "history"))
        (:file "tags" :depends-on ("server" "echo" "help" "windows" "sequence" "outputs" "verbs"))
@@ -331,6 +335,7 @@ without a compositor — which is the whole model."
      (:file "test-shares")
      (:file "test-window-state")
      (:file "test-gestures")
+     (:file "test-profiles")
      (:file "test-placement")
      (:file "test-stacking")
      (:file "test-tree")

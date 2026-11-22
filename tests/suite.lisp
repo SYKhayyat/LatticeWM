@@ -128,6 +128,14 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite profiles :in model
+  :description "Named configuration files you can switch between (#12).  A
+profile is a Lisp file in ~/.config/latticewm/profiles/ and loading it is
+loading a file -- the same trust init.lisp has, and the reason a profile can
+hold a keymap, a rule table and a lambda, which a JSON document could not.  What
+saving captures is what DIFFERS from what shipped: a profile that froze every
+option would pin a user to the defaults of the release that wrote it.")
+
 (def-suite gestures :in model
   :description "Touch gestures, as a table (#16).  Everything here is the half
 that needs no compositor: what a gesture spec is, how the table turns into plans

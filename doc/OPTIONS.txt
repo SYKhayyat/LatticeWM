@@ -1026,6 +1026,20 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   as you go three deep, and everybody's first configuration change in the
   fixed-axis window managers is to add a 'split the other way' binding.
 
+*STARTUP-PROFILE*
+  default: NIL
+  The profile to load at startup, or NIL for none.
+  
+  The declarative half of #12, and the reason it exists as an option rather than
+  only as a command: the two ways to say `use my work settings' are a key you
+  press and a line in init.lisp, and a feature that only offered one of them
+  would be a feature half the people who want it cannot use.  Set it to a string:
+  
+      (setf *startup-profile* "work")
+  
+  A profile that fails to load is reported and the session continues, exactly as
+  a broken init.lisp does.
+
 *SWANK-INTERFACE*
   default: "127.0.0.1"
   Which address SWANK binds to when it is on.

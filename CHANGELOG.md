@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Profiles: switch configurations without restarting.** `M-x profile-load
+  work` applies a profile to the running session, `profile-save work` writes the
+  current one, `profiles` lists them, `profile-delete` removes one, and
+  `profile-current` says which is loaded. A profile is an ordinary
+  configuration file in `~/.config/latticewm/profiles/` — the same trust
+  `init.lisp` has, and the reason it can hold a keymap, a window rule table or a
+  lambda, which a JSON document could not. What `profile-save` writes is what
+  *differs* from what shipped: options you changed, the gesture table and your
+  key bindings. A profile that froze every value would pin you to the defaults
+  of the release that wrote it and silently lose every improvement after. The
+  declarative half is `*startup-profile*`, which names one to load at startup.
 - **Touch gestures, as a table.** `M-x gesture` binds a gesture to any command
   (`3 left`, `2 pinch in`, `1 edge top`), `forget-gesture` unbinds one, and
   `p:*gestures*` is the same thing in a config file; three-finger swipes are the

@@ -567,6 +567,12 @@ debug it (connecting, binding, the first manage sequence) is still after it."
   ;; scratchpad at load time is a claim like any other.
   (install-scratchpad-claims)
   (when config (load-config))
+  ;; #12's declarative half: after the configuration, because a config file is
+  ;; what names the profile, and guarded because a missing profile is a message
+  ;; and not a session that does not start -- the same rule LOAD-CONFIG keeps.
+  (when *startup-profile*
+    (guarded "startup profile"
+      (load-profile *startup-profile*)))
   ;; :DEFAULT rather than the option's value as a default argument, because a
   ;; default argument is evaluated by the *caller* — so reading *SWANK-PORT* in
   ;; the lambda list would have read it in MAIN, before this function had
