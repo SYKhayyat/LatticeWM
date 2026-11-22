@@ -112,11 +112,19 @@ would look out of a window."
 
 ;;; =========================================================== the wiring
 
-(defmethod p:on-key :before ((policy lattice-mixin) world key)
-  "A peek is over the moment you press anything else.
+(declaim (ftype (function () (or t null)) preview-end))
 
-:BEFORE, so the key that ends the peek still runs: the point of a glance is that
-you take it and act, and swallowing the keystroke that was the reason for the
-look would be the one way to make this feel like a mode after all."
+(defmethod p:on-key :before ((policy lattice-mixin) world key)
+  "A glance is over the moment you press anything else -- a peek or a preview.
+
+:BEFORE, so the key that ends it still runs: the point of a glance is that you
+take it and act, and swallowing the keystroke that was the reason for the look
+would be the one way to make this feel like a mode after all.
+
+BOTH PICTURES HERE, not one method each: two :BEFORE methods on the same
+specializers are one method and one silent deletion, the same trap the pointer
+claims have.  PREVIEW-END is called through an FTYPE declaration because the
+preview is loaded after this file."
   (declare (ignore world key))
-  (when (peek-active-p) (peek-end)))
+  (when (peek-active-p) (peek-end))
+  (preview-end))

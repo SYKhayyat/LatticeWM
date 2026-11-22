@@ -2727,3 +2727,98 @@ meant, and what #13's stacking is for."
           (l:drag-pan-released :move)
           (is-true (c:window-floating-p window) "it is still a float")
           (is (null l:*drag-dock*) "and the drag is forgotten"))))))
+
+;;; ============================================ the whole session at once (#23)
+;;;
+;;; The thumbnail half of the issue needs screencopy, which this program does
+;;; not speak -- grim speaks it, and doc/FINDINGS.org records the day.  What
+;;; DOES not need pixels is the question a tiler is actually asking: what will
+;;; my screen look like when I go there.  That is a drawing of the model.
+
+(test preview-panels-are-one-per-workspace-and-do-not-overlap
+  "Pure arithmetic, and the same function draws a panel and finds the panel a
+click landed in -- the rule CELL-RECTS and MAP-CELL-AT already follow."
+  (let* ((area (c:make-rect 0 0 1600 900))
+         (panels (l:preview-panels 4 area)))
+    (is (= 4 (length panels)))
+    (is (equal '(0 1 2 3) (mapcar #'car panels)) "in workspace order")
+    (loop for (a . ra) in panels
+          do (loop for (b . rb) in panels
+                   unless (eql a b)
+                     do (is (null (c:rect-intersect ra rb))
+                            "panels ~d and ~d do not overlap" a b)))
+    (loop for (index . rect) in panels
+          do (is-true (c:rect-contains-p area (c:rect-x rect) (c:rect-y rect))
+                      "panel ~d starts inside the area" index))))
+
+(test a-panel-grows-as-the-count-shrinks
+  "One workspace gets the whole wall; eighteen get a grid of them."
+  (let ((area (c:make-rect 0 0 1600 900)))
+    (let* ((one (cdr (first (l:preview-panels 1 area))))
+           (many (mapcar #'cdr (l:preview-panels 12 area))))
+      (is (> (c:rect-w one) (c:rect-w (first many)))
+          "one workspace is a bigger picture than twelve")
+      (is (= 1 (length (l:preview-panels 1 area))))
+      (is (= 12 (length (l:preview-panels 12 area))))
+      (is (= 0 (length (l:preview-panels 0 area))) "no workspaces, no wall")
+      (is (= 4 (l:preview-columns 12)) "as square a wall as the count allows"))))
+
+(test a-point-on-a-panel-names-that-workspace
+  (let* ((area (c:make-rect 0 0 1600 900))
+         (panels (l:preview-panels 6 area)))
+    (loop for (index . rect) in panels
+          do (multiple-value-bind (x y) (centre-of rect)
+               (is (eql index (l:preview-panel-at panels x y))
+                   "the middle of panel ~d is panel ~d" index index)))
+    (is (null (l:preview-panel-at panels -500 -500)) "and nothing is no panel")))
+
+(test the-preview-shows-shows-the-session-and-any-key-takes-it-down
+  "A glance, not a mode -- the same ruling the peek made, for the same reason."
+  (with-lattice-world ()
+    (let ((l:*preview* nil))
+      (r::workspace 3)
+      (is-true (l:preview))
+      (is-true (l:preview-active-p) "the wall is up")
+      (p:on-key p:*policy* world (cons 38 (list :none)))
+      (is (null (l:preview-active-p)) "and one keypress later it is not")
+      (r:mark-dirty))))
+
+(test clicking-a-panel-goes-to-that-workspace
+  "The press decode, end to end: a point in the middle of the third panel puts
+you on the third workspace."
+  (with-lattice-world ()
+    (let ((l:*preview* nil))
+      (r::workspace 3)
+      (setf (c:world-outputs world)
+            (list (make-instance 'c:output :name "DP-1"
+                                 :rect (c:make-rect 0 0 1600 900))))
+      (let* ((output (first (c:world-outputs world)))
+             (area (p:outer-rect p:*policy* output))
+             (panels (l:preview-panels 3 area)))
+        (l:preview-begin)
+        (multiple-value-bind (x y) (centre-of (cdr (nth 2 panels)))
+          (is-true (p:pointer-press p:*policy* world x y :move)
+                   "the panel claims the press")
+          (is (null (l:preview-active-p)) "and puts the wall away")
+          (is (eql 2 (p:output-workspace output))
+              "where you asked to be"))))))
+
+(test the-preview-draws-every-workspace-including-the-empty-ones
+  "An overview that draws only what has windows in it is an overview you cannot
+tell you have thirteen workspaces from."
+  (with-lattice-world ()
+    (r::workspace 4)
+    (let* ((root (c:world-root world))
+           (count (if (typep root 'c:stack) (c:container-count root) 1))
+           (panels (l:preview-panels count (c:make-rect 0 0 1600 900))))
+      (is (= 4 count))
+      (is (= 4 (length panels)) "four panels for four workspaces, empty or not"))))
+
+(test preview-off-takes-the-wall-down-and-says-whether-it-did
+  "The verb for a key of its own, since the panel wall is the one picture a
+person may want to look at for longer than one keystroke."
+  (let ((l:*preview* nil))
+    (is (null (l:preview-off)) "nothing to put away")
+    (l:preview-begin)
+    (is-true (l:preview-off))
+    (is (null (l:preview-active-p)))))

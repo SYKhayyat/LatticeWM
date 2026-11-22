@@ -69,6 +69,12 @@ motion runs straight through the cell boundary as though it were not there.")
    #:*drag-pan* #:drag-panning-p #:drag-pan-begin #:drag-pan-update
    #:drag-pan-end #:drag-pan-tracking #:drag-pan-released #:cell-pitch
    #:zoom-at-pointer #:*drag-dock* #:cell-holding #:record-drag-dock
+   ;; #23: every workspace at once, in miniature.
+   #:*preview* #:*preview-background* #:*preview-panel-color*
+   #:*preview-here-color*
+   #:preview #:preview-off #:preview-active-p #:preview-begin
+   #:preview-end #:preview-panels #:preview-panel-at #:preview-columns
+   #:preview-claim-press #:draw-preview #:draw-preview-on
    #:draw-coordinate-overlay-on #:copy-viewport
    #:current-grid #:current-cell #:grid-path #:cell-path
    #:goto-cell))

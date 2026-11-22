@@ -56,6 +56,9 @@ edits nothing under src/."
      ;; after pointer: a press on empty space is a handle, and the map decides
      ;; what counts as empty.
      (:file "pan")
+     ;; after pan: the preview claims a press the same way, through the seam
+     ;; pan.lisp declares.
+     (:file "preview")
      (:file "overlay")))))
 
 (defsystem "lattice/tests"

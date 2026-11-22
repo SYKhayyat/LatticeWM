@@ -229,47 +229,64 @@ back to the cursor, which is what those two commands already do."
 
 ;;; ------------------------------------------------------------- the claiming
 
-(defmethod p:pointer-press ((policy lattice-mixin) (world c:world) x y kind)
-  "Claim a press on the map's cells, and a press on the plane's empty parts.
+;;; ONE METHOD FOR EVERY CLAIM, AND THAT IS NOT AN ORGANISATIONAL CHOICE.  CLOS
+;;; keeps a single method per specializer list, so a claim for the map's cells
+;;; in one file, a claim for the plane's empty parts in another and a claim for
+;;; the preview's panels in a third would not be three claims: the last one
+;;; loaded would silently *be* the claim, and the other two would be dead code
+;;; that reads as though it works.  Three branches of one function is the same
+;;; three answers with the compiler on our side.
 
-Two claims with one rule between them: what is under the pointer decides.  A
-*celled* press on the map is a jump (or a window move); an *empty* press is a
-handle on the plane.  What is never claimed is a press over a window, because
-that is a window drag and always was -- the map changes what the mouse does to
-the plane, not to the windows on it."
-  (let* ((output (r:output-at x y))
-         (grid (and output (cursor-grid world)))
-         (area (and output grid (map-area policy output))))
-    (cond
-      ((null area) nil)
-      ((and (map-shown-p grid area)
-            (map-cell-at policy grid output x y))
-       (let ((address (map-cell-at policy grid output x y)))
-         (ecase kind
-           (:move
-            (goto-cell address)
-            (r:notify "~a" (cell-label grid address)))
-           (:resize
-            ;; The resize chord is the one that means `move the thing'.
-            (let ((window (r:focused-window)))
-              (when window
-                (move-cell-contents (cell-x address) (cell-y address))
-                (r:notify "~a to ~a" (p:name-of-window window)
-                          (cell-label grid address)))))
-           (t nil))
-         t))
-      ;; A window that lives in a cell is a thing you can drop into ANOTHER
-      ;; cell: record the drag, and hand back NIL so the ordinary float-drag
-      ;; runs -- the window follows the pointer, which is the visible half of
-      ;; every window drag -- and the release hook decides where it landed.
-      ((and (eq kind :move)
-            (let ((window (a-window-at world x y)))
-              (and window grid (cell-holding grid window)
-                   (progn (record-drag-dock grid window x y) t))))
-       nil)
-      ;; Empty space -- a gap between cells, or past the edge of the plane --
-      ;; is a handle, and only the left button and the move chord.
-      ((and (eq kind :move) (null (a-window-at world x y)))
-       (drag-pan-begin policy grid output x y)
-       t)
-      (t nil))))
+;; DECLARED, NOT STUBBED.  A stub that answers NIL here is compiled into a call
+;; site that believes NIL is the only answer, so the real function in
+;; preview.lisp returns T straight into a type assertion -- caught at runtime,
+;; in a method that looks correct, with an error message about NULL.  The return
+;; type below is T, which tells the compiler nothing and asserts nothing, and
+;; the declaration is enough to keep gate 1 quiet about a forward reference.
+(declaim (ftype (function (t t t t) t) preview-claim-press))
+
+(defmethod p:pointer-press ((policy lattice-mixin) (world c:world) x y kind)
+  "Claim a press that is aimed at something drawn rather than at a window.
+
+Three pictures, one rule: what is under the pointer decides, and a press over a
+*window* is never claimed, because that is a window drag and always was.  The
+preview is asked first -- it is a wall of workspaces on top of everything, so a
+panel is not a cell -- then the map's cells, then the plane's empty parts."
+  (or (preview-claim-press policy world x y)
+      (let* ((output (r:output-at x y))
+             (grid (and output (cursor-grid world)))
+             (area (and output grid (map-area policy output))))
+        (cond
+          ((null area) nil)
+          ((and (map-shown-p grid area)
+                (map-cell-at policy grid output x y))
+           (let ((address (map-cell-at policy grid output x y)))
+             (ecase kind
+               (:move
+                (goto-cell address)
+                (r:notify "~a" (cell-label grid address)))
+               (:resize
+                ;; The resize chord is the one that means `move the thing'.
+                (let ((window (r:focused-window)))
+                  (when window
+                    (move-cell-contents (cell-x address) (cell-y address))
+                    (r:notify "~a to ~a" (p:name-of-window window)
+                              (cell-label grid address)))))
+               (t nil))
+             t))
+          ;; A window that lives in a cell is a thing you can drop into ANOTHER
+          ;; cell: record the drag, and hand back NIL so the ordinary
+          ;; float-drag runs -- the window follows the pointer, which is the
+          ;; visible half of every window drag -- and the release hook decides
+          ;; where it landed.
+          ((and (eq kind :move)
+                (let ((window (a-window-at world x y)))
+                  (and window grid (cell-holding grid window)
+                       (progn (record-drag-dock grid window x y) t))))
+           nil)
+          ;; Empty space -- a gap between cells, or past the edge of the plane
+          ;; -- is a handle, and only the left button and the move chord.
+          ((and (eq kind :move) (null (a-window-at world x y)))
+           (drag-pan-begin policy grid output x y)
+           t)
+          (t nil)))))

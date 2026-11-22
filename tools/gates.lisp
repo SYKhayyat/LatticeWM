@@ -220,7 +220,7 @@ know the extension exists.")
 ;; passes the letter by pushing everything through PROPS and &rest arguments
 ;; until it has almost no methods at all.  Both are stated as numbers because
 ;; both are only visible as numbers.
-(defparameter *lattice-line-budget* 2000
+(defparameter *lattice-line-budget* 2400
   "Past this many *code* lines, the lattice is a second window manager.
 
 CODE LINES, WHICH IT WAS NOT, AND THAT WAS OLD GATE 6'S DISEASE IN THE FILE
@@ -238,6 +238,18 @@ Red for a reason, and the reason is recorded in the issue: the lattice's
 plane's share of the keyboard), and the sweep that raised the number took the
 same headroom rule off the new truth — a fifth over where the tree sits,
 which is room to add a container kind and not room to add a window manager.
+
+2000 TO 2400 ON 2026-11-21, AND THE ARGUMENT IS A DIFFERENT KIND FROM THE LAST
+ONE.  #116 raised it because the number was stale.  This raise is for code that
+did not exist: the peek (#38), the map's hit test and press claim (#30), the
+plane handle and the window drop (#29, #28) and the preview (#23) are four
+features of the *map* -- the one thing this extension has that no other
+container kind does.  A map you can look at, click, drag and preview is not a
+container kind costing a few hundred lines; it is a *view* of one, and views
+cost what they cost.  The thesis the budget defends -- that a container kind is
+cheap -- is untouched by any of it, and still measures true on
+nested-cells and master-stack, which are the extensions that are container
+kinds and nothing else.
 Raising it was the decision the docstring below was written to force: the
 threshold is a ratchet, and a ratchet moved by hand has to say why.  If the
 lattice stops being verbs over the core with the next four commands, this

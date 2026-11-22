@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **`M-x preview` — the whole session, in miniature.** One panel per workspace,
+  each showing that workspace's plane with its windows named, laid out as square
+  a wall as the count allows; the workspace you are on is outlined in another
+  colour. Click a panel and you are taken there; press anything and it is gone,
+  the same "a glance, not a mode" ruling the peek made. It moves no window and
+  resizes nothing, because it is drawn from the model — which is also why it can
+  show workspaces that are on no screen at all. Real thumbnails need
+  screencopy, which this program does not speak; that half is #130. (#23)
 - **Drag a window into another cell.** Super+click a tiled window and let go
   over a different cell and it lands there; let go where you picked it up and
   nothing moves; let go over empty space and it stays floating, which is what a

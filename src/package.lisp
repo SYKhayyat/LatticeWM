@@ -575,7 +575,7 @@ keybindings, the command registry, and the session loop.")
    ;; the frame clock: when drawing is worth anything.  See DRAW-WHEN-READY.
    #:draw-when-ready #:overlay-frame #:forget-frame
    #:current-node #:current-leaf #:current-window #:current-path
-   #:workspace-stack #:grow-workspaces-to
+   #:workspace-stack #:grow-workspaces-to #:show-workspace
    ;; #10: an extension that lays out a fresh plane asks the same two questions
    ;; the key does -- grow the list, then show it -- so the command is exported
    ;; rather than reimplemented from three model calls at the call site.

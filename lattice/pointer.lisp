@@ -56,31 +56,6 @@ somewhere else."
       (cond (address (goto-cell address))
             (t (r:notify "the pointer is not over a cell") nil)))))
 
-;;; ================================================= the press that claims
-
-(defmethod p:pointer-press ((policy lattice-mixin) (world c:world) x y kind)
-  "Claim a pointer press that lands on the drawn map.
-
-Only while the map is showing: a press over a live window is a drag, and taking
-those would make the map's presence change what the mouse does to everything
-under it.  The map covers the output while it is up, so a press that lands on a
-cell is a press on the map by construction."
-  (let* ((output (r:output-at x y))
-         (grid (and output (cursor-grid world)))
-         (area (and output grid (map-area policy output))))
-    (when (and area (map-shown-p grid area))
-      (let ((address (map-cell-at policy grid output x y)))
-        (when address
-          (ecase kind
-            (:move
-             (goto-cell address)
-             (r:notify "~a" (cell-label grid address)))
-            (:resize
-             ;; The resize chord is the one that means `move the thing'.
-             (let ((window (r:focused-window)))
-               (when window
-                 (move-cell-contents (cell-x address) (cell-y address))
-                 (r:notify "~a to ~a" (p:name-of-window window)
-                           (cell-label grid address)))))
-            (t nil))
-          t)))))
+;;; The press that claims lives in PAN.LISP, with the drags it shares a method
+;;; with: CLOS keeps one method per specializer list, so a claim written here
+;;; and a claim written there would be one claim and one silent deletion.
