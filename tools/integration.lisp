@@ -1140,6 +1140,51 @@ are what a person means by the arrangement, and both are copy-stable."
                          "and P:FOCUS-TARGET's answer is what river was told to focus")))))))
 
        ;; ------------------------------------------------------------------
+       ;; WINDOW PIXELS (#135).  This program draws only what it draws, so a
+       ;; thumbnail of somebody else's window (#130) needs the compositor to
+       ;; hand over a copy — and the only way to know that works is against a
+       ;; real compositor with a real client in front of it.  Headless counts:
+       ;; wlroots renders to its own buffers on a headless backend, so the copy
+       ;; has content in it, which is why the last check is "the frame is not
+       ;; an empty rectangle" rather than "a frame arrived".
+       (section "window pixels"
+         (let ((window (window-named "latticewm-a" 1)))
+           (cond
+             ((null window)
+              (missing "no client window, so there is nothing whose pixels ~
+                        could be captured"))
+             (t
+              (check (r:capture-available-p)
+                     "the compositor offers the three capture globals")
+              (let ((report (r:capture-report "latticewm-a")))
+                (cond
+                  ((not (getf report :available))
+                   ;; A compositor without ext-image-copy-capture-v1 is a
+                   ;; supported configuration, not a failure: the deck draws
+                   ;; its boxes and says nothing.
+                   (too-old "this compositor cannot copy an image (~a)"
+                            (getf report :reason)))
+                  (t
+                   (check (plusp (or (getf report :toplevels) 0))
+                          "and it listed ~d toplevel~:p"
+                          (or (getf report :toplevels) 0))
+                   (check (getf report :matched)
+                          "and our window matched one of them by app-id")
+                   (check (and (getf report :width) (getf report :height))
+                          "and a frame arrived at ~dx~d"
+                          (getf report :width) (getf report :height))
+                   (check (and (getf report :width)
+                               (>= (getf report :width) 1)
+                               (>= (getf report :height) 1))
+                          "and it is a real size, not a zero one")
+                   (check (plusp (or (getf report :non-zero) 0))
+                          "and it is not an empty rectangle: ~d of ~d words ~
+                           are non-zero, checksum ~x"
+                          (or (getf report :non-zero) 0)
+                          (or (getf report :words) 0)
+                          (or (getf report :checksum) 0)))))))))
+
+       ;; ------------------------------------------------------------------
        ;; A SECOND SEAT (#90).  DESIGN says "The lattice cursor (D18). One per
        ;; seat".  The code had one cursor and one focused float for the whole
        ;; machine, and derived keyboard focus only for the first seat: on a

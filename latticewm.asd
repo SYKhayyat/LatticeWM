@@ -188,7 +188,23 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:wayflan-client-impl "river-libinput-config-v1"
         :in-package "LATTICEWM/RIVER" :export t)
        (:wayflan-client-impl "river-xkb-config-v1"
-        :in-package "LATTICEWM/RIVER" :export t)))
+        :in-package "LATTICEWM/RIVER" :export t)
+       ;; Window pixels (#135).  Three protocols from wayland-protocols, and the
+       ;; order is again a dependency: a capture SESSION is made from a capture
+       ;; SOURCE, so the source has to be a known class first.
+       ;;
+       ;; What they are for: this program draws only what it draws, so it has no
+       ;; way to show a picture of a window it does not own.  The chain is
+       ;; `the compositor lists its toplevels' -> `this handle is a capture
+       ;; source' -> `copy that source into a buffer I supply'.  The last step is
+       ;; one copy per request, which is what makes thumbnails (#130) affordable
+       ;; at all.
+       (:wayflan-client-impl "ext-foreign-toplevel-list-v1"
+        :in-package "LATTICEWM/WAYLAND" :export t)
+       (:wayflan-client-impl "ext-image-capture-source-v1"
+        :in-package "LATTICEWM/WAYLAND" :export t)
+       (:wayflan-client-impl "ext-image-copy-capture-v1"
+        :in-package "LATTICEWM/WAYLAND" :export t)))
      (:module "model"
       :serial t
       :components
@@ -307,6 +323,13 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:file "gestures" :depends-on ("server" "minibuffer" "echo" "sequence" "seats"))
        (:file "input" :depends-on ("server" "minibuffer" "echo" "outputs"))
        (:file "session" :depends-on ("server" "minibuffer" "windows" "sequence" "outputs" "seats" "input"))
+       ;; Window pixels (#135).  AFTER SESSION, and that is a real ordering: the
+       ;; capture sequence waits for a frame by pumping the same
+       ;; DISPATCH-ONE-EVENT the session loop uses, so the file that reads one
+       ;; event must exist first.  The two functions SESSION needs from here
+       ;; (CAPTURE-GLOBAL-P, BIND-CAPTURE-GLOBALS) are declared FTYPE below it,
+       ;; which is how this tree does forward references -- never a stub.
+       (:file "pixels" :depends-on ("server" "surface" "echo" "minibuffer" "session"))
        (:file "ipc" :depends-on ("server" "minibuffer" "sequence" "swank" "session"))
        ;; Profiles (#12): named configuration files, loaded into a live session.
        ;; After config, which owns the directory they live in, and after
@@ -359,6 +382,7 @@ without a compositor — which is the whole model."
      (:file "test-shortcuts")
      (:file "test-pins")
      (:file "test-containers")
+     (:file "test-pixels")
      (:file "test-workspace-nav")
      (:file "test-placement")
      (:file "test-stacking")

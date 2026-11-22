@@ -5,6 +5,8 @@
 ;;;;   LATTICEWM/RIVER    generated protocol bindings.  Plumbing.  Policy code
 ;;;;                      must never call into this package directly — see
 ;;;;                      LATTICEWM/WIRE for why.
+;;;;   LATTICEWM/WAYLAND generated wayland-protocol bindings for the standard
+;;;;                      extension protocols (capture, #135).  Plumbing too.
 ;;;;   LATTICEWM/WIRE     the sequence discipline and one checked wrapper per
 ;;;;                      generated request.  Still plumbing.
 ;;;;   LATTICEWM/CORE     the model: nodes, containers, paths, geometry, and
@@ -40,6 +42,25 @@ plain functions rather than generic functions, so the manage/render sequence
 discipline cannot be attached to them with DEFMETHOD, and redefining a
 generated function in place would be silently reverted by the next scanner
 run.  LATTICEWM/WIRE exists to hold that discipline."))
+
+(defpackage #:latticewm/wayland
+  (:use #:cl)
+  ;; The wayland-protocols this program needed and wayflan does not ship:
+  ;; capture sources and copies (#135).  Same reason as LATTICEWM/RIVER for
+  ;; importing rather than regenerating: wl_buffer and wl_shm are already
+  ;; generated into wayflan's client package, and two incompatible copies of
+  ;; one class is a bug waiting to be written.
+  (:import-from #:xyz.shunter.wayflan.client
+                #:wl-buffer #:wl-callback #:wl-surface #:wl-subsurface
+                #:wl-output #:wl-pointer)
+  (:documentation
+   "Generated wayland-protocol bindings for the extension protocols.
+
+KEPT SEPARATE FROM LATTICEWM/RIVER on purpose: RIVER is one compositor's own
+protocol, this is the standard extensions anyone may implement, and the two get
+re-vendored on different days (see src/protocol/PINNED).  Nothing here is a
+dependency of the model; the runtime binds what the compositor offers and treats
+the absence of every global in here as an ordinary state."))
 
 (defpackage #:latticewm/wire
   (:use #:cl)
@@ -585,7 +606,13 @@ You never edit this package.")
    #:summary-of #:truncate-text #:wrap-text #:split-lines #:split-words)
   (:local-nicknames (#:c #:latticewm/core)
                     (#:p #:latticewm/policy)
+                    ;; W is the wire discipline; WP is the protocol the wire
+                    ;; discipline does not cover.  Two prefixes rather than one
+                    ;; because the distinction the two packages exist for is
+                    ;; exactly "checked sequence" versus "generated request",
+                    ;; and a shared prefix would hide which one a call is.
                     (#:w #:latticewm/wire)
+                    (#:wp #:latticewm/wayland)
                     (#:river #:latticewm/river)
                     (#:wl #:xyz.shunter.wayflan.client)
                     (#:a #:alexandria))
@@ -648,6 +675,10 @@ keybindings, the command registry, and the session loop.")
    #:define-container-kind #:container-kind-names #:container-kind-registered-p
    #:container-kind-description #:restyle-container #:cursor-container
    #:kind-name #:kind-argument
+   ;; Window pixels (#135).
+   #:capture-window #:capture-available-p #:capture-report #:pixels-checksum #:pixels #:pixels-width #:pixels-height
+   #:pixels-data #:toplevel #:toplevel-app-id #:toplevel-title #:toplevel-closed
+   #:match-toplevel #:server-toplevels
    #:*startup-profile* #:*profiles-directory*
    #:profiles-directory #:profiles-directory-name
    #:profile-names #:profile-path #:profile-name-p #:profile-exists-p

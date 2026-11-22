@@ -166,6 +166,30 @@ the wl_output itself, and river_output_v1 is not one.")
                :documentation "wl_compositor, for surfaces of our own.")
    (shm :initform nil :accessor server-shm
         :documentation "wl_shm, for the pixels we draw ourselves.")
+   (capture-manager :initform nil :accessor server-capture-manager
+                    :documentation
+                    "ext_image_copy_capture_manager_v1, or NIL (#135).
+
+NIL is the ordinary case on a compositor without the protocol, and every
+capture entry point answers NIL rather than signalling: a thumbnail is
+decoration, and decoration must not be able to take a session down.")
+   (toplevel-capture-source-manager :initform nil
+                                    :accessor server-toplevel-capture-source-manager
+                                    :documentation
+                                    "ext_foreign_toplevel_image_capture_source_manager_v1.
+
+Separate from CAPTURE-MANAGER because they are separate globals: one turns a
+toplevel handle into something capturable, the other copies it.  Both are needed
+and either can be missing.")
+   (toplevel-list :initform nil :accessor server-toplevel-list
+                  :documentation "ext_foreign_toplevel_list_v1, or NIL.")
+   (toplevels :initform '() :initarg :toplevels :accessor server-toplevels
+              :documentation
+              "The foreign toplevels the compositor has listed, as TOPLEVELs.
+
+Not the same namespace as SERVER-WINDOWS: river names its windows and this list
+names the compositor's, and the only thing the two agree on is what a window
+says about itself -- app-id and title.")
    (pending-manage-work :initform '() :accessor server-pending-manage-work
                         :documentation
                         "Thunks waiting for a manage sequence, newest first.

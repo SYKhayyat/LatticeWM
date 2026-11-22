@@ -288,6 +288,12 @@ command rather than one restart.  =M-x profiles= lists them, =M-x
 profile-delete= removes one, and =*startup-profile*= is the line that makes one
 the one you start in.
 
+=M-x capture-probe= says whether this compositor will hand over a picture of a
+window -- the pixels of a window are the one thing this program cannot draw for
+itself -- and, when it will, captures one frame and reports its size and a
+checksum.  It is a diagnostic rather than a feature: the deck that draws with
+those pixels is still to come (#130).
+
 A container can change what it *is* without moving anything out of it.  =M-x
 restyle split= tiles, =M-x restyle stack= goes back to one window at a time, =M-x
 restyle grid 3= arranges in three columns if the grid module is loaded — and

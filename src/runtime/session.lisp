@@ -195,6 +195,13 @@ most of the time and for no gain."))
 
 ;;; ------------------------------------------------------------ connecting
 
+;;; The capture globals (#135) are bound from here and implemented in
+;;; pixels.lisp, which comes after this file -- it pumps DISPATCH-ONE-EVENT, so
+;;; it cannot come before.  Declared rather than stubbed, for the reason
+;;; CONTRIBUTING gives: a stub is a second definition that can disagree.
+(declaim (ftype (function (t t t t t) t) bind-capture-globals))
+(declaim (ftype (function (t) t) capture-global-p))
+
 (defun dispatch-one-event (display)
   "Dispatch a single event, surviving anything wrong with it.
 
@@ -313,6 +320,11 @@ registry cannot serve."
       ((string= interface "wl_shm")
        (setf (server-shm server)
              (wl:wl-registry.bind registry name 'wl:wl-shm 1)))
+      ;; THE CAPTURE TRIO (#135).  All three are version 1 and all three are
+      ;; optional; the handlers live in src/runtime/pixels.lisp because binding
+      ;; them is three lines and using them is the rest of that file.
+      ((capture-global-p interface)
+       (bind-capture-globals server registry name interface version))
       ;; TOUCH GESTURES (#16).  Optional in the strongest sense: absent means
       ;; the feature does not exist on this machine, which is every river
       ;; before 0.5.0.  One line, once, because a window manager that says why

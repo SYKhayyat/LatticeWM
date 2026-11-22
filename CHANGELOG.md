@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Window pixels: `M-x capture-probe`.** The program draws only what it draws,
+  so there has never been a way to show a picture of somebody else's window.
+  It now speaks `ext-foreign-toplevel-list-v1`,
+  `ext-foreign-toplevel-image-capture-source-v1` and
+  `ext-image-copy-capture-v1`, which chain as *the compositor names its
+  toplevels* → *this handle is a capture source* → *copy it into a buffer I
+  supply*. One copy per request, never a stream, and every entry point answers
+  NIL on a compositor without them — a thumbnail is decoration and decoration
+  must not be able to take a session down. `M-x capture-probe` reports what the
+  compositor offers and, when it can, captures one frame and reports its size
+  and a checksum. The deck that draws with it is #130.
 - **`M-x restyle` — a container can change what it is, keeping its windows.**
   `M-x restyle split`, `M-x restyle stack`, `M-x restyle grid 3`: the container
   the cursor is in becomes a container of another kind, holding the same children

@@ -1696,3 +1696,24 @@ single choice is the difference between "one paradigm per screen" and "a grid in
 one half of a split and a strip in the other". It also gives the sweep's last
 missing verb for free: ~grid~ and ~scrolling~ became one-line callers of the same
 seam, so the three of them can never disagree about what a conversion means.
+
+* A window's pixels are the one thing this program cannot draw, and the protocol for it is three requests long
+#130 sat open for weeks on a cost question -- "live thumbnails need continuous GPU→CPU copies" -- and the cost question was the wrong question. wlroots 0.20 offers `ext-image-copy-capture-v1`, where a client asks for **one** copy into a buffer it supplies and gets `ready` or `failed` back. There is no feed to subscribe to and nothing running while nobody looks, so a deck of thumbnails costs a screenshot rather than a video.
+
+Three protocols, and the chain is worth writing down because each link needs the one before it:
+
+  ext-foreign-toplevel-list-v1                 the compositor names its toplevels
+  ext-foreign-toplevel-image-capture-source-v1  a handle becomes a capture source
+  ext-image-copy-capture-v1                     copy a source into our buffer
+
+Four things learned doing it, each of which cost a red integration run:
+
+**A foreign toplevel is not our window.** river names its windows and this list names the compositor's; the only thing the two agree on is what a window says about itself, so the match is app-id then title, and an ambiguous match answers NIL. A thumbnail of the wrong window is worse than an empty box.
+
+**The `options` argument is a bitfield, so wayflan wants a list.** `(create-session manager source 0)` fails with `The value 0 is not of type LIST`, which says nothing about what the argument means. `()` is "no options".
+
+**A capture is XRGB8888 and the canvas is ARGB8888 premultiplied.** The top byte of a captured pixel is undefined (in practice zero); copying the words as they arrive produces a fully transparent picture, which looks exactly like a capture that failed. One pass OR-ing in `#xff000000` is the conversion.
+
+**The size comes from the compositor, not from the window.** `buffer_size` arrives before `done`, and the copy is of what is on screen; a window partly off an output still captures at its full size. Sizing the buffer from our own rectangle would work on a 1x headless backend and fail on the machine people actually use.
+
+The last thing it needs is a *wait*, and a wait inside a drawing path is where a window manager hangs. The frame is collected by pumping the ordinary event loop with an event limit, so a compositor that never answers costs a dropped thumbnail and not a frozen session.

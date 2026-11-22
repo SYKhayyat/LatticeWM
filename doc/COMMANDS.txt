@@ -76,6 +76,18 @@ LatticeWM commands.
 (browser)
   Open a web browser.  Bound to `b' in an empty pane by default.
 
+(capture-probe &optional (name nil))
+  Say whether this compositor can be asked for a window's pixels, and try once.
+  
+  NAME is an app-id or a title.  With no name, the window with the keyboard is
+  used.
+  
+  This is the diagnostic the protocol work is verified by, and it is deliberately
+  not a thumbnail: it reports whether the three globals are bound, how many
+  foreign toplevels the compositor listed, which of them matched, and -- when a
+  frame arrived -- its size and a checksum of the pixels.  The checksum is the
+  check that catches "a frame arrived, and it is a black rectangle".
+
 (captures)
   Say what is being recorded right now, and by how many sessions.
   

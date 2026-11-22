@@ -134,6 +134,12 @@ workspaces' shipped with the container; what was missing was a relative step
 that grows at the edge instead of wrapping, and the sending verb that follows
 the same answer.")
 
+(def-suite pixels :in model
+  :description "Which of the compositor's toplevels is one of our windows
+(#135).  The capture sequence itself needs a compositor and is checked in the
+integration harness; the match is ours, and it is the half that can be wrong
+quietly -- a picture of the wrong window looks like a picture.")
+
 (def-suite containers :in model
   :description "Changing what a container is without moving anything out of it
 (#134).  Every paradigm is a way of arranging SOME container, so this is the
