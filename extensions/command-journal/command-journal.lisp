@@ -13,16 +13,16 @@
 
 (defvar *excluded-commands* '("start-journal" "stop-journal" "clear-journal"
                               "replay-journal" "load-journal"
-                              "save-journal-as"
-                              "repeat" "undo" "redo"
-                              "run-command-by-name")
-  "Commands the journal looks straight through.
+                              "save-journal-as")
+  "The journal's own verbs, which a recording looks straight through.
 
-The journal's own verbs, because replaying a recording is not part of what
-the recording did.  UNDO and REDO, because a journal replays ACTIONS, not
-retractions of actions -- replaying yesterday's journal into today's session
-should not un-do today's work on the way past.  And REPEAT, because what
-`.' repeated was already journaled under its own name.")
+Replaying a recording is not part of what the recording did.  What used to be
+here as well -- UNDO, REDO, REPEAT, RUN-COMMAND-BY-NAME and the lattice's zoom
+and pan verbs -- is P:*VIEW-COMMANDS* now (#5), because that distinction is a
+fact about the *program* rather than about this extension: a recorder is not the
+only thing that wants to know which commands change what you are looking at
+rather than what is there.  This list keeps the verbs that are about recording
+itself, which nothing outside this file can know about.")
 
 (defvar *journals-directory* nil
   "Where saved journals are written, or NIL for <data directory>/journals/.
@@ -45,7 +45,11 @@ asked for -- but see *EXCLUDED-COMMANDS*, which is where the verbs that
 must never be journaled are named once rather than special-cased here."
   (when (and *recording*
              (not (member (p:command-name command) *excluded-commands*
-                          :test #'string=)))
+                          :test #'string=))
+             ;; A LOOK, NOT A MOVE (#5).  Shared with anything else that needs
+             ;; the distinction, and extended through an option rather than by
+             ;; editing this file.
+             (not (p:view-command-p (p:command-name command))))
     (setf *journal*
           (append *journal* (list (cons (p:command-name command)
                                         (copy-list arguments))))))

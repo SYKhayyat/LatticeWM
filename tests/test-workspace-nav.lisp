@@ -165,3 +165,28 @@ layout options -- and a config file writes it."
   (let ((row (find :workspace-nav (p:all-options) :key (lambda (row) (first row)))))
     (is-true row)
     (is (eq :wrap (third row)) "wrapping is what an upgrade gets")))
+
+;;; ------------------------------------------------ what a look is, not a move
+;;;
+;;; #5 asked for one thing worth keeping from a `layout recording' module: an
+;;; exact, tested decision about which commands a recorder must not replay.  It
+;;; lives in the policy now (P:*VIEW-COMMANDS*), because it is a fact about the
+;;; program and not about the recorder that asked first.
+
+(test a-look-is-not-a-move
+  (dolist (name '("zoom-in" "zoom-out" "zoom-reset" "pan" "undo" "redo"
+                  "repeat" "run-command-by-name"))
+    (is-true (p:view-command-p name) name)))
+
+(test a-move-is-recorded-because-a-replay-without-it-puts-the-wrong-window-on-top
+  (dolist (name '("focus" "workspace" "split" "send-to-workspace" "swap"
+                  "next-window" "move-window"))
+    (is (not (p:view-command-p name)) name)))
+
+(test an-unknown-or-unstringy-name-is-not-a-view-command
+  "The answer for anything nobody has classified is `this is a move', which is
+the safe direction: a replay that repeats one command too many is repairable, a
+replay that silently drops a window is not."
+  (is (not (p:view-command-p "no-such-command")))
+  (is (not (p:view-command-p nil)))
+  (is (not (p:view-command-p :zoom-in)) "a bare keyword is not a name"))

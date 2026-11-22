@@ -341,3 +341,39 @@ for.  What M-x checks before offering to run something."
 
 :SUPER is the only one that does not collide with something an application
 already wants.")
+
+;;; ------------------------------------------------- what is a look, not a move
+
+(define-option *view-commands*
+    '("zoom-in" "zoom-out" "zoom-reset" "zoom-to" "zoom-fit" "zoom-at-pointer"
+      "pan" "pan-to-cursor" "pan-to"
+      "undo" "redo" "repeat" "run-command-by-name"
+      "journal" "command-journal")
+  "Commands that change what you are LOOKING at and not what is there.
+
+The distinction a recorder needs, as data rather than as a comment inside one
+extension (#5).  Replaying a recording must reproduce the *arrangement* -- which
+window is where, in which workspace, floated or tiled -- and must not replay the
+looking: a zoom that was right on a different screen size is a wrong zoom, and a
+retraction (`undo') that is replayed into a new session takes away work that new
+session never did.
+
+IT IS AN OPTION, so an extension that adds a view verb of its own -- a focus
+ring, a status page, a peek -- can say so in one line rather than by editing
+another extension's list.  What is NOT here matters as much: `focus',
+`next-window' and `workspace' are moves and are recorded, because a replay that
+skipped them would put the windows in the right arrangement with the wrong one
+on top.
+
+See P:VIEW-COMMAND-P, which is the only reader, and command-journal, which is
+the only caller that exists.")
+
+(defun view-command-p (name)
+  "True when the command called NAME only changes what you are looking at.
+
+Takes a name rather than a command object so that a caller holding an entry from
+a recorded file -- a name and a list of arguments, with no registry look-up done
+yet -- can ask without first resolving it."
+  (and (stringp name)
+       (member name *view-commands* :test #'string=)
+       t))

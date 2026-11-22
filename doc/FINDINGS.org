@@ -1522,3 +1522,32 @@ number is the index into it. `Next' and `behind' are the same movement, which is
 why growing the list and growing the map cannot disagree -- and it is why the
 status line has said =workspace 3/5= since the day the vocabulary file stopped
 calling a workspace a tab.
+
+* Layout recording: the recorder was not missing, the *classification* was
+#5 asks for a layout recording/playback module and its own scope note answers
+the question before any code is written: recording and playback ship twice
+already, in =extensions/keyboard-macros= and =extensions/command-journal=, both
+built on the same seam (=*command-wrappers*=). A third recorder would be a third
+answer to one question, which is the shape this file spends most of its length
+arguing against.
+
+What was genuinely missing is the *classification* the second one carried as a
+private list: which commands are a **look** (zoom, pan, undo, repeat) and which
+are a **move** (focus, split, workspace, send). Both recorders had decided it,
+each in its own file, and neither could tell the other. That is a fact about the
+*program* -- any extension that replays, batches or audits commands needs the
+same answer -- so it moved to the policy as =*VIEW-COMMANDS*=, with
+=P:VIEW-COMMAND-P= as the only reader and =command-journal= as the first caller.
+An extension that adds a view verb of its own says so in one line, in its own
+config file, rather than by editing another extension's source.
+
+Two rulings in that list are worth their sentences. **A retraction is a look**:
+replaying =undo= into a new session takes away work that session never did.
+And **a focus change is a move**: a replay that skipped =focus= would put every
+window in the right arrangement with the wrong one on top, which looks like a
+correct replay until you type into it.
+
+The remaining item #5 listed -- record the *spawns* as part of a restartable
+layout -- is not a recorder either: it is =window-restarts= plus a saved layout,
+and it is a composition rather than a feature. Nothing here needs a module, so
+nothing here got one.

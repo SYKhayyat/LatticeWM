@@ -26,6 +26,13 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **`*view-commands*`: what a recorder must not replay.** The distinction
+  between a *look* (zoom, pan, undo, redo, repeat) and a *move* (focus, split,
+  workspace, send) was a private list inside `extensions/command-journal`; it is
+  policy now, read through `view-command-p`, so any extension that replays,
+  batches or audits commands gets the same answer and can add its own view verb
+  in one line. There is still **no third recorder**: keyboard-macros and
+  command-journal already ship
 - **Infinite workspaces, taken literally.** `*workspace-nav*` decides what the
   far end of the workspace stack is: `:wrap` (the default, and what every
   version before this did — the next workspace after the last one is the first)

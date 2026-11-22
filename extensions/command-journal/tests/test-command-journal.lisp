@@ -86,8 +86,9 @@ nothing is recorded."
     (is (= 0 (cj:journal-entry-count)) "installed matters")))
 
 (test excluded-commands-pass-through
-  "UNDO and REPEAT are looked straight through: a journal replays actions,
-not retractions of actions or echoes of actions."
+  "The journal's own verbs are looked straight through, and so is everything a
+LOOK rather than a move: a journal replays actions, not retractions of actions
+or echoes of actions (#5)."
   (with-journal
     (cj:enable)
     (unwind-protect
@@ -95,8 +96,10 @@ not retractions of actions or echoes of actions."
            (cj:start-journal)
            (record-run "undo")
            (record-run "repeat")
+           (record-run "zoom-in")
+           (record-run "pan")
            (record-run "start-journal")
-           (is (= 0 (cj:journal-entry-count)))))
+           (is (= 0 (cj:journal-entry-count)) "the look was not journaled")))
       (cj:disable)))
 
 (test stop-stops-without-forgetting

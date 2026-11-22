@@ -3549,7 +3549,8 @@ separately rather than silently dropped."
 ;;   reload-input      -- rebuilds seats from the compositor's devices.
 ;;   restart-wm        -- the session exiting; asking it to do so in a test
 ;;                        would be the test ending the build.
-;;   run-command-by-name -- the prompt is the command (M-x itself).
+;;   (run-command-by-name was here: the prompt is the command, so the test that
+;;   covers it is the minibuffer suite's M-x path rather than a command test.)
 ;;   set-input         -- writes a rule and asks the compositor to apply it.
 ;;
 ;; Each line names its command as the string a session uses (downcased, as the
@@ -3567,7 +3568,6 @@ separately rather than silently dropped."
     ("reload-config" . "re-runs the session's own configuration file")
     ("reload-input" . "rebuilds seats from the compositor's devices")
     ("restart-wm" . "the session exiting; a test of it would end the build")
-    ("run-command-by-name" . "the prompt is the command (M-x itself)")
     ("set-input" . "writes a rule and asks the compositor to apply it")))
 
 (flet ((suite-files ()

@@ -493,7 +493,12 @@ LatticeWM commands.
   like rather than only on the chord xkb reserves.
 
 (next-workspace &optional (step 1))
-  Switch to the next workspace, wrapping.
+  Switch to the next workspace.
+  
+  What happens at the end is *WORKSPACE-NAV*'s decision (#1): :wrap returns to the
+  first workspace, :grow makes a new one and keeps going.  Stepping *back* from the
+  first always wraps, because there is nothing behind workspace one and a numbered
+  workspace zero would undo the one thing every number here agrees about.
 
 (pin-window)
   Keep the focused window above the other floats, near or far.
@@ -514,7 +519,10 @@ LatticeWM commands.
   List the workspace pins, and whether each screen is here.
 
 (previous-workspace)
-  Switch to the previous workspace, wrapping.
+  Switch to the previous workspace, wrapping at the first.
+  
+  Wrapping *backwards* is not a limitation and does not follow *WORKSPACE-NAV*:
+  :grow is about the edge of the map, and there is no edge behind workspace one.
 
 (profile-current)
   Say which profile was loaded most recently, if any.
@@ -701,6 +709,18 @@ LatticeWM commands.
   workspace, in a lattice cell, or in another output's tree is still marked,
   and the batch verbs act on it wherever it is.  Nothing about the selection is
   visible on screen yet; LIST-SELECTED is how you ask.
+
+(send-next-workspace &key (step 1) (follow nil))
+  Send the focused pane to the next workspace, growing one if that is the edge.
+  
+  The relative half of SEND-TO-WORKSPACE, and the reason #1 asked for it: a
+  `send it two workspaces right' you have to count out yourself is a command you
+  use once.  What happens at the far end is *WORKSPACE-NAV*'s decision, the same
+  one the switching verb reads, so `next' and `send next' cannot disagree about
+  where the next workspace is.
+
+(send-previous-workspace &key (step 1) (follow nil))
+  Send the focused pane to the previous workspace, wrapping at the first.
 
 (send-to-output which &key (follow nil))
   Move the focused pane to another screen — a direction, or a number from one.

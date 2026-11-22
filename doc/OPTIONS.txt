@@ -1189,6 +1189,29 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   default: (0.22 0.22 0.26 1.0)
   Border colour of every pane that is not focused.
 
+*VIEW-COMMANDS*
+  default: ("zoom-in" "zoom-out" "zoom-reset" "zoom-to" "zoom-fit"
+            "zoom-at-pointer" "pan" "pan-to-cursor" "pan-to" "undo" "redo"
+            "repeat" "run-command-by-name" "journal" "command-journal")
+  Commands that change what you are LOOKING at and not what is there.
+  
+  The distinction a recorder needs, as data rather than as a comment inside one
+  extension (#5).  Replaying a recording must reproduce the *arrangement* -- which
+  window is where, in which workspace, floated or tiled -- and must not replay the
+  looking: a zoom that was right on a different screen size is a wrong zoom, and a
+  retraction (`undo') that is replayed into a new session takes away work that new
+  session never did.
+  
+  IT IS AN OPTION, so an extension that adds a view verb of its own -- a focus
+  ring, a status page, a peek -- can say so in one line rather than by editing
+  another extension's list.  What is NOT here matters as much: `focus',
+  `next-window' and `workspace' are moves and are recorded, because a replay that
+  skipped them would put the windows in the right arrangement with the wrong one
+  on top.
+  
+  See P:VIEW-COMMAND-P, which is the only reader, and command-journal, which is
+  the only caller that exists.
+
 *WARN-ON-REBINDING*
   default: T
   Say so when DEFINE-KEY replaces a binding with a *different* command.
@@ -1276,6 +1299,28 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   This is the tier-0 half of window placement.  The tier-1 half is a method on
   WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
   are supported and this one requires no Lisp beyond a quoted list.
+
+*WORKSPACE-NAV*
+  default: :WRAP
+  What the last workspace is: a wall (:wrap) or the edge of the map (:grow).
+  
+    :wrap  the next workspace after the last one is the first, as it always was
+    :grow  the next workspace after the last one is a new one
+  
+  THE TWO ANSWERS ARE BOTH RIGHT AND THEY ARE ABOUT DIFFERENT DESKS.  Wrapping is
+  what a fixed set of numbered workspaces wants -- i3 and the tiling tradition, and
+  before this option the only answer this program had.  Growing is what infinite
+  workspaces are for, and #1 exists because somebody switched to the end of their
+  stack, pressed the key again, and found themselves back at the beginning, which
+  reads as `the desktop is smaller than I thought' rather than as a decision.
+  
+  What grows is the *far end only*: stepping back from the first workspace wraps,
+  because there is nothing behind it and a workspace numbered zero would undo the
+  one thing every workspace number in this program agrees about.
+  
+  The numbered verb is untouched.  `M-x workspace 40' has always created what it
+  needed, and the stack grows; this option only decides what happens when a
+  *relative* step runs off the end.
 
 *WORKSPACE-PINS*
   default: NIL

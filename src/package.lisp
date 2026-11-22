@@ -447,6 +447,8 @@ You never edit this package.")
    #:way-back-key
    ;; #1: what a relative workspace step does at the far end.
    #:*workspace-nav* #:grow-workspace-nav-p
+   ;; #5: what a recorder must not replay -- a look, not a move.
+   #:*view-commands* #:view-command-p
    #:ease #:+animation-curves+ #:*animations* #:animation-for
    #:animation-key #:animation-transitions #:animation-forget
    #:animation-progress #:animation-finished-p #:*animation-duration*
