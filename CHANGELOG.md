@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A group is a tag, and now it has verbs.** `M-x act-on-group` runs *any*
+  command on every window carrying a tag (`minimize`, `close-window`, a verb an
+  extension added — the wrapper knows nothing about the command beyond its
+  name), `M-x focus-group` goes to the member you worked in most recently,
+  `M-x show-group` brings back the ones you put away, and `M-x list-tags`
+  already listed the members. No new object: a tag travels with the window, is
+  saved with the session, and one window may carry several, so groups compose
+  and persist without a second file format. The command's own arguments are
+  asked for once and applied to every member, and the members are the *subject*
+  rather than the focus — the same distinction `with-window` makes.
 - **The hidden set, as a list and a picker.** `M-x list-hidden` shows what is
   alive and on no screen — the window, the program, and where `restore` will put
   it — `M-x hidden` brings one back through a picker that offers *only* the

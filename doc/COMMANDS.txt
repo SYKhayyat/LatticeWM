@@ -1,5 +1,20 @@
 LatticeWM commands.
 
+(act-on-group name command)
+  Run any command on every window tagged NAME.
+  
+  This is the whole of `a group is a unit' and it needed no new object: every
+  verb in this program asks FOCUSED-WINDOW who it is working on, so a group is a
+  window set plus one dynamic binding per member.  Close them, minimize them,
+  tag them again, run a verb an extension added -- anything, because the wrapper
+  knows nothing about the command beyond the name.
+  
+  ASKED ONCE, NOT ONCE PER WINDOW.  the command's own arguments are read a single
+  time and applied to each member, which is the difference between `float these
+  three' and three separate questions whose answers you would have to give
+  identically.  As with WITH-WINDOW, the windows are not *focused*: the subject is
+  named and the keyboard does not move.
+
 (anchor-float &optional (path (current-path)))
   Pin the focused floating window to the pane at PATH.
   
@@ -189,6 +204,12 @@ LatticeWM commands.
 
 (focus-forward &optional (step 1))
   Focus the window you walked back away from.  The other half of FOCUS-BACK.
+
+(focus-group name)
+  Go to the window tagged NAME you were in most recently.
+  
+  `jump-to-tag' answers *a* window carrying the tag; this answers the one you
+  mean, which for a project tag is the window you were last working in.
 
 (focus-history)
   List every window focus has been through, most recent first, marking where
@@ -692,6 +713,14 @@ LatticeWM commands.
   so two outputs cannot display the *same* window twice; see #96.  The cursor's
   output is the leader and keeps the workspace; the other screen joins it.  Give
   it again to span three or four; the output joins the group already there.
+
+(show-group name)
+  Bring back every hidden window tagged NAME, and go to the most recent one.
+  
+  `gather-tag' is about *where* the windows are and this is about whether they
+  are anywhere at all, which are different questions: a group put away with
+  minimize is still your group, and one command should bring it back rather than
+  a picker per window.
 
 (snap place &key output)
   Put the focused window in one of the screen's regions, floating.

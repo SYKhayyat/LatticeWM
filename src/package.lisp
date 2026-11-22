@@ -629,6 +629,9 @@ keybindings, the command registry, and the session loop.")
    ;; answer three files give; these are the report and the picker.
    #:hidden-windows #:hidden-applications #:hidden-return-place
    #:hidden-picker-entries #:show-hidden-window
+   ;; #7: a group is a tag.  The noun already existed; these are the verbs that
+   ;; make `act on all of them' one command.
+   #:group-windows
    #:gesture-finished #:gesture-fired
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
    ;; things that happen because time passed rather than because a client

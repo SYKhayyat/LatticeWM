@@ -145,3 +145,125 @@ package involved."
     (setf (gethash window (r::server-windows server)) window)
     (let ((r:*server* server))
       (is (member (string-downcase name) (r:all-tags) :test #'string=)))))
+
+;;; ------------------------------------------------- a tag is a group (#7)
+;;;
+;;; The issue asked whether a group should be a first-class object.  The answer
+;;; taken is that a group IS a tag -- it travels with the window, it is saved
+;;; with the session, and one window may carry many -- and that what was missing
+;;; was the verbs.  These are those verbs, and every check here is about the
+;;; *set*, because the set is the feature.
+
+(defun a-world-of-three-tagged ()
+  "Three windows, two of them tagged `work', one tagged `music'.
+
+Values: (values world server a b other)."
+  (let* ((a (win "editor")) (b (win "terminal")) (other (win "music"))
+         (server (make-instance 'r::server))
+         (world (c:make-world :root (c:make-stack (list (c:make-leaf)) 0))))
+    (dolist (window (list a b other))
+      (setf (gethash window (r::server-windows server)) window))
+    (setf (c:window-tags a) (list (r:normalize-tag "work"))
+          (c:window-tags b) (list (r:normalize-tag "work"))
+          (c:window-tags other) (list (r:normalize-tag "music")))
+    (values world server a b other)))
+
+(defmacro with-a-group ((a b other) &body body)
+  "Run BODY inside the world the group lives in.
+
+INSIDE, not around: every one of these verbs reads the world from the dynamic
+variable, so a fixture that returned values and let the body run afterwards
+would be asking NIL who its windows are."
+  (let ((world (gensym "WORLD")) (server (gensym "SERVER")))
+    `(multiple-value-bind (,world ,server ,a ,b ,other) (a-world-of-three-tagged)
+       (let ((r:*world* ,world) (r:*server* ,server)
+             (p:*policy* (policy)) (p:*seat* nil)
+             (p:*echo-message* nil))
+         (declare (ignorable ,server))
+         ,@body))))
+
+(test a-group-is-the-windows-carrying-the-tag
+  (with-a-group (a b other)
+    (is (equal (list a b) (r:group-windows "work"))
+        "the two tagged windows and nothing else")
+    (is (equal (list other) (r:group-windows "music")))
+    (is (null (r:group-windows "nobody-has-this")))))
+
+(test a-group-is-ordered-by-when-you-last-worked-in-it
+  "`Bring me back to my project' means the window you were in, not whichever
+one comes first out of the compositor's hash -- so the focus history is the
+order, and windows it has never seen come after the ones it has."
+  (with-a-group (a b other)
+    (declare (ignorable other))
+    (setf (c:prop r:*world* :focus-history) (list b a))
+    (is (equal (list b a) (r:group-windows "work"))
+        "B was focused more recently than A, so B is first")
+    (setf (c:prop r:*world* :focus-history) nil)
+    (is (= 2 (length (r:group-windows "work")))
+        "and with no history at all the group is still complete")))
+
+(test act-on-group-runs-a-command-on-every-window-of-the-group
+  "The whole of `a group is a unit', and it needed no new object: every verb
+asks FOCUSED-WINDOW who it is working on, so a group is a window set plus one
+dynamic binding per member."
+  (with-a-group (a b other)
+    (is (= 2 (r:act-on-group "work" "minimize"))
+        "two windows acted on, not three")
+    (is (c:window-minimized-p a))
+    (is (c:window-minimized-p b))
+    (is (not (c:window-minimized-p other))
+        "and the window carrying a different tag was left alone")))
+
+(test act-on-group-does-not-move-the-keyboard
+  "The distinction WITH-WINDOW makes (#128), made again here: the named window
+is the *subject*, not the focus.  Nothing is told that it has the keyboard."
+  (with-a-group (a b other)
+    ;; Placed first, so there *is* a focus to be unmoved.
+    (dolist (window (list a b other))
+      (p:on-window-open p:*policy* r:*world* window))
+    (let ((before (r:focused-window)))
+      (is-true before "the fixture has somebody in focus")
+      (r:act-on-group "work" "minimize")
+      (is (eq before (r:focused-window))
+          "the focused window is whatever it was -- even when it is the very
+window the group just minimized"))))
+
+(test act-on-group-refuses-a-tag-nobody-carries-and-a-command-that-is-not-one
+  (with-a-group (a b other)
+    (declare (ignorable a b other))
+    (is (cl:stringp (r:act-on-group "nobody-has-this" "minimize"))
+        "an empty group says so rather than erroring")
+    (is (cl:stringp (r:act-on-group "work" "no-such-command"))
+        "and a command name that does not exist says so too")
+    (is (cl:stringp (r:act-on-group "work" "act-on-group"))
+        "a group cannot act on itself with itself")))
+
+(test focus-group-goes-to-the-member-you-were-in-most-recently
+  (with-a-group (a b other)
+    (declare (ignorable other))
+    (setf (c:prop r:*world* :focus-history) (list b a))
+    (is (eq b (r:focus-group "work"))
+        "B, because the history says so -- JUMP-TO-TAG would have said A")))
+
+(test show-group-brings-back-the-hidden-members-and-leaves-the-rest
+  (with-a-group (a b other)
+    (dolist (window (list a b other))
+      (p:on-window-open p:*policy* r:*world* window))
+    (r:minimize-window a)
+    (r:minimize-window b)
+    (is (= 2 (r:show-group "work")))
+    (is (notany #'c:window-minimized-p (list a b)))
+    (is (not (c:window-minimized-p other))
+        "the untagged window was never hidden, and nothing was done to it")))
+
+(test show-group-with-a-group-that-is-already-visible-changes-nothing
+  (with-a-group (a b other)
+    (declare (ignorable a b))
+    (is (cl:stringp (r:show-group "work"))
+        "nothing hidden: it says so")
+    (is (not (c:window-minimized-p other)))))
+
+(test the-group-commands-exist-and-are-named-by-a-test
+  (is-true (p:find-command "act-on-group"))
+  (is-true (p:find-command "focus-group"))
+  (is-true (p:find-command "show-group")))

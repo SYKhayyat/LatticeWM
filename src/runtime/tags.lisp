@@ -163,6 +163,118 @@ scratchpad the same feature seen twice."
                  (and (rest windows) (length (rest windows))))
          window)))))
 
+;;; ------------------------------------------------- a tag is a group (#7)
+;;;
+;;; THE ISSUE ASKED WHETHER A GROUP SHOULD BE A FIRST-CLASS OBJECT, and the
+;;; answer taken here is the issue's own option two: a group IS a tag.  Three
+;;; reasons, and they are the three that would otherwise be three new objects.
+;;;
+;;; A tag travels with the window rather than with a place, so a group survives
+;;; rearrangement; it is already saved and restored with the session (#39's
+;;; persistence seam), so a group is persistent without a second file format;
+;;; and one window may carry many tags, so groups compose.  What was actually
+;;; missing was not the noun but the VERBS -- `act on all of them' -- and that is
+;;; a handful of lines here rather than a subsystem.
+
+(defun group-windows (name)
+  "Every live window tagged NAME, most recently focused first.
+
+THE ORDER IS THE POINT.  A group is acted on in the order you last worked in
+it, because `bring me back to my project' means the window you were in, not
+whichever one happens to come first out of the compositor's hash.  Windows the
+history has never seen keep their relative order after those it has, so the
+answer is stable and total."
+  (let* ((windows (windows-tagged name))
+         (history (p:focus-history-of *world*)))
+    (stable-sort (copy-list windows)
+                 (lambda (a b)
+                   (let ((ia (or (position a history) most-positive-fixnum))
+                         (ib (or (position b history) most-positive-fixnum)))
+                     (< ia ib))))))
+
+(defcommand act-on-group (name command)
+  "Run any command on every window tagged NAME.
+
+This is the whole of `a group is a unit' and it needed no new object: every
+verb in this program asks FOCUSED-WINDOW who it is working on, so a group is a
+window set plus one dynamic binding per member.  Close them, minimize them,
+tag them again, run a verb an extension added -- anything, because the wrapper
+knows nothing about the command beyond the name.
+
+ASKED ONCE, NOT ONCE PER WINDOW.  the command's own arguments are read a single
+time and applied to each member, which is the difference between `float these
+three' and three separate questions whose answers you would have to give
+identically.  As with WITH-WINDOW, the windows are not *focused*: the subject is
+named and the keyboard does not move."
+  (:interactive :tag :command)
+  (let ((inner (find-command command))
+        (windows (group-windows name)))
+    (cond
+      ((null windows) (notify "nothing is tagged ~(~a~)" name))
+      ((null inner) (notify "no such command: ~a" command))
+      ((eq inner (find-command "act-on-group"))
+       (notify "act-on-group cannot run itself"))
+      (t
+       (let ((arguments (command-arguments inner))
+             (act (lambda (values)
+                    (let ((acted '()))
+                      (dolist (window (group-windows name))
+                        ;; Re-read each time: an earlier member's command may
+                        ;; have closed a later one -- `act on all of these, and
+                        ;; close-window' is a thing people ask for.
+                        (when (c:window-live-p window)
+                          (push (with-focus-on window
+                                  (if values
+                                      (apply #'run-command (command-name inner) values)
+                                      (run-command (command-name inner))))
+                                acted)))
+                      (after-command)
+                      (notify "~(~a~): ~d window~:p" name (length acted))
+                      (length acted)))))
+         (cond
+           ((and arguments (not (command-interactive-p inner)))
+            (notify "~a takes ~{~(~a~)~^ ~} -- run it from a REPL"
+                    (command-name inner) (command-lambda-list inner)))
+           ((null arguments) (funcall act nil))
+           (t (read-arguments inner arguments (lambda (values) (funcall act values))))))))))
+
+(defcommand focus-group (name)
+  "Go to the window tagged NAME you were in most recently.
+
+`jump-to-tag' answers *a* window carrying the tag; this answers the one you
+mean, which for a project tag is the window you were last working in."
+  (:interactive :tag)
+  (let ((windows (group-windows name)))
+    (cond
+      ((null windows) (notify "nothing is tagged ~(~a~)" name))
+      (t
+       (let ((window (first windows)))
+         (when (c:window-minimized-p window) (restore-window window))
+         (focus-existing-window window)
+         (notify "~(~a~): ~a~@[ (~d more)~]"
+                 name (p:name-of-window window)
+                 (and (rest windows) (length (rest windows))))
+         window)))))
+
+(defcommand show-group (name)
+  "Bring back every hidden window tagged NAME, and go to the most recent one.
+
+`gather-tag' is about *where* the windows are and this is about whether they
+are anywhere at all, which are different questions: a group put away with
+minimize is still your group, and one command should bring it back rather than
+a picker per window."
+  (:interactive :tag)
+  (let* ((windows (group-windows name))
+         (hidden (remove-if-not #'c:window-minimized-p windows)))
+    (cond
+      ((null windows) (notify "nothing is tagged ~(~a~)" name))
+      ((null hidden) (notify "~(~a~): nothing hidden" name))
+      (t
+       (dolist (window (reverse hidden)) (restore-window window))
+       (focus-existing-window (first hidden))
+       (notify "~(~a~): ~d window~:p back" name (length hidden))
+       (length hidden)))))
+
 (defcommand gather-tag (name)
   "Bring every window tagged NAME to the workspace you are on.
 
