@@ -625,6 +625,10 @@ keybindings, the command registry, and the session loop.")
    #:profile-names #:profile-path #:profile-name-p #:profile-exists-p
    #:load-profile #:write-profile #:delete-profile #:*current-profile*
    #:option-changes #:profile-forms
+   ;; #6: the hidden set.  No new state -- the scratchpad was already the
+   ;; answer three files give; these are the report and the picker.
+   #:hidden-windows #:hidden-applications #:hidden-return-place
+   #:hidden-picker-entries #:show-hidden-window
    #:gesture-finished #:gesture-fired
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
    ;; things that happen because time passed rather than because a client

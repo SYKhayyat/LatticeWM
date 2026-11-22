@@ -26,6 +26,15 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The hidden set, as a list and a picker.** `M-x list-hidden` shows what is
+  alive and on no screen — the window, the program, and where `restore` will put
+  it — `M-x hidden` brings one back through a picker that offers *only* the
+  hidden windows, `M-x restore-app` brings back every window of one program at
+  once, and `M-x restore-all` empties the set. No new state: a window on the
+  scratchpad was already out of the layout and remembering its place, and this
+  is the report and the picker the set never had. Nothing here is a taskbar,
+  because there isn't one — "invisible" and "hidden but listed" are the same
+  thing in a program that lists nothing until asked.
 - **Profiles: switch configurations without restarting.** `M-x profile-load
   work` applies a profile to the running session, `profile-save work` writes the
   current one, `profiles` lists them, `profile-delete` removes one, and

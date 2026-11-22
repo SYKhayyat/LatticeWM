@@ -128,6 +128,13 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite hidden :in model
+  :description "The hidden set: windows that are alive and on no screen (#6).
+No new state -- WM:WORLD-SCRATCHPAD was already the answer three files give.
+What was missing was that the set could not be *listed*, and that the only
+picker that reached it offered every window of the session to reach the few you
+cannot see.")
+
 (def-suite profiles :in model
   :description "Named configuration files you can switch between (#12).  A
 profile is a Lisp file in ~/.config/latticewm/profiles/ and loading it is

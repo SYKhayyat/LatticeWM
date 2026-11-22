@@ -222,6 +222,13 @@ forget-gesture= unbinds one. These are *touchscreen* gestures: river consumes
 trackpad swipes itself and does not forward them, which is a limit of the
 compositor rather than of the table.
 
+=M-x list-hidden= says what is alive and on no screen -- there is no taskbar
+here, so a window you put away is in no list until you ask for one -- and =M-x
+hidden= brings one back through a picker that offers only those.  =M-x
+restore-app= brings back every window of one program, and =M-x restore-all=
+empties the set.  Nothing is truncated or shadowed: a hidden window is out of
+the layout, alive, still running, and holding the place it will return to.
+
 =M-x profile-load work= applies a *profile* to the running session, and =M-x
 profile-save work= writes down what you have changed from the shipped
 configuration.  A profile is an ordinary configuration file in

@@ -291,6 +291,15 @@ LatticeWM commands.
   Built from the live keymap and each command's own docstring, so it includes
   anything you bound yourself and cannot go out of date.  Any key dismisses it.
 
+(hidden window)
+  Bring back one of the windows that is on no screen.
+  
+  The picker offers the hidden set and nothing else, which is the whole point:
+  `M-x focus-window-by-name' reaches every window this session has, and reaching
+  three you cannot see through forty you can is the difficulty this command
+  removes.  Choosing one restores it to the place it left and puts the cursor
+  there.
+
 (jump-to-tag name)
   Go to the window carrying tag NAME, wherever it is.
   
@@ -306,6 +315,14 @@ LatticeWM commands.
   
   Persistent for the session but not across one: put it in *XKB-LAYOUT* to keep
   it.
+
+(list-hidden)
+  Show what is alive and on no screen, and where each one will come back to.
+  
+  There is no taskbar here, so a window you put away is in no list until you ask
+  for one.  This is the list: the windows, the program each belongs to, and the
+  place RESTORE will put it -- `back where it was' when the slot survived, `into
+  the pane you are in' when it did not.
 
 (list-inputs &optional name)
   Print every input device, or the ones whose name contains NAME.
@@ -534,6 +551,21 @@ LatticeWM commands.
   river hands window management to one client at a time, so a successor spawned
   from here — inside the event loop, with our manager object still bound — would
   race us for it and lose.
+
+(restore-all)
+  Bring back every window that is on no screen.
+  
+  The complement of `minimize', and the reason it exists: a hidden set with no
+  way to empty it is a set that grows and is never audited.  Each window goes
+  back to its own remembered place, oldest first.
+
+(restore-app app-id)
+  Bring back every hidden window belonging to one program.
+  
+  THE REASON THIS IS A COMMAND AND NOT A LOOP THE USER WRITES: hidden windows
+  are hidden as *windows*, but they are put away as *work* -- a browser with
+  three windows is one thing you stopped doing.  All of them come back, in the
+  order they were hidden, each to its own remembered place.
 
 (restore-last)
   Bring back the most recently minimized window.

@@ -308,6 +308,10 @@ system, an infinite zoomable plane of cells, is a proof of."
        ;; After config, which owns the directory they live in, and after
        ;; sequence, which owns the key rebind and manage ask a load needs.
        (:file "profiles" :depends-on ("server" "minibuffer" "echo" "config" "sequence" "seats"))
+       ;; #6: the hidden set, as a report and a picker.  After verbs, whose
+       ;; picker it reuses rather than reimplements, and after help, whose page
+       ;; it draws on.
+       (:file "hidden" :depends-on ("verbs" "help" "windows" "minibuffer"))
        (:file "history" :depends-on ("server" "minibuffer" "echo" "help" "sequence"))
        (:file "verbs" :depends-on ("server" "minibuffer" "echo" "help" "config" "emit" "capture" "windows" "sequence" "outputs" "seats" "history"))
        (:file "tags" :depends-on ("server" "echo" "help" "windows" "sequence" "outputs" "verbs"))
@@ -336,6 +340,7 @@ without a compositor — which is the whole model."
      (:file "test-window-state")
      (:file "test-gestures")
      (:file "test-profiles")
+     (:file "test-hidden")
      (:file "test-placement")
      (:file "test-stacking")
      (:file "test-tree")
