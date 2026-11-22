@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Monitors: move a workspace to another screen, and see what each one shows.**
+  `M-x move-workspace-to-output` sends the workspace you are on — windows and
+  all — to the screen in a direction, and this screen trades for what that one
+  was showing rather than going blank. Without `:follow` the keyboard stays
+  where you are; with it, it crosses the seam with the work. `M-x list-outputs`
+  reports every screen: name, size, position, the workspace it is showing,
+  whether it holds the cursor, and whether it is sharing a plane with another.
+  Workspace *numbers* already meant the same thing on every screen, because
+  there is one stack of workspaces and one viewport per output — the number
+  picks the workspace and each screen keeps its own viewport. Mirroring in the
+  sense of one picture on two monitors is not a client's to do (#96, #125);
+  `M-x share-workspace` is the useful half of it.
 - **A group is a tag, and now it has verbs.** `M-x act-on-group` runs *any*
   command on every window carrying a tag (`minimize`, `close-window`, a verb an
   extension added — the wrapper knows nothing about the command beyond its

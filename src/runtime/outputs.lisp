@@ -439,3 +439,95 @@ workspace, because the one it was looking at is still the group's."
                                      (mapcar (lambda (member)
                                                (or (c:output-name member) "?"))
                                              group))))))))
+
+;;; --------------------------------------------- a workspace is not a screen (#8)
+;;;
+;;; THE MODEL IS ONE STACK OF WORKSPACES AND ONE VIEWPORT PER OUTPUT, which is
+;;; the fiat in PLAN.org and the reason most of #8 was already true.  Numbers
+;;; already mean the same thing everywhere, because there is one stack: `M-x
+;;; workspace 5' shows workspace five on the screen the cursor is on and leaves
+;;; the other screens alone.  And mirroring in the sense people mean it -- one
+;;; picture on two monitors -- is impossible for a Wayland client and was
+;;; answered by #96 and #125 rather than by a verb.
+;;;
+;;; What was missing was the verb for `this workspace belongs over there', and
+;;; the report that says which screen is showing what.  Both are here, and
+;;; neither needed a new field: SHOW-WORKSPACE-ON already trades, which is
+;;; exactly what moving a workspace between screens means.
+
+(defcommand move-workspace-to-output (which &key (follow nil))
+  "Show the workspace you are on, on another screen -- a direction or a number.
+
+The whole workspace moves, windows and all, because a workspace is one node of
+one tree and there is nothing to take apart.  THIS SCREEN TRADES: it comes back
+showing the workspace the other screen was showing, which is SHOW-WORKSPACE-ON's
+answer and the one that leaves both monitors displaying something rather than
+one of them blank.
+
+FOLLOW takes the cursor with the workspace, for the keyboard to arrive where the
+work you just moved now is.  Without it you stay and look at what you traded
+for, which is right when you are shipping a distraction away and wrong when you
+are following your work."
+  (:interactive :direction)
+  (let* ((here (cursor-output))
+         (target (and here (ignore-errors (resolve-output which))))
+         (index (and here (c:prop here :workspace))))
+    (cond
+      ;; NIL, and not the message NOTIFY returns: the answer to `move this
+      ;; workspace' when there is nowhere to move it is a moved workspace or
+      ;; nothing, and a command whose failure value is a string is a command
+      ;; every caller has to special-case.
+      ((null here) (notify "no output to move from") nil)
+      ((null target) (notify "no screen that way") nil)
+      ((eq target here) (notify "that is the screen you are on") nil)
+      ((null index) (notify "this screen is not showing a workspace") nil)
+      (t
+       (let ((traded (c:prop target :workspace)))
+         (show-workspace-on target index)
+         (setf (c:container-selection (c:world-workspaces *world*)) index)
+         (relayout)
+         (request-manage)
+         ;; THE CURSOR IS A PLACE IN THE MODEL, NOT A SIDE EFFECT OF WHICH
+         ;; SCREEN IS ACTIVE -- the same ruling SHOW-WORKSPACE-ON makes.  So
+         ;; without FOLLOW it is repaired onto the workspace this screen has
+         ;; just traded for, which is where the person looking at that screen
+         ;; now is; with FOLLOW it crosses the seam with the work.
+         (if follow
+             (focus-output which)
+             (p:jump-cursor (p:current-policy) *world*
+                            (p:remembered-place *world* (c:prop here :workspace))))
+         (notify "workspace ~d is on ~a~@[; this one now shows ~d~]"
+                 (1+ index)
+                 (or (c:output-name target) "that screen")
+                 (and (integerp traded) (1+ traded)))
+         index)))))
+
+(defcommand list-outputs ()
+  "Show every screen: what it is called, how big it is, and what it is showing."
+  ()
+  (let ((outputs (all-outputs))
+        (here (cursor-output)))
+    (if (null outputs)
+        (progn (notify "no outputs") nil)
+        (progn
+          (show-help-page
+           (format nil "outputs -- ~d" (length outputs))
+           (loop for output in outputs
+                 for index from 1
+                 collect (cons (format nil "~d ~a~:[~; *~]"
+                                       index (or (c:output-name output) "?")
+                                       (eq output here))
+                               (format nil "~dx~d at ~d,~d  workspace ~d~@[  sharing with ~a~]"
+                                       (c:rect-w (c:output-rect output))
+                                       (c:rect-h (c:output-rect output))
+                                       (c:rect-x (c:output-rect output))
+                                       (c:rect-y (c:output-rect output))
+                                       (1+ (or (c:prop output :workspace) 0))
+                                       (let ((group (c:output-share-group output)))
+                                         (and group
+                                              (format nil "~{~a~^, ~}"
+                                                      (mapcar (lambda (member)
+                                                                (or (c:output-name member) "?"))
+                                                              (remove output group)))))))))
+          (notify "~d output~:p" (length outputs))
+          outputs))))

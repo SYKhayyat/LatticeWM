@@ -25,30 +25,6 @@
 
 ;;; ------------------------------------------------------------------ fixtures
 
-(defun two-output-world (&key (w 1000) (h 800))
-  "A world with a monitor left of another, each showing a workspace of its own."
-  (let* ((world (c:make-world))
-         (left (make-instance 'c:output :name "left"
-                              :rect (c:make-rect 0 0 w h)))
-         (right (make-instance 'c:output :name "right"
-                               :rect (c:make-rect w 0 w h))))
-    (setf (c:world-outputs world) (list left right))
-    (p:ensure-workspaces-for-outputs world)
-    (values world left right)))
-
-(defun three-output-world (&key (w 1000) (h 800))
-  "Three monitors in a row, so that a group can grow past two."
-  (let* ((world (c:make-world))
-         (left (make-instance 'c:output :name "left"
-                              :rect (c:make-rect 0 0 w h)))
-         (middle (make-instance 'c:output :name "middle"
-                                :rect (c:make-rect w 0 w h)))
-         (right (make-instance 'c:output :name "right"
-                               :rect (c:make-rect (* 2 w) 0 w h))))
-    (setf (c:world-outputs world) (list left middle right))
-    (p:ensure-workspaces-for-outputs world)
-    (values world left middle right)))
-
 ;;; -------------------------------------------------------------------- tests
 
 (test the-union-of-two-monitors-is-the-rectangle-around-both

@@ -230,6 +230,15 @@ rather than an arbitrary one, and =M-x show-group= brings back the ones you put
 away.  One window may carry several tags, so groups compose, and a tag travels
 with the window rather than with a place, so a group survives rearrangement.
 
+=M-x move-workspace-to-output= sends the workspace you are on to the screen in
+a direction, and the screen it left trades for what that one was showing instead
+of going blank; =:follow= takes the keyboard with it.  =M-x list-outputs= says
+what each screen is called, how big it is, which workspace it shows, and whether
+it is one plane with another.  Workspace numbers mean the same workspace on
+every screen -- there is one stack of workspaces and one viewport per output --
+and mirroring, in the sense of one picture on two monitors, is not something a
+Wayland client can do: =M-x share-workspace= is the useful half.
+
 =M-x list-hidden= says what is alive and on no screen -- there is no taskbar
 here, so a window you put away is in no list until you ask for one -- and =M-x
 hidden= brings one back through a picker that offers only those.  =M-x

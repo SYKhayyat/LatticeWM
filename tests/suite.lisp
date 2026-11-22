@@ -128,6 +128,12 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite outputs :in model
+  :description "Monitors (#8).  One stack of workspaces and one viewport per
+output means a number already means the same workspace on every screen, so what
+was missing was the verb for `this workspace belongs over there' and the report
+that says which screen shows what.")
+
 (def-suite hidden :in model
   :description "The hidden set: windows that are alive and on no screen (#6).
 No new state -- WM:WORLD-SCRATCHPAD was already the answer three files give.
@@ -286,6 +292,30 @@ contradicting the thing it exists to check."
 (defun win (&optional (app-id "test"))
   "A window object with no proxy — the model never dereferences one."
   (make-instance 'c:window :app-id app-id))
+
+(defun two-output-world (&key (w 1000) (h 800))
+  "A world with a monitor left of another, each showing a workspace of its own."
+  (let* ((world (c:make-world))
+         (left (make-instance 'c:output :name "left"
+                              :rect (c:make-rect 0 0 w h)))
+         (right (make-instance 'c:output :name "right"
+                               :rect (c:make-rect w 0 w h))))
+    (setf (c:world-outputs world) (list left right))
+    (p:ensure-workspaces-for-outputs world)
+    (values world left right)))
+
+(defun three-output-world (&key (w 1000) (h 800))
+  "Three monitors in a row, so that a group can grow past two."
+  (let* ((world (c:make-world))
+         (left (make-instance 'c:output :name "left"
+                              :rect (c:make-rect 0 0 w h)))
+         (middle (make-instance 'c:output :name "middle"
+                                :rect (c:make-rect w 0 w h)))
+         (right (make-instance 'c:output :name "right"
+                               :rect (c:make-rect (* 2 w) 0 w h))))
+    (setf (c:world-outputs world) (list left middle right))
+    (p:ensure-workspaces-for-outputs world)
+    (values world left middle right)))
 
 (defun leaf-with (app-id)
   "A leaf holding a fresh window tagged APP-ID."

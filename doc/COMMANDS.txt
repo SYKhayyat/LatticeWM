@@ -354,6 +354,9 @@ LatticeWM commands.
   is in force, not what the configuration asked for, so the two disagreeing is
   visible rather than mysterious.
 
+(list-outputs)
+  Show every screen: what it is called, how big it is, and what it is showing.
+
 (list-scratchpad-claims)
   Show which application goes on which scratchpad.
 
@@ -428,6 +431,20 @@ LatticeWM commands.
   
   Floats are positioned by hand, which is the point of floating them; this is
   the keyboard half of that.
+
+(move-workspace-to-output which &key (follow nil))
+  Show the workspace you are on, on another screen -- a direction or a number.
+  
+  The whole workspace moves, windows and all, because a workspace is one node of
+  one tree and there is nothing to take apart.  THIS SCREEN TRADES: it comes back
+  showing the workspace the other screen was showing, which is SHOW-WORKSPACE-ON's
+  answer and the one that leaves both monitors displaying something rather than
+  one of them blank.
+  
+  FOLLOW takes the cursor with the workspace, for the keyboard to arrive where the
+  work you just moved now is.  Without it you stay and look at what you traded
+  for, which is right when you are shipping a distraction away and wrong when you
+  are following your work.
 
 (name-this)
   Give the focused node a name, so it can be jumped to by it.
