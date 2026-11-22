@@ -25,6 +25,11 @@
 
 (in-package #:latticewm/runtime)
 
+;; FOCUS-OUTPUT lives in verbs.lisp, which loads after this file, and the pin
+;; below needs it: a forward *function* reference is a DECLAIM FTYPE and never a
+;; stub (the stub is the thing gate 1 exists to catch).
+(declaim (ftype (function (t) t) focus-output))
+
 (defun name-outputs ()
   "Give every output the name of the wl_output it named, once both are known.
 
@@ -238,6 +243,22 @@ moved it to another monitor would be answering a question nobody asked.
 If the other output had nothing to trade back it is left with no workspace, and
 ENSURE-WORKSPACES-FOR-OUTPUTS gives it one before anything is drawn."
   (when (and output (integerp index))
+    ;; THE PIN WINS (#132), AND IT IS CHECKED HERE BECAUSE THIS IS THE ONE
+    ;; WRITER OF :WORKSPACE.  A pin says `workspace 3 belongs to the external
+    ;; monitor'; asking another screen for it is asking for the workspace, and
+    ;; the workspace is there.  So the owner is asked instead and you are taken
+    ;; with it -- the answer the issue calls `the pin wins', chosen over
+    ;; `a pin is a default' (which is not a pin: anything would override it) and
+    ;; over `pins forbid the switch' (which refuses what the user asked for).
+    ;;
+    ;; Before the trade, deliberately: a trade would take the pinned workspace
+    ;; off the screen it is pinned to and leave that screen showing the asker's,
+    ;; which is the pin being overruled one line after it was honoured.
+    (let ((owner (pinned-output-for index)))
+      (when (and owner (not (eq owner output)))
+        (show-workspace-on owner index)
+        (focus-output owner)
+        (return-from show-workspace-on index)))
     ;; A FOLLOWER IS NOT A SCREEN YOU SWITCH.  It draws nothing, so a switch
     ;; asked of it is a switch of the group; the leader is the member that
     ;; keeps the index and lays the plane out, so it is the one asked.
@@ -531,3 +552,94 @@ are following your work."
                                                               (remove output group)))))))))
           (notify "~d output~:p" (length outputs))
           outputs))))
+
+;;; ------------------------------------------------- the pin (#132)
+
+(p:define-option *workspace-pins* nil
+  "Which screen each workspace belongs to: an alist of number and output name.
+
+    ((3 . \"HDMI-A-1\") (5 . \"eDP-1\"))
+
+The output NAME rather than an object, because river has no stable output
+identity and the name is already what per-output workspace memory is keyed on --
+a pin written in a config file has to mean the same screen tomorrow.
+
+A pinned workspace is honoured by the one writer of :workspace
+(SHOW-WORKSPACE-ON), which is what keeps this from becoming four checks in four
+places that disagree.  Asking another screen for a pinned workspace takes you to
+the screen it is pinned to, because you asked for the workspace.  A pin to a
+screen that is not plugged in is not a pin: the workspace behaves as if unpinned,
+which is #8's answer for an output that went away.")
+
+(defun pinned-output-name (index)
+  "The output NAME the workspace at internal INDEX is pinned to, or NIL.
+
+THE TABLE IS KEYED BY WORKSPACE NUMBER, not by internal index: it is written by
+a config file and by `M-x pin-workspace 3', and both of those mean the third
+workspace, which is index two.  The conversion happens here and nowhere else, so
+that the table a human reads and the table the runtime consults cannot drift."
+  (let ((entry (and (integerp index)
+                    (assoc (1+ index) *workspace-pins* :test #'eql))))
+    (and entry (string (cdr entry)))))
+
+(defun pinned-output-for (index)
+  "The OUTPUT workspace INDEX is pinned to, if that output is here now."
+  (let ((name (pinned-output-name index)))
+    (and name
+         (find-if (lambda (output)
+                    (let ((own (c:output-name output)))
+                      (and own (string-equal own name))))
+                  (all-outputs)))))
+
+(defcommand pin-workspace (which output)
+  "Pin a workspace to a screen, so asking for it anywhere brings it there.
+
+`M-x pin-workspace 3 HDMI-A-1'.  The imperative half of *WORKSPACE-PINS*: the
+same table, edited by a command instead of by a config file."
+  (:interactive :number :output)
+  (let ((name (and output (c:output-name output))))
+    (cond ((null name) (notify "that screen has no name yet") nil)
+          ((not (integerp which)) (notify "which workspace?") nil)
+          (t
+           (let ((entry (assoc which *workspace-pins* :test #'eql)))
+             (if entry
+                 (setf (cdr entry) name)
+                 (setf *workspace-pins*
+                       (sort (acons which name *workspace-pins*) #'< :key #'car))))
+           ;; Pinning a workspace onto the screen it is on is what makes it
+           ;; stay; pinning it *elsewhere* is a request to move it there, and a
+           ;; pin that left the workspace on the wrong screen until something
+           ;; else happened would be a pin you cannot check.
+           (show-workspace-on output (1- which))
+           (relayout)
+           (request-manage)
+           (notify "workspace ~d is pinned to ~a" which name)
+           which))))
+
+(defcommand unpin-workspace (which)
+  "Let a workspace go anywhere again."
+  (:interactive :number)
+  (let ((entry (and (integerp which)
+                    (assoc which *workspace-pins* :test #'eql))))
+    (if (null entry)
+        (progn (notify "workspace ~d is not pinned" which) nil)
+        (progn
+          (setf *workspace-pins* (remove entry *workspace-pins*))
+          (notify "workspace ~d is free again" which)
+          which))))
+
+(defcommand pins ()
+  "List the workspace pins, and whether each screen is here."
+  (show-help-page
+   "workspace pins"
+   (if (null *workspace-pins*)
+       '(("" . "no pins: every workspace may go anywhere"))
+       (loop for (index . name) in *workspace-pins*
+             collect (cons (format nil "workspace ~d" index)
+                           (format nil "~a~a" name
+                                   (if (find-if (lambda (output)
+                                                  (let ((own (c:output-name output)))
+                                                    (and own (string-equal own name))))
+                                                (all-outputs))
+                                       "" " (not plugged in)"))))))
+  t)

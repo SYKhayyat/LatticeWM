@@ -504,6 +504,15 @@ LatticeWM commands.
   overlap), so pinning one floats it, and that is the same promise the window
   rule's :PIN makes for windows that open pinned.
 
+(pin-workspace which output)
+  Pin a workspace to a screen, so asking for it anywhere brings it there.
+  
+  `M-x pin-workspace 3 HDMI-A-1'.  The imperative half of *WORKSPACE-PINS*: the
+  same table, edited by a command instead of by a config file.
+
+(pins)
+  List the workspace pins, and whether each screen is here.
+
 (previous-workspace)
   Switch to the previous workspace, wrapping.
 
@@ -915,6 +924,9 @@ LatticeWM commands.
 
 (unpin-window)
   Let the focused window stack like the other floats again.
+
+(unpin-workspace which)
+  Let a workspace go anywhere again.
 
 (unshare-workspace)
   Stop sharing the workspace you are on; this screen shows its own again.

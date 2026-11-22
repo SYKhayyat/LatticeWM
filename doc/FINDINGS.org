@@ -1446,3 +1446,42 @@ And it composes with the rest the way every feature here is meant to: the
 declarative half is =*start-suspended*=
 (+M-x resume-keys+ or Super+Escape ends it), because "give the keyboard away for
 this session" is a line in a config file and not only a key you press.
+
+* Pinning a workspace to a screen: the pin wins, and that is a ruling about the
+  trade
+#132 is the third of the multi-monitor features and the only one where a new
+feature plainly contradicts an old one. #126's rule is that a switch **trades**:
+when this screen switches to a workspace another screen is showing, the other
+screen takes the one this screen was showing. That rule exists because the
+alternative leaves a monitor blank. A pin says the opposite about the same pair,
+so the two disagree the moment somebody asks the wrong screen for a pinned
+workspace, and there were three coherent answers:
+
+1. *the pin wins* -- asking another screen for a pinned workspace takes you to
+   the screen that owns it, and trades never apply to a pinned workspace;
+2. *the pin is a default* -- it decides where a workspace starts (at output
+   arrival, after a hotplug, after a restore) and any explicit switch may take it
+   away;
+3. *pins forbid the switch* -- the command refuses with a message naming the
+   screen.
+
+**The first one shipped.** The second is not a pin: a rule that any explicit
+action overrides is a default value, and a user who pins a workspace to the
+external monitor has already said what they want to happen. The third is the
+strictest and the most annoying -- it refuses the thing the user asked for and
+tells them to go somewhere else, which is the interaction every window manager
+gets criticised for.
+
+The answer that made it cheap was *where* to check. #132 warned that the
+temptation is to check the pin in =show-workspace-on=, in
+=ensure-workspaces-for-outputs=, in the hotplug path and again in the restore
+path, and that the fourth is the one that would rot. It is checked in exactly one
+place instead -- =show-workspace-on=, which is already *the one writer of*
+=:workspace= -- and everything else gets the rule for free, including restore and
+hotplug, without a line of code in either.
+
+Two smaller decisions that turned out to matter. Pinning *moves* the workspace if
+it is somewhere else, because a pin you cannot see take effect is a table entry
+rather than a rule; and the pin table is keyed by **workspace number** while the
+runtime speaks internal indexes, with the conversion in one function, so that the
+table a human reads and the table the runtime consults cannot drift.

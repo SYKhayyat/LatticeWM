@@ -26,6 +26,15 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A workspace can be pinned to a screen.** `M-x pin-workspace 3 HDMI-A-1`
+  (or `*workspace-pins*` in a config file, `((3 . "HDMI-A-1"))`), `M-x
+  unpin-workspace` to let it go, `M-x pins` to see the table and whether each
+  screen is plugged in. **The pin wins over #8's trade**: asking another screen
+  for a pinned workspace takes you to the screen that owns it, because you asked
+  to see the workspace — the alternative, a pin that any switch may override, is
+  not a pin. Enforced in one place (`show-workspace-on`, the one writer of the
+  workspace property), so restore and hotplug get the rule for free; a pin to a
+  screen that is unplugged is not a pin, and returns when the screen does.
 - **`M-x suspend-keys` hands the keyboard to the application.** Every binding
   is disabled at the compositor — not merely ignored, because river delivers a
   registered key to the window manager and never to the window — except

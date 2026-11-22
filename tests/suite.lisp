@@ -128,6 +128,11 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite pins :in model
+  :description "A workspace that belongs to a screen (#132).  The rule this
+collides with is #126's trade, so the answer taken -- the pin wins, and the
+cursor follows -- is checked where the two rules meet.")
+
 (def-suite shortcuts :in model
   :description "The keyboard in both directions (#11).  A keyriver was told
 about goes to the window manager and never to the focused window, so `global'

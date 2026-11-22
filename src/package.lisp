@@ -638,6 +638,8 @@ keybindings, the command registry, and the session loop.")
    ;; same answer the report's page has.
    #:shortcut-rows #:shortcut-summary #:shortcut-first-line
    #:*start-suspended*
+   ;; #132: the pin table, exported because an init.lisp writes it directly.
+   #:*workspace-pins* #:pinned-output-for #:pinned-output-name
    #:*startup-profile* #:*profiles-directory*
    #:profiles-directory #:profiles-directory-name
    #:profile-names #:profile-path #:profile-name-p #:profile-exists-p

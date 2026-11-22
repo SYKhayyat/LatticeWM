@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM extension surface
-70 generics, 123 options.  Generated from the running image.
+70 generics, 124 options.  Generated from the running image.
 ============================================================================
 
 Every generic below dispatches on a policy as its first argument.  To change
@@ -2844,6 +2844,24 @@ WINDOW-NAME, which is the generic every one of those places asks.
 This is the tier-0 half of window placement.  The tier-1 half is a method on
 WINDOW-RULE-FOR, and the tier-2 half is a method on ON-WINDOW-OPEN; all three
 are supported and this one requires no Lisp beyond a quoted list.
+
+*workspace-pins*
+  now: NIL
+  read by: pin-workspace, pinned-output-name, pins, unpin-workspace
+  Which screen each workspace belongs to: an alist of number and output name.
+
+    ((3 . "HDMI-A-1") (5 . "eDP-1"))
+
+The output NAME rather than an object, because river has no stable output
+identity and the name is already what per-output workspace memory is keyed on --
+a pin written in a config file has to mean the same screen tomorrow.
+
+A pinned workspace is honoured by the one writer of :workspace
+(SHOW-WORKSPACE-ON), which is what keeps this from becoming four checks in four
+places that disagree.  Asking another screen for a pinned workspace takes you to
+the screen it is pinned to, because you asked for the workspace.  A pin to a
+screen that is not plugged in is not a pin: the workspace behaves as if unpinned,
+which is #8's answer for an output that went away.
 
 *xkb-layout*
   now: NIL

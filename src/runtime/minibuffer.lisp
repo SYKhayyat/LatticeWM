@@ -380,6 +380,30 @@ characters at any scale without this function knowing how wide a glyph is."
                (error "~a is not a direction -- try left, right, up or down" text))
              keyword)))
 
+(define-argument-type :output "screen: "
+  :documentation "The name of a screen, or a direction from the one you are on."
+  :candidates (lambda ()
+                (let ((world latticewm/runtime::*world*))
+                  (if world
+                      (mapcar (lambda (output)
+                                (or (c:output-name output) "?"))
+                              (c:world-outputs world))
+                      '())))
+  :parse (lambda (text)
+           (let* ((world latticewm/runtime::*world*)
+                  (keyword (and world (keyword-named text)))
+                  (by-name (and world
+                                (find-if (lambda (output)
+                                           (let ((name (c:output-name output)))
+                                             (and name
+                                                  (string-equal name text))))
+                                         (c:world-outputs world)))))
+             (or by-name
+                 (and world keyword
+                      (p:output-in-direction world
+                                             (p:output-showing world (first (c:world-cursor world)))
+                                             keyword))
+                 (error "no screen called ~a and none that way" text)))))
 (define-argument-type :axis "axis: "
   :documentation "Horizontal or vertical."
   :candidates '("horizontal" "vertical")

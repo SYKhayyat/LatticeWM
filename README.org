@@ -245,6 +245,11 @@ surface, and river has no animation request, so that is the compositor's call.
 What fades is what this program draws for you -- its own buffer on its own
 surface.
 
+A workspace can be *pinned* to a screen -- =M-x pin-workspace 3 HDMI-A-1=, or
+=((3 . "HDMI-A-1"))= in =*workspace-pins*= -- and then asking any other screen
+for it takes you to the screen it lives on, rather than trading it away.  =M-x
+pins= says what is pinned and whether each screen is plugged in.
+
 =M-x move-workspace-to-output= sends the workspace you are on to the screen in
 a direction, and the screen it left trades for what that one was showing instead
 of going blank; =:follow= takes the keyboard with it.  =M-x list-outputs= says
