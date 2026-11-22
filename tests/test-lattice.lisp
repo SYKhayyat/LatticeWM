@@ -1965,7 +1965,7 @@ the function's own docstring exists to prevent."
     (unwind-protect
          (let ((theirs (intern "ZOOM-OUT" package)))
            (setf (symbol-value theirs) :theirs)
-           (l:install-vocabulary package)
+           (l:install-lattice-vocabulary package)
            (is (eq theirs (find-symbol "ZOOM-OUT" package))
                "the name they had already defined is still theirs")
            (is (eq 'l:pan-to-cursor (find-symbol "PAN-TO-CURSOR" package))
@@ -2822,3 +2822,36 @@ person may want to look at for longer than one keystroke."
     (l:preview-begin)
     (is-true (l:preview-off))
     (is (null (l:preview-active-p)))))
+
+;;; ------------------------------------ the vocabulary, and its one name
+
+(test the-lattice-installs-its-own-names-under-a-name-of-its-own
+  "INSTALL-VOCABULARY meant two different functions in LATTICEWM/USER, and the
+runtime's meaning was the one kept -- so a configuration file following the
+lattice's docstring called the runtime's function with no source and installed
+nothing, with one log line to say so.  The rename is the fix; this checks the
+name a user reaches is the one they mean."
+  (is (fboundp 'l:install-lattice-vocabulary)
+      "the lattice's own verb is reachable by its spelled-out name")
+  (is (not (eq (fdefinition 'l:install-lattice-vocabulary)
+               (fdefinition (find-symbol "INSTALL-VOCABULARY" "LATTICEWM/RUNTIME"))))
+      "and it is not the runtime's function wearing a new name")
+  (let ((target (find-symbol "INSTALL-VOCABULARY" "LATTICEWM/USER")))
+    (is (eq (and target (fdefinition target))
+            (fdefinition (find-symbol "INSTALL-VOCABULARY" "LATTICEWM/RUNTIME")))
+        "while the user package still resolves the bare name to the runtime's ~
+one, which is right: the runtime's is the general seam and the lattice's is a
+call into it")))
+
+(test installing-the-lattice-vocabulary-into-a-package-works
+  "The verb does what its docstring says: a package passed in comes back with
+the commands visible in it."
+  (let ((package (make-package (format nil "LATTICE-TEST-~a" (random 100000))
+                               :use '())))
+    (unwind-protect
+         (progn
+           (is (eq package (l:install-lattice-vocabulary package))
+               "the verb answers the package it installed into")
+           (is (find-symbol "ZOOM-OUT" package)
+               "and the commands are visible there"))
+      (delete-package package))))

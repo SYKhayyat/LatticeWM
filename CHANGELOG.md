@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The lattice's vocabulary verb has a name of its own: `install-lattice-vocabulary`.**
+  It was `install-vocabulary`, which is exactly what `r:install-vocabulary` is
+  called, so the two collided in `latticewm/user` and the runtime's meaning was
+  the one kept — correctly, by the rule that the name already there wins. The
+  result was a documented function nobody could reach: a configuration file
+  following the docstring and writing `(install-vocabulary)` with no argument
+  got the runtime's function with no source, which warns and installs nothing.
+  Two functions with one name and different arguments is a collision to avoid,
+  not a conflict to resolve, and the new name matches this file's sibling verb,
+  `install-lattice-keys` (#136).
 - **Thumbnails in the deck: `M-x thumbnails on`.** The deck showed every
   workspace as boxes and names, because a window is somebody else's surface and
   this program draws only what it draws. #135 removed that reason; this is the

@@ -52,7 +52,8 @@ motion runs straight through the cell boundary as though it were not there.")
    #:cursor-plane #:cursor-grid #:cursor-cell #:cursor-grid-path
    #:workspace-entry-cell #:new-workspace-viewport
    ;; using it
-   #:enable #:enable-in #:disable #:install-lattice-keys #:install-vocabulary
+   #:enable #:enable-in #:disable #:install-lattice-keys
+   #:install-lattice-vocabulary
    #:*overlay-scale* #:*overlay-background* #:*overlay-foreground*
    #:*overlay-min-cell* #:cell-label #:draw-coordinate-overlay
    #:*map-threshold* #:*map-background* #:*map-cell-color* #:*map-empty-color*

@@ -1041,7 +1041,7 @@ container is inert, not broken."
 ;;; MAKING THE VOCABULARY REACHABLE
 ;;; ==================================================================
 
-(defun install-vocabulary (&optional (package '#:latticewm/user))
+(defun install-lattice-vocabulary (&optional (package '#:latticewm/user))
   "Make the lattice's names visible in PACKAGE, which defaults to the one
 configuration files and the REPL are read in.
 
@@ -1055,10 +1055,19 @@ working perfectly.
 The mechanics -- USE-PACKAGE at load time, conflicts settled in the user's
 favour before they can interrupt it -- live in R:INSTALL-VOCABULARY, which is
 this paragraph's argument made executable once instead of three times (#121).
-That this extension is the one whose behaviour the others were copied from is
-why the name here stays a function of one argument: it is the documented
-thing to call, and it returns the package it installed into."
+It returns the package it installed into.
+
+THE NAME IS SPELLED OUT, and it was not: this was INSTALL-VOCABULARY, which is
+exactly what R:INSTALL-VOCABULARY is called, so the two collided in
+LATTICEWM/USER and the runtime's meaning was the one kept -- correctly, by the
+rule that the name already there wins.  The result was a documented function
+nobody could reach: a configuration file following this docstring and writing
+(=install-vocabulary=) with no argument got the runtime function with no
+source, which warns and installs nothing.  Two functions with one name and
+different arguments is not a conflict to resolve, it is a collision to avoid,
+and the fix is the name this file's sibling verb already uses:
+=install-lattice-keys=.  #136."
   (r:install-vocabulary '#:lattice :package package :label "lattice"))
 
 (eval-when (:load-toplevel :execute)
-  (install-vocabulary))
+  (install-lattice-vocabulary))
