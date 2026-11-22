@@ -26,6 +26,12 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A saved layout is a library, not one name.** The `layout-persistence`
+  extension grows `list-layouts` (each name with its panes and applications),
+  `forget-layout`, `rename-layout`, `use-layout` (opens an arrangement in a new
+  workspace, leaving the current one alone) and `spawn-layout` (the same, plus
+  starting the applications the arrangement names and the session is missing).
+  (#10)
 - **A scratchpad can outlive its window.** Membership already survived a
   restart, but a scratchpad whose *window* did not come back — a reboot, a
   crash, a closed terminal — came back empty. `scratchpad-claim music spotify`

@@ -244,3 +244,126 @@ and an absolute count would be asserting on their tidiness."
         (t*:unblock-the-replacement blocked))
       (is-false (probe-file (r:temporary-state-path file))
                 "with no temporary left behind"))))
+
+;;; ==================================================== the library (issue #10)
+;;;
+;;; SAVE-LAYOUT and RESTORE-LAYOUT named an arrangement; #10 is about the
+;;; things a name is worth having for -- seeing it, renaming it, throwing it
+;;; away, and opening it somewhere that is not on top of your work.
+
+(test the-library-lists-what-you-have-and-what-is-in-it
+  "A layout you cannot see is one you cannot trust, rename or delete."
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")
+                (make-instance 'c:window :app-id "firefox" :identifier "F")))
+    (install-workspace-content
+     (c:make-split :horizontal
+                   (list (c:make-leaf (first lp::*live-windows*))
+                         (c:make-leaf (second lp::*live-windows*)))
+                   nil))
+    (lp:save-layout "work")
+    (is (equal '("work") (lp:all-layout-names)))
+    (let ((line (lp:layout-summary "work")))
+      (is-true (search "work" line))
+      (is-true (search "2 panes" line) "it counts the panes")
+      (is-true (search "emacs" line) "and names the applications")
+      (is-true (search "firefox" line)))
+    (let ((r::*help-visible* nil))
+      (is-true (lp:list-layouts) "the command answers with a page")
+      (is-true (find "work" (cdr r::*help-visible*) :key #'car :test #'equal)
+               "on the page, not only in the file list"))))
+
+(test a-forgotten-layout-is-gone-and-its-windows-stay
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")))
+    (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
+    (lp:save-layout "work")
+    (is (equal "work" (lp:forget-layout "work")))
+    (is (null (lp:all-layout-names)))
+    (is (= 1 (length (workspace-app-ids)))
+        "forgetting a layout is not closing windows")
+    (is (null (lp:forget-layout "work")) "and forgetting it twice says so")))
+
+(test a-renamed-layout-keeps-what-it-describes
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")))
+    (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
+    (lp:save-layout "work")
+    (is (equal "writing" (lp:rename-layout "work" "writing")))
+    (is (equal '("writing") (lp:all-layout-names)))
+    ;; And the arrangement came with the name.
+    (install-workspace-content (c:make-leaf))
+    (is (eq :restored (lp:restore-layout "writing")))
+    (is (equal '("emacs") (workspace-app-ids)))))
+
+(test renaming-does-not-overwrite-somebody-elses-layout
+  "A rename that quietly replaced an arrangement would be the one irreversible
+thing in this file."
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")))
+    (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
+    (lp:save-layout "work")
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "firefox" :identifier "F")))
+    (install-workspace-content (c:make-leaf (first lp::*live-windows*)))
+    (lp:save-layout "play")
+    (is (null (lp:rename-layout "work" "play")) "it refuses")
+    (is (equal '("play" "work") (lp:all-layout-names))
+        "and both layouts are still there")))
+
+(test a-layout-opens-in-a-workspace-of-its-own
+  "An arrangement you are trying should not cost you the one you had, so the
+new plane is grown first and the current one is never touched."
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")
+                (make-instance 'c:window :app-id "firefox" :identifier "F")))
+    (install-workspace-content
+     (c:make-split :horizontal
+                   (list (c:make-leaf (first lp::*live-windows*))
+                         (c:make-leaf (second lp::*live-windows*)))
+                   nil))
+    (lp:save-layout "work")
+    ;; Now the session holds only one of them, in a different arrangement.
+    (let ((editor (make-instance 'c:window :app-id "emacs" :identifier "E2")))
+      (setf lp::*live-windows*
+            (list editor (make-instance 'c:window :app-id "firefox" :identifier "F2")))
+      (install-workspace-content (c:make-leaf editor))
+      (is (= 1 (c:container-count (c:world-workspaces r:*world*))))
+      (is (= 1 (lp:layout-into-new-workspace "work")) "index of the new plane")
+      (is (= 2 (c:container-count (c:world-workspaces r:*world*)))
+          "the list grew rather than replaced")
+      (is (= 1 (length (c:node-leaves
+                        (c:child-at (c:world-workspaces r:*world*) 0))))
+          "the workspace you were in is untouched")
+      (is (= 2 (length (c:node-leaves
+                        (c:child-at (c:world-workspaces r:*world*) 1))))
+          "and the new one holds the arrangement"))))
+
+(test spawning-a-layout-starts-what-is-missing-and-only-that
+  "The proudest half of a saved arrangement: it names the applications, so
+opening it is also a request to have them.  A program that is already running
+is not started twice."
+  (with-layouts
+    (setf lp::*live-windows*
+          (list (make-instance 'c:window :app-id "emacs" :identifier "E")
+                (make-instance 'c:window :app-id "firefox" :identifier "F")))
+    (install-workspace-content
+     (c:make-split :horizontal
+                   (list (c:make-leaf (first lp::*live-windows*))
+                         (c:make-leaf (second lp::*live-windows*)))
+                   nil))
+    (lp:save-layout "work")
+    (let ((started '()))
+      (let ((lp:*spawn-function* (lambda (argv) (push argv started))))
+        ;; Firefox came back on its own; emacs did not.
+        (setf lp::*live-windows*
+              (list (make-instance 'c:window :app-id "firefox" :identifier "F2")))
+        (install-workspace-content (c:make-leaf))
+        (is (equal "work" (lp:spawn-layout "work")))
+        (is (equal '(("emacs")) started)
+            "the missing application, once, and the present one not at all")))))

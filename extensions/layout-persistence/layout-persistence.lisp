@@ -271,6 +271,139 @@ here and is not part of the arrangement comes back as an extra pane."
   :documentation "A saved layout, with completion over the files."
   :candidates (all-layout-names))
 
+;;; ================================================== a library, not one name
+;;;
+;;; #10.  SAVE-LAYOUT and RESTORE-LAYOUT gave an arrangement a name; they did
+;;; not give you a way to SEE the names you have, throw one away, rename one,
+;;; or open one somewhere other than over the workspace you are sitting in.
+;;; That is the difference between a feature and a library, and the missing
+;;; verbs are small because the mechanism is already here.
+
+(defun layout-form (name)
+  "The saved form for NAME, or NIL when there is no such layout."
+  (let ((file (layout-file name)))
+    (when (and file (probe-file file)) (guarded-read file))))
+
+(defun count-leaves (node)
+  "How many panes NODE describes.
+
+NODE is a serialized node -- a plist whose first element is its tag -- so the
+children are one key over, not the form itself.  Walking the form directly is
+what made this answer :SPLIT, which is not a number of panes."
+  (if (eq (first node) :leaf)
+      1
+      (loop for child in (getf (rest node) :children)
+            sum (count-leaves child))))
+
+(defun layout-summary (name)
+  "One line about NAME, for the list: panes, then the applications in them."
+  (let* ((form (layout-form name))
+         (root (and form (getf form :root)))
+         (ids (and root (saved-leaf-ids root))))
+    (format nil "~a -- ~a pane~:p~@[ -- ~{~a~^, ~}~]"
+            name
+            (if root (count-leaves root) 0)
+            ids)))
+
+(r:defcommand list-layouts ()
+  "Show the saved layouts, with what is in each one.
+
+A layout you cannot see is a layout you cannot trust, rename, or delete --
+and the names were only ever visible at a completion prompt."
+  ()
+  (let ((names (all-layout-names)))
+    (if (null names)
+        (r:notify "no saved layouts -- M-x save-layout names one")
+        (r:show-help-page
+         (format nil "saved layouts -- ~d" (length names))
+         (mapcar (lambda (name) (cons name (layout-summary name))) names)))))
+
+(r:defcommand forget-layout (name)
+  "Throw away the saved layout NAME.  The windows it described stay open."
+  (:interactive :layout-name)
+  (if (delete-layout name)
+      (progn (r:notify "forgot layout ~a" name) name)
+      (progn (r:notify "no layout named ~a" name) nil)))
+
+(r:defcommand rename-layout (name new-name)
+  "Rename the saved layout NAME to NEW-NAME, keeping what it describes."
+  (:interactive :layout-name :name)
+  (let ((old (layout-file name))
+        (new (layout-file new-name)))
+    (cond
+      ((null old) (r:notify "no layout named ~a" name) nil)
+      ((not (probe-file old)) (r:notify "no layout named ~a" name) nil)
+      ((probe-file new) (r:notify "there is already a layout called ~a" new-name) nil)
+      (t (ensure-directories-exist new)
+         (rename-file old new)
+         (r:notify "~a is now ~a" name new-name)
+         new-name))))
+
+(defun layout-into-new-workspace (name &key spawn)
+  "Open the layout NAME in a workspace of its own, after the current one.
+
+The workspace is grown first and the arrangement applied to it, so the plane
+you were looking at is untouched -- an arrangement you are *trying* should not
+cost you the one you had.  With SPAWN, applications the layout names but the
+session does not have are started by their application id.
+
+Returns the new workspace's index, or NIL when there is no such layout."
+  (let ((form (layout-form name)))
+    (cond
+      ((null form)
+       (r:notify "no layout named ~a" name)
+       nil)
+      (t
+       (r:new-workspace)
+       (let ((index (first (c:world-cursor r:*world*))))
+         (restore-into-workspace (getf form :root) index)
+         (when spawn
+           (spawn-missing-applications (saved-leaf-ids (getf form :root))))
+         (r:mark-dirty)
+         index)))))
+
+(defvar *spawn-function* nil
+  "How a missing application is started, or NIL for R:SPAWN.
+
+A function of one argument, the argv list.  Bound by tests, which must not
+open windows on somebody's desktop just because a layout named a program --
+the same ruling DECLARED-SESSIONS made for its manifests.")
+
+(defun spawn-missing-applications (app-ids)
+  "Start every application in APP-IDS the session does not already have.
+
+The application id is the command, which is the honest mapping: it is the
+name the window announces and, for the ordinary case, the name of the
+program.  An id that is not on PATH fails in the log and changes nothing
+else -- a layout that could not launch one program is still a layout."
+  (let ((live (mapcar #'c:window-app-id (or *live-windows* (r:all-windows)))))
+    (dolist (app-id app-ids)
+      (unless (member app-id live :test #'equal)
+        (let ((argv (list app-id)))
+          (if *spawn-function*
+              (funcall *spawn-function* argv)
+              (r:spawn app-id)))))))
+
+(r:defcommand (layout-to-new-workspace "use-layout") (name)
+  "Open the saved layout NAME in a new workspace, leaving this one as it is."
+  (:interactive :layout-name)
+  (let ((index (layout-into-new-workspace name)))
+    (when index
+      (r:notify "~a opened in workspace ~d" name (1+ index))
+      name)))
+
+(r:defcommand spawn-layout (name)
+  "Open the layout NAME in a new workspace, starting whatever is missing.
+
+The proudest half of a saved arrangement: it names the applications that
+belong in it, so opening it is also a request to have them."
+  (:interactive :layout-name)
+  (let ((index (layout-into-new-workspace name :spawn t)))
+    (when index
+      (r:notify "~a opened in workspace ~d, starting what was missing"
+                name (1+ index))
+      name)))
+
 (r:defcommand (save-named-layout "save-layout") (name)
   "Save the workspace under the cursor as the layout NAME."
   (:interactive :name)

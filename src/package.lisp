@@ -576,6 +576,10 @@ keybindings, the command registry, and the session loop.")
    #:draw-when-ready #:overlay-frame #:forget-frame
    #:current-node #:current-leaf #:current-window #:current-path
    #:workspace-stack #:grow-workspaces-to
+   ;; #10: an extension that lays out a fresh plane asks the same two questions
+   ;; the key does -- grow the list, then show it -- so the command is exported
+   ;; rather than reimplemented from three model calls at the call site.
+   #:new-workspace
    #:focused-window #:in-wm-thread-p
    #:window-river-node #:guarded #:best-effort #:with-abandon
    ;; the batch selection.  A list of windows marked for one operation, kept

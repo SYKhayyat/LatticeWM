@@ -38,6 +38,21 @@ With =*save-on-change*= (the default), every layout change also asks for a
 session save immediately rather than waiting for the periodic pass; the core
 coalesces those asks, so a burst of changes costs one write.
 
+* The library of layouts
+
+A name is worth having for more than bringing one back.  =M-x list-layouts=
+shows every saved layout with its panes and the applications in them;
+=M-x forget-layout= deletes one (the windows it described stay open) and
+=M-x rename-layout= renames one, refusing to overwrite an existing name.
+
+=M-x use-layout= opens a saved arrangement in a *new* workspace after the
+current one, so trying one never costs you the workspace you had.
+=M-x spawn-layout= does the same and also starts the applications the
+arrangement names but the session does not have -- the application id is the
+command, so a layout whose ids are ordinary program names is a spawn
+manifest as well.  A program that does not exist costs a line in the log and
+nothing else.
+
 Layouts are kept under =layouts/= in the first data directory that has one;
 =delete-layout= removes one, =all-layout-names= lists them sorted.
 
