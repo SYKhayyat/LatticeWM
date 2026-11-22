@@ -1,0 +1,62 @@
+#+TITLE: grid
+#+OPTIONS: toc:nil num:nil
+
+n windows in a rectangle of cells, in reading order, as a container kind.
+
+Every paradigm in LatticeWM has two ways in — a command and a rule — and this is
+the one that was missing both. `lattice/` is a grid, but it is a *system*: a
+plane of cells with its own zoom and pan. What a person means by "grid" is the
+smaller thing: put these n windows in a rectangle, left to right and then down.
+
+* Using it
+
+#+begin_src lisp
+;; ~/.config/latticewm/init.lisp
+(load-extension "grid")
+#+end_src
+
+then, live or at startup:
+
+#+begin_src lisp
+(grid:grid)        ; as square as the count allows
+(grid:grid 3)      ; three columns
+(grid:grid-columns 2)   ; change the width afterwards
+#+end_src
+
+Every window that was in the workspace becomes a cell, in the order it was laid
+out — nothing is lost, nothing is reordered. =grid-columns= is the grid's zoom,
+the same relationship =strip-width= has to a strip: it changes the divisor in the
+drawing and nothing about the tree.
+
+* What it decides
+
+- *Width.* Stated, or =*grid-columns*=, or ~(ceiling (sqrt n))~ — one, two, two,
+  two, three, three, three for one to seven windows. A number is a desk that
+  always wants that many, including =(grid 1)= for a single column of full-width
+  rows.
+- *The last row.* The whole row is divided into the same number of columns as
+  every other row and the cells without a window are left empty, so the columns
+  stay lined up. Dividing the last row among the children it has gives a
+  5-window grid two bottom cells half as wide again as the three above them,
+  which is the one thing a grid is for.
+- *Motion.* Left and Right are reading order and cross into the next row at its
+  end. Up and Down move a whole row and answer nothing past the edge, because
+  the grid is bounded — unlike the strip.
+- *Arrival.* The first cell, except for a step *down* from something above the
+  grid, which keeps the column you were in.
+
+* What it is made of
+
+=grid-container= subclasses =sequential-container=, which supplies addressing,
+insertion and removal. The module answers how the grid is drawn, how motion
+crosses it, where you land arriving at it — and the state half of the container
+protocol (=copy-node-slots=, =node-signature=, =serialize-node=,
+=deserialize-node=), so the width survives undo and a session save. A grid that
+forgets its width is a grid that silently becomes a list.
+
+* Why a container and not a policy
+
+An arrangement belongs to one workspace; a policy is a property of the session.
+Two workspaces may want different ones, and a user should not have to choose
+between them at startup. That is the same argument that made =scrolling-columns=
+a container rather than a =layout-children= override.

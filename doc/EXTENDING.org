@@ -552,9 +552,15 @@ subclasses ~sequential-container~ — which supplies addressing, insertion and
 removal — and answers three questions: how it is drawn, how motion crosses it,
 and where you land arriving at it.
 
-*Read that file before reading =lattice/=.* It is the same shape at a tenth of
-the size, and the lattice is only larger because a plane has more data in it
-than a strip does.
+=extensions/grid~ is the same shape with a second axis: n windows in a rectangle
+of cells, ~M-x grid 3~, with the column count as its zoom. Read either one and
+you have seen what a container kind costs: a subclass, a drawing method, a
+motion method, an arrival method, and the four state methods that keep undo and
+a session save from losing the arrangement.
+
+*Read one of those before reading =lattice/=.* They are the same shape at a
+tenth of the size, and the lattice is only larger because a plane has more data
+in it than a strip does.
 
 *** The list is the point
 

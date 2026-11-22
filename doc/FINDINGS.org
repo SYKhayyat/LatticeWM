@@ -1596,3 +1596,42 @@ columns:scrolling)~ sitting in example 04's body -- correct at a REPL, where
 there is a current workspace -- came to break the build. It is commented, with
 the reason, which is the same treatment ~define-option~ gets for a value that is
 only meaningful once something is running.
+
+* A grid is a container, not a mode: the arrangement belongs to one workspace
+The module sweep named five paradigms -- tiling, floating, stacking, tabs,
+scrolling columns -- and four of them could be asked for twice: once as a verb
+and once as a rule. The fifth, a grid, could be asked for neither. ~lattice/~ is
+a plane of cells, but a plane is a *system* with its own zoom and pan; the thing
+a person means by "grid" is smaller and older than that: put these n windows in
+a rectangle, left to right and then down.
+
+Two decisions in it are worth keeping.
+
+**It is a container, not a policy.** An arrangement belongs to one workspace and
+a policy belongs to the session, so two workspaces may want different ones and a
+user should not have to choose at startup. This is the argument
+=scrolling-columns= already made, and it is the reason ~M-x grid~ is a container
+swap at the workspace's path and touches nothing else: the leaves stay leaves,
+in the order they were already in, so turning a grid back into a stack loses
+nothing and needs no migration.
+
+**The last row does not reflow.** Every row is divided into the same number of
+columns and a shorter row simply leaves its last cells empty. Dividing the last
+row among the children it *has* is the obvious alternative and it is wrong: a
+5-window 3-column grid gets two bottom cells half as wide again as the three
+above them, the columns stop lining up, and the one thing a grid is for is gone.
+A hole at the end of the last row is what a person draws on paper.
+
+And one that is a rule rather than a choice: **the count is stored as NIL when
+nobody stated one**, so the GRID-COLUMNS option can change what an existing grid does
+and "as square as it goes" stays live, while a stated width stays stated through
+undo, a session save and a change of that option. A container that remembered a
+computed 3 would be a container that quietly overrode the user's setting.
+
+*The trap this module paid for.* Every extension that defines an option calls
+~r:install-vocabulary~ on itself, and the reason is not tidiness: a configuration
+file is read in =latticewm/user=, so a line setting =grid-columns= in an init
+file interns a *new* symbol there and changes nothing at all, silently. The surface suite's
+~every-option-is-reachable-from-a-config-file~ is the check that caught it, and
+it caught it on the first run -- which is the whole argument for having written
+that test when the same class of bug was found in the core's own options.

@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **`grid`: a grid arrangement, as a container kind.** `M-x grid N` turns the
+  current workspace into a rectangle of `N` columns filled in reading order;
+  `M-x grid-columns N` changes the width afterwards (the grid's zoom), and
+  `*grid-columns*` supplies the default for a new grid. The last row keeps the
+  columns lined up rather than stretching, motion runs along a row and crosses
+  into the next one, and the width survives undo and a session save because the
+  module answers the state half of the container protocol. It is a container
+  rather than a policy because an arrangement belongs to one workspace.
 - **The examples are loaders.** `examples/01`–`04` no longer carry inline copies
   of code that lives in `extensions/`; each is now what a user actually writes —
   `load-extension` plus the table or the knob — so the teaching file cannot teach
