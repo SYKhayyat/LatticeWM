@@ -308,6 +308,13 @@ Values must be READABLE -- this goes in a file a human edits.  Window objects
 come back as their river identifiers, which is the same rule the window itself
 follows."))
 
+(defmethod node-extra-facts ((node node))
+  ;; THE DEFAULT THE DOCSTRING ABOVE PROMISED AND DID NOT HAVE (#131).  Without
+  ;; it, a session with no extension loaded reaches SERIALIZE-NODE, finds no
+  ;; applicable method, and never writes a layout at all -- which is the whole
+  ;; feature of this file failing quietly in the configuration most users have.
+  nil)
+
 (defgeneric restore-node-extra-facts (node facts index)
   (:documentation
    "Put FACTS (from NODE-EXTRA-FACTS) back onto NODE, or ignore them.
@@ -317,6 +324,13 @@ written by an image that had an extension loaded, read by one that does not,
 degrades to what the core can carry -- each tab window on its own pane -- rather
 than failing to load.  A result is not needed because the node is already built;
 this fills it in."))
+
+(defmethod restore-node-extra-facts ((node node) facts index)
+  "Ignore FACTS.  The other half of the default, and the forward-compatibility
+path the docstring promises: a file written by an image with an extension loaded
+and read by one without it degrades to what the core can carry."
+  (declare (ignore node facts index))
+  nil)
 
 (defgeneric serialize-node (node)
   (:documentation

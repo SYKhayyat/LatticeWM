@@ -165,3 +165,21 @@ replaced by `.corrupt' while making room for it."
     (is (null (r:load-state path)))
     (is (probe-file (make-pathname :type "lisp.v99" :defaults path)))
     (is (not (probe-file (make-pathname :type "lisp.corrupt" :defaults path))))))
+
+;;; --------------------------------------- the seam the core promises (#131)
+
+(test the-core-answers-extra-facts-for-a-node-it-knows-nothing-extra-about
+  "NODE-EXTRA-FACTS is documented as `NIL by default' and STORE-NODE-EXTRA-FACTS
+as `the default does nothing'.  Neither default existed: only the tabs extension
+defined a method, so a session with no extension loaded reached SERIALIZE-NODE,
+found no applicable method, and never wrote a layout at all (#131).
+
+The check is on a container rather than a leaf on purpose -- an image with the
+tabs extension loaded has a LEAF method, and a check that only works in a bare
+image would stop testing the thing it was written for."
+  (let ((split (c:make-split :horizontal (list (c:make-leaf) (c:make-leaf))
+                             '(1 1))))
+    (is (null (c:node-extra-facts split))
+        "the core knows nothing extra about a node, and says so")
+    (is (null (c:restore-node-extra-facts split '(:tabs ("a" "b")) 0))
+        "and facts from a file it cannot use are ignored, not an error")))
