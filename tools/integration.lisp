@@ -476,7 +476,15 @@ leaves the thread free."
   nil)
 
 (defparameter +cannot-fire-headless+
-  '(:input-added :input-removed :keyboard-layout-changed :output-removed)
+  '(:input-added :input-removed :keyboard-layout-changed :output-removed
+    ;; :POINTER-RELEASED was missing here and the suite said so (#16's
+    ;; integration run, which was the first one after #29 added the hook).  It
+    ;; fires from a river pointer *binding* coming up, and a binding only comes
+    ;; up if a button went down -- which needs a pointer device, and river runs
+    ;; here with WLR_LIBINPUT_NO_DEVICES=1.  :POINTER-MOVED is not in this
+    ;; position and does not need to be: pointer_position arrives from the
+    ;; compositor with no device involved, so it fires every run.
+    :pointer-released)
   "Hooks a headless backend structurally cannot produce.
 
 Named one by one rather than counted.  river runs here with
@@ -535,6 +543,17 @@ Computed rather than listed, because the answer depends on the compositor in
 front of us instead of on this file."
   (unless (river-speaks-capture-sessions-p)
     '(:capture-changed)))
+
+(defun hooks-this-river-has-no-protocol-for ()
+  "Declared hooks that need a protocol this river does not speak at all.
+
+Not a version gap but an *absence*: river_touch_gestures_v1 arrived in river
+0.5.0 and is a separate global, so a compositor either offers it or does not.
+Asked of the running connection rather than listed, so the excuse stops
+applying the moment the river in front of us has the global."
+  (unless (and r:*server* (r:server-touch-gestures r:*server*))
+    '(:gesture-start :gesture-end :gesture-motion :gesture-scale
+      :gesture-fingers)))
 
 (defun watch-every-hook ()
   "Put a recorder on every declared hook.  Returns how many were attached.
@@ -2326,7 +2345,9 @@ are what a person means by the arrangement, and both are copy-stable."
                            ;; recomputed from the version we bound at, so it
                            ;; excuses nothing on a river new enough to have
                            ;; driven the hook.
-                           (member name (hooks-this-river-cannot-fire)))
+                           (member name (hooks-this-river-cannot-fire))
+                           (member name
+                                   (hooks-this-river-has-no-protocol-for)))
                  (check nil "~s never fired, and is not one a headless backend ~
                              is unable to fire.  Drive it, or say here why it ~
                              cannot be driven" name))))
@@ -2409,7 +2430,15 @@ are what a person means by the arrangement, and both are copy-stable."
            (unless (fired name)
              (too-old "~s: this river binds at v~d, and what drives that hook ~
                        arrived in v~d" name *bound-wm-version*
-                      +capture-sessions-since+)))))
+                      +capture-sessions-since+)))
+         ;; And the ones that need a protocol this river does not have at all.
+         ;; Reported as a skip rather than a version gap: there is no number to
+         ;; act on, there is a compositor release to upgrade to.
+         (dolist (name (hooks-this-river-has-no-protocol-for))
+           (unless (fired name)
+             (skip "~s: needs river_touch_gestures_v1, which this river does ~
+                    not offer (river 0.5.0 added it).  The table is still ~
+                    planned and reported; nothing can fire" name)))))
 
   ;; --- teardown ---------------------------------------------------------
   (dolist (process *clients*)

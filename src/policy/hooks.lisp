@@ -478,3 +478,47 @@ This is the seam between a table of rules and a set of methods: a module that
 stores rules as methods on its own generic needs exactly one way to be asked,
 and a list-composing hook is that way without anybody's :AROUND methods
 having to agree on specializers.")
+
+;;; ------------------------------------------------------------ touch gestures
+;;;
+;;; FIVE HOOKS FOR FOUR MOMENTS, and the split is between the discrete and the
+;;; continuous.  A gesture that is a *command* -- swipe left to change
+;;; workspace -- needs only :GESTURE-START, because recognition is the whole
+;;; event.  A gesture that is a *manipulation* -- drag a map, pinch a zoom --
+;;; needs the stream, and the stream is what the other four carry.  One hook
+;;; that did both would force every listener to filter.
+
+(defhook :gesture-start (plan) "Run when a touch gesture is recognised, before
+its command runs.  PLAN is the gesture's own plist -- :FINGERS, the trigger
+(:DIRECTION, :PINCH or :EDGE), and the :COMMAND it is about to run.
+
+Recognition, not contact: the protocol sends this when the thresholds are met,
+and it sends :END when every finger is lifted, so a hook that wants a running
+gesture from first touch to last is listening to the wrong pair of events
+deliberately.")
+
+(defhook :gesture-end (plan) "Run when a gesture ends or is cancelled, with the
+PLAN it was started for.
+
+BOTH ENDINGS AND ONE HOOK, because nothing that consumes this cares which: a
+pinch that is cancelled by palm detection and one the user completed both mean
+`stop scaling'.  The protocol distinguishes them and a listener that needs to
+know can watch river itself.")
+
+(defhook :gesture-motion (dx dy) "Run on a gesture's centroid motion, with the
+total change since touch down -- cumulative, not incremental.
+
+Cumulative is the protocol's choice and it is the friendly one: a listener that
+wants `how far has this moved' reads one number rather than accumulating a
+stream it may have started late.")
+
+(defhook :gesture-scale (scale) "Run on a pinch's scale, as a ratio of the pinch
+distance at touch down: 1.0 at the start, below it for fingers together, above
+it for fingers apart.
+
+Sent only when there are two or more touch points, because one finger has no
+pinch distance to be a ratio of.")
+
+(defhook :gesture-fingers (count) "Run when the number of touch points in a
+running gesture changes.  The gesture is not restarted: a fourth finger landing
+mid-pinch is an update to a gesture, not a new one.")

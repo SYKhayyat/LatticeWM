@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM hooks
-23 hooks.  Generated from the running image.
+28 hooks.  Generated from the running image.
 ============================================================================
 
 A HOOK NOTICES THAT SOMETHING HAPPENED.  Every function attached to it runs,
@@ -82,6 +82,61 @@ ON-WINDOW-CLOSE, which is the commonest focus change there is, and the
 lattice's ENABLE-IN, which repaths every cursor in the world.  Both wrote the
 slot directly.  Both go through REPAIR-CURSOR now, which is REPAIR-PATH plus
 this hook and existed the whole time.
+
+
+----------------------------------------------------------------------------
+:GESTURE-END (plan)
+----------------------------------------------------------------------------
+Run when a gesture ends or is cancelled, with the
+PLAN it was started for.
+
+BOTH ENDINGS AND ONE HOOK, because nothing that consumes this cares which: a
+pinch that is cancelled by palm detection and one the user completed both mean
+`stop scaling'.  The protocol distinguishes them and a listener that needs to
+know can watch river itself.
+
+
+----------------------------------------------------------------------------
+:GESTURE-FINGERS (count)
+----------------------------------------------------------------------------
+Run when the number of touch points in a
+running gesture changes.  The gesture is not restarted: a fourth finger landing
+mid-pinch is an update to a gesture, not a new one.
+
+
+----------------------------------------------------------------------------
+:GESTURE-MOTION (dx dy)
+----------------------------------------------------------------------------
+Run on a gesture's centroid motion, with the
+total change since touch down -- cumulative, not incremental.
+
+Cumulative is the protocol's choice and it is the friendly one: a listener that
+wants `how far has this moved' reads one number rather than accumulating a
+stream it may have started late.
+
+
+----------------------------------------------------------------------------
+:GESTURE-SCALE (scale)
+----------------------------------------------------------------------------
+Run on a pinch's scale, as a ratio of the pinch
+distance at touch down: 1.0 at the start, below it for fingers together, above
+it for fingers apart.
+
+Sent only when there are two or more touch points, because one finger has no
+pinch distance to be a ratio of.
+
+
+----------------------------------------------------------------------------
+:GESTURE-START (plan)
+----------------------------------------------------------------------------
+Run when a touch gesture is recognised, before
+its command runs.  PLAN is the gesture's own plist -- :FINGERS, the trigger
+(:DIRECTION, :PINCH or :EDGE), and the :COMMAND it is about to run.
+
+Recognition, not contact: the protocol sends this when the thresholds are met,
+and it sends :END when every finger is lifted, so a hook that wants a running
+gesture from first touch to last is listening to the wrong pair of events
+deliberately.
 
 
 ----------------------------------------------------------------------------

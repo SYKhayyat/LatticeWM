@@ -214,6 +214,14 @@ window rule is the per-application exception and wins over the mode:
 the one before that; =M-x focus-forward= comes back. Windows that have closed
 since are stepped over, and =M-x focus-history= lists the walk.
 
+=M-x gesture= binds a touch gesture to any command, and the same table can be
+written in your config: =(((:fingers 3 :direction :left) . "next-workspace"))=
+ships as the default, so three fingers on the screen is the pager. Pinches and
+edge swipes are the same shape (=2 pinch in=, =1 edge top=), and =M-x
+forget-gesture= unbinds one. These are *touchscreen* gestures: river consumes
+trackpad swipes itself and does not forward them, which is a limit of the
+compositor rather than of the table.
+
 =M-x with-window= runs any command with the window *you name* as the one it acts
 on — =M-x with-window=, choose the window, choose =close-window=. It works for
 verbs an extension adds, because every one of them asks "who am I acting on",

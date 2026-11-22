@@ -128,6 +128,15 @@ awkward ones: an odd-sized screen (a half that is not the half a naive division
 gives), the space being the *layout's* space rather than the output's, and a rule
 that says :SNAP without saying :FLOAT still getting a float.")
 
+(def-suite gestures :in model
+  :description "Touch gestures, as a table (#16).  Everything here is the half
+that needs no compositor: what a gesture spec is, how the table turns into plans
+the runtime applies, how a prompt reads `3 left', and which command a recognised
+gesture runs.  The wire half is river_touch_gesture_v1 objects, and it is
+covered by the headless-river integration suite -- the split is the same one
+P:PREVIEW-PANELS and the preview's drawing have, and for the same reason: the
+decisions are in the plan, and the protocol is a consumer of it.")
+
 (def-suite states :in model
   :description "What state a window is in, derived rather than stored (#25).
 Two rulings are the whole of it: fullscreen is a second axis (river renders a

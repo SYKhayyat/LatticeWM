@@ -1,6 +1,6 @@
 ============================================================================
 LatticeWM container protocol
-19 generics.  Generated from the running image.
+21 generics.  Generated from the running image.
 ============================================================================
 
 A CONTAINER holds children at ADDRESSES.  That is the whole abstraction, and
@@ -263,6 +263,31 @@ has been named — can say so.
     (node)                              ; node.lisp
 
 ----------------------------------------------------------------------------
+node-extra-facts (latticewm/core:node)
+----------------------------------------------------------------------------
+What NODE knows that the core does not, as a plist; NIL by default.
+
+THE SEAM THAT LETS AN EXTENSION SURVIVE A RESTART WITHOUT THE CORE LEARNING ITS
+NAME.  The tabs extension keeps a group as a prop on a leaf, and a prop is
+exactly what SERIALIZE-NODE used to drop: #39 was a session's tab groups dying
+at every login while the *windows* came back, because the file described the
+tree and a tab group is not in the tree.
+
+Three answers were available and two were worse: teaching the core file format
+about :TABS gives the core a field it cannot validate and every future extension
+the same edit; letting an extension replace SERIALIZE-NODE for LEAF means the
+second extension to want this silently wins.  A method per kind, consulted while
+the leaf is written, is the version where adding a third extension is a method
+and not a merge.
+
+Values must be READABLE -- this goes in a file a human edits.  Window objects
+come back as their river identifiers, which is the same rule the window itself
+follows.
+
+  methods:
+    (node)                              ; node.lisp
+
+----------------------------------------------------------------------------
 node-signature (latticewm/core:node)
 ----------------------------------------------------------------------------
 A readable value that changes exactly when NODE's arrangement does.
@@ -297,6 +322,21 @@ expecting callers to fix it themselves — see DESIGN D18's focus-repair rule.
     (stack t) AROUND                    ; node.lisp
     (split t) AROUND                    ; node.lisp
     (sequential-container t)            ; node.lisp
+
+----------------------------------------------------------------------------
+restore-node-extra-facts (latticewm/core:node latticewm/core::facts
+                          latticewm/core::index)
+----------------------------------------------------------------------------
+Put FACTS (from NODE-EXTRA-FACTS) back onto NODE, or ignore them.
+
+The default does nothing, which is the forward-compatibility path: a file
+written by an image that had an extension loaded, read by one that does not,
+degrades to what the core can carry -- each tab window on its own pane -- rather
+than failing to load.  A result is not needed because the node is already built;
+this fills it in.
+
+  methods:
+    (node t t)                          ; node.lisp
 
 ----------------------------------------------------------------------------
 serialize-node (latticewm/core:node)

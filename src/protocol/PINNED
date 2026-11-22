@@ -87,8 +87,20 @@ version river offered, which this file described as degrading "to their old
 behaviour against an older river instead of refusing."  True, and only half the
 axis: against a *newer* river the same line promised to decode events these
 bindings have never seen, and a promise like that is not broken loudly.  All
-six protocols have a ceiling constant now and all six are clamped to it; gate 5
-checks every one against the XML here rather than two of them.
+seven protocols have a ceiling constant now and all seven are clamped to it;
+gate 5 checks every one against the XML here rather than two of them.
+
+AND ONE FILE HERE IS NEWER THAN THE REST.  river-touch-gestures-v1.xml is from
+river 0.5.2, not from the 0.4.6 this directory was re-vendored at, because that
+is when the protocol first existed -- adding touch gestures (#16) means either
+vendoring a file from a newer release or not having the feature.  The mismatch
+costs nothing, and the reason is worth writing down: a vendored XML decides the
+*version this build binds at and the shapes it can decode*, not the release
+somebody must run.  The global is optional in the strongest sense -- absent, the
+gesture table is planned and reported and nothing fires -- so a session on river
+0.4.6 is exactly the session it was before, and a session on 0.5.0 or newer gets
+gestures.  Say the range out loud: the window management protocol is still bound
+at 5 from the 0.4.6 XML, and gestures are bound at 1 from the 0.5.2 one.
 
 wayland.xml is wayland 1.23, taken from wayflan's own vendored copy.  It is
 here for gate 8 and for nothing else: wayflan generates the core protocol into

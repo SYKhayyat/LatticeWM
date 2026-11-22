@@ -113,6 +113,15 @@ Missing this global is already survivable: unlike the window manager it is not
 refused, it disables keybindings and warns, which is what the branch below has
 always done for a version it did not like.")
 
+(defparameter +touch-gestures-version+ 1
+  "The river_touch_gestures_v1 version this build was generated against.
+
+ONE, AND THERE IS NO FLOOR TO HAVE: the protocol has been at version 1 since
+river 0.5.0 and every request it carries was there in that release.  Absent is
+the case that matters, and it is not an error -- a compositor without gestures
+is every river before 0.5.0, and the table is still planned and reported so
+that a user finds out why nothing happens.")
+
 (defparameter +layer-shell-version+ 1
   "The river_layer_shell_v1 version this build was generated against.")
 
@@ -304,6 +313,19 @@ registry cannot serve."
       ((string= interface "wl_shm")
        (setf (server-shm server)
              (wl:wl-registry.bind registry name 'wl:wl-shm 1)))
+      ;; TOUCH GESTURES (#16).  Optional in the strongest sense: absent means
+      ;; the feature does not exist on this machine, which is every river
+      ;; before 0.5.0.  One line, once, because a window manager that says why
+      ;; is worth more than one that is silently uninterested.
+      ((string= interface "river_touch_gestures_v1")
+       (setf (server-touch-gestures server)
+             (wl:wl-registry.bind registry name
+                                  'river:river-touch-gestures-v1
+                                  (negotiated-version
+                                   version 1 +touch-gestures-version+)))
+       (unless (server-touch-gestures server)
+         (logmsg :info "river offers no river_touch_gestures_v1; gestures are ~
+                        configured but will not fire")))
       ((string= interface "river_layer_shell_v1")
        (setf (server-layer-shell server)
              (wl:wl-registry.bind registry name

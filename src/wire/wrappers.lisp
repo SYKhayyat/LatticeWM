@@ -60,7 +60,17 @@
     "RIVER-XKB-BINDING-V1.DISABLE"
     "RIVER-XKB-BINDINGS-SEAT-V1.ENSURE-NEXT-KEY-EATEN"
     "RIVER-XKB-BINDINGS-SEAT-V1.CANCEL-ENSURE-NEXT-KEY-EATEN"
-    "RIVER-XKB-BINDINGS-SEAT-V1.MODIFIERS-WATCH")
+    "RIVER-XKB-BINDINGS-SEAT-V1.MODIFIERS-WATCH"
+    ;; river_touch_gesture_v1 (#16).  Every request on this object but DESTROY
+    ;; modifies gesture state, and the protocol says so in each description --
+    ;; the four threshold setters, and ENABLE/DISABLE which are the same
+    ;; classification as an xkb binding's.
+    "RIVER-TOUCH-GESTURE-V1.ENABLE"
+    "RIVER-TOUCH-GESTURE-V1.DISABLE"
+    "RIVER-TOUCH-GESTURE-V1.SET-DIRECTION"
+    "RIVER-TOUCH-GESTURE-V1.SET-EDGE"
+    "RIVER-TOUCH-GESTURE-V1.SET-THRESHOLD-MOTION"
+    "RIVER-TOUCH-GESTURE-V1.SET-THRESHOLD-SCALE")
   "Requests that modify window-management state and are manage-sequence only.
 
 Transcribed from river-window-management-v1.xml's own classification.  If the
@@ -301,6 +311,33 @@ never for a request.")
   (alias binding-destroy river-xkb-binding-v1.destroy)
   (alias bindings-seat-destroy river-xkb-bindings-seat-v1.destroy)
   (alias seat-destroy river-seat-v1.destroy)
+  ;; touch gestures (#16)
+  (alias gestures-get-seat river-touch-gestures-v1.get-seat
+         "SEAT's gesture object.  Manage sequence only when enabling, which is
+why the caller marks the server dirty rather than enabling the object here.")
+  (alias gestures-seat-destroy river-touch-gestures-seat-v1.destroy)
+  (alias gestures-seat-get-gesture river-touch-gestures-seat-v1.get-gesture
+         "Define one gesture needing FINGER-COUNT touch points.  Not enabled
+until GESTURE-ENABLE, which is window-management state.")
+  (alias gesture-enable river-touch-gesture-v1.enable
+         "Enable a gesture.  Manage sequence only.")
+  (alias gesture-disable river-touch-gesture-v1.disable
+         "Disable a gesture without destroying it.  Manage sequence only.")
+  (alias gesture-destroy river-touch-gesture-v1.destroy)
+  (alias gesture-set-direction river-touch-gesture-v1.set-direction
+         "Require centroid motion in DIRECTION of at least MIN-DISTANCE.
+Manage sequence only.")
+  (alias gesture-set-edge river-touch-gesture-v1.set-edge
+         "Require the gesture to start within MAX-DISTANCE of EDGE.
+Manage sequence only.")
+  (alias gesture-set-threshold-motion
+         river-touch-gesture-v1.set-threshold-motion
+         "Require MIN-DISTANCE of centroid motion, with no direction.
+Manage sequence only.")
+  (alias gesture-set-threshold-scale
+         river-touch-gesture-v1.set-threshold-scale
+         "Require a pinch smaller than IN or larger than OUT.  Manage sequence
+only, and ignored for a gesture needing fewer than two touch points.")
   ;; pointer bindings.  A SEPARATE INTERFACE WITH A SEPARATE ENABLE, and the
   ;; reason this alias exists is that the first version of the pointer code
   ;; called BINDING-ENABLE on a river_pointer_binding_v1 -- which is a type

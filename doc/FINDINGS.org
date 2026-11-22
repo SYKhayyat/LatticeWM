@@ -80,7 +80,7 @@ quietly doing the extension's half of it.
 | Lines in =lattice/= | 2,077 (427 model, 779 policy, 500 commands, 311 map and overlay, 60 package) |
 | ~defmethod~ forms | 28 |
 | Core generics specialised | 14 (12 policy, 2 persistence) |
-| Container protocol members | 19, of which the lattice answers 13 |
+| Container protocol members | 21, of which the lattice answers 13 |
 | New container classes | 1 |
 | *Core files edited* | *7* (two for the lattice, two for the examples, four for the workspace decision, one shared) |
 | *Core behaviours changed* | *0* |
@@ -1007,9 +1007,16 @@ consequences had all four shapes at once:
   the other seventeen, with their methods left where the file format is.
 - *Nothing anywhere said how many members there are.* This file's own
   [[#free][what you get for free]] list is the closest thing, and it lists what a
-  kind /inherits/ rather than what it must answer. The number is *nineteen*.
+  kind /inherits/ rather than what it must answer. The number is *twenty-one*.
 
-  #+CLAIM: (= 19 (length (container-protocol-generics)))
+  #+CLAIM: (= 21 (length (container-protocol-generics)))
+
+  It was nineteen until #131 gave ~node-extra-facts~ and
+  ~restore-node-extra-facts~ the default methods their docstrings had been
+  promising. That is worth a sentence here because it is the *only* way this
+  number has ever moved: a generic joins the protocol by acquiring a method on
+  the node lineage, and two generics that the tabs extension had been answering
+  privately became part of the contract the moment the core answered them.
 
   Six of them have defaults that are correct for a dense integer-addressed
   container and wrong for anything else, which is what makes skipping them
@@ -1337,3 +1344,39 @@ census-and-restore harness that notices replacement rather than only addition,
 a primary-method convention documented where the trap bit, and eventually a
 list-composing hook (=:window-rule=) as the sanctioned way for any number of
 modules to answer the same question without agreeing on specializers.
+
+* Gestures: the protocol decides which half of the feature exists
+:PROPERTIES:
+:CUSTOM_ID: gestures-touchscreen-not-trackpad
+:END:
+
+#16 asked for touchpad gestures — three-finger swipes, two-finger pinches — and
+the honest answer turned out to be two answers, because the compositor decides
+which half of a gesture exists.
+
+River 0.5.0 added =river-touch-gestures-v1=: a window manager defines its own
+gestures, with finger counts, motion thresholds, pinch scale thresholds and edge
+triggers, and receives =start=, =delta_motion=, =scale= and =end=. That is the
+*touchscreen's* finger, and everything #16 asked for is expressible in it —
+three fingers left is a workspace, two fingers apart is a zoom, one finger down
+from the top edge is a panel. That half is shipped, as a table
+(=p:*gestures*=) and as commands (=M-x gesture=).
+
+Trackpad gesture events are libinput's, and river does not expose them: the
+upstream feature request for binding trackpad gestures
+([[https://codeberg.org/river/river/issues/1182]]) is open, and the compositor
+consumes three- and four-finger trackpad swipes itself rather than forwarding
+them. This is the third time the same finding has been written in this file in
+a different costume — =modifiers_watch= in #38, the missing axis event in #29 —
+and it is the one worth generalising: *an input feature is either in the
+protocol the compositor speaks or it does not exist for the window manager, and
+no amount of policy code creates it.* A window manager can be infinitely
+configurable about the events it is given. It cannot invent one.
+
+What that meant for the shape of the work is the interesting part. The table is
+protocol-agnostic: a spec is fingers, a trigger and a command, and
+=P:GESTURE-PLANS= turns it into numbers the runtime applies. When river exposes
+trackpad gestures, the table does not change and the plan does not change; only
+the object that gets configured does. That was worth doing deliberately rather
+than by accident, because the alternative — a table that names protocol objects
+— would have made the trackpad half a rewrite rather than an addition.

@@ -101,6 +101,11 @@ continuable SEQUENCE-VIOLATION if the context is wrong.")
    #:bindings-seat-ensure-next-key-eaten
    #:bindings-seat-cancel-ensure-next-key-eaten
    #:bindings-seat-modifiers-watch
+   ;; touch gestures (#16)
+   #:gestures-get-seat #:gestures-seat-destroy #:gestures-seat-get-gesture
+   #:gesture-enable #:gesture-disable #:gesture-destroy
+   #:gesture-set-direction #:gesture-set-edge #:gesture-set-threshold-motion
+   #:gesture-set-threshold-scale
    ;; input configuration: keyboards, mice and touchpads
    #:input-destroy #:input-set-repeat-info #:input-set-scroll-factor
    #:input-map-to-output #:input-assign-to-seat
@@ -431,6 +436,12 @@ You never edit this package.")
    #:*focus-steal-policy* #:*focus-quiet-seconds* #:may-take-focus-p
    #:same-application-p #:dialog-p #:*last-user-activity*
    #:note-user-activity #:focus-quiet-p
+   ;; #16: the gesture table, as a table -- the runtime applies the plans.
+   #:*gestures* #:gesture-spec-p #:gesture-trigger #:gesture-plans
+   #:gesture-add #:gesture-remove #:gesture-table-names #:gesture-command-of
+   #:parse-gesture-spec #:gesture-spec-text #:gesture-scale-for
+   #:+gesture-directions+ #:+gesture-edges+ #:+gesture-pinches+
+   #:+gesture-swipe-distance+ #:+gesture-pinch-scale+
    #:+pointer-buttons+ #:pointer-button-code #:*pointer-bindings*
    #:*click-to-focus* #:*click-to-raise* #:*float-on-drag*
    #:*honour-client-move-requests* #:*pointer-resize-minimum* #:*pointer-snap*
@@ -602,6 +613,12 @@ keybindings, the command registry, and the session loop.")
    #:float-away-from-tree #:transition-window #:*window-transitions*
    #:*focus-override* #:with-focus-on #:focused-window
    #:request-fullscreen #:rebind-keys #:request-manage #:after-command
+   ;; #16: touch gestures.  EXPORTS FOR THE WIRE HALF so an extension can reach
+   ;; the same objects the runtime made, and for the sync a test drives.
+   #:server-touch-gestures #:server-gestures-dirty #:sync-gestures
+   #:gesture-seat-of #:attach-gesture-seat #:detach-gesture-seat
+   #:gesture-moved #:gesture-scaled #:gesture-fingers-changed
+   #:gesture-finished #:gesture-fired
    #:call-in-wm-thread #:in-wm #:start-swank #:*swank-port*
    ;; things that happen because time passed rather than because a client
    ;; said something.  See ADD-TIMER.

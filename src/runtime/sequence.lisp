@@ -22,6 +22,14 @@
 ;;;; own size causes one — so a render handler must be cheap and idempotent.
 
 (in-package #:latticewm/runtime)
+
+;; A SEAM, NOT A STUB.  #16 needs the manage sequence to rebuild gesture
+;; objects, and gestures are a later file because a recognised gesture runs a
+;; command through AFTER-COMMAND, which is here.  Declaring the function's type
+;; lets this compile a correct call without teaching it that the answer is
+;; always NIL -- the mistake that turned a return value into a TYPE-ERROR in
+;; #23.  A stub here would be compiled *while this file is compiled*, everywhere.
+(declaim (ftype (function () t) sync-gestures))
 ;;; ------------------------------------------------------------- the loop
 
 (defun mark-dirty ()
@@ -242,6 +250,13 @@ ask comes from."
   (setf (server-manage-requested *server*) nil)
   (w:with-manage-sequence ((server-manager *server*))
    (with-watchdog ("manage sequence")
+    ;; #16.  Declared rather than defined here: gestures are a file later than
+    ;; this one (they run commands through AFTER-COMMAND), and a call to a
+    ;; function that does not exist yet is what gate 1 is for.  DECLAIM says the
+    ;; function will exist and what it takes, which is the seam #23 established.
+    (when (server-gestures-dirty *server*)
+      (setf (server-gestures-dirty *server*) nil)
+      (sync-gestures))
     (when (server-bindings-dirty *server*)
       (setf (server-bindings-dirty *server*) nil)
       (dolist (seat (server-seats *server*))

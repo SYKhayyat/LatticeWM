@@ -168,6 +168,12 @@ system, an infinite zoomable plane of cells, is a proof of."
         :in-package "LATTICEWM/RIVER" :export t)
        (:wayflan-client-impl "river-layer-shell-v1"
         :in-package "LATTICEWM/RIVER" :export t)
+       ;; Touch gestures (#16).  Since river 0.5.0, and *after* the window
+       ;; management protocol because its `get_seat' request takes a
+       ;; river_seat_v1 argument: the generator emits a class per interface and
+       ;; a class cannot name one that has not been emitted yet.
+       (:wayflan-client-impl "river-touch-gestures-v1"
+        :in-package "LATTICEWM/RIVER" :export t)
        ;; Input configuration.  Three protocols, and the order is a dependency:
        ;; both of the others carry an `input_device' event whose argument is a
        ;; river_input_device_v1, so input-management has to be generated first.
@@ -288,6 +294,13 @@ system, an infinite zoomable plane of cells, is a proof of."
        (:file "swank" :depends-on ("server" "sequence"))
        (:file "outputs" :depends-on ("server" "surface" "minibuffer" "layer" "capture" "sequence"))
        (:file "seats" :depends-on ("server" "keys" "minibuffer" "layer" "pointer" "sequence"))
+       ;; Touch gestures (#16).  After SEATS because they are attached to seats
+       ;; and rebuilt in the manage sequence seats already schedule; after
+       ;; SEQUENCE because a recognised gesture runs a command through the same
+       ;; AFTER-COMMAND a key binding does.  Both of those are seams declared in
+       ;; the earlier files rather than calls that do not resolve -- see the
+       ;; DECLAIMs in seats.lisp and sequence.lisp.
+       (:file "gestures" :depends-on ("server" "minibuffer" "echo" "sequence" "seats"))
        (:file "input" :depends-on ("server" "minibuffer" "echo" "outputs"))
        (:file "session" :depends-on ("server" "minibuffer" "windows" "sequence" "outputs" "seats" "input"))
        (:file "ipc" :depends-on ("server" "minibuffer" "sequence" "swank" "session"))
@@ -317,6 +330,7 @@ without a compositor — which is the whole model."
      (:file "test-geometry")
      (:file "test-shares")
      (:file "test-window-state")
+     (:file "test-gestures")
      (:file "test-placement")
      (:file "test-stacking")
      (:file "test-tree")

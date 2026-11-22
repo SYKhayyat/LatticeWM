@@ -26,6 +26,20 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Touch gestures, as a table.** `M-x gesture` binds a gesture to any command
+  (`3 left`, `2 pinch in`, `1 edge top`), `forget-gesture` unbinds one, and
+  `p:*gestures*` is the same thing in a config file; three-finger swipes are the
+  pager and the focus moves by default.  This speaks
+  `river-touch-gestures-v1`, which is new in river 0.5.0 and is **optional**:
+  absent, the table is planned and reported and nothing fires, and a session on
+  0.4.6 is exactly what it was.  It is a *touchscreen* protocol — river consumes
+  trackpad swipes itself and does not forward them (`doc/FINDINGS.org`) — so the
+  table is protocol-agnostic on purpose: a spec is fingers, a trigger and a
+  command, and `p:gesture-plans` fills in the numbers, so the day trackpad
+  gestures arrive the table does not change.  New hooks `:gesture-start`,
+  `:gesture-end`, `:gesture-motion`, `:gesture-scale` and `:gesture-fingers` for
+  whoever wants a continuous gesture (a pan, a zoom) rather than a command.
+  (#16)
 - **A session with no extension loaded saves its layout again.**  `node-extra-facts`
   and `restore-node-extra-facts` were documented as having a default and did not
   have one — only the tabs extension defined a method — so a core-only session

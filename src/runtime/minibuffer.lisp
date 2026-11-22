@@ -469,6 +469,16 @@ characters at any scale without this function knowing how wide a glyph is."
                        :test (lambda (a b) (string= a (string b))))
                  (error "~a is not always, smart or never" text)))))
 
+(define-argument-type :gesture-spec "gesture: "
+  :documentation "fingers and gesture, e.g. 3 left, 2 pinch in, 1 edge top --
+see M-x gesture."
+  :candidates '("3 left" "3 right" "3 up" "3 down"
+                "4 left" "4 right" "2 pinch in" "2 pinch out"
+                "1 edge top" "1 edge left")
+  :parse (lambda (text)
+           (multiple-value-bind (spec why) (p:parse-gesture-spec text)
+             (or spec (error "~a~@[ -- ~a~]" text why)))))
+
 (define-argument-type :command "command: "
   :documentation "The name of one of our own commands."
   :candidates (mapcar #'command-name (all-commands)))

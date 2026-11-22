@@ -400,6 +400,43 @@ LatticeWM options.  Set any of these in ~/.config/latticewm/init.lisp
   Pixels of empty space between adjacent panes.  0 is a clean grid; 4 to 8
   gives the airy look, at the cost of that much screen.
 
+*GESTURES*
+  default: (((:FINGERS 3 :DIRECTION :LEFT) . "next-workspace")
+            ((:FINGERS 3 :DIRECTION :RIGHT) . "previous-workspace")
+            ((:FINGERS 3 :DIRECTION :UP) . "focus-previous")
+            ((:FINGERS 3 :DIRECTION :DOWN) . "focus-next"))
+  Which touch gesture runs which command, as an assoc list.
+  
+  Each entry is a SPEC and the command its recognition runs, and a spec is four
+  shape/trigger pairs:
+  
+    ( :fingers N :direction :left | :right | :up | :down )   a centroid swipe
+    ( :fingers N :pinch :in | :out )                          a pinch, in or out
+    ( :fingers N :edge :top | :bottom | :left | :right )     a swipe from an edge (one finger is the ordinary reading)
+  
+  Fingers are how many touch points the gesture needs, counted the way this
+  program counts everything: the issue's three is three.  A pinch needs at least
+  two, which the protocol itself enforces.
+  
+  Three tuning keywords are recognised and optional, with the values they name:
+  
+    :distance  pixels of centroid motion before a direction or edge gesture
+               triggers (default 200)
+    :scale     the pinch size that triggers a pinch, so 0.8 means `closer
+               together than four-fifths' and 1.25 means `farther apart than a
+               quarter' (default 0.8 in, 1.25 out)
+    :command   the command to run; the assoc cdr is the usual place, and the
+               first entry per gesture wins
+  
+  The command may be any command -- a workspace, a focus move, a verb an
+  extension adds.  A gesture that names an unknown command is dropped when the
+  table is planned, with a log line, in exactly the way a key that names an
+  unknown command is.
+  
+  These are touchscreen gestures (see the finding above).  The table is still
+  the right shape for trackpad gestures the day river exposes them: the planning
+  is protocol-agnostic and the plan is what the runtime applies.
+
 *HELP-BACKGROUND*
   default: (0.07 0.07 0.1 0.94)
   Help overlay background, as (R G B A).

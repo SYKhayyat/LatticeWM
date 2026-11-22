@@ -255,11 +255,29 @@ LatticeWM commands.
   looks like it did nothing; RESTORE puts it back in the slot it left, and the
   cursor follows it there.
 
+(forget-gesture spec)
+  Unbind a touch gesture.  `M-x forget-gesture 3 left'.
+
 (gather-tag name)
   Bring every window tagged NAME to the workspace you are on.
   
   The `set up my project' verb: tag the four windows once, and afterwards one
   keystroke collects them wherever they have drifted to.
+
+(gesture spec command)
+  Bind a touch gesture to a command, live.
+  
+  SPEC is fingers then the gesture, written the way you would say it: `3 left',
+  `3 edge top', `2 pinch in', `4 up'.  The trailing number of an edge gesture is
+  the edge it must start from, so `1 edge top' is a one-finger swipe down from the
+  top of the screen.
+  
+  COMMAND is anything you can run: a workspace switch, a focus move, a command an
+  extension adds.  The binding is added to the front of the table and takes effect
+  at the next manage sequence, which is when the protocol allows it.
+
+(gestures)
+  List the gesture table: what each gesture runs, and whether it can fire.
 
 (goto-named-cell)
   Type a name and jump to whatever has it.
@@ -416,6 +434,13 @@ LatticeWM commands.
 
 (redo)
   Undo an undo.
+
+(refresh-gestures)
+  Rebuild the gesture objects from the current table.
+  
+  The table is an option like any other, so a config file reload or a `setf' from
+  the control socket changes it without telling anybody.  This is the one verb for
+  `I changed my mind, apply it' -- the same shape as REBIND-KEYS.
 
 (reload-config)
   Re-read the configuration file.

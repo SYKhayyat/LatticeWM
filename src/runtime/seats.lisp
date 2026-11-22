@@ -22,6 +22,12 @@
 
 (in-package #:latticewm/runtime)
 
+;; Seams for #16, for the same reason SEQUENCE declares SYNC-GESTURES: the
+;; gesture file is compiled after this one (it runs commands through
+;; AFTER-COMMAND) and ATTACH-SEAT has to tell it a seat exists.
+(declaim (ftype (function (t t) t) attach-gesture-seat))
+(declaim (ftype (function (t) t) detach-gesture-seat))
+
 
 (defun attach-seat (proxy)
   "Register a seat, and give it its keyboard bindings."
@@ -91,6 +97,7 @@
                 (:removed (detach-seat seat proxy))
                 (t nil))
     (attach-layer-shell-seat seat)
+    (attach-gesture-seat seat proxy)
     (when (server-bindings *server*)
       (setf (seat-bindings-seat seat)
             (w:bindings-get-seat (server-bindings *server*) proxy))
@@ -137,6 +144,7 @@ its half."
         ;; what it said last time' on a seat that now has no bindings at all,
         ;; and skipped making any -- a seat that came back with a dead prompt.
         (c:prop seat :capture-wanted) nil)
+  (detach-gesture-seat seat)
   (let ((layer (c:prop seat :layer-shell)))
     (when layer
       (best-effort "layer shell seat destroy"

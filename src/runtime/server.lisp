@@ -118,6 +118,20 @@ drift is exactly what a hand-maintained list of handled events would produce."
    (bindings :initform nil :accessor server-bindings
              :documentation "river_xkb_bindings_v1, or NIL if unavailable.")
    (layer-shell :initform nil :accessor server-layer-shell)
+   (touch-gestures :initform nil :accessor server-touch-gestures
+                   :documentation
+                   "river_touch_gestures_v1, or NIL on a compositor without it.
+
+NIL is the ordinary case on anything older than river 0.5.0, and it means one
+thing: no gesture object can be made, so the table is planned and reported but
+nothing is bound.  Gestures are a feature the compositor has, not one this
+program can invent -- the same finding as #29's missing axis event.")
+   (gestures-dirty :initform nil :accessor server-gestures-dirty
+                   :documentation
+                   "Whether gesture objects need rebuilding at the next manage
+sequence.  Defining a gesture is window-management state, so a command that
+changes the table cannot apply it there and then: the same shape as
+SERVER-BINDINGS-DIRTY, and for the same reason.")
    (input-manager :initform nil :accessor server-input-manager
                   :documentation "river_input_manager_v1, or NIL.")
    (libinput-config :initform nil :accessor server-libinput-config
