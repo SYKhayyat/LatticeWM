@@ -26,6 +26,12 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A printed world counts every window it holds (#140).** `print-object` counted
+  `node-windows` of the root, so a world of two tiled windows, a floating dialog
+  and a scratchpad window printed "2 windows" — the same under-report the deck
+  (#138) and the map (#139) had, in the place most likely to be read.
+  `world-window-count` counts the tree, the scratchpad and the floats, each
+  window once.
 - **The drawn map shows floating windows too (#139).** `draw-map-on` drew cells,
   and a float is not in the tree, so the full-screen map under-reported what is
   on the plane. Both drawings now call one `draw-cell-floats`, so they cannot

@@ -260,6 +260,7 @@ deliberately decomposed so that policy can redirect it.")
    #:share-siblings-p #:refresh-share-rects
    #:output-capture-sessions #:output-captured-p #:world-captures
    #:world-node-at #:world-leaf-at #:world-window-at #:world-focus-window
+   #:world-window-count
    #:current-workspace #:workspace-path #:world-workspaces))
 
 (defpackage #:latticewm/policy

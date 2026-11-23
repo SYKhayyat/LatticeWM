@@ -1679,3 +1679,27 @@ bugs about")))
     (is (eq :never p:*focus-steal-policy*) "the option moved")
     (is (search "never" (car p:*echo-message*))
         "and the echo area said which mode you are in")))
+
+(test a-world-prints-how-many-windows-it-holds-not-how-many-are-tiled
+  "The printed world is where a person first reads the number -- in a REPL, in a
+log, in a backtrace.  Counting the tree alone said a world of two tiled windows
+and a floating dialog held two windows (#140)."
+  (let* ((world (fresh-world))
+         (a (win "a"))
+         (b (win "b"))
+         (c (win "c"))
+         (d (win "d")))
+    (setf (c:world-root world)
+          (c:make-stack (list (c:make-leaf a) (c:make-leaf b)) 0))
+    (setf (c:world-scratchpad world) (list c))
+    (setf (c:world-floats world)
+          (list (make-instance 'c:floating-window :window d :anchor nil
+                                                   :rect (c:make-rect 0 0 10 10))))
+    (is (= 4 (c:world-window-count world)) "two tiled, one away, one floating")
+    (is (search "4 window" (princ-to-string world))
+        "and the printed world says so: ~a" (princ-to-string world))
+    ;; A window the model forbids being in two places at once -- but the count
+    ;; must not depend on that being true, or the number moves when a bug does.
+    (setf (c:world-scratchpad world) (list a))
+    (is (= 3 (c:world-window-count world))
+        "a window recorded twice counts once")))

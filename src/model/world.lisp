@@ -355,10 +355,33 @@ reach — two small leaks the removal path used to have no reason to care about.
   (remhash seat (world-focused-floats world))
   nil)
 
+(defun world-window-count (world)
+  "Every window WORLD holds a place for, counted once.
+
+TILED, PUT AWAY, OR FLOATING -- the question a person reads a printed world to
+answer.  Counting the tree alone said a world of two tiled windows and a
+floating dialog held two windows, which is the same under-report the deck (#138)
+and the map (#139) had, in the place most likely to be read: the object printed
+in a REPL or a log.
+
+The same answer as the runtime's WORLD-WINDOWS, and deliberately a separate
+function rather than a call to it: the model may not depend on the runtime, and
+this is the model's own fact about itself."
+  (let ((seen (make-hash-table :test #'eq))
+        (count 0))
+    (flet ((note (window)
+             (when (and window (not (gethash window seen)))
+               (setf (gethash window seen) t)
+               (incf count))))
+      (dolist (window (node-windows (world-root world))) (note window))
+      (dolist (window (world-scratchpad world)) (note window))
+      (dolist (float (world-floats world)) (note (float-window float))))
+    count))
+
 (defmethod print-object ((w world) stream)
   (print-unreadable-object (w stream :type t :identity nil)
     (format stream "~d window~:p, cursor ~s"
-            (length (node-windows (world-root w))) (world-cursor w))))
+            (world-window-count w) (world-cursor w))))
 
 ;;; ------------------------------------------------------- world accessors
 
