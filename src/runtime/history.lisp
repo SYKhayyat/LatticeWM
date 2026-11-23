@@ -46,7 +46,10 @@ THE FLOATS ARE PART OF THE LAYOUT, which is the thing a snapshot is of.  They
 live beside the tree in WORLD-FLOATS, and TOGGLE-FLOAT removes a window from the
 tree -- so it is recorded as an undo step, and an undo that put the window back
 without taking its float record away left it tiled *and* floating, placed twice
-by the emitter while WORLD-WINDOWS deduplicated it into invisibility (#141)."
+by the emitter while WORLD-WINDOWS deduplicated it into invisibility (#141).
+
+SIGNATURE is the tree AND the floats (#147): see LAYOUT-SIGNATURE for what is
+in it and, at more length, what is deliberately not."
   (root nil)
   (cursor nil)
   (floats '())
@@ -61,6 +64,51 @@ by the emitter while WORLD-WINDOWS deduplicated it into invisibility (#141)."
 (defun redo-ring ()
   "The stack of layouts undone but not yet redone."
   (and *world* (c:prop *world* :redo-ring)))
+
+;;; ------------------------------------------------ what counts as the layout
+;;;
+;;; A FLOAT IS NOT IN THE TREE, SO THE SIGNATURE WAS BLIND TO IT AND NOTHING
+;;; COULD PUT ONE BACK (#147).
+;;;
+;;; The step is decided by "has the layout changed since the last settle", and
+;;; A-LAYOUT was the tree — so a window that was placed by hand could be
+;;; nudged, dragged or resized and the world said it was unchanged: no step, and
+;;; the one class of window whose position is *entirely* the user's choice was
+;;; the one undo could not walk back.  Moving a float is the whole reason to
+;;; float something.
+;;;
+;;; WHAT IS *NOT* IN IT MATTERS AS MUCH.  The anchor is a node object and a
+;;; snapshot holds a *copy* of the tree, so anchoring the signature on identity
+;;; would report a change on every settle after every undo -- an undo ring that
+;;; fills with steps nobody took.  The node an anchored float hangs on is in the
+;;; tree, so the tree's half of the signature already covers it; the float's own
+;;; half covers where the hand put it.
+;;;
+;;; The minimized flag is left out for the opposite reason: it lives on the
+;;; WINDOW rather than on the record, so undoing a minimize would record a step
+;;; that RESTORE-SNAPSHOT cannot walk back -- a step that does nothing is worse
+;;; than a change that is not a step.
+;;;
+;;; Order IS in it, so raising and lowering a float are steps too.  That is a
+;;; superset of "put my window back", and it is what "the layout" means here:
+;;; which windows are on top of which is a thing a person arranged.
+
+(defun float-signature (floats)
+  "What FLOATS look like, as a value two worlds can be compared on.
+
+The window and its rectangle, in stacking order.  The window is a live object
+shared by every snapshot ever taken of it -- there is only one of those -- so
+EQ is the right comparison and it is what EQUAL does to it inside this list."
+  (loop for record in floats
+        for rect = (c:float-rect record)
+        collect (list (c:float-window record)
+                      (c:rect-x rect) (c:rect-y rect)
+                      (c:rect-w rect) (c:rect-h rect))))
+
+(defun layout-signature ()
+  "What undo compares: the tree and the floats, which together are the layout."
+  (list (c:node-signature (c:world-root *world*))
+        (float-signature (c:world-floats *world*))))
 
 ;;; ------------------------------------------------- where the step is taken
 ;;;
@@ -113,7 +161,7 @@ by the emitter while WORLD-WINDOWS deduplicated it into invisibility (#141)."
 ;;;   * every door is covered, because a settle point is "a human or a script
 ;;;     just did something arbitrary" rather than "RUN-COMMAND returned";
 ;;;   * the deny-list disappears, because the test is now what happened to the
-;;;     tree rather than which function ran — which is what its own docstring
+;;;     layout rather than which function ran — which is what its own docstring
 ;;;     said it was aiming at;
 ;;;   * an arrow key costs one signature walk instead of two deep copies and
 ;;;     two signature walks, and a key that changes nothing costs no copy.
@@ -144,7 +192,7 @@ the tree twice, which at a settle point is half the remaining cost."
    :root (c:copy-node (c:world-root *world*))
    :cursor (copy-list (c:world-cursor *world*))
    :floats (c:copy-float-records (c:world-floats *world*))
-   :signature (or signature (c:node-signature (c:world-root *world*)))
+   :signature (or signature (layout-signature))
    :label label
    :time (get-internal-real-time)))
 
@@ -220,21 +268,23 @@ is a verb and may merge, called with one it is a door and may not.  No call
 site had to change, and a door that invents a new constant is covered by
 construction rather than by being added to a list.
 
-THE SETTLE POINTS ARE THE DOORS, and there are four: a key binding running to
+THE SETTLE POINTS ARE THE DOORS, and there are five: a key binding running to
 completion, `Super+;', the control socket, and a thunk queued from another
 thread — which is SWANK.  AFTER-COMMAND is the first three, because
-EVAL-EXPRESSION and EVALUATE-FOR-IPC both already end with it.
+EVAL-EXPRESSION and EVALUATE-FOR-IPC both already end with it.  The fifth is the
+pointer coming up, because a drag is a gesture rather than a command and it is
+the only door a mouse has (#147).
 
-Cheap when nothing happened, which is the common case: one NODE-SIGNATURE walk
-and no copy.  It used to be two COPY-NODEs of every workspace and two walks,
-per keystroke, whether or not anything changed."
+Cheap when nothing happened, which is the common case: one signature walk over
+the tree and the floats, and no copy.  It used to be two COPY-NODEs of every
+workspace and two walks, per keystroke, whether or not anything changed."
   (when (and *world* (plusp *undo-depth*))
     (let ((baseline (undo-baseline)))
       (cond
         ;; First settle of the session: there is nothing to get back to yet.
         ((null baseline) (setf (undo-baseline) (snapshot-layout label)))
         (t
-         (let ((signature (c:node-signature (c:world-root *world*))))
+         (let ((signature (layout-signature)))
            (unless (equal signature (layout-snapshot-signature baseline))
              (setf (layout-snapshot-label baseline) label
                    (layout-snapshot-time baseline) (get-internal-real-time))

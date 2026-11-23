@@ -303,13 +303,30 @@ sweep that walked only the table would leave that one stale."
 FOR RESTORING A SNAPSHOT, and the rule is that a window is in one place (#141).
 A window the tree now mentions stops floating: an undone TOGGLE-FLOAT put it back
 in the tree, so its record has to go, or the emitter places it twice.  A window
-the tree does not mention keeps its *current* record where it was already
-floating, so undoing an unrelated tiling change does not snap a float the user
-has since dragged back to an old rectangle -- a float move is not a layout change
-and is not recorded, so it must not be undone by the back door.  A window that
-was floating in the snapshot and is not floating now gets the snapshot's record
-back, with the snapshot's rectangle.  A dead window's record is dropped, the same
-rule PRUNE-DEAD-WINDOWS applies to a leaf."
+that was floating in the snapshot comes back floating, WITH THE SNAPSHOT'S
+RECTANGLE.  A dead window's record is dropped, the same rule PRUNE-DEAD-WINDOWS
+applies to a leaf.
+
+IT USED TO KEEP THE RECTANGLE THE WINDOW HAD FROM THE LAST DRAG.  The argument
+was written here: a float move was not recorded, so undoing an unrelated tiling
+change must not snap a float the user had since dragged back to an old
+rectangle.  That argument was right and its premise was the bug (#147) -- a
+float move was not recorded because the signature was the tree, and a float is
+not in the tree.  Now that a move is its own step, the snapshot's rectangle is
+exactly what the snapshot is *of*, and keeping the current one turned undo into
+a no-op for the only change it was invoked to undo.
+
+A RECORD ON ITS WAY IN IS COPIED, because the ring and the live world must not
+share one: an undo, a redo and another undo would otherwise leave the ring
+holding whatever the emitter last wrote into the live rectangle.
+
+EXCEPT WHEN THE WINDOW IS ALREADY FLOATING, and there the record the world has is
+the one that stays -- a seat's keyboard focus IS a float record, and
+FORGET-UNPLACED-FLOAT-FOCUS asks whether that exact object is still on the list
+(#143).  Swapping in a copy made every seat's focus on a float die on every undo,
+which showed up as `undo, then toggle-float' floating the *tiled* window next to
+it instead of putting the float back.  So the copy is of the rectangle, which is
+the part the snapshot owns, and the identity is left where the world put it."
   (let ((tiled (c:node-windows (c:world-root world)))
         (out '()))
     (dolist (record records)
@@ -317,7 +334,13 @@ rule PRUNE-DEAD-WINDOWS applies to a leaf."
         (when (and window
                    (not (member window tiled))
                    (c:window-live-p window))
-          (push (or (c:float-of-window world window) record) out))))
+          (let ((live (c:float-of-window world window)))
+            (cond
+              (live
+               (let ((rect (c:float-rect record)))
+                 (setf (c:float-rect live) (and rect (c:copy-rect rect))))
+               (push live out))
+              (t (push (c:copy-float-record record) out)))))))
     (nreverse out)))
 
 (defun float-away-from-tree (policy window)

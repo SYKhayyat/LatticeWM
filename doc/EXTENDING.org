@@ -129,7 +129,7 @@ which is the entire reason the model has no parent pointers.
 
 ** The world, the window, the pointer
 
-| ~(world-cursor world)~ | The path the keyboard is at. ~setf~-able, and moving it alone costs nothing: undo compares the *tree*, so twenty focus changes in a row record no step. Change the tree and call ~note-layout-settled~. |
+| ~(world-cursor world)~ | The path the keyboard is at. ~setf~-able, and moving it alone costs nothing: undo compares the *layout* — the tree plus the floats — so twenty focus changes in a row record no step. Change the tree, or move a floating window, and call ~note-layout-settled~. |
 | ~(prop node key)~ | Extension storage on a node, and the sanctioned place for it: ~(setf (prop node :my-extension/pinned) t)~. Namespace your keys — gate 13 reads them, and a key read but never written fails the build as provably dead. |
 | ~(window-preferred-size window)~ | Two values, both ~NIL~ when the client said nothing. Only ever a number when the client pinned its minimum and maximum equal, which is how a fixed-size dialog announces itself — exactly the case where honouring it matters. |
 | ~(warp-pointer x y)~ | Move the pointer, in output-layout coordinates. It exists so that an extension never has to reach into the wire package; the first worked example that crossed that seam did so because this function was missing. |
@@ -793,19 +793,19 @@ socket, and SLIME all evaluate directly. So =Super+; (setf (world-root *world*)
 (make-leaf))= destroyed a layout with no undo entry, while an arrow key
 recorded a snapshot for a cursor move that changed nothing.
 
-Undo is taken at the *settle points* now — the four places where a human or a
+Undo is taken at the *settle points* now — the five places where a human or a
 script has just done something arbitrary — and the test is what happened to the
-tree rather than which function ran:
+layout rather than which function ran:
 
 #+begin_src lisp
 (note-layout-settled "opened a socket of my own")
 #+end_src
 
-If your extension opens a fifth door — a socket, a timer, a second REPL — call
+If your extension opens a sixth door — a socket, a timer, a second REPL — call
 that after it, and the layout changes made through it become recoverable like
-everyone else's. It is cheap when nothing happened: one ~node-signature~ walk
-and no copy at all. The command wrapper is still there and still covers every
-command including yours; all it does now is *name* the step.
+everyone else's. It is cheap when nothing happened: one signature walk over the
+tree and the floats, and no copy at all. The command wrapper is still there and
+still covers every command including yours; all it does now is *name* the step.
 
 ~(remove-command-wrapper 'time-commands)~ takes it off again, and you will want
 it: a wrapper runs around *every* command, so the one you are still writing is

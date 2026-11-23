@@ -1738,10 +1738,30 @@ WORLD-WINDOWS deduplicated it into invisibility (#141)."
     (is (= 1 (float-count world)) "redo floats it again")
     (is (not (member b (c:node-windows (c:world-root world)))) "and takes it out of the tree")))
 
-(test a-float-the-user-has-since-dragged-is-not-moved-by-an-unrelated-undo
-  "A float move is not a layout change and is not recorded, so it must not be
-undone by the back door: the restored record for a window that is *already*
-floating keeps its current rectangle (#141)."
+(defun float-rect-values (world window)
+  "The rectangle WORLD has WINDOW floating at, as four numbers, or NIL."
+  (let ((float (c:float-of-window world window)))
+    (when float
+      (let ((rect (c:float-rect float)))
+        (list (c:rect-x rect) (c:rect-y rect) (c:rect-w rect) (c:rect-h rect))))))
+
+(defun move-float-to (world window x y)
+  "Put WINDOW's float at X,Y, keeping its size -- what a drag ends up doing."
+  (let* ((float (c:float-of-window world window))
+         (rect (c:float-rect float)))
+    (setf (c:float-rect float)
+          (c:make-rect x y (c:rect-w rect) (c:rect-h rect)))))
+
+(test a-float-the-user-has-since-dragged-stays-put-through-an-unrelated-undo
+  "#141's RULE, KEPT UNDER #147's: undoing something that had nothing to do with
+the float must not move it.
+
+This used to hold because a float move was not recorded at all -- the signature
+was the tree and a float is not in the tree -- so the back door had to be closed
+by keeping the *current* rectangle on the way back in.  Now that a move is its
+own step, the door is closed from the other side: the snapshot holds the
+rectangle from the moment it was taken, and every change to that rectangle since
+is a step in front of it."
   (let* ((world (fresh-world))
          (pol (policy))
          (r (find-package "LATTICEWM/RUNTIME"))
@@ -1754,21 +1774,160 @@ floating keeps its current rectangle (#141)."
     (settle "start")
     (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
     (settle "float")
-    (let* ((float (c:float-of-window world b))
-           (dragged (c:make-rect 111 222 333 444)))
-      (setf (c:float-rect float) (c:float-rect float))
-      (setf (c:float-rect float) dragged)
-      ;; A tiling change that has nothing to do with the float.
-      (p:on-window-open pol world (win "c"))
-      (settle "split")
+    (move-float-to world b 111 222)
+    ;; The hand came up, which is where a drag settles.
+    (settle "drag a window")
+    ;; A tiling change that has nothing to do with the float.
+    (p:on-window-open pol world (win "c"))
+    (settle "split")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (is (= 1 (float-count world)) "the float is still a float")
+    (is (equal '(111 222) (subseq (float-rect-values world b) 0 2))
+        "and it is where the user left it, not where the older snapshot saw it")))
+
+(test a-float-move-is-a-step-and-undo-puts-the-rectangle-back
+  "#147: MOVING A FLOAT IS THE WHOLE REASON TO FLOAT SOMETHING, and it was the
+one layout change undo could not walk back -- the signature that decides whether
+a step happened was the tree's, and the point of a float is that it is not in
+the tree."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let ((home (float-rect-values world b))
+          (ring (find-symbol "UNDO-RING" r)))
+      (let ((before-move (length (funcall ring))))
+        (move-float-to world b 300 400)
+        (settle "drag a window")
+        (is (= (1+ before-move) (length (funcall ring))) "the move is a step"))
       (funcall (find-symbol "UNDO" r))
       (settle "undo")
-      (is (= 1 (float-count world)) "the float is still a float")
-      (is (equal (list 111 222 333 444)
-                 (let ((rect (c:float-rect (c:float-of-window world b))))
-                   (list (c:rect-x rect) (c:rect-y rect)
-                         (c:rect-w rect) (c:rect-h rect))))
-          "and it is where the user left it, not where the snapshot saw it"))))
+      (is (= 1 (float-count world)) "it is still a float, not back in the tree")
+      (is (equal home (float-rect-values world b))
+          "and it is back at the rectangle the float was made with"))))
+
+(test redo-puts-a-moved-float-back-where-the-hand-put-it
+  "The other direction, which is where a snapshot taken by value rather than by
+reference earns its keep: redo has to have the *dragged* rectangle to hand."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (move-float-to world b 300 400)
+    (settle "drag a window")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (funcall (find-symbol "REDO" r))
+    (settle "redo")
+    (is (equal '(300 400) (subseq (float-rect-values world b) 0 2))
+        "redo puts the float back where the hand left it")))
+
+(test a-settle-that-moved-no-float-is-not-a-step
+  "A SIGNATURE THAT IS TOO EAGER IS WORSE THAN ONE THAT IS TOO BLIND: an undo ring
+full of steps nobody took, each of which walks back one nowhere.  A float's
+anchor is a NODE OBJECT and a snapshot holds a copy of the tree, so identity in
+the signature would do exactly that after every undo."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (ring (find-symbol "UNDO-RING" r))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let ((settled (length (funcall ring))))
+      (settle "nothing at all")
+      (settle "nothing at all")
+      (is (= settled (length (funcall ring)))
+          "three settles over an unchanged world are one step, not three")
+      (funcall (find-symbol "UNDO" r))
+      (settle "undo")
+      (funcall (find-symbol "REDO" r))
+      (settle "redo")
+      (is (= settled (length (funcall ring)))
+          "and an undo and a redo do not leave steps behind them"))))
+
+(test a-drag-is-one-step-and-one-undo-puts-the-whole-drag-back
+  "THE POINTER IS THE FIFTH DOOR, and it is the only one a mouse has (#147).
+
+APPLY-POINTER-DELTA runs once per motion event, so a step per delta would fill
+the ring with a drag's interim rectangles and make undo a rewind button.  It is
+one step, taken when the hand comes up, because that is the one moment the
+rectangle is final."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (seat (make-instance (find-symbol "SEAT" r) :proxy nil))
+         (ring (find-symbol "UNDO-RING" r))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let ((home (float-rect-values world b))
+          (settled (length (funcall ring))))
+      (funcall (find-symbol "START-POINTER-OP" r) seat :move b)
+      ;; River sends cumulative deltas from the start of the operation.
+      (dolist (delta '((10 10) (20 25) (60 70)))
+        (funcall (find-symbol "APPLY-POINTER-DELTA" r) seat
+                 (first delta) (second delta)))
+      (is (= settled (length (funcall ring)))
+          "nothing is recorded while the hand is still down")
+      (is (not (equal home (float-rect-values world b)))
+          "and the window followed the pointer")
+      (funcall (find-symbol "END-POINTER-OP" r) seat)
+      (is (= (1+ settled) (length (funcall ring)))
+          "letting go records one step for the whole gesture")
+      (funcall (find-symbol "UNDO" r))
+      (settle "undo")
+      (is (equal home (float-rect-values world b))
+          "and one undo puts the drag back, not a third of it"))))
+
+(test the-rectangle-a-restore-hands-back-is-a-copy
+  "AN UNDO AND A REDO MUST NOT LEAVE THE RING AND THE LIVE WORLD SHARING ONE
+RECTANGLE, or the ring holds whatever the emitter last wrote into it -- and the
+emitter writes into it every frame."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (move-float-to world b 300 400)
+    (settle "drag a window")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (let ((live (c:float-rect (c:float-of-window world b)))
+          (held (c:float-rect
+                 (first (funcall (find-symbol "LAYOUT-SNAPSHOT-FLOATS" r)
+                                 (first (funcall (find-symbol "REDO-RING" r))))))))
+      (is (= 300 (c:rect-x held)) "redo has the dragged rectangle to hand")
+      (is (not (eq live held)) "and it is not the object the world is using")
+      (setf (c:rect-x live) 1)
+      (is (= 300 (c:rect-x held))
+          "so writing into the live rectangle does not write into the ring"))))
 
 (test a-snapshot-carries-its-floats-and-their-own-rectangles
   (let* ((world (fresh-world))
@@ -1848,6 +2007,45 @@ cursor would be drawn as unfocused (#143)."
     (is (null (c:world-floats world)) "the float is gone")
     (is (null (c:world-focused-float world))
         "and no seat is holding a keyboard for a float that is not there")))
+
+(test an-undo-that-keeps-a-float-leaves-the-keyboard-on-it
+  "THE OTHER HALF OF #143, and the symptom is a misdirected verb rather than a
+stale flag.  A seat's focus on a float is the float RECORD, and
+FORGET-UNPLACED-FLOAT-FOCUS asks whether that exact object is still on the list —
+by EQ.  So a restore that rebuilt the identity of every record, rather than only
+its rectangle, dropped the keyboard on every undo, and the next `toggle-float' —
+meaning \"put this one back\" — floated the tiled window *beside* it instead.  Caught
+by the integration suite on the first run against a real compositor, which is the
+only place a drag, an undo and a keypress happen in that order."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let ((float (c:float-of-window world b)))
+      (setf (c:world-focused-float world p:*seat*) float)
+      (move-float-to world b 300 400)
+      (settle "drag a window")
+      (funcall (find-symbol "UNDO" r))
+      (settle "undo")
+      (is (eq float (c:world-focused-float world p:*seat*))
+          "the seat still holds the same float record, not a copy of it")
+      (is (eq b (funcall (find-symbol "FOCUSED-WINDOW" r)))
+          "so the keyboard is still on the float")
+      (funcall (find-symbol "TOGGLE-FLOAT" r))
+      (is (not (c:window-floating-p b)) "and toggle-float puts the float back")
+      (is (not (c:window-floating-p a)) "rather than floating its neighbour")
+      (is (equal '("a" "b")
+                 (sort (mapcar #'c:window-app-id (c:node-windows (c:world-root world)))
+                       #'string<))
+          "with both windows in the tree"))))
 
 (test a-window-that-already-has-a-place-is-not-placed-again
   "`*UNPLACED*` is the arrival list, and PLACE-UNPLACED-WINDOWS drains it by

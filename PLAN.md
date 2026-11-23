@@ -69,13 +69,15 @@ prove its own failures are not this one); then the documents nobody checks
 (#117, #118), then the untested surface (#119), then the three magic-number /
 duplication items, then the structural split (#124).
 
-## Phase 0.5 — The next three findings (filed 2026-11-23, after Phase 0 shipped)
+## Phase 0.5 — The next five findings (filed 2026-11-23, after Phase 0 shipped)
 
 Small, and each one is a wrong answer rather than a wish: a drawing that cannot
-see a window, a build that can test the wrong fasl, and an undo ring with a hole
-in it.  They sit above Phase 1 for the reason Phase 0 does — nothing safety-shape
-is displaced, because Phase 1 is fully checked — and they move back down the day
-one of them starts touching a safety path.
+see a window, a build that can test the wrong fasl, an undo ring with a hole in
+it, and the two things doing that work turned up — an integration suite that
+fails in a section the diff never reached, and a float that loses the node it is
+anchored to.  They sit above Phase 1 for the reason Phase 0 does — nothing
+safety-shape is displaced, because Phase 1 is fully checked — and they move back
+down the day one of them starts touching a safety path.
 
 - [x] #145 the coordinate overlay asked the *tree* whether a cell was occupied,
 and floats live beside the tree (#138), so a workspace showing a dialog over an
@@ -109,7 +111,51 @@ calling all 25 package files moved on every run. Measured by hand as well: after
 a one-line change to `src/package.lisp`, a plain `asdf:load-system` printed
 `src/package.lisp moved since this fasl cache was built`, dropped 89 cached
 files, and recompiled (32s); a second run of the same check said nothing.
-- [ ] #147 moving a float is not on the undo ring.
+- [x] #147 moving a float is not on the undo ring, so a hand-placed window could
+never be put back. The signature that decides whether a step happened was the
+tree's, and the point of a float is that it is not in the tree. `history.lisp`'s
+`layout-signature` is now the tree *and* the floats — window and rectangle, in
+stacking order — and answers both of the issue's open questions: what is a move's
+step (one per *gesture*; a drag is many intermediate rectangles but nothing
+settles until the hand comes up), and whether including the floats puts a capture
+per frame on the ring (it does not, and never did: the step is taken at a settle
+point, not at a write). The anchor node is deliberately *not* in it — a snapshot
+holds a copy of the tree, so identity there would report a change after every
+undo — and neither is the minimized flag, which lives on the window and so is a
+step undo could not walk back. `end-pointer-op` is the fifth door and the only
+one a mouse has: it settles once, labelled, so two drags are two steps.
+`reconcile-floats` gives up #141's rule on purpose — it kept the *live* rectangle
+for a window already floating, because a move was not recorded; now the snapshot's
+rectangle is what the snapshot is of, and keeping the live one made undo a no-op
+for the only change it was invoked to undo. #141's actual property survives:
+undoing a tiling change still does not move a float dragged since, because the
+drag is its own step in front of it. +14 checks in `test-lifecycle.lisp`, and the
+integration drag case now undoes and redoes the gesture. That case was run under
+`nix-shell --run "make integration"`: both of its new checks passed against a
+real compositor, and it earned its keep before it did — the first run put the
+keyboard on the *tiled* window after `undo, then toggle-float', because
+`reconcile-floats` was handing back fresh records and a seat's focus on a float
+is compared by identity (`forget-unplaced-float-focus`, #143). Hence the record
+stays and only the rectangle is copied.
+The integration suite itself is intermittent on this host and was before this
+change: two of five runs died in wayflan's `cb-shiftout` assertion
+(`(<= (+ start nbytes) end)` with `end` 0) during a capture or echo section,
+which the unmodified tree reproduces — filed separately, because #146 was
+supposed to be the answer to that message.
+- [ ] #148 `make integration` is intermittent: two of five runs on this host died
+in wayflan's `cb-shiftout` assertion — `(<= (+ start nbytes) end)` with `end` 0 —
+during an echo-area or capture section, and everything after the crash reported as
+its own bug (35 failures on `SERVER-SEATS` called with `NIL`). That is the message
+#146 was filed about, so the stale-fasl explanation was at best one cause of two:
+the failing runs had a fresh cache, and the tree as it was before #147 reproduces
+it. The cost is the one #146 was trying to remove — a red run you cannot attribute
+to the diff or to the host — so it sits here rather than behind Phase 1.
+- [ ] #149 an anchored float has no anchor in a restored tree, so an undo hides
+it. `copy-float-record` shares the anchor, which is right for the window (there is
+one of those) and wrong for a node (`copy-node` gives every node a new identity) —
+and #145 changed the symptom from "drawn in the wrong place" to "not drawn", which
+is how it was found. The fix is a path in the snapshot and a re-point after
+`reconcile-floats`, the same trick the cursor already uses.
 
 ## SKIP — duplicate mirrors, keep ONE side
 - #42–#62 (open [Release]) are EXACT mirrors of closed #63–#83. Work from #63–#83 only; close the mirror set as a batch when ready (you said not now — so SKIP).

@@ -48,6 +48,14 @@
 ;;; What lives here is the mechanism: bindings, the operation in progress, and
 ;;; the arithmetic of turning cumulative deltas into rectangles.
 
+;; DECLARED, NOT STUBBED.  HISTORY comes after this file, because SEQUENCE comes
+;; after it and HISTORY needs SEQUENCE — so the settle point a drag ends with is
+;; a forward reference.  A stub answering NIL here would be compiled into a call
+;; site that believes NIL is the only answer, which is the trap PAN.LISP:216
+;; documented for PREVIEW-CLAIM-PRESS; the return type below says nothing and
+;; the declaration is what keeps gate 1 quiet about it.
+(declaim (ftype (function (&optional t t) t) note-layout-settled))
+
 ;;; ------------------------------------------------- an operation in progress
 
 (defstruct (pointer-op (:constructor %make-pointer-op))
@@ -110,7 +118,21 @@ protocol half waits for a sequence that may legally carry it."
     operation))
 
 (defun end-pointer-op (seat)
-  "Finish whatever the pointer was doing.  Manage sequence only."
+  "Finish whatever the pointer was doing.  Manage sequence only.
+
+AND SETTLE WHERE IT FINISHED, because a drag is a gesture and this is where the
+hand lets go (#147).  Nothing settles while it is happening -- APPLY-POINTER-DELTA
+runs once per motion event and would record a step per pixel -- so the whole drag
+becomes one undo step here, at the one moment the rectangle is final.  That makes
+this the fifth door into the layout and the only one a mouse has: dragging a
+window between cells (DOCK-WINDOW-AT) and dragging one out of the tree
+(*FLOAT-ON-DRAG*) both arrive through this function and neither came through a
+command.
+
+A LABEL, and therefore not coalescible: two drags in a row are two steps back,
+which is what a person who dragged twice expects.  A plain AFTER-COMMAND would
+have handed NOTE-LAYOUT-SETTLED the default label and merged them inside
+*UNDO-COALESCE-SECONDS*."
   (let ((operation (seat-pointer-op seat)))
     (when operation
       (setf (seat-pointer-op seat) nil)
@@ -127,7 +149,8 @@ protocol half waits for a sequence that may legally carry it."
       (run-hooks :pointer-op nil (pointer-op-window operation))
       (logmsg :debug "pointer ~(~a~) finished" (pointer-op-kind operation))
       (mark-dirty)
-      (request-manage))
+      (request-manage)
+      (note-layout-settled "drag a window"))
     operation))
 
 (defun apply-pointer-delta (seat dx dy)

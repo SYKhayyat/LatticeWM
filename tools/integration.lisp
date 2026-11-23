@@ -1900,7 +1900,21 @@ are what a person means by the arrangement, and both are copy-stable."
                        ;; the difference between cumulative and incremental, and
                        ;; it is the drift the struct's docstring is about.
                        (check (c:rect-equal once twice)
-                              "and repeating it does not move it again"))
+                              "and repeating it does not move it again")
+                       ;; AND THE DRAG IS ON THE UNDO RING (#147), as ONE step
+                       ;; rather than one per motion event: river sends a delta
+                       ;; per event, and end-pointer-op is the one moment the
+                       ;; rectangle is final.  A float is not in the tree, so the
+                       ;; signature that decides whether a step happened had to
+                       ;; grow a second half for this to be recorded at all.
+                       (verb "undo")
+                       (let ((back (c:float-of-window *world* a)))
+                         (check (and back (c:rect-equal (c:float-rect back) start))
+                                "and one undo puts the whole drag back"))
+                       (verb "redo")
+                       (let ((again (c:float-of-window *world* a)))
+                         (check (and again (c:rect-equal (c:float-rect again) twice))
+                                "and redo returns it to where the hand left it")))
                      (check (null ended) "and releasing clears it from the seat"))
                    (settle)
                    (check (null (r::server-pending-manage-work *server*))
