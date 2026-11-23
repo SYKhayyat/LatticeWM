@@ -150,6 +150,18 @@ the window."
   (mark-dirty)
   (logmsg :debug "window closed: ~s" window))
 
+(defun window-placed-p (window)
+  "True when WINDOW already has a place: tiled, floating, or put away.
+
+The question PLACE-UNPLACED-WINDOWS has to ask before it places anything, and it
+is asked of the world rather than of the compositor -- a window the compositor
+announced and a snapshot already mentions is placed, whatever the arrival list
+says (#144)."
+  (or (not (null (c:leaf-holding (c:world-root *world*) window)))
+      (c:window-floating-p window)
+      (c:window-minimized-p window)
+      (not (null (member window (c:world-scratchpad *world*))))))
+
 (defun place-unplaced-windows ()
   "Place every window that has appeared since the last manage sequence.
 
@@ -160,7 +172,13 @@ legal."
         (policy (p:current-policy)))
     (setf *unplaced* '())
     (dolist (window pending)
-      (when (c:window-live-p window)
+      ;; A WINDOW THAT ALREADY HAS A PLACE IS NOT PLACED AGAIN.  A restore can
+      ;; put a window the compositor has announced but this program has not yet
+      ;; placed into the tree from a snapshot (#144), and then the manage pass
+      ;; would place it a second time -- the third member of the family that also
+      ;; holds a float after an undo (#141) and a minimized window after an undo
+      ;; (#142).  One window, one place.
+      (when (and (c:window-live-p window) (not (window-placed-p window)))
         (declare-window-capabilities policy window)
         (let ((path (guarded "on-window-open"
                       (p:on-window-open policy *world* window))))

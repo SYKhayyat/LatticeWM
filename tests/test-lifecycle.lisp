@@ -1848,3 +1848,34 @@ cursor would be drawn as unfocused (#143)."
     (is (null (c:world-floats world)) "the float is gone")
     (is (null (c:world-focused-float world))
         "and no seat is holding a keyboard for a float that is not there")))
+
+(test a-window-that-already-has-a-place-is-not-placed-again
+  "`*UNPLACED*` is the arrival list, and PLACE-UNPLACED-WINDOWS drains it by
+asking the policy to open each window.  A restore can put a window the
+compositor announced but this program has not yet placed into the tree from a
+snapshot, and then the manage pass placed it a second time -- a world of two
+windows ending up with three and one of them twice (#144)."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (let ((before (length (c:node-windows (c:world-root world)))))
+      (setf (symbol-value (find-symbol "*UNPLACED*" r)) (list b))
+      (funcall (find-symbol "PLACE-UNPLACED-WINDOWS" r))
+      (is (= before (length (c:node-windows (c:world-root world))))
+          "a window that is already tiled is not placed again")
+      (is (= 1 (count b (c:node-windows (c:world-root world))))
+          "and appears exactly once")
+      ;; AND THE GUARD DOES NOT TURN THE MANAGE PASS OFF: a window with no place
+      ;; is still placed.
+      (let ((d (win "d")))
+        (setf (symbol-value (find-symbol "*UNPLACED*" r)) (list d))
+        (funcall (find-symbol "PLACE-UNPLACED-WINDOWS" r))
+        (is (= (1+ before) (length (c:node-windows (c:world-root world))))
+            "a window with no place is still placed by the manage pass")))))

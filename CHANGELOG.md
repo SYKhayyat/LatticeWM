@@ -26,6 +26,14 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A window that already has a place is not placed again (#144).** `*unplaced*`
+  is the arrival list and `place-unplaced-windows` drains it by asking the policy
+  to open each window, without asking whether the window already has somewhere to
+  be. A restore can put a window the compositor announced but the program has not
+  yet placed into the tree from a snapshot — and the manage pass then placed it a
+  second time: measured, a world of two tiled windows ended up with three and one
+  of them twice. `window-placed-p` asks the world (tiled, floating, put away) and
+  the manage pass places only what has no place.
 - **A seat gives up the keyboard of a float a restore has put back in the tree
   (#143).** Clicking a float hands that seat the keyboard; `unfloat-window` clears
   it for the seat that asked, but a restore reconciles the float list wholesale
