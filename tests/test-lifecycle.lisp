@@ -2047,6 +2047,125 @@ only place a drag, an undo and a keypress happen in that order."
                        #'string<))
           "with both windows in the tree"))))
 
+(defun anchor-table (node)
+  "A render index holding NODE at one rectangle, as a relayout would leave one.
+
+KEYED BY THE NODE, which is what FLOAT-PLACED-RECT and ANCHOR-FLOAT look up; a
+table keyed by paths (as one older test builds) answers nothing and made a
+silent no-op look like a passing check."
+  (let ((table (make-hash-table :test #'eq)))
+    (setf (gethash node table) (c:make-rect 50 50 800 600))
+    table))
+
+(defun a-pane-node (world window)
+  "The leaf in WORLD's tree that holds WINDOW -- a node, to anchor a float to."
+  (c:leaf-holding (c:world-root world) window))
+
+(test an-anchored-float-still-hangs-on-its-pane-after-an-undo
+  "A NODE OBJECT DOES NOT SURVIVE A COPY (#149).  The snapshot copies the tree, so
+the anchor a float record points at is a node of the tree the snapshot was taken
+FROM.  Undo installs the copy, and that object is then in no tree at all — the
+render index has no rectangle for it, so the float is not placed and, since #145,
+not drawn either.  Found while putting float moves on the undo ring, and the
+symptom is the one nobody would guess: `undo' makes a picture-in-picture vanish."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let ((anchor (a-pane-node world a)))
+      (setf (c:prop world :rect-index) (anchor-table anchor))
+      (setf (c:float-anchor (c:float-of-window world b)) anchor
+            (c:float-rect (c:float-of-window world b)) (c:make-rect 12 34 300 200))
+      ;; A settle, so the anchor is part of what the snapshot is of rather than
+      ;; part of the change the undo below is meant to walk back.
+      (settle "anchor-float")
+      ;; A tiling change that has nothing to do with the float, so there is
+      ;; something to undo.
+      (p:on-window-open pol world (win "c"))
+      (settle "split")
+      (funcall (find-symbol "UNDO" r))
+      (settle "undo")
+      (let* ((float (c:float-of-window world b))
+             (now (and float (c:float-anchor float))))
+        (is (not (null float)) "the float survives the undo")
+        (is (not (null now)) "and it still has an anchor")
+        (is (eq (a-pane-node world a) now)
+            "which is the pane at that path in the tree that came back")
+        ;; A relayout indexes whatever nodes are current, so index the pane in
+        ;; the tree that came back, not the anchor the float is holding -- which
+        ;; is the difference this test is about.
+        (setf (c:prop world :rect-index) (anchor-table (a-pane-node world a)))
+        (is (equal '(62 84 300 200)
+                   (let ((rect (c:float-placed-rect float (c:prop world :rect-index))))
+                     (and rect (list (c:rect-x rect) (c:rect-y rect)
+                                     (c:rect-w rect) (c:rect-h rect)))))
+            "so it is placed again: the pane's rectangle plus the offset")))))
+
+(test an-undo-of-an-anchor-float-gives-the-anchor-back
+  "THE OTHER DIRECTION, which #147 made possible: anchoring changes the float's
+rectangle (it re-expresses it against the pane) and the anchor itself, so it is
+a step.  Undo has to give back both -- an unanchored float at the rectangle it
+had -- rather than un-widening it while leaving it tied to the pane."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let ((anchor (c:resolve-path (c:world-root world) '(0))))
+      (setf (c:prop world :rect-index) (anchor-table anchor)))
+    (setf (c:float-rect (c:float-of-window world b)) (c:make-rect 90 90 300 200))
+    ;; A settle first: a rectangle set without one is part of the next change,
+    ;; so undoing the anchor would take it away as well and the test would be
+    ;; asserting the wrong thing in a way that still passed.
+    (settle "place the float")
+    (setf (c:world-focused-float world p:*seat*) (c:float-of-window world b))
+    (funcall (find-symbol "ANCHOR-FLOAT" r) '(0))
+    (settle "anchor-float")
+    (is (not (null (c:float-anchor (c:float-of-window world b))))
+        "the float is anchored")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (let* ((float (c:float-of-window world b))
+           (rect (c:float-rect float)))
+      (is (null (c:float-anchor float)) "and undo lets go of the pane again")
+      (is (equal '(90 90 300 200)
+                 (list (c:rect-x rect) (c:rect-y rect) (c:rect-w rect) (c:rect-h rect)))
+          "with the rectangle it had before it was anchored, not the offset"))))
+
+(test a-float-anchored-to-nothing-the-tree-holds-survives-a-restore
+  "ANCHOR-PATHS ONLY RECORDS ANCHORS THAT WERE IN THE TREE, and a float whose
+anchor was already elsewhere has no path to follow.  The restore leaves that
+anchor alone rather than guessing: an incorrect anchor places the window
+somewhere it has never been, which reads as a bug in the layout."
+  (let* ((world (fresh-world))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (b (win "b"))
+         (stray (c:make-leaf)))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (setf (c:world-floats world)
+          (list (make-instance 'c:floating-window :window b :anchor stray
+                                                   :rect (c:make-rect 1 2 3 4))))
+    (let ((snap (funcall (find-symbol "SNAPSHOT-LAYOUT" r))))
+      (is (null (funcall (find-symbol "LAYOUT-SNAPSHOT-ANCHOR-PATHS" r) snap))
+          "no path is recorded for an anchor the tree does not hold")
+      (funcall (find-symbol "RESTORE-SNAPSHOT" r) snap)
+      (is (eq stray (c:float-anchor (c:float-of-window world b)))
+          "and the anchor it had is left where it was"))))
+
 (test a-window-that-already-has-a-place-is-not-placed-again
   "`*UNPLACED*` is the arrival list, and PLACE-UNPLACED-WINDOWS drains it by
 asking the policy to open each window.  A restore can put a window the

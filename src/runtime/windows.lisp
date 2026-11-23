@@ -297,7 +297,33 @@ sweep that walked only the table would leave that one stale."
              (c:world-cursors world))
     seats))
 
-(defun reconcile-floats (world records)
+(defun float-anchor-paths (root floats)
+  "Where each anchored float's anchor sits in ROOT, as (WINDOW PATH) entries.
+
+A NODE OBJECT DOES NOT SURVIVE A COPY, and that is the whole of #149.  The tree
+is copied into a snapshot (`copy-node`), so the anchor a float record points at
+-- a node *object* -- is a node of the tree the snapshot was taken FROM.  Undo
+installs the snapshot's copy, and the anchor then names a node in no tree: the
+render index holds no rectangle for it, so the renderer skips the float and an
+anchored window that survived the undo is drawn nowhere at all.
+
+A PATH is how the rest of the model says \"the same node\" across a copy -- the
+cursor's repair already uses one -- and a path is available for every node in a
+tree, whereas a name is only there for the ones somebody named.  The entry is a
+LIST rather than the bare path so that the root (whose path is NIL) can be told
+apart from a node that was not in the tree at all."
+  (loop for record in floats
+        for anchor = (c:float-anchor record)
+        for window = (c:float-window record)
+        for path = (and anchor (c:node-path-to root anchor))
+        ;; NODE-PATH-TO answers NIL for the root and for a node it never found,
+        ;; so the root is named separately: an entry for a node the tree does
+        ;; not hold would send a restore to the ROOT, which is an anchor, and
+        ;; a wrong one.
+        when (and anchor window (or path (eq anchor root)))
+          collect (list window path)))
+
+(defun reconcile-floats (world records &optional anchor-paths)
   "The float records WORLD should hold, given the tree it now has and RECORDS.
 
 FOR RESTORING A SNAPSHOT, and the rule is that a window is in one place (#141).
@@ -326,7 +352,16 @@ FORGET-UNPLACED-FLOAT-FOCUS asks whether that exact object is still on the list
 (#143).  Swapping in a copy made every seat's focus on a float die on every undo,
 which showed up as `undo, then toggle-float' floating the *tiled* window next to
 it instead of putting the float back.  So the copy is of the rectangle, which is
-the part the snapshot owns, and the identity is left where the world put it."
+the part the snapshot owns, and the identity is left where the world put it.
+
+THE ANCHOR COMES FROM ANCHOR-PATHS, NOT FROM THE RECORD (#149).  The record's
+anchor names a node of the tree the snapshot was taken from, and the tree
+installed here is a copy of it, so that node is in no tree and would place
+nothing.  ANCHOR-FLOAT and UNANCHOR-FLOAT are undoable steps of their own, so the
+snapshot's answer -- anchored to this path, or not anchored at all -- is the one
+that has to come back.  An entry with no path means the anchor was not in the
+tree when the snapshot was taken, which is not something a restore can improve
+on, so that float keeps whatever anchor it has."
   (let ((tiled (c:node-windows (c:world-root world)))
         (out '()))
     (dolist (record records)
@@ -334,13 +369,25 @@ the part the snapshot owns, and the identity is left where the world put it."
         (when (and window
                    (not (member window tiled))
                    (c:window-live-p window))
-          (let ((live (c:float-of-window world window)))
+          (let* ((live (c:float-of-window world window))
+                 (entry (assoc window anchor-paths))
+                 ;; A path of NIL is the root, which is why the entry is a list:
+                 ;; its presence, not its contents, says the anchor was placed.
+                 (anchor (and entry
+                              (c:resolve-path (c:world-root world)
+                                              (second entry))))
+                 ;; Anchored in the snapshot, or known to be unanchored: either
+                 ;; way the answer is known.  Otherwise say nothing.
+                 (anchor-known (or anchor (null (c:float-anchor record)))))
             (cond
               (live
                (let ((rect (c:float-rect record)))
-                 (setf (c:float-rect live) (and rect (c:copy-rect rect))))
+                 (setf (c:float-rect live) (and rect (c:copy-rect rect)))
+                 (when anchor-known (setf (c:float-anchor live) anchor)))
                (push live out))
-              (t (push (c:copy-float-record record) out)))))))
+              (t (let ((copy (c:copy-float-record record)))
+                   (when anchor-known (setf (c:float-anchor copy) anchor))
+                   (push copy out))))))))
     (nreverse out)))
 
 (defun float-away-from-tree (policy window)

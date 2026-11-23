@@ -150,12 +150,18 @@ its own bug (35 failures on `SERVER-SEATS` called with `NIL`). That is the messa
 the failing runs had a fresh cache, and the tree as it was before #147 reproduces
 it. The cost is the one #146 was trying to remove — a red run you cannot attribute
 to the diff or to the host — so it sits here rather than behind Phase 1.
-- [ ] #149 an anchored float has no anchor in a restored tree, so an undo hides
-it. `copy-float-record` shares the anchor, which is right for the window (there is
+- [x] #149 an anchored float had no anchor in a restored tree, so an undo hid
+it. `copy-float-record` shared the anchor, which is right for the window (there is
 one of those) and wrong for a node (`copy-node` gives every node a new identity) —
 and #145 changed the symptom from "drawn in the wrong place" to "not drawn", which
-is how it was found. The fix is a path in the snapshot and a re-point after
-`reconcile-floats`, the same trick the cursor already uses.
+is how it was found. Fixed with the same trick the cursor uses: `float-anchor-paths`
+records each anchor's *path* when the snapshot is taken and `reconcile-floats`
+resolves it against the tree that came back. The path is not the only piece: the
+snapshot also has to say "unanchored", because unanchoring is a step of its own —
+which #147 is what made visible. A *saved* layout still forgets anchors
+(`restore-a-float` builds a record with no anchor), so a restart unties an anchored
+float; that is the state file's version to bump, not a snapshot's, and it is noted
+rather than fixed here.
 
 ## SKIP — duplicate mirrors, keep ONE side
 - #42–#62 (open [Release]) are EXACT mirrors of closed #63–#83. Work from #63–#83 only; close the mirror set as a batch when ready (you said not now — so SKIP).

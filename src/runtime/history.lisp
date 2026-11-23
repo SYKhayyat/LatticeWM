@@ -49,10 +49,17 @@ without taking its float record away left it tiled *and* floating, placed twice
 by the emitter while WORLD-WINDOWS deduplicated it into invisibility (#141).
 
 SIGNATURE is the tree AND the floats (#147): see LAYOUT-SIGNATURE for what is
-in it and, at more length, what is deliberately not."
+in it and, at more length, what is deliberately not.
+
+ANCHOR-PATHS is where each anchored float's anchor sits in the tree this
+snapshot copied, because the record's anchor is a node OBJECT and a copy gives
+every node a new identity -- so the anchor a restored float would otherwise
+point at is in no tree at all (#149).  Only nodes that were in the tree are
+listed; see FLOAT-ANCHOR-PATHS."
   (root nil)
   (cursor nil)
   (floats '())
+  (anchor-paths '())
   (signature nil)
   (label "change")
   (time 0))
@@ -184,14 +191,21 @@ left\" and \"move right\" are different steps.  A plain binding and not a
 snapshot, which is the whole of what the wrapper does now.")
 
 (defun snapshot-layout (&optional (label "change") signature)
-  "The current tree, copied, with the cursor and a signature.
+  "The current tree, copied, with the cursor, its floats and a signature.
 
 SIGNATURE is accepted so a caller that has already computed one does not walk
-the tree twice, which at a settle point is half the remaining cost."
+the tree twice, which at a settle point is half the remaining cost.
+
+ANCHOR-PATHS is read against the tree as it is NOW, before it is copied, and
+that is what makes it work: it records where each anchor IS, and the copy that
+comes back through RESTORE-SNAPSHOT has the same shape, so the same path leads
+to the corresponding node in it."
   (%make-layout-snapshot
    :root (c:copy-node (c:world-root *world*))
    :cursor (copy-list (c:world-cursor *world*))
    :floats (c:copy-float-records (c:world-floats *world*))
+   :anchor-paths (float-anchor-paths (c:world-root *world*)
+                                     (c:world-floats *world*))
    :signature (or signature (layout-signature))
    :label label
    :time (get-internal-real-time)))
@@ -359,8 +373,12 @@ changed."
           ;; back into the tree still floating (#141).  The scratchpad is
           ;; reconciled the other way, from the tree: a window the tree mentions
           ;; is tiled, so it is not minimized, or it is in two places (#142).
+          ;; The anchor paths are the same problem one level down: the record's
+          ;; anchor is a node of the tree this snapshot was taken from, and that
+          ;; tree is the one being replaced (#149).
           (c:world-floats *world*)
-          (reconcile-floats *world* (layout-snapshot-floats snapshot)))
+          (reconcile-floats *world* (layout-snapshot-floats snapshot)
+                            (layout-snapshot-anchor-paths snapshot)))
     (reconcile-tiled-windows *world*)
     ;; A seat whose keyboard was on a float that is no longer floating is
     ;; holding a focus that has nowhere to be (#143).
