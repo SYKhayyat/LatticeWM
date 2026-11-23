@@ -26,6 +26,13 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **A seat gives up the keyboard of a float a restore has put back in the tree
+  (#143).** Clicking a float hands that seat the keyboard; `unfloat-window` clears
+  it for the seat that asked, but a restore reconciles the float list wholesale
+  and asks nobody — leaving a seat holding a focus that has nowhere to be. The
+  emitter reads a focused float as "the keyboard is elsewhere", so the tiled
+  window under the cursor is drawn unfocused. The restore now sweeps the seats,
+  including the seatless entry a unit test or a replay writes to.
 - **Undo of a minimize no longer leaves a window tiled and put away at once
   (#142).** Minimizing removes a window from the tree and into the scratchpad, so
   it is an undo step — and undo put the window back while it was still minimized

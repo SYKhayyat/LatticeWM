@@ -243,7 +243,7 @@ deliberately decomposed so that policy can redirect it.")
    #:input-device-settings #:input-device-setting
    #:input-device-matches-p #:+input-device-types+
    ;; the world
-   #:world #:world-root #:world-cursor #:world-outputs #:world-inputs
+   #:world #:world-root #:world-cursor #:world-cursors #:world-outputs #:world-inputs
    #:world-scratchpad
    ;; A world's props are reached through PROPS, the same accessor a node's are:
    ;; it is one slot on two classes on purpose, so a rule written against a node

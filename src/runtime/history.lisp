@@ -312,6 +312,9 @@ changed."
           (c:world-floats *world*)
           (reconcile-floats *world* (layout-snapshot-floats snapshot)))
     (reconcile-tiled-windows *world*)
+    ;; A seat whose keyboard was on a float that is no longer floating is
+    ;; holding a focus that has nowhere to be (#143).
+    (forget-unplaced-float-focus *world*)
     ;; Anything we are managing that this tree does not mention has to go
     ;; somewhere, or it would be invisible and unreachable — the same rule
     ;; LOAD-STATE follows, and for the same reason.

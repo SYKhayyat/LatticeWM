@@ -250,6 +250,35 @@ after a restore.  Returns WORLD."
     (setf (c:world-scratchpad world) scratchpad)
     world))
 
+(defun forget-unplaced-float-focus (world)
+  "Clear the keyboard of any seat whose focused float is no longer floating.
+
+A FOCUS FLAG IS ABOUT A PLACE.  UNFLOAT-WINDOW clears it for the seat that
+unfloated, because that is the seat that asked; a restore reconciles the float
+list wholesale and cannot know which seat noticed, so it asks the only question
+that matters -- is the place still a place.  Left set, the tiled window under the
+cursor is drawn as unfocused, since LEAF-FOCUS-STATE answers :CURSOR rather than
+T while a float has the keyboard (#143).  Returns WORLD."
+  (let ((places (c:world-floats world)))
+    (dolist (seat (world-seats-with-a-place world))
+      (let ((record (c:world-focused-float world seat)))
+        (when (and record (not (member record places :test #'eq)))
+          (setf (c:world-focused-float world seat) nil))))
+    world))
+
+(defun world-seats-with-a-place (world)
+  "Every seat WORLD knows about, plus the seatless one.
+
+The seatless entry is not a mistake: the accessor defaults SEAT to NIL, and a
+program with no seat table at all -- a unit test, a replay -- writes there.  A
+sweep that walked only the table would leave that one stale."
+  (let ((seats (list nil)))
+    (maphash (lambda (seat cursor)
+               (declare (ignore cursor))
+               (pushnew seat seats))
+             (c:world-cursors world))
+    seats))
+
 (defun reconcile-floats (world records)
   "The float records WORLD should hold, given the tree it now has and RECORDS.
 

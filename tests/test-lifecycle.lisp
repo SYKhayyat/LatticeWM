@@ -1821,3 +1821,30 @@ surface in two places."
     (is (= 1 (count b (c:node-windows (c:world-root world))))
         "restoring it again does not put a second copy in the tree: ~d"
         (count b (c:node-windows (c:world-root world))))))
+
+(test an-undo-that-unfloats-a-window-gives-the-keyboard-back
+  "A FOCUS FLAG IS ABOUT A PLACE.  Clicking a float gives it the seat's keyboard
+(`world-focused-float`), and UNFLOAT-WINDOW clears that on the way out -- but a
+restore reconciles the float list wholesale, so a seat whose only claim was the
+float it was pointing at keeps a focus that no longer exists.  The emitter reads
+a focused float as \"the keyboard is elsewhere\", so the tiled window under the
+cursor would be drawn as unfocused (#143)."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (setf (c:world-focused-float world) (c:float-of-window world b))
+    (is (not (null (c:world-focused-float world))) "b's float has the keyboard")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (is (null (c:world-floats world)) "the float is gone")
+    (is (null (c:world-focused-float world))
+        "and no seat is holding a keyboard for a float that is not there")))
