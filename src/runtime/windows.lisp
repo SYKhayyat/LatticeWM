@@ -230,6 +230,29 @@ in ON-WINDOW-OPEN; PLACE-UNPLACED-WINDOWS hands its value to this keyword."
     (mark-dirty)
     window))
 
+(defun reconcile-floats (world records)
+  "The float records WORLD should hold, given the tree it now has and RECORDS.
+
+FOR RESTORING A SNAPSHOT, and the rule is that a window is in one place (#141).
+A window the tree now mentions stops floating: an undone TOGGLE-FLOAT put it back
+in the tree, so its record has to go, or the emitter places it twice.  A window
+the tree does not mention keeps its *current* record where it was already
+floating, so undoing an unrelated tiling change does not snap a float the user
+has since dragged back to an old rectangle -- a float move is not a layout change
+and is not recorded, so it must not be undone by the back door.  A window that
+was floating in the snapshot and is not floating now gets the snapshot's record
+back, with the snapshot's rectangle.  A dead window's record is dropped, the same
+rule PRUNE-DEAD-WINDOWS applies to a leaf."
+  (let ((tiled (c:node-windows (c:world-root world)))
+        (out '()))
+    (dolist (record records)
+      (let ((window (c:float-window record)))
+        (when (and window
+                   (not (member window tiled))
+                   (c:window-live-p window))
+          (push (or (c:float-of-window world window) record) out))))
+    (nreverse out)))
+
 (defun float-away-from-tree (policy window)
   "Take WINDOW out of the tree and make it a float, remembering the slot it left.
 

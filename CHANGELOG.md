@@ -26,6 +26,18 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Undo puts a window back in one place (#141).** A `layout-snapshot` recorded
+  the tree and the cursor and nothing about which windows were floating, and
+  floats live beside the tree in `world-floats`. `toggle-float` removes a window
+  from the tree, so it *is* an undo step — and undoing it put the window back
+  while its float record stayed, leaving it tiled and floating at once. The
+  reverse lost the float too. Snapshots now carry their floats, and
+  `reconcile-floats` applies one rule: a window is in one place. A window that is
+  already floating keeps its *current* rectangle, so undoing an unrelated tiling
+  change does not snap a float the user has since dragged; a window that stopped
+  floating gets the snapshot's back; a window the restored tree mentions stops
+  floating; a dead window's record is dropped. `undo-history`'s per-step caption
+  counts floats as well as tiled windows.
 - **A printed world counts every window it holds (#140).** `print-object` counted
   `node-windows` of the root, so a world of two tiled windows, a floating dialog
   and a scratchpad window printed "2 windows" — the same under-report the deck

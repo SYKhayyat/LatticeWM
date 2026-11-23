@@ -40,9 +40,16 @@ steps to get back across one drag is not undo, it is a rewind button.  NIL
 records every change separately.")
 
 (defstruct (layout-snapshot (:constructor %make-layout-snapshot))
-  "A tree, where the cursor was in it, and what produced it."
+  "A tree, where the cursor was in it, what produced it, and its floats.
+
+THE FLOATS ARE PART OF THE LAYOUT, which is the thing a snapshot is of.  They
+live beside the tree in WORLD-FLOATS, and TOGGLE-FLOAT removes a window from the
+tree -- so it is recorded as an undo step, and an undo that put the window back
+without taking its float record away left it tiled *and* floating, placed twice
+by the emitter while WORLD-WINDOWS deduplicated it into invisibility (#141)."
   (root nil)
   (cursor nil)
+  (floats '())
   (signature nil)
   (label "change")
   (time 0))
@@ -136,6 +143,7 @@ the tree twice, which at a settle point is half the remaining cost."
   (%make-layout-snapshot
    :root (c:copy-node (c:world-root *world*))
    :cursor (copy-list (c:world-cursor *world*))
+   :floats (c:copy-float-records (c:world-floats *world*))
    :signature (or signature (c:node-signature (c:world-root *world*)))
    :label label
    :time (get-internal-real-time)))
@@ -296,7 +304,11 @@ changed."
     (setf (layout-snapshot-label current) (layout-snapshot-label snapshot))
     (setf (c:world-root *world*) (prune-dead-windows (layout-snapshot-root snapshot))
           (c:world-cursor *world*)
-          (c:repair-path (c:world-root *world*) (layout-snapshot-cursor snapshot)))
+          (c:repair-path (c:world-root *world*) (layout-snapshot-cursor snapshot))
+          ;; AND THE FLOATS COME BACK WITH IT, or a window that was floated goes
+          ;; back into the tree still floating (#141).
+          (c:world-floats *world*)
+          (reconcile-floats *world* (layout-snapshot-floats snapshot)))
     ;; Anything we are managing that this tree does not mention has to go
     ;; somewhere, or it would be invisible and unreachable — the same rule
     ;; LOAD-STATE follows, and for the same reason.
@@ -360,5 +372,11 @@ forward branch, which is what every editor does."
                collect (cons (format nil "~d" index)
                              (format nil "~a  (~d window~:p)"
                                      (layout-snapshot-label snapshot)
-                                     (length (c:node-windows
-                                              (layout-snapshot-root snapshot))))))))))
+                                     ;; THE FLOATS COUNT TOO: a step that was a
+                                     ;; float is a step where fewer windows are
+                                     ;; tiled, and a caption reading 1 window for
+                                     ;; a step that held two describes a world it
+                                     ;; is not about (#141).
+                                     (+ (length (c:node-windows
+                                                 (layout-snapshot-root snapshot)))
+                                        (length (layout-snapshot-floats snapshot))))))))))

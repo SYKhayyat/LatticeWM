@@ -378,6 +378,23 @@ this is the model's own fact about itself."
       (dolist (float (world-floats world)) (note (float-window float))))
     count))
 
+(defun copy-float-record (record)
+  "A copy of RECORD with a rectangle of its own.
+
+The window and the anchor are the same objects, because there is one of each.
+The NODE slot is left alone deliberately: it is the leaf a policy is asked about,
+and FLOAT-LEAF makes one on demand.  Copying the rectangle and not sharing it is
+the whole point -- a snapshot that handed back the live rectangle would be a
+snapshot you could edit."
+  (make-instance 'floating-window
+                 :window (float-window record)
+                 :rect (copy-rect (float-rect record))
+                 :anchor (float-anchor record)))
+
+(defun copy-float-records (records)
+  "A copy of every float record in RECORDS, in order."
+  (mapcar #'copy-float-record records))
+
 (defmethod print-object ((w world) stream)
   (print-unreadable-object (w stream :type t :identity nil)
     (format stream "~d window~:p, cursor ~s"

@@ -1703,3 +1703,85 @@ and a floating dialog held two windows (#140)."
     (setf (c:world-scratchpad world) (list a))
     (is (= 3 (c:world-window-count world))
         "a window recorded twice counts once")))
+
+;;; ------------------------------- floats, which are part of the layout too
+
+(defun float-count (world) (length (c:world-floats world)))
+
+(test undo-of-a-float-does-not-leave-the-window-in-two-places
+  "FLOATING IS A LAYOUT CHANGE: TOGGLE-FLOAT removes the window from the tree, so
+it is recorded, and an undo that put the window back without taking the float
+record away left it tiled *and* floating -- placed twice by the emitter, while
+WORLD-WINDOWS deduplicated it into invisibility (#141)."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (is (= 0 (float-count world)))
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (is (= 1 (float-count world)) "b is floating")
+    (is (not (member b (c:node-windows (c:world-root world))))
+        "and the tree does not mention it")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (is (member b (c:node-windows (c:world-root world))) "undo puts b back in the tree")
+    (is (= 0 (float-count world)) "and stops it floating, so it is in one place")
+    (funcall (find-symbol "REDO" r))
+    (settle "redo")
+    (is (= 1 (float-count world)) "redo floats it again")
+    (is (not (member b (c:node-windows (c:world-root world)))) "and takes it out of the tree")))
+
+(test a-float-the-user-has-since-dragged-is-not-moved-by-an-unrelated-undo
+  "A float move is not a layout change and is not recorded, so it must not be
+undone by the back door: the restored record for a window that is *already*
+floating keeps its current rectangle (#141)."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "FLOAT-AWAY-FROM-TREE" r) pol b)
+    (settle "float")
+    (let* ((float (c:float-of-window world b))
+           (dragged (c:make-rect 111 222 333 444)))
+      (setf (c:float-rect float) (c:float-rect float))
+      (setf (c:float-rect float) dragged)
+      ;; A tiling change that has nothing to do with the float.
+      (p:on-window-open pol world (win "c"))
+      (settle "split")
+      (funcall (find-symbol "UNDO" r))
+      (settle "undo")
+      (is (= 1 (float-count world)) "the float is still a float")
+      (is (equal (list 111 222 333 444)
+                 (let ((rect (c:float-rect (c:float-of-window world b))))
+                   (list (c:rect-x rect) (c:rect-y rect)
+                         (c:rect-w rect) (c:rect-h rect))))
+          "and it is where the user left it, not where the snapshot saw it"))))
+
+(test a-snapshot-carries-its-floats-and-their-own-rectangles
+  (let* ((world (fresh-world))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (setf (c:world-floats world)
+          (list (make-instance 'c:floating-window :window a :anchor nil
+                                                   :rect (c:make-rect 1 2 3 4))))
+    (let* ((snapshot (funcall (find-symbol "SNAPSHOT-LAYOUT" r)))
+           (copy (first (funcall (find-symbol "LAYOUT-SNAPSHOT-FLOATS" r) snapshot))))
+      (is (= 1 (length (funcall (find-symbol "LAYOUT-SNAPSHOT-FLOATS" r) snapshot))))
+      (is (eq a (c:float-window copy)) "the snapshot names the same window")
+      (is (not (eq (c:float-rect copy) (c:float-rect (first (c:world-floats world)))))
+          "and has a rectangle of its own, so a snapshot is not something you edit")
+      (is (= 3 (c:rect-w (c:float-rect copy)))))))
