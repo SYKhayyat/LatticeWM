@@ -17,7 +17,7 @@ not need this page at all.
 git clone https://github.com/SYKhayyat/LatticeWM.git
 cd LatticeWM
 ./bootstrap.sh          # fetches the two dependencies; idempotent
-make check              # build, twenty-three gates, the unit suite, integration
+make check              # build, twenty-four gates, the unit suite, integration
 ```
 
 `make check` is what CI runs and what the nix build runs. If it is green on
@@ -43,7 +43,7 @@ could notice, and the maintainers' CI runs the first. Nothing else about
 
 ## What will fail your branch, up front
 
-There are twenty-three build gates. They are not style checks; each one exists
+There are twenty-four build gates. They are not style checks; each one exists
 because something silently rotted and nobody noticed. That makes them
 excellent for a maintainer and a wall for a newcomer, so here is the wall,
 described before you hit it.

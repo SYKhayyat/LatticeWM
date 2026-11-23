@@ -61,8 +61,8 @@ The extensions under extensions/ are appended by EXTENSION-SYSTEMS above, for
 the same reason: promotion to a module that gate 3 holds to the boundary rules
 is not worth anything if the boundary check is the only check it gets.")
 (defparameter *loose-files*
-  '("tools/hardware-check.lisp" "tools/bench.lisp")
-  "Files a *user* is told to load, which belong to no system.
+  '("tools/hardware-check.lisp" "tools/bench.lisp" "tools/stamp.lisp")
+  "Files a *user* or a *make target* loads, which belong to no system.
 
 TOOLS/BENCH.LISP WAS THE THIRD INSTANCE OF THIS BUG AND IT WAS FOUND WHILE THE
 COMMIT FIXING THE SECOND ONE WAS STILL THE TIP.  `make bench' is referenced by
@@ -84,6 +84,12 @@ COMPILED AND NOT LOADED, deliberately.  Loading it installs an ON-KEY method
 and four hooks into the image doing the checking, and a gate that changes the
 program it is inspecting is worse than the warning it is looking for.  Every
 undefined reference in the file is visible from the compile alone.
+
+TOOLS/STAMP.LISP IS THE FIRST FILE ON THIS LIST NOBODY IS TOLD TO LOAD BY HAND:
+tools/prelude.lisp loads it, so every make target runs it, and it decides whether
+the fasl cache may be used at all (#146).  A build's own instrument is the worst
+place for a typo nobody compiles -- the thing that goes wrong there goes wrong as
+`the check passed', which is what the file exists to stop happening.
 
 THE WORKED EXAMPLES ARE THE SAME CASE AND ARE ADDED BY EXAMPLE-FILES BELOW.")
 
@@ -141,7 +147,7 @@ gate whose output reorders itself per machine is a gate nobody can diff."
         #'string<))
 
 (defun forget-our-fasls ()
-  "Delete every fasl the systems in *SYSTEMS* could load from.
+  "Delete every fasl this project's own sources produced.
 
 GATE 1 CAN ONLY JUDGE A FILE THAT COMPILED.  ASDF compiles a source only when
 its fasl is stale beside it, so on a warm cache the gate's silence about a
@@ -160,25 +166,17 @@ fail, warm ones pass.  The floor job drops the cache outright for this
 reason and says so in the workflow; a developer's machine hides the same way
 whenever a build runs against fasls older than they look.
 
-FORGETTING RATHER THAN CLEARING.  CLEAR-SYSTEM drops the component from this
-image and the next load consults the disk again, where the stale fasl still
-stands.  Deleting the output is the one act ASDF cannot second-guess: a
-missing fasl compiles, in dependency order, exactly as a cold build would.
-Dependencies are deliberately untouched -- their warnings are not a gate
-this project can pass, and recompiling them on every push is the cost the
-cache exists to avoid -- so the price is one pass over first-party sources,
-a few seconds, paid where the verdict is issued and nowhere else."
-  (dolist (system *systems*)
-    (labels ((walk (component)
-               (typecase component
-                 (asdf:cl-source-file
-                  (ignore-errors
-                   (delete-file (asdf:output-file
-                                 (asdf:make-operation 'asdf:compile-op)
-                                 component))))
-                 (asdf:component
-                  (map nil #'walk (asdf:component-children component))))))
-      (walk (asdf:find-system system)))))
+FORGETTING RATHER THAN CLEARING, and now by one definition rather than two:
+this is TOOLS/STAMP.LISP's FORGET-FIRST-PARTY-FASLS, which deletes everything
+ASDF cached for this tree except .deps/.  It was a walk of the component graph
+here, which missed one thing a delete of the directory cannot: the generated
+.lisp stubs wayflan writes beside its fasls, which are inputs to a compilation
+and not components of a system.  Dependencies are still untouched -- their
+warnings are not a gate this project can pass, and recompiling them on every
+push is the cost the cache exists to avoid -- so the price is still one pass
+over first-party sources, a few seconds, paid where the verdict is issued and
+nowhere else."
+  (forget-first-party-fasls *root*))
 
 (defun record (condition)
   (cond

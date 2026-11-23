@@ -28,7 +28,7 @@ contributing to it follows from taking it seriously.
 
 Every claim this project makes about itself is supposed to be attached to
 something that runs. That is why there is so much machinery for a window
-manager: twenty-three build gates, a unit suite, an integration suite that drives
+manager: twenty-four build gates, a unit suite, an integration suite that drives
 a real compositor, six references generated from the running image, and a set
 of checks over the prose itself.
 

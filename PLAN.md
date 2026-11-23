@@ -92,7 +92,23 @@ the emitter also stopped drawing an *anchored* float whose anchor this frame did
 not place — a picture-in-picture whose host cell went away, and a float anchored
 in another workspace, were both placed at their offset as though it were screen
 coordinates. +18 checks.
-- [ ] #146 `make integration` can run against a stale protocol fasl.
+- [x] #146 `make integration` could run against a stale protocol fasl and report
+a protocol desync in a section the diff never reached. The cache now carries a
+receipt: `tools/stamp.lisp`, loaded by `tools/prelude.lisp` so that every make
+target inherits the answer, records the content hash of every `package.lisp`
+beside the fasls it built, and drops this project's cached files (`.deps/`
+untouched) when one of them moves — because ASDF decides staleness one file at a
+time and cannot see that a DEFPACKAGE is a shared surface. The drop is
+`forget-first-party-fasls`, which `tools/build.lisp` now calls too: deleting the
+whole project cache directory is a superset of a walk of the component graph, and
+it catches one thing the walk missed — wayflan's generated `.lisp` stubs, which
+are inputs to a compilation rather than components of a system. Gate 24 exercises
+the mechanism in a sandbox (stamped, steady, dropped, `.deps/` survives), which
+is how the first version was caught comparing two MD5 arrays with `EQUAL` and
+calling all 25 package files moved on every run. Measured by hand as well: after
+a one-line change to `src/package.lisp`, a plain `asdf:load-system` printed
+`src/package.lisp moved since this fasl cache was built`, dropped 89 cached
+files, and recompiled (32s); a second run of the same check said nothing.
 - [ ] #147 moving a float is not on the undo ring.
 
 ## SKIP — duplicate mirrors, keep ONE side

@@ -3677,6 +3677,101 @@ the suite that names it, or add the reason to *UNTESTED-COMMANDS* here."
              (length untested) (sort untested #'string<)))
       (t (format t "  every command is named by a suite or written down here~%")))))
 
+;;; ---------------------------------------------------------------- gate 24
+
+(banner 24 "the build knows whether its fasls are the ones for this tree")
+;; #146.  A `package.lisp' change recompiles everything downstream of it -- and
+;; ASDF decides staleness one file at a time, so a fasl compiled against a
+;; package that has since changed shape is never recompiled.  Four red
+;; `make integration' runs, in a section the diff never reached, came from
+;; exactly that.  tools/stamp.lisp records the package surface with the fasls,
+;; and drops the cache when it moves.
+;;
+;; AND A RULE WIRED TO NOTHING IS THE THING THIS FILE EXISTS TO ABOLISH, so the
+;; mechanism is exercised here rather than trusted.  In a sandbox, because a
+;; gate that dumped the real cache would make every gate behind it compile the
+;; whole program again -- and because a gate's job is to ask, not to spend.
+;;
+;; The first version of this mechanism compared two MD5 byte vectors with EQUAL,
+;; which is identity for a general array, and therefore reported every package
+;; file in the tree as moved on every run.  It looked like a working check that
+;; had found 25 problems.  That is the failure this gate is for.
+(unless (fboundp 'check-fasl-stamp)
+  (load (merge-pathnames "tools/stamp.lisp" *root*)))
+
+(let* ((sandbox (merge-pathnames "latticewm-gate24/" (uiop:temporary-directory)))
+       (package (merge-pathnames "src/package.lisp" sandbox))
+       (cache (project-fasl-directory sandbox))
+       (stamp (stamp-pathname sandbox))
+       (stub (merge-pathnames "src/some-protocol.lisp" cache))
+       (fasl (merge-pathnames "src/some-protocol.fasl" cache))
+       (dependency (merge-pathnames ".deps/some-library/some-library.fasl"
+                                    cache))
+       (problems '()))
+  (flet ((check (ok-p format &rest arguments)
+           (unless ok-p (push (format nil "~?" format arguments) problems))))
+    (ignore-errors (uiop:delete-directory-tree sandbox :validate t))
+    (ignore-errors (uiop:delete-directory-tree cache :validate t))
+    (ensure-directories-exist package)
+    (with-open-file (out package :direction :output :if-exists :supersede)
+      (write-line "(defpackage #:gate24-sandbox (:use #:cl))" out))
+    ;; THE FINGERPRINT IS A FUNCTION OF CONTENT, and stable between two reads of
+    ;; one tree: an unstable one would drop the cache on every single run, which
+    ;; is the failure mode that makes a check indistinguishable from no check.
+    (let ((once (package-fingerprint sandbox))
+          (twice (package-fingerprint sandbox)))
+      (check (= 1 (length once)) "the sandbox has ~d package files, not 1"
+             (length once))
+      (check (equal once twice)
+             "two fingerprints of one tree disagreed, so the stamp would drop ~
+              the cache on every run")
+      (check (stringp (cdar once))
+             "a digest is ~s rather than a string -- EQUAL does not compare a
+byte vector by content, which is how the first version of this called every
+file in the tree moved" (cdar once)))
+    (check (eq :stamped (check-fasl-stamp :root sandbox :announce nil))
+           "a cache with no stamp was not stamped")
+    (check (probe-file stamp) "no stamp was written to the cache directory")
+    ;; A CACHE WITH CONTENT: a fasl, one of wayflan's generated stubs (an input
+    ;; to a compilation and not a component of a system, which is why the drop
+    ;; is of the directory), and a dependency's fasl, which must survive.
+    (dolist (path (list fasl stub dependency))
+      (ensure-directories-exist path)
+      (with-open-file (out path :direction :output :if-exists :supersede)
+        (write-line "cached" out)))
+    (check (null (check-fasl-stamp :root sandbox :announce nil))
+           "an unchanged tree was reported as moved")
+    (check (and (probe-file fasl) (probe-file stub))
+           "an unchanged tree lost its cache")
+    ;; And now the thing itself: the package surface moves.
+    (with-open-file (out package :direction :output :if-exists :append)
+      (write-line ";;; and one export more" out))
+    (check (eq :dropped (check-fasl-stamp :root sandbox :announce nil))
+           "a changed package file did not drop the cache")
+    (check (not (probe-file fasl))
+           "the fasl built against the old package is still there")
+    (check (not (probe-file stub))
+           "the generated stub of a protocol whose bindings were compiled
+against the old package is still there")
+    (check (probe-file dependency)
+           "a dependency's fasl was dropped -- .deps/ is not this project's
+build to pay for")
+    (check (null (check-fasl-stamp :root sandbox :announce nil))
+           "the stamp was not rewritten after the drop, so the next run would
+drop everything again")
+    (format t "  package files in this tree~46t~d~%"
+            (length (package-fingerprint *root*)))
+    (format t "  a moved package file drops the cache, and .deps/ survives~%")
+    (ignore-errors (uiop:delete-directory-tree sandbox :validate t))
+    (ignore-errors (uiop:delete-directory-tree cache :validate t))
+    (when problems
+      (fail 24 "tools/stamp.lisp does not do what #146 asked of it:~{~%    ~a~}~
+~%~4tThe rule is that a package file's content is what a fasl was built
+against, and a cache built against a different one is dropped rather than
+loaded.  Nothing else notices: the compiler cannot see a stale fasl and the
+integration suite reports it as a protocol desync in an untouched section."
+            (reverse problems)))))
+
 ;;; ---------------------------------------------------------------- verdict
 
 

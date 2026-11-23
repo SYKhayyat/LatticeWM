@@ -21,6 +21,15 @@
       (uiop:getcwd))
   "The project directory.  The Makefile runs from it; a REPL might not.")
 
+;; AND WHETHER THE FASL CACHE IS THE ONE FOR THIS TREE (#146), which is a
+;; question about the tree rather than about the libraries -- so it is asked
+;; here, before anything is loaded, and every make target inherits the answer.
+;; A package file that moved since the cache was built drops this project's
+;; fasls rather than loading code compiled against a package that no longer has
+;; that shape; see tools/stamp.lisp for why ASDF cannot see it itself.
+(load (merge-pathnames "tools/stamp.lisp" *root*))
+(check-fasl-stamp :root *root*)
+
 (defparameter *systems*
   '("wayflan-client" "alexandria" "closer-mop" "bordeaux-threads")
   "Everything latticewm.asd depends on that is not in SBCL itself.
