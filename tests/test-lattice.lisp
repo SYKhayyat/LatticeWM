@@ -2968,3 +2968,21 @@ to change in a drawing is what things look like."
     (is (not (null row)) "the option is registered")
     (is (eq 'l:*float-box-color* (second row))
         "and it names the lattice's own variable")))
+
+(test the-map-asks-the-same-question-the-deck-asks
+  "The map's root is the plane, not a workspace stack, and the question is the
+same one: which floats are anchored somewhere in this thing.  Asking it of a
+grid is how a drawing of the plane finds the floats over it (#139)."
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (here (leaf "terminal"))
+         (elsewhere (leaf "mail"))
+         (world (c:make-world)))
+    (setf (c:child-at grid (l:cell 0 0)) here)
+    (setf (c:child-at grid (l:cell 1 0)) elsewhere)
+    (setf (c:world-floats world) (list (float-on (t*::win "dialog") here)))
+    (let ((found (l::floats-of grid world)))
+      (is (= 1 (length found)) "the plane answers with the float over it")
+      (is (eq here (c:float-anchor (first found))))))
+  ;; AND THE TWO DRAWINGS SHARE ONE LOOP, so they cannot drift: the deck and the
+  ;; map both call DRAW-CELL-FLOATS, and neither has a copy of the filter.
+  (is-true (fboundp 'l::draw-cell-floats) "the shared drawing exists"))

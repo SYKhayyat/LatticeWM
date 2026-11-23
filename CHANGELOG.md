@@ -26,6 +26,13 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The drawn map shows floating windows too (#139).** `draw-map-on` drew cells,
+  and a float is not in the tree, so the full-screen map under-reported what is
+  on the plane. Both drawings now call one `draw-cell-floats`, so they cannot
+  disagree about which floats belong to a cell or where inside it they go.
+  Output-pinned floats stay out of the map: it has no per-workspace panel to
+  name them in, and a position invented for a screen-coordinate float would lie
+  about where it is.
 - **The deck draws floating windows (#138).** Floats are not in the tree, so the
   preview and the drawn map drew cells and nothing else: a workspace whose cell
   held a terminal and had a dialog floating over it was drawn as one cell, and

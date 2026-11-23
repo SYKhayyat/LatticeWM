@@ -538,6 +538,12 @@ coordinate. Zoom is the choice of how many cells you can see — 1, 2, 4, 6, 8 �
 and past that it becomes a drawn map. Motion runs straight through a cell
 boundary as though it were not there.
 
+Both drawings show floating windows, since a float is not in the tree and a map
+drawn from the tree would under-report what is on the plane: an anchored float
+is outlined inside the cell it hangs on, and the deck — which has a panel per
+workspace — names the floats pinned to the screen in the corner of the panel you
+are standing on.
+
 | [[file:doc/coordinate-overlay.png][Cells and coordinates]] | [[file:doc/drawn-map.png][The drawn map at deep zoom]] |
 
 *Infinitely many planes, one behind another.* Every workspace is a plane — not

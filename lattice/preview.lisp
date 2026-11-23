@@ -185,10 +185,7 @@ question what is on this workspace with a number that is too low (#138)."
             ;; because that is what a float is: on top.  A cell holding four
             ;; leaves can have floats on two of them, so this is asked of every
             ;; anchored float rather than of the cell's single summary.
-            (dolist (record floats)
-              (when (node-in-tree-p (c:float-anchor record) node)
-                (draw-preview-float
-                 canvas (float-box-in-cell box node record index) record))))))))))
+            (draw-cell-floats canvas box node floats index))))))))
 
 ;;; ------------------------------------------------------------- the floats
 
@@ -285,6 +282,19 @@ placed yet is in no index."
                                         (max 1 (floor (- room 2)
                                                       (r:text-width "m"))))
                        (apply #'r:argb *float-box-color*))))))
+
+(defun draw-cell-floats (canvas box cell-node floats index)
+  "Draw every float anchored somewhere in CELL-NODE's subtree, inside BOX.
+
+THE ONE FUNCTION BOTH DRAWINGS CALL, which is the point: the deck and the drawn
+map are two views of the same plane, and two copies of this loop would drift
+apart the way the two answers about a stack's visible window did (#137).  What
+decides placement is FLOAT-BOX-IN-CELL; what decides *which* floats is this;
+what either drawing looks like is its own."
+  (dolist (record floats)
+    (when (node-in-tree-p (c:float-anchor record) cell-node)
+      (draw-preview-float canvas (float-box-in-cell box cell-node record index)
+                           record))))
 
 (defun draw-free-floats (canvas panel-box floats)
   "Name the output-pinned floats at the bottom of PANEL-BOX, one row each.

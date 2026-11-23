@@ -197,8 +197,10 @@ should."
             ;; cell deep: it asked where the windows are, not where the camera
             ;; points.  Without a peek this is the grid's own viewport and the
             ;; drawing is exactly what it was.
-            (loop for (address . rect) in (cell-rects policy grid area
-                                                      :viewport (peek-viewport grid))
+            (let ((floats (and r:*world* (floats-of grid r:*world*)))
+                  (index (and r:*world* (c:prop r:*world* :rect-index))))
+              (loop for (address . rect) in (cell-rects policy grid area
+                                                        :viewport (peek-viewport grid))
                   for node = (c:child-at grid address)
                   for occupied = (and node (not (c:node-empty-p node)))
                   for box = (c:make-rect (- (c:rect-x rect) origin-x)
@@ -231,7 +233,12 @@ should."
                                        (window-summary node)
                                        (max 0 (floor (- (c:rect-w box) 12)
                                                      (r:text-width "m"))))
-                                      (apply #'r:argb *map-detail-color*)))))
-          (r:overlay-commit overlay :rect area))))))
+                                      (apply #'r:argb *map-detail-color*)))
+                     ;; A FLOAT IS NOT IN THE TREE, so a map drawn from the
+                     ;; tree left it out and under-reported what is on the
+                     ;; plane (#139).  The same helper the deck calls, so the
+                     ;; two drawings cannot disagree about where it goes.
+                     (draw-cell-floats canvas box node floats index)))
+            (r:overlay-commit overlay :rect area)))))))
 
 (r:add-hook :draw-overlays 'draw-map)
