@@ -1785,3 +1785,39 @@ floating keeps its current rectangle (#141)."
       (is (not (eq (c:float-rect copy) (c:float-rect (first (c:world-floats world)))))
           "and has a rectangle of its own, so a snapshot is not something you edit")
       (is (= 3 (c:rect-w (c:float-rect copy)))))))
+
+(test undo-of-a-minimize-leaves-the-window-in-one-place
+  "MINIMIZING TAKES A WINDOW OUT OF THE TREE TOO, so it is recorded like a float
+(#141 was the float half).  Undo puts the window back in the tree while it is
+still minimized and still in the scratchpad -- and then RESTORE-WINDOW brings it
+back a second time, because its old slot is not empty any more (the restored
+tree filled it with the window itself), so the policy splits the cursor's pane
+instead.  The window ends up twice in the tree, and river is told to tile one
+surface in two places."
+  (let* ((world (fresh-world))
+         (pol (policy))
+         (r (find-package "LATTICEWM/RUNTIME"))
+         (a (win "a"))
+         (b (win "b")))
+    (setf (symbol-value (find-symbol "*WORLD*" r)) world)
+    (fresh-undo-state world)
+    (p:on-window-open pol world a)
+    (p:on-window-open pol world b)
+    (settle "start")
+    (funcall (find-symbol "MINIMIZE-WINDOW" r) b)
+    (settle "minimize")
+    (is (c:window-minimized-p b) "b is minimized")
+    (is (not (member b (c:node-windows (c:world-root world))))
+        "and out of the tree")
+    (funcall (find-symbol "UNDO" r))
+    (settle "undo")
+    (is (member b (c:node-windows (c:world-root world))) "undo puts b back")
+    (is (not (c:window-minimized-p b))
+        "and it is tiled, so it is not still minimized")
+    (is (not (member b (c:world-scratchpad world)))
+        "nor in the scratchpad -- a window is in one place")
+    (funcall (find-symbol "RESTORE-WINDOW" r) b)
+    (settle "restore")
+    (is (= 1 (count b (c:node-windows (c:world-root world))))
+        "restoring it again does not put a second copy in the tree: ~d"
+        (count b (c:node-windows (c:world-root world))))))

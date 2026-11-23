@@ -230,6 +230,26 @@ in ON-WINDOW-OPEN; PLACE-UNPLACED-WINDOWS hands its value to this keyword."
     (mark-dirty)
     window))
 
+(defun reconcile-tiled-windows (world)
+  "Every window WORLD's tree mentions is tiled, so it is in no other place.
+
+A MINIMIZED WINDOW IS IN THE SCRATCHPAD AND NOT IN THE TREE -- that is what
+minimize means here, and it is why minimizing is recorded as an undo step.  An
+undo that put the window back in the tree while leaving the flag set and the
+window in the scratchpad left it in two places: the emitter skipped it (minimized
+wins), and RESTORE-WINDOW then found its old slot *occupied by itself*, took the
+split branch, and put a second copy in the tree (#142).
+
+Derived from the tree rather than recorded, because the tree is the authority
+after a restore.  Returns WORLD."
+  (let ((scratchpad (c:world-scratchpad world)))
+    (dolist (window (c:node-windows (c:world-root world)))
+      (when (c:window-minimized-p window)
+        (setf (c:window-minimized-p window) nil
+              scratchpad (remove window scratchpad))))
+    (setf (c:world-scratchpad world) scratchpad)
+    world))
+
 (defun reconcile-floats (world records)
   "The float records WORLD should hold, given the tree it now has and RECORDS.
 
@@ -358,11 +378,31 @@ it a policy question."
   window)
 
 (defun restore-window (window)
-  "Bring WINDOW back from the scratchpad."
-  (guarded "on-restore" (p:on-restore (p:current-policy) *world* window))
-  (mark-dirty)
-  (request-manage)
-  window)
+  "Bring WINDOW back from the scratchpad.
+
+A WINDOW THAT IS NOT PUT AWAY IS NOT RESTORED, and the guard is not politeness.
+The policy's ON-RESTORE puts the window back in its remembered slot when that
+slot is *empty* and splits the cursor's pane otherwise -- so restoring a window
+that the tree already mentions fills that remembered slot with the window itself,
+and then puts a second copy of the same surface in the tree.  The emitter is
+asked to tile one window in two places, which is the sort of thing that looks
+like a rendering bug and is not (#142).
+
+PUT AWAY MEANS MINIMIZED, and a minimized window may be a float -- that is a
+decision the state machine already took, and a float that was put away has to
+come back a float.  So the test is *put away and not in the tree*, not *not
+floating*: a window that is tiled, or floating without being put away, is already
+placed and there is nothing to bring back."
+  (cond
+    ((and (not (c:window-minimized-p window))
+          (not (member window (c:world-scratchpad *world*))))
+     window)
+    ((member window (c:node-windows (c:world-root *world*))) window)
+    (t
+     (guarded "on-restore" (p:on-restore (p:current-policy) *world* window))
+     (mark-dirty)
+     (request-manage)
+     window)))
 
 ;;; ------------------------------------------------------------ keyboard focus
 

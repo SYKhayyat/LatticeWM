@@ -306,9 +306,12 @@ changed."
           (c:world-cursor *world*)
           (c:repair-path (c:world-root *world*) (layout-snapshot-cursor snapshot))
           ;; AND THE FLOATS COME BACK WITH IT, or a window that was floated goes
-          ;; back into the tree still floating (#141).
+          ;; back into the tree still floating (#141).  The scratchpad is
+          ;; reconciled the other way, from the tree: a window the tree mentions
+          ;; is tiled, so it is not minimized, or it is in two places (#142).
           (c:world-floats *world*)
           (reconcile-floats *world* (layout-snapshot-floats snapshot)))
+    (reconcile-tiled-windows *world*)
     ;; Anything we are managing that this tree does not mention has to go
     ;; somewhere, or it would be invisible and unreachable — the same rule
     ;; LOAD-STATE follows, and for the same reason.

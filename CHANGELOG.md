@@ -26,6 +26,16 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **Undo of a minimize no longer leaves a window tiled and put away at once
+  (#142).** Minimizing removes a window from the tree and into the scratchpad, so
+  it is an undo step — and undo put the window back while it was still minimized
+  and still in the scratchpad. The emitter skips minimized windows, so nothing
+  looked broken; then `restore-window` found the window's remembered slot
+  occupied by the window itself, split the cursor's pane instead, and the window
+  ended up twice in the tree. `reconcile-tiled-windows` clears the flag and the
+  scratchpad entry for every window a restored tree mentions, and `restore-window`
+  now acts only on a window that is actually put away — a minimized float still
+  comes back a float, which is the state machine's existing decision.
 - **Undo puts a window back in one place (#141).** A `layout-snapshot` recorded
   the tree and the cursor and nothing about which windows were floating, and
   floats live beside the tree in `world-floats`. `toggle-float` removes a window
