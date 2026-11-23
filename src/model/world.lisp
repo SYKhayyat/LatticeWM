@@ -463,6 +463,30 @@ one-element path — or the empty path when the root is not a workspace stack."
   "The FLOATING-WINDOW record for WINDOW, or NIL."
   (find window (world-floats world) :key #'float-window))
 
+(defun float-placed-rect (float &optional index)
+  "The screen rectangle FLOAT occupies right now, or NIL when nothing places it.
+
+A float pinned to the output carries a rectangle in screen coordinates already,
+so that is the answer.  An anchored float's rectangle is an *offset from its
+anchor's*, and its anchor's is in the render index -- the map from node to
+screen rectangle a relayout leaves on the world -- so without an index, or for
+an anchor that has not been placed, the answer is NIL rather than a guess.
+
+THIS IS THE ONE PLACE THAT KNOWS IT (#145).  EMIT-FLOATS added the two together
+itself, and the lattice's preview panel worked the same placement out a third
+way; the coordinate overlay needed the same answer and instead asked the tree
+whether anything was on the cell, which is how a drawing of the plane came to
+be the one thing that could not see the window on it."
+  (let ((anchor (float-anchor float))
+        (rect (float-rect float)))
+    (if (null anchor)
+        rect
+        (let ((base (and index (gethash anchor index))))
+          (and base rect
+               (make-rect (+ (rect-x base) (rect-x rect))
+                          (+ (rect-y base) (rect-y rect))
+                          (rect-w rect) (rect-h rect)))))))
+
 (defun world-captures (world)
   "Everything river says is being recorded right now: OUTPUTs first, then
 WINDOWs, each with at least one screen capture session.

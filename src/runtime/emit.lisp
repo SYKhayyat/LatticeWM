@@ -574,48 +574,53 @@ a RENDER-ORDER method sees floats and tiles in one vocabulary."
           (if (c:window-minimized-p window)
               (when-changed (window :shown nil)
                 (best-effort "hide" (w:window-hide proxy)))
-              (let* ((anchor (c:float-anchor float))
-                     (base (and anchor (gethash anchor (c:prop *world* :rect-index))))
-                     (rect (c:float-rect float))
-                     (placed (if base
-                                 (c:make-rect (+ (c:rect-x base) (c:rect-x rect))
-                                              (+ (c:rect-y base) (c:rect-y rect))
-                                              (c:rect-w rect) (c:rect-h rect))
-                                 rect)))
-                (setf (c:window-rect window) placed)
-                (when-changed (window :shown t)
-                  (best-effort "show" (w:window-show proxy)))
-                ;; Queue unconditionally and let EMIT-DIMENSION-WORK diff it
-                ;; at *drain* time, exactly where tiled work is diffed (on the
-                ;; :DIMENSIONS key).  Diffing here at *queue* time recorded the
-                ;; new size as sent the instant it was pushed -- but a render
-                ;; sequence does not drain the queue, and the next relayout
-                ;; overwrites it with tiled-only work (COLLECT-DIMENSION-WORK),
-                ;; discarding this entry while the diff still said "sent."  The
-                ;; float then stuck at the wrong size until something unrelated
-                ;; moved it.  Re-pushing every relayout is cheap and self-heals:
-                ;; the drain-time diff still sends each size at most once.
-                (push (list window (c:rect-w placed) (c:rect-h placed))
-                      (server-pending-dimensions *server*))
-                (let ((river-node (window-river-node window)))
-                  (when river-node
-                    (when-changed (window :position (list (c:rect-x placed)
-                                                          (c:rect-y placed)))
-                      (best-effort "set_position"
-                        (w:node-set-position river-node (c:rect-x placed)
-                                             (c:rect-y placed))))))
-                ;; The float's own leaf, kept on the float record rather than
-                ;; made fresh each time: BORDER-COLOR is handed a node, and a
-                ;; node that is a different object on every relayout cannot carry
-                ;; a prop, cannot be compared, and cannot be the thing a
-                ;; window-rule hung a colour on.
-                (emit-borders policy window (float-leaf float)
-                              (window-focused-p window))
-                ;; The same shape a tree placement has: (NODE PATH RECT VISIBLE).
-                ;; PATH is NIL because a float is deliberately not in the tree,
-                ;; which is exactly what a RENDER-ORDER method wanting to know
-                ;; `is this a float' can test.
-                (push (list (float-leaf float) nil placed t) out))))))))
+              (let ((placed (c:float-placed-rect float (c:prop *world* :rect-index))))
+                ;; AN ANCHORED FLOAT WHOSE ANCHOR IS NOT PLACED HAS NO PLACE.  It
+                ;; used to fall back to its own rectangle as though that were
+                ;; screen coordinates, which drew a picture-in-picture at
+                ;; wherever its offset landed when its host cell went away -- and
+                ;; drew a float anchored in *another workspace* on this one,
+                ;; because the render index is this relayout's placements and
+                ;; nothing else.  Hidden is the honest answer.
+                (if (null placed)
+                    (when-changed (window :shown nil)
+                      (best-effort "hide" (w:window-hide proxy)))
+                    (progn
+                      (setf (c:window-rect window) placed)
+                      (when-changed (window :shown t)
+                        (best-effort "show" (w:window-show proxy)))
+                      ;; Queue unconditionally and let EMIT-DIMENSION-WORK diff
+                      ;; it at *drain* time, exactly where tiled work is diffed
+                      ;; (on the :DIMENSIONS key).  Diffing here at *queue* time
+                      ;; recorded the new size as sent the instant it was pushed
+                      ;; -- but a render sequence does not drain the queue, and
+                      ;; the next relayout overwrites it with tiled-only work
+                      ;; (COLLECT-DIMENSION-WORK), discarding this entry while
+                      ;; the diff still said "sent."  The float then stuck at the
+                      ;; wrong size until something unrelated moved it.
+                      ;; Re-pushing every relayout is cheap and self-heals: the
+                      ;; drain-time diff still sends each size at most once.
+                      (push (list window (c:rect-w placed) (c:rect-h placed))
+                            (server-pending-dimensions *server*))
+                      (let ((river-node (window-river-node window)))
+                        (when river-node
+                          (when-changed (window :position (list (c:rect-x placed)
+                                                                (c:rect-y placed)))
+                            (best-effort "set_position"
+                              (w:node-set-position river-node (c:rect-x placed)
+                                                   (c:rect-y placed))))))
+                      ;; The float's own leaf, kept on the float record rather
+                      ;; than made fresh each time: BORDER-COLOR is handed a
+                      ;; node, and a node that is a different object on every
+                      ;; relayout cannot carry a prop, cannot be compared, and
+                      ;; cannot be the thing a window-rule hung a colour on.
+                      (emit-borders policy window (float-leaf float)
+                                    (window-focused-p window))
+                      ;; The same shape a tree placement has: (NODE PATH RECT
+                      ;; VISIBLE).  PATH is NIL because a float is deliberately
+                      ;; not in the tree, which is exactly what a RENDER-ORDER
+                      ;; method wanting to know `is this a float' can test.
+                      (push (list (float-leaf float) nil placed t) out))))))))))
 
 (defun float-leaf (float)
   "The LEAF standing for FLOAT, made once and kept.

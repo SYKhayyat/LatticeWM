@@ -2986,3 +2986,115 @@ grid is how a drawing of the plane finds the floats over it (#139)."
   ;; AND THE TWO DRAWINGS SHARE ONE LOOP, so they cannot drift: the deck and the
   ;; map both call DRAW-CELL-FLOATS, and neither has a copy of the filter.
   (is-true (fboundp 'l::draw-cell-floats) "the shared drawing exists"))
+
+;;; ---------------------- what a cell with something on it is (#145)
+;;;
+;;; THE COORDINATE OVERLAY ASKED THE TREE.  "Is there a child at this address"
+;;; is the tree's answer, and a floating window is not in the tree (#138) -- so
+;;; a workspace showing a dialog over an empty cell drew no coordinate on the
+;;; one cell the reader was actually looking at.  The predicate it asks now is
+;;; CELL-HOLDS-SOMETHING-P, and these are the cells it has to get right.
+
+(defun a-cell-rect (x y &optional (w 400) (h 300))
+  "The screen rectangle of the cell at X,Y, as the layout would place it."
+  (c:make-rect (* x w) (* y h) w h))
+
+(test a-float-occupies-the-cell-it-is-drawn-on
+  "The whole of #145, in four assertions."
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world))
+         (r:*world* world)
+         (rect (a-cell-rect 0 0)))
+    (is (null (c:child-at grid (l:cell 0 0))) "the cell is empty in the tree")
+    (is (not (l::cell-holds-something-p grid (l:cell 0 0) rect))
+        "and with nothing on it, it draws no coordinate")
+    (setf (c:world-floats world)
+          (list (float-on (t*::win "dialog") nil
+                          :rect (c:make-rect 100 80 200 150))))
+    (is (l::cell-holds-something-p grid (l:cell 0 0) rect)
+        "the same cell with a dialog floating over it is labelled, because it
+is occupied in every sense that matters")
+    (is (equal (l:cell-string (l:cell 0 0)) (l:cell-label grid (l:cell 0 0)))
+        "and what it says is the coordinate, there being no name to say")))
+
+(test a-float-labels-the-cells-it-is-on-and-no-others
+  "A label on every cell a float touches would be as wrong as none: the
+coordinate on a cell is a claim about where something is."
+  (let* ((grid (grid-of '(0 0 nil) '(1 0 nil)))
+         (world (c:make-world))
+         (r:*world* world))
+    (setf (c:world-floats world)
+          (list (float-on (t*::win "dialog") nil
+                          :rect (c:make-rect 500 60 200 150))))
+    (is (l::cell-holds-something-p grid (l:cell 1 0) (a-cell-rect 1 0)))
+    (is (not (l::cell-holds-something-p grid (l:cell 0 0) (a-cell-rect 0 0)))
+        "the cell to the left of it is still empty")))
+
+(test a-float-that-is-on-no-screen-labels-no-cell
+  "Three ways for a float to be on no screen, and all three are ordinary: it is
+put away, its window is gone, or it hangs on a node this frame did not place --
+which is what an anchored float in *another workspace* is."
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world))
+         (r:*world* world)
+         (rect (a-cell-rect 0 0))
+         (window (t*::win "dialog"))
+         (record (float-on window nil :rect (c:make-rect 20 20 200 150))))
+    (setf (c:world-floats world) (list record))
+    (is-true (l::cell-holds-something-p grid (l:cell 0 0) rect))
+    (setf (c:window-minimized-p window) t)
+    (is-false (l::cell-holds-something-p grid (l:cell 0 0) rect)
+              "a minimized float is hidden by the emitter, so its cell is empty")
+    (setf (c:window-minimized-p window) nil
+          (c:window-live-p window) nil)
+    (is-false (l::cell-holds-something-p grid (l:cell 0 0) rect)
+              "and so is a window river has told us is gone")
+    (setf (c:window-live-p window) t
+          (c:float-anchor record) (leaf "the pane it hangs on"))
+    (is-false (l::cell-holds-something-p grid (l:cell 0 0) rect)
+              "an anchored float whose anchor is in no index has no place, and
+a label on where it used to be would be a guess")))
+
+(test an-anchored-float-is-placed-against-the-rectangle-of-its-anchor
+  "Its own rectangle is an offset, so the question 'which cell is it on' is only
+answerable through the render index -- the one FLOAT-PLACED-RECT adds."
+  (let* ((anchor (leaf "terminal"))
+         (record (float-on (t*::win "picture-in-picture") anchor
+                           :rect (c:make-rect 40 30 200 150)))
+         (index (make-hash-table :test #'eq)))
+    (is (null (c:float-placed-rect record index))
+        "with no anchor rectangle there is nowhere to be")
+    (setf (gethash anchor index) (a-cell-rect 1 0))
+    (let ((placed (c:float-placed-rect record index)))
+      (is (= 440 (c:rect-x placed)) "the anchor's x plus the offset")
+      (is (= 30 (c:rect-y placed)) "and its y")
+      (is (= 200 (c:rect-w placed)) "the float's own size, unscaled"))))
+
+(test an-empty-cell-is-empty-whether-the-tree-calls-it-a-leaf-or-a-hole
+  "The inconsistency the same fix closes.  Floating a window out of a cell
+leaves an empty *leaf* behind and closing the window in it leaves a *hole*, and
+the two are the same empty cell on screen -- but one was labelled and the other
+was not, with nothing visible to explain the difference."
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world))
+         (r:*world* world))
+    (is (not (l::cell-holds-something-p grid (l:cell 0 0) (a-cell-rect 0 0)))
+        "a hole at (0,0) is empty")
+    (setf (c:child-at grid (l:cell 0 0)) (c:make-leaf))
+    (is (not (l::cell-holds-something-p grid (l:cell 0 0) (a-cell-rect 0 0)))
+        "and so is an empty leaf at (0,0), which is the same thing to look at")))
+
+(test a-named-empty-cell-keeps-its-label
+  "A name is an address you can jump to, and the label is where the name is
+readable -- so occupancy cannot be the whole of the rule: D1's third addressing
+layer has to survive the cell being empty."
+  (let* ((grid (grid-of '(0 0 nil)))
+         (world (c:make-world))
+         (r:*world* world)
+         (node (c:make-leaf)))
+    (setf (c:child-at grid (l:cell 0 0)) node
+          (c:node-label node) "mail")
+    (is-true (l::cell-holds-something-p grid (l:cell 0 0) (a-cell-rect 0 0))
+             "an empty cell with a name on it is labelled")
+    (is (equal "mail" (l:cell-label grid (l:cell 0 0)))
+        "and what it says is the name, not the coordinate")))

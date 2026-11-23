@@ -64,6 +64,48 @@ coordinate is still one keystroke away in the echo area."
     (or (and node (c:node-label node))
         (cell-string address))))
 
+(defun float-over-rect-p (rect)
+  "Is any floating window lying on RECT?
+
+The render index places an anchored float against its anchor's rectangle and a
+free one not at all, so this asks FLOAT-PLACED-RECT rather than reading either
+kind inline -- and a float that cannot be placed is a float that is not on
+screen, which is not a reason to label the cell under its old rectangle.
+Minimized floats are hidden by the emitter and are not on screen either."
+  (let ((world r:*world*)
+        (index (and r:*world* (c:prop r:*world* :rect-index))))
+    (and world
+         (some (lambda (record)
+                 (let ((window (c:float-window record))
+                       (placed (c:float-placed-rect record index)))
+                   (and placed window
+                        (c:window-live-p window)
+                        (not (c:window-minimized-p window))
+                        (c:rect-intersect placed rect))))
+               (c:world-floats world)))))
+
+(defun cell-holds-something-p (grid address rect)
+  "Is there anything to label on the cell at ADDRESS, whose rectangle is RECT?
+
+THE TREE IS NOT THE WHOLE MODEL (#145, #138).  This used to be the tree's
+answer alone -- is there a child at this address -- and the tree gets the
+question wrong in both directions:
+
+  - A cell showing only a floating window has no child.  Floats live beside the
+tree, so the cell a reader is most likely asking about, the one with a dialog
+on it, was the one cell with no coordinate on it.
+  - An empty leaf and an empty hole are the same empty cell, and the tree calls
+one a child and the other nothing.  So a cell you floated a window out of was
+labelled and a cell you closed a window in was not, with nothing on screen to
+tell you why.
+
+So the question becomes what it was always meant to be: is anything here?  A
+node with a window in it, a node somebody named -- the name is what the label
+says, and a name is an address you can jump to -- or a floating window on it."
+  (let ((node (c:child-at grid address)))
+    (or (and node (or (not (c:node-empty-p node)) (c:node-label node)))
+        (float-over-rect-p rect))))
+
 (defun draw-coordinate-overlay ()
   "Label every visible cell, on every output.
 
@@ -106,8 +148,8 @@ coordinates onto the first, at positions that meant nothing there."
               (current (current-cell))
               (drawn '()))
           (loop for (address . rect) in (cell-rects policy grid area)
-                when (and (c:child-at grid address)
-                          (>= (c:rect-w rect) *overlay-min-cell*))
+                when (and (>= (c:rect-w rect) *overlay-min-cell*)
+                          (cell-holds-something-p grid address rect))
                   do (let* ((text (cell-label grid address))
                             (width (+ 10 (r:text-width text :scale *overlay-scale*)))
                             (height (+ 6 (r:text-height :scale *overlay-scale*)))

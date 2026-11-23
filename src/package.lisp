@@ -252,7 +252,7 @@ deliberately decomposed so that policy can redirect it.")
    ;; REPLACE-CHILD fifty lines above, found the same way and fixed the same way.
    ;; Gate 16 is the thing that will not let it happen a third time.
    #:world-floats #:make-world #:world-focused-float #:world-forget-seat
-   #:float-of-window
+   #:float-of-window #:float-placed-rect
    #:floating-window #:float-anchor #:float-rect #:float-window #:float-node
    #:output #:output-proxy #:output-rect #:output-name #:output-scale
    #:window-state #:window-state-name

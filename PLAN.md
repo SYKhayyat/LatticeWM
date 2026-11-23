@@ -69,6 +69,32 @@ prove its own failures are not this one); then the documents nobody checks
 (#117, #118), then the untested surface (#119), then the three magic-number /
 duplication items, then the structural split (#124).
 
+## Phase 0.5 — The next three findings (filed 2026-11-23, after Phase 0 shipped)
+
+Small, and each one is a wrong answer rather than a wish: a drawing that cannot
+see a window, a build that can test the wrong fasl, and an undo ring with a hole
+in it.  They sit above Phase 1 for the reason Phase 0 does — nothing safety-shape
+is displaced, because Phase 1 is fully checked — and they move back down the day
+one of them starts touching a safety path.
+
+- [x] #145 the coordinate overlay asked the *tree* whether a cell was occupied,
+and floats live beside the tree (#138), so a workspace showing a dialog over an
+empty cell drew no coordinate on the one cell the reader was looking at. Now
+`lattice/overlay.lisp`'s `cell-holds-something-p` asks the question it meant: a
+node with a window in it, a node somebody named (the name is what the label
+says), or a floating window on it. That closed a second inconsistency in the
+same test — an empty cell was labelled or not depending on whether the tree
+called it an empty leaf or a hole, which is invisible on screen (asserted in
+`an-empty-cell-is-empty-whether-the-tree-calls-it-a-leaf-or-a-hole`). The
+placement arithmetic moved to `c:float-placed-rect`, which `emit-floats` now
+calls too, so a drawing and the emitter cannot disagree about where a float is;
+the emitter also stopped drawing an *anchored* float whose anchor this frame did
+not place — a picture-in-picture whose host cell went away, and a float anchored
+in another workspace, were both placed at their offset as though it were screen
+coordinates. +18 checks.
+- [ ] #146 `make integration` can run against a stale protocol fasl.
+- [ ] #147 moving a float is not on the undo ring.
+
 ## SKIP — duplicate mirrors, keep ONE side
 - #42–#62 (open [Release]) are EXACT mirrors of closed #63–#83. Work from #63–#83 only; close the mirror set as a batch when ready (you said not now — so SKIP).
 - #2==#4 (keep #4), #7==#24 (keep #7).
