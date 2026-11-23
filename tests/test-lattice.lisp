@@ -2896,3 +2896,75 @@ than an error."
   (let ((empty (c:make-stack '() 0)))
     (is (c:node-empty-p (c:visible-node empty))
         "an empty stack shows nothing, and asking must not signal")))
+
+;;; --------------------------------------- floats, which are not in the tree
+
+(defun float-on (window anchor &key (rect (c:make-rect 10 10 40 30)))
+  "A floating-window record, as the runtime makes one."
+  (make-instance 'c:floating-window :window window :anchor anchor :rect rect))
+
+(test an-anchored-float-belongs-to-the-workspace-its-anchor-is-in
+  "A float is in no tree, so the panel has to ask which workspace its anchor is
+in -- and a float anchored into another workspace belongs on that panel, not
+this one."
+  (let* ((here (grid-of '(0 0 nil)))
+         (there (grid-of '(0 0 nil)))
+         (mine (leaf "terminal"))
+         (theirs (leaf "mail"))
+         (world (c:make-world)))
+    (setf (c:child-at here (l:cell 0 0)) mine)
+    (setf (c:child-at there (l:cell 0 0)) theirs)
+    (setf (c:world-floats world)
+          (list (float-on (t*::win "dialog") mine)
+                (float-on (t*::win "other") theirs)
+                (float-on (t*::win "free") nil)))
+    (let ((ours (l::floats-of here world)))
+      (is (= 1 (length ours)) "exactly the one anchored here: ~d" (length ours))
+      (is (eq mine (c:float-anchor (first ours))))
+      (is (not (member (c:float-anchor (first ours)) (list nil theirs)))
+          "and nothing anchored into the other workspace, nor the free one"))
+    (is (= 1 (length (l::floats-of there world)))
+        "the other workspace sees its own anchor and not ours")
+    (is (= 1 (length (l::free-floats-of world)))
+        "and the float pinned to the output is its own question, because it is
+over the screen rather than over a workspace")))
+
+(test an-anchored-float-is-drawn-at-its-fraction-of-the-cell
+  "The float's rect is relative to its anchor's rectangle, so its place inside
+the cell is a fraction the panel copies exactly -- no invented geometry."
+  (let* ((cell (leaf "terminal"))
+         (record (float-on (t*::win "dialog") cell
+                           :rect (c:make-rect 100 50 100 100)))
+         ;; The cell is 400x200 on screen, the float at (100,50) covering a
+         ;; quarter of the width and half the height, from a quarter of the way in.
+         (index (make-hash-table :test #'eq))
+         (box (c:make-rect 0 0 40 20)))
+    (setf (gethash cell index) (c:make-rect 0 0 400 200))
+    (let ((place (l::float-box-in-cell box cell record index)))
+      (is (not (null place)))
+      (is (= 10 (c:rect-x place)) "a quarter of the way in")
+      (is (= 5 (c:rect-y place)) "and a quarter of the way down")
+      (is (= 10 (c:rect-w place)) "a quarter of the panel cell's width")
+      (is (= 10 (c:rect-h place)) "and half its height"))))
+
+(test a-float-with-no-place-yet-is-not-drawn
+  "The render index is filled by the emitter, so a cell that has not been placed
+is in no index.  That is an ordinary frame, and it draws no float rather than a
+rectangle at nowhere."
+  (let* ((cell (leaf "terminal"))
+         (record (float-on (t*::win "dialog") cell))
+         (index (make-hash-table :test #'eq)))
+    (is (null (l::float-box-in-cell (c:make-rect 0 0 40 20) cell record index)))
+    (setf (gethash cell index) (c:make-rect 0 0 0 0))
+    (is (null (l::float-box-in-cell (c:make-rect 0 0 40 20) cell record index))
+        "and neither does an empty cell rectangle")))
+
+(test the-float-colour-is-an-option-so-a-panel-can-be-told-apart
+  "The border a real float gets is the policy's answer for its node, which needs
+a live node and a focused state; the panel has neither, so a float has a colour
+of its own -- and it is an option, because the one thing a user reliably wants
+to change in a drawing is what things look like."
+  (let ((row (assoc :float-box-color (p:all-options))))
+    (is (not (null row)) "the option is registered")
+    (is (eq 'l:*float-box-color* (second row))
+        "and it names the lattice's own variable")))

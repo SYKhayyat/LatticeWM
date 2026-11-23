@@ -118,11 +118,23 @@ panel drawn at a point are worked out by one function, so they cannot disagree
                                        (- (c:rect-y rect) (c:rect-y area))
                                        (c:rect-w rect) (c:rect-h rect))
                 for node = (c:child-at root index)
-                do (draw-preview-panel canvas box node index here))
+                do (draw-preview-panel canvas box node index here
+                                        (floats-of node r:*world*)
+                                        (and (eql index here)
+                                             (free-floats-of r:*world*))))
           (r:overlay-commit overlay :rect area))))))
 
-(defun draw-preview-panel (canvas box node index here)
-  "One workspace, in BOX: its number, its frame, and its plane in miniature."
+(defun draw-preview-panel (canvas box node index here &optional floats free-floats)
+  "One workspace, in BOX: its number, its frame, its plane in miniature and its
+floats.
+
+FLOATS are the ones anchored in this workspace's tree, drawn inside the cell
+their anchor lives in.  FREE-FLOATS are the output-pinned ones, passed only for
+the panel you are standing on -- they are over that plane and no other -- and
+named at the bottom of it.
+
+A panel says there is a float because an overview that leaves it out answers the
+question what is on this workspace with a number that is too low (#138)."
   (let ((frame (if (eql index here) *preview-here-color* *preview-panel-color*)))
     (r:canvas-fill canvas (apply #'r:argb *preview-panel-color*) box)
     (r:canvas-rect canvas box (apply #'r:argb frame) :width (if (eql index here) 3 1))
@@ -138,15 +150,17 @@ panel drawn at a point are worked out by one function, so they cannot disagree
       (unless (or (null node) (c:node-empty-p node)
                   (< (c:rect-w inner) 8) (< (c:rect-h inner) 8))
         (if (typep node 'grid)
-            (draw-preview-plane canvas inner node)
+            (draw-preview-plane canvas inner node floats)
             ;; A workspace that is not a plane -- before the lattice arrived, or
             ;; after it was turned off -- is drawn as the one box it is, with
             ;; what it holds.  An overview that refuses to draw what it does not
             ;; recognise is an overview that lies by omission.
-            (draw-preview-cell canvas inner (window-summary node) node))))))
+            (draw-preview-cell canvas inner (window-summary node) node))
+        (when free-floats
+          (draw-free-floats canvas box free-floats)))))
 
-(defun draw-preview-plane (canvas inner grid)
-  "GRID's occupied cells, scaled to fit INNER."
+(defun draw-preview-plane (canvas inner grid &optional floats)
+  "GRID's occupied cells, scaled to fit INNER, with FLOATS drawn where they hang."
   (let ((cells (occupied-cells grid)))
     (when cells
       (let* ((min-x (reduce #'min cells :key #'cell-x))
@@ -164,8 +178,131 @@ panel drawn at a point are worked out by one function, so they cannot disagree
                                   ;; one other place that draws cells.
                                   (+ (c:rect-y inner) (* (- max-y (cell-y address)) h))
                                   w h))
-                (node (c:child-at grid address)))
-            (draw-preview-cell canvas box (window-summary node) node)))))))
+                (node (c:child-at grid address))
+                (index (c:prop r:*world* :rect-index)))
+            (draw-preview-cell canvas box (window-summary node) node)
+            ;; A FLOAT IS DRAWN OVER THE CELL ITS ANCHOR LIVES IN, afterwards,
+            ;; because that is what a float is: on top.  A cell holding four
+            ;; leaves can have floats on two of them, so this is asked of every
+            ;; anchored float rather than of the cell's single summary.
+            (dolist (record floats)
+              (when (node-in-tree-p (c:float-anchor record) node)
+                (draw-preview-float
+                 canvas (float-box-in-cell box node record index) record))))))))))
+
+;;; ------------------------------------------------------------- the floats
+
+;;; A FLOAT IS NOT IN THE TREE, and everything above draws the tree.  So a
+;;; workspace whose cell holds a terminal and has a dialog floating over it was
+;;; drawn as one cell -- the overview said one window while the screen showed
+;;; two, which is exactly the question the overview exists to answer (#138).
+;;;
+;;; THE TWO KINDS OF FLOAT ARE PLACED DIFFERENTLY, because they are placed
+;;; differently.  An anchored float's rect is relative to the rectangle of the
+;;; node it hangs on, and both of those rectangles are in the render index -- so
+;;; its place *inside its cell* is a fraction the panel can copy exactly.  An
+;;; output-pinned one has a rect in screen coordinates and no cell at all, and
+;;; the panel is a drawing of the plane rather than of pixels: nothing maps it,
+;;; so it is *named* in the panel's corner instead of being placed at a position
+;;; the drawing would have to invent.  Inventing one would be the deck lying
+;;; about where something is.
+
+(p:define-option *float-box-color* '(230 200 120 255)
+  "The colour a floating window is drawn in, in a preview panel.
+
+The border colour a real float gets is the policy's answer for its node, which
+needs a live node and a focused state; the preview is a drawing of the model and
+has neither.  One colour for every float is honest about that, and keeping it
+separate from the cell colours is what makes a float legible as a float.")
+
+(defun node-in-tree-p (node root)
+  "True when NODE is somewhere in ROOT's tree.
+
+By identity, which is the only way the emitter and the panel can agree: what
+FLOAT-ANCHOR holds is a node object, and the same object is what the emitter
+places the float against."
+  (and node root (not (null (c:find-node-if (lambda (n) (eq n node)) root)))))
+
+(defun floats-of (workspace world)
+  "The floats anchored somewhere in WORKSPACE's tree.
+
+A float anchored into another workspace is not here at all: it is on that
+workspace's panel, because that is where its node is."
+  (let ((out '()))
+    (dolist (record (c:world-floats world) (nreverse out))
+      (let ((anchor (c:float-anchor record)))
+        (when (and anchor (node-in-tree-p anchor workspace))
+          (push record out))))))
+
+(defun free-floats-of (world)
+  "The floats pinned to the output rather than to a node.
+
+They belong to the *screen*, not to a workspace, which is why they are a
+separate question: a panel is a workspace, and the panel you are standing on is
+the one these are actually over."
+  (remove nil (mapcar (lambda (record)
+                        (unless (c:float-anchor record) record))
+                      (c:world-floats world))))
+
+(defun float-box-in-cell (cell-box cell-node record index)
+  "Where an anchored FLOAT goes inside the panel's CELL-BOX, or NIL.
+
+CELL-NODE's rectangle and the float's anchor's rectangle are both in the render
+index, and the float's own rect is an offset from its anchor's -- so the float's
+place *relative to its cell* is arithmetic on those three, and the panel copies
+it by scaling.  NIL when either rectangle is missing or empty, which is an
+ordinary frame: the index is filled by the emitter and a cell that has not been
+placed yet is in no index."
+  (let ((cell-rect (gethash cell-node index))
+        (anchor-rect (gethash (c:float-anchor record) index))
+        (rect (c:float-rect record)))
+    (when (and cell-rect anchor-rect
+               (plusp (c:rect-w cell-rect)) (plusp (c:rect-h cell-rect))
+               (plusp (c:rect-w rect)) (plusp (c:rect-h rect)))
+      (let* ((placed-x (+ (c:rect-x anchor-rect) (c:rect-x rect)))
+             (placed-y (+ (c:rect-y anchor-rect) (c:rect-y rect)))
+             (fx (/ (- placed-x (c:rect-x cell-rect)) (float (c:rect-w cell-rect))))
+             (fy (/ (- placed-y (c:rect-y cell-rect)) (float (c:rect-h cell-rect))))
+             (fw (/ (c:rect-w rect) (float (c:rect-w cell-rect))))
+             (fh (/ (c:rect-h rect) (float (c:rect-h cell-rect)))))
+        (let* ((w (max 2 (min (c:rect-w cell-box) (floor (* (c:rect-w cell-box) (min 1 fw))))))
+               (h (max 2 (min (c:rect-h cell-box) (floor (* (c:rect-h cell-box) (min 1 fh))))))
+               (x (+ (c:rect-x cell-box)
+                     (floor (* (c:rect-w cell-box) (max 0 (min fx 1))))))
+               (y (+ (c:rect-y cell-box)
+                     (floor (* (c:rect-h cell-box) (max 0 (min fy 1)))))))
+          (c:make-rect x y (min w (- (+ (c:rect-x cell-box) (c:rect-w cell-box)) x))
+                       (min h (- (+ (c:rect-y cell-box) (c:rect-h cell-box)) y))))))))
+
+(defun draw-preview-float (canvas box record)
+  "One anchored float inside the cell box it hangs on: an outline and a name."
+  (when box
+    (r:canvas-rect canvas box (apply #'r:argb *float-box-color*) :width 1)
+    (let ((room (c:rect-w box)))
+      (when (and (> room 24) (> (c:rect-h box) (r:text-height :scale 1)))
+        (r:canvas-text canvas (+ (c:rect-x box) 1) (+ (c:rect-y box) 1)
+                       (r:truncate-text (p:name-of-window (c:float-window record))
+                                        (max 1 (floor (- room 2)
+                                                      (r:text-width "m"))))
+                       (apply #'r:argb *float-box-color*))))))
+
+(defun draw-free-floats (canvas panel-box floats)
+  "Name the output-pinned floats at the bottom of PANEL-BOX, one row each.
+
+The word FLOAT is the whole of the correction: a reader who sees a count next to
+a cell and `float' in the corner knows which of the two is in the layout.  Rows
+count upwards from the bottom edge of the panel, and a panel too short for them
+says nothing rather than writing over the cell that is there."
+  (let ((row-height (+ (r:text-height :scale 1) 1)))
+    (loop for record in floats
+          for row from 1
+          for y = (- (+ (c:rect-y panel-box) (c:rect-h panel-box))
+                     (* row row-height) 2)
+          while (> y (* 2 (r:text-height :scale 1)))
+          do (r:canvas-text canvas (+ (c:rect-x panel-box) 6) y
+                            (format nil "float ~a"
+                                    (p:name-of-window (c:float-window record)))
+                            (apply #'r:argb *float-box-color*)))))
 
 (defun draw-preview-cell (canvas box summary &optional node)
   "One occupied cell's miniature: a picture of it if there is one, and its name.

@@ -1217,13 +1217,22 @@ are what a person means by the arrangement, and both are copy-stable."
                      (count-of (name)
                        (symbol-value (find-symbol name "THUMBNAILS")))
                      (drawn ()
-                       ;; A REAL CANVAS: the blit is a pixel loop, and a
-                       ;; pretend canvas would test the loop against nothing.
-                       (let ((canvas (some #'r::overlay-canvas (all-overlays))))
+                       ;; A REAL CANVAS WE OWN, rather than one found on an
+                       ;; overlay: the blit is a pixel loop and a pretend canvas
+                       ;; would test the loop against nothing -- but *finding*
+                       ;; the deck's own buffer made this section depend on a
+                       ;; paint that had already happened, and when it had not,
+                       ;; the draw quietly did nothing and three checks failed
+                       ;; as if the capture were broken.
+                       (let ((canvas (and (server-shm *server*)
+                                          (wm (lambda ()
+                                                (make-canvas (server-shm *server*)
+                                                             200 150))))))
                          (when canvas
                            (wm (lambda ()
                                  (funcall draw canvas (c:make-rect 0 0 160 100)
                                           "latticewm-a" node)))
+                           (wm (lambda () (destroy-canvas canvas)))
                            t))))
                 ;; THE TWO EDGES BY HAND rather than the PREVIEW command, which
                 ;; toggles: a section that toggles its way through a cache test
@@ -1293,11 +1302,16 @@ are what a person means by the arrangement, and both are copy-stable."
                      (let* ((before (count-of "*CAPTURES*"))
                             (hidden (c:make-leaf other))
                             (stack (c:make-stack
-                                    (list (c:make-leaf node) hidden) 1)))
-                       (when (some #'r::overlay-canvas (all-overlays))
+                                    (list (c:make-leaf node) hidden) 1))
+                            (canvas (and (server-shm *server*)
+                                         (wm (lambda ()
+                                               (make-canvas (server-shm *server*)
+                                                            200 150))))))
+                       (when canvas
                          (wm (lambda ()
-                               (funcall draw (some #'r::overlay-canvas (all-overlays))
-                                        (c:make-rect 0 0 160 100) "tab" stack))))
+                               (funcall draw canvas (c:make-rect 0 0 160 100)
+                                        "tab" stack)))
+                         (wm (lambda () (destroy-canvas canvas))))
                        (check (= 1 (- (count-of "*CAPTURES*") before))
                               "a tab group captures its selected window, once")
                        (multiple-value-bind (picture present)
@@ -1308,6 +1322,39 @@ are what a person means by the arrangement, and both are copy-stable."
                                  not the one behind it"))
                        (wm (lambda () (funcall finish)))
                        (call "DISABLE")))))
+                ;; A FLOAT IS NOT IN THE TREE, so it was invisible to this
+                ;; drawing until #138: the overview said a workspace held one
+                ;; window while the screen showed two.  The float is made here
+                ;; and taken back, so the sections below find the tree they
+                ;; expect.
+                (let* ((panel (find-symbol "DRAW-PREVIEW-PANEL" "LATTICE"))
+                       (floats-of (find-symbol "FLOATS-OF" "LATTICE"))
+                       (free-of (find-symbol "FREE-FLOATS-OF" "LATTICE"))
+                       (shm (server-shm *server*))
+                       (canvas (and shm (wm (lambda () (make-canvas shm 200 150))))))
+                  (cond
+                    ((or (null panel) (null canvas))
+                     (skip "no deck and no canvas, so no float to draw"))
+                    (t
+                     (verb "toggle-float")
+                     (check (c:window-floating-p node) "a window can be floated")
+                     (let ((free (wm (lambda () (funcall free-of *world*))))
+                           (anchored (wm (lambda () (funcall floats-of node *world*)))))
+                       (check (= 1 (length free))
+                              "and the deck asks about it as a float: ~d"
+                              (length free))
+                       (check (null anchored)
+                              "not as one anchored in a workspace, because it ~
+                               is pinned to the screen")
+                       (check (wm (lambda ()
+                                    (funcall panel canvas (c:make-rect 0 0 200 150)
+                                             node 0 0 anchored free)
+                                    t))
+                              "and the panel draws with a float in the session"))
+                     (verb "toggle-float")
+                     (check (not (c:window-floating-p node))
+                            "and putting it back leaves the tree as it was")
+                     (wm (lambda () (destroy-canvas canvas))))))
                 ;; THE PIXEL COPY, on a canvas we own: a 2x2 picture of four
                 ;; known colours drawn into the whole of it, then read back.
                 (let ((shm (server-shm *server*)))

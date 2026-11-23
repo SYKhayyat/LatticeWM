@@ -26,6 +26,17 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+- **The deck draws floating windows (#138).** Floats are not in the tree, so the
+  preview and the drawn map drew cells and nothing else: a workspace whose cell
+  held a terminal and had a dialog floating over it was drawn as one cell, and
+  the overview said one window while the screen showed two. An anchored float is
+  now outlined inside the cell of the node it hangs on, at its fraction of that
+  cell — derived from the render index, so the miniature occupies the same
+  fraction the real one does, rather than a position the drawing invented. An
+  output-pinned float has no cell and no plane coordinates, so it is *named* at
+  the bottom of the panel you are standing on. One colour for every float,
+  `*float-box-color*`, because the policy's border answer needs a live node and a
+  focus state.
 - **A tab group in the deck shows the tab you are on (#137).** #130 gave a
   picture only to a cell holding *exactly one* window, which is right for a
   four-way split and wrong for a stack: a tab group has a selected child, so one

@@ -315,6 +315,16 @@ that is one window and it is the one on screen.  A compositor without the
 capture protocols, or a window it will not name, draws the same box it always
 did.
 
+Floating windows are in the deck too, because a float is not in the layout and
+an overview that left it out would say a workspace holds one window while the
+screen shows two.  A float anchored to a window is outlined inside that
+window's cell, at its fraction of it -- the same fraction the real one occupies
+-- and a float pinned to the screen rather than to a window is *named* at the
+bottom of the panel you are standing on, since its position is screen
+coordinates and the panel is a drawing of the plane.  One colour for every
+float, `*float-box-color*`, because the policy's border colour needs a live node
+and a focus state and a panel has neither.
+
 A container can change what it *is* without moving anything out of it.  =M-x
 restyle split= tiles, =M-x restyle stack= goes back to one window at a time, =M-x
 restyle grid 3= arranges in three columns if the grid module is loaded — and

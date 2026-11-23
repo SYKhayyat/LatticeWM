@@ -1757,3 +1757,44 @@ The selected thing there is not one window, and a picture of one of its leaves
 would be a picture of something that is not what is selected.  That cell keeps
 its box and its count, which is the honest drawing of a cell that is not one
 thing.
+
+* A drawing of the tree cannot be a drawing of the workspace
+The deck drew cells.  Floats are not in the tree -- `world-floats` is beside it,
+keyed by window -- so a workspace whose cell held a terminal and had a dialog
+floating over it was drawn as one cell, and the overview answered "what is on
+this workspace" with a number that was too low by one (#138).
+
+The two kinds of float are placed differently because they *are* placed
+differently, and the difference decides whether the drawing can say where they
+are at all:
+
+- An **anchored** float's rect is an offset from the rectangle of the node it
+  hangs on, and both rectangles are in the render index the emitter fills.  The
+  float's place *inside its cell* is therefore `(placed - cell) / cell` -- a
+  fraction, computed from real numbers, that the panel copies onto its box.
+  Nothing is invented, and the miniature occupies the fraction the real one
+  does.
+- An **output-pinned** float (anchor NIL) has screen coordinates and no cell.
+  A panel is a drawing of the plane, not of pixels; there is no plane coordinate
+  that maps to it.  So it is *named* -- `float <name>` at the bottom of the
+  panel you are standing on, because that is the plane it is over.  Placing it
+  by guesswork would be the deck lying about where a window is, which is worse
+  than saying only that it exists.
+
+A float has one colour, `*float-box-color*`, and not the border colour a real
+window gets: that answer comes from the policy for a live node with a focus
+state, and a panel has neither.
+
+* A stale protocol fasl desyncs the compositor
+Editing a `package.lisp` recompiles every system downstream of it, including
+the vendored `ext-image-*` protocol bindings.  After that rebuild, `make
+integration` failed four runs in a row -- in a section nothing had touched
+("window pixels"), as `(<= (+ start nbytes) end)` with `end = 0` inside
+wayflan's `cb-shiftout`, followed by `invalid object 0` and a dead connection:
+the generated proxy layout and the compiled code that reads it no longer agreed.
+
+`make clean && make build` made it green (295 checks, no failures).  The lesson
+is not "clean more": it is that a failure in a section your diff never reaches,
+arriving as a protocol desync rather than a failed assertion, is a build
+artifact until proven otherwise.  Check the name of the section before you read
+the diff.
