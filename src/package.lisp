@@ -626,7 +626,7 @@ keybindings, the command registry, and the session loop.")
    ;; the live session
    #:*world* #:*server* #:server #:seat #:primary-seat #:default-seat
    #:seat-key #:call-as-seat #:seat-focused #:server-manager
-   #:server-display #:server-seats #:server-running #:seat-proxy
+   #:server-display #:server-seats #:server-running #:*session-end* #:seat-proxy
    #:window-of-proxy #:all-windows #:all-outputs #:current-output
    ;; OUTPUT-SHOWING-WORKSPACE was here and is P:OUTPUT-SHOWING now, so that
    ;; motion -- which has to ask the same question and may not call the runtime

@@ -1358,7 +1358,10 @@ would be worse than saying so."
   (run-shutdown-once)
   (when (server-manager *server*)
     (best-effort "exit_session" (w:wm-exit-session (server-manager *server*))))
-  (setf (server-running *server*) nil))
+  ;; Recorded before the flag, because the loop reads the flag and stops: a
+  ;; line after it would be a line nobody was left to run.
+  (setf *session-end* :quit
+        (server-running *server*) nil))
 
 (defcommand restart-wm ()
   "Restart the window manager without ending the session.

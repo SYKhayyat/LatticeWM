@@ -103,6 +103,51 @@ the three that a person can fix by upgrading, so it says so separately.")
 (defvar *sections* '() "(TITLE . CHECK-COUNT), newest first.")
 (defvar *section* "start-up" "The section a check belongs to.")
 
+(defvar *wm-under-test* nil
+  "The thread START is running on.")
+
+(defvar *wm-end* nil
+  "Why the thread running START finished, or NIL while it is still going.
+
+START RETURNS FOR TWO REASONS AND ONE OF THEM IS A CRASH.  The harness used to
+run it inside IGNORE-ERRORS, which threw away both the condition and the fact
+that it had happened: a run that died in the protocol layer looked, from every
+later section, like a window manager that answered NIL to questions about its
+own server -- thirty-five failures apiece reading like separate bugs (#148).
+Capturing it costs one variable and turns all of them into one sentence.")
+
+(defvar *wm-gone* nil
+  "True once a section has found the session gone and said so.")
+
+(defvar *session-expected-to-end* nil
+  "True once a section has ended the session on purpose.
+
+THE SECTIONS AFTER `shutting down' RUN WITHOUT A WINDOW MANAGER THREAD, and that
+is not a fallback: with no thread owning the compositor socket, IN-WM-THREAD-P
+is true for whoever is asking, so a queued thunk runs where it stands.  Those
+sections are therefore not evidence that the session survived -- which is why
+*SESSION-END* has to say *why* it ended, and not merely that it did.")
+
+(defun wm-running-p ()
+  "Is the window manager thread still running?
+
+THE THREAD, NOT THE SERVER OBJECT, for the reason the shutdown check spells out:
+START's UNWIND-PROTECT sets *SERVER* to NIL after the loop, so a slot read off a
+server that has just been cleared is a type error rather than an answer.  The
+thread finishing is the one fact that is monotonic."
+  (and *wm-under-test* (sb-thread:thread-alive-p *wm-under-test*)))
+
+(defun wm-ended-unexpectedly-p ()
+  "Did the session end without anybody in this file asking it to?
+
+START returning normally is how a QUIT ends a session; a condition out of START
+is a crash, and so is a session the compositor disconnected.  The three are told
+apart by *SESSION-END*, which the runtime records and which, unlike anything on
+the server object, outlives the teardown that clears it."
+  (and *wm-under-test*
+       (not (wm-running-p))
+       (not *session-expected-to-end*)))
+
 (defun strict-p ()
   "Is a missing dependency a failure rather than a skip?
 
@@ -125,6 +170,26 @@ have."
              (format t "  FAIL  ~?~%" format arguments)))
   (force-output)
   ok)
+
+(defun note-wm-gone ()
+  "Say once that the session is over, and stop pretending each later check can run.
+
+ONE SENTENCE, NOT THIRTY-FIVE NON-ANSWERS.  A session that ends in the middle of
+the run leaves every later section asking a server that is no longer there, and
+`SERVER-SEATS was called with NIL' is what that looks like from each of them --
+which is why the first report of this read as thirty-five separate bugs (#148)."
+  (unless *wm-gone*
+    (setf *wm-gone* t)
+    (check nil "the session ended here (~a), so the sections after it did not ~
+                run"
+           ;; A CONDITION OUT OF START FIRST, because that is the crash itself;
+           ;; otherwise the runtime's own record of the end, which is how a
+           ;; compositor that closed the connection is told apart from a QUIT
+           ;; that produced the same `START returned'.
+           (cond ((and *wm-end* (not (eq *wm-end* :returned))) *wm-end*)
+                 (*session-end*)
+                 (*wm-end*)
+                 (t :unknown)))))
 
 (defun skip (format &rest arguments)
   "Note something a headless backend cannot have.  Reported, never fatal."
@@ -180,6 +245,17 @@ information about the twelve checks that never happened."
     (push (cons title 0) *sections*)
     (format t "~&~%---- ~a~%" title)
     (force-output)
+    ;; A SECTION THAT CANNOT RUN IS NOT THIRTY FAILED CHECKS.  Everything after
+    ;; the session ends would be a question about a server that is no longer
+    ;; there, and the answer is always the same one, which was already given
+    ;; (#148).  Checked here as well as in WM, because a section that asks the
+    ;; model directly would never go through WM to find out.
+    (when (wm-ended-unexpectedly-p)
+      (note-wm-gone))
+    (when *wm-gone*
+      (format t "  ----  not run: the window manager stopped above~%")
+      (force-output)
+      (return-from run-section nil))
     (handler-case (funcall thunk)
       (error (condition)
         (check nil "the section itself signalled: ~a" condition)))))
@@ -321,8 +397,6 @@ else already holds wayland-1, which is every developer's machine."
 (defun socket-path ()
   (format nil "~a/~a" *runtime-dir* *display*))
 
-(defvar *wm-under-test* nil
-  "The thread START is running on.")
 
 (defun start-window-manager ()
   "Run START on a thread, against the headless river.
@@ -340,10 +414,19 @@ the pieces by hand would be constructing state again."
   (setf *log-level* :warn
         *log-file* nil
         *ipc-socket* nil)
-  (setf *wm-under-test*
+  (setf *wm-end* nil
+        *wm-gone* nil
+        *session-expected-to-end* nil
+        *wm-under-test*
         (sb-thread:make-thread
          (lambda ()
-           (ignore-errors (start :swank-port nil :config nil :restore nil)))
+           ;; :returned is a session that ended the way QUIT ends one; a
+           ;; condition is a session that ended because something broke.
+           (setf *wm-end* (handler-case
+                              (progn (start :swank-port nil :config nil
+                                            :restore nil)
+                                     :returned)
+                            (error (condition) condition))))
          :name "latticewm-under-test")))
 
 (defun client-environment ()
@@ -435,7 +518,18 @@ Returns (values RESULT STATUS), STATUS being :OK, :ERROR, :ABANDONED or
 :TIMEOUT.  The last two are distinct: :TIMEOUT is the thread never reaching
 THUNK, :ABANDONED is THUNK outrunning TIMEOUT and being interrupted, which
 leaves the thread free."
-  (call-in-wm-thread-sync thunk :timeout timeout))
+  (cond
+    ((wm-running-p) (call-in-wm-thread-sync thunk :timeout timeout))
+    ;; AFTER A PLANNED SHUTDOWN the thunk still runs, in the caller's thread:
+    ;; with no window manager thread, IN-WM-THREAD-P is true for anybody, and
+    ;; three sections depend on that.
+    ((not (wm-ended-unexpectedly-p))
+     (call-in-wm-thread-sync thunk :timeout timeout))
+    ;; NOT A QUEUE AND A TEN-SECOND WAIT: a session that is gone will never
+    ;; answer, so asking it thirty-five times costs six minutes and reports
+    ;; thirty-five of the same non-answer (#148).
+    (t (note-wm-gone)
+       (values nil :dead))))
 
 (defvar *relayouts* 0
   "How many times the emitter has finished a relayout.  See SETTLE.")
@@ -1156,7 +1250,15 @@ are what a person means by the arrangement, and both are copy-stable."
              (t
               (check (r:capture-available-p)
                      "the compositor offers the three capture globals")
-              (let ((report (r:capture-report "latticewm-a")))
+              ;; ON THE WINDOW MANAGER THREAD, which is not decoration: a
+              ;; capture sends thirteen requests, and sending them from this
+              ;; thread while the window manager thread is drawing interleaves
+              ;; two writers into one protocol buffer.  That was #148 -- the run
+              ;; died with `invalid object N' or with an assertion inside
+              ;; wayflan's CB-SHIFTOUT, in whichever section happened to be
+              ;; unlucky.  CAPTURE-REPORT now refuses to run off that thread, so
+              ;; this is enforced rather than remembered.
+              (let ((report (wm (lambda () (r:capture-report "latticewm-a")))))
                 (cond
                   ((not (getf report :available))
                    ;; A compositor without ext-image-copy-capture-v1 is a
@@ -2554,7 +2656,17 @@ are what a person means by the arrangement, and both are copy-stable."
          (check (poll-until (lambda ()
                               (not (sb-thread:thread-alive-p *wm-under-test*)))
                             10)
-                "and QUIT ends the session"))
+                "and QUIT ends the session")
+         ;; AND WHY IT ENDED, which the sections after this one cannot assume:
+         ;; with no window manager thread a queued thunk runs in the caller's
+         ;; thread, so `it still answers' stopped being evidence of anything the
+         ;; day that fallback landed.  The three ends are told apart by name.
+         (check (eq :quit *session-end*)
+                "and it says the session ended because it was asked to (~s)"
+                *session-end*)
+         ;; From here the session is over on purpose, so a section that finds no
+         ;; window manager thread is not finding a crash (#148).
+         (setf *session-expected-to-end* t))
 
        ;; ------------------------------------------------------------------
        ;; :USER-ACTIVITY is fired from the seat's own event path, and a
@@ -2716,6 +2828,12 @@ are what a person means by the arrangement, and both are copy-stable."
 (format t "~d check~:p in ~d section~:p~%" *checks* (length *sections*))
 (dolist (entry (reverse *sections*))
   (format t "  ~3d  ~a~%" (cdr entry) (car entry)))
+
+(when *wm-gone*
+  (format t "~%THE RUN STOPPED EARLY.  The session ended in the middle of it, so~%~
+              the sections after that one did not run and this report is of~%~
+              what came before.  That is one cause and not thirty-five, which~%~
+              is how it used to read (#148).~%"))
 
 (when *skipped*
   (format t "~%~d thing~:p a headless backend cannot have:~%" (length *skipped*))

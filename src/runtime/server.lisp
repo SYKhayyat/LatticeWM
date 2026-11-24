@@ -109,6 +109,26 @@ drift is exactly what a hand-maintained list of handled events would produce."
              (with-abandon (case event ,@clauses)))
            (wl:wl-proxy-hooks ,proxy))))
 
+(defvar *session-end* nil
+  "How the last session ended: NIL while one is running, then a keyword.
+
+WHY THIS IS A VARIABLE AND NOT A SLOT.  The answer outlives the thing it is
+about: START's unwind-protect sets *SERVER* to NIL on the way out, so anything
+stored on the server is gone by the time there is a question to ask, and the
+question is always asked afterwards -- by a test harness, a caller of START, or
+a person reading the log.  Three answers, and they are three different things:
+
+  :QUIT         somebody asked the session to end (the QUIT command).
+  :DISCONNECTED the compositor closed the connection.  Either it went away, or
+                it decided we had done something it could not accept -- which
+                from inside the client is the same event and the same end.
+  :STOPPED      the loop's running flag went false and nothing claimed credit
+                for it, which is a third cause and would otherwise be reported
+                as one of the other two.
+
+A condition out of START is the fourth case and does not come through here: it
+arrives at the caller instead, which is where a backtrace is still available.")
+
 (defclass server ()
   ((display :initarg :display :accessor server-display
             :documentation "The wl_display.")

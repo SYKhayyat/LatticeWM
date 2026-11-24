@@ -164,6 +164,30 @@ alpha is 255, so OR-ing the top byte in is the whole conversion."
 
 ;;; ------------------------------------------------------------- the frame
 
+(define-condition capture-off-thread (error)
+  ((thread :initarg :thread :reader capture-off-thread-thread)
+   (owner :initarg :owner :reader capture-off-thread-owner))
+  (:report
+   (lambda (condition stream)
+     (format stream "window capture was called from ~a, and only the window ~
+                     manager thread~@[ (~a)~] may send on the compositor ~
+                     connection: two threads writing one protocol buffer ~
+                     interleave two requests into one message."
+             (or (ignore-errors (sb-thread:thread-name
+                                 (capture-off-thread-thread condition)))
+                 "a thread")
+             (ignore-errors (sb-thread:thread-name
+                             (capture-off-thread-owner condition))))))
+  (:documentation
+   "Signalled when window capture is asked for from the wrong thread.
+
+A PROGRAM ERROR RATHER THAN A CAPTURE FAILURE.  The other outcomes of a capture
+-- no protocol, no matching toplevel, a frame that never arrives -- are answers
+and are reported as NIL or as a reason; this one is the caller having broken
+the single-writer rule that the whole client rests on, and the only safe thing
+to do with it is to say so before the buffer is written by two threads at once
+and the connection is lost instead (#148)."))
+
 (defparameter +wait-slice+ 0.005
   "How long to hold off between looks at the socket, in seconds.
 
@@ -210,7 +234,11 @@ NIL means no picture: the compositor does not offer the protocols, the window
 has no foreign toplevel to match, the match was ambiguous, the frame failed, or
 the compositor stopped answering.  Every one of those is a reason to draw the
 deck's box instead, never a reason to signal -- a thumbnail is decoration and a
-decoration that can take the session down is not worth having."
+decoration that can take the session down is not worth having.
+
+The one exception is CAPTURE-OFF-THREAD: a caller on the wrong thread is not a
+capture that failed, it is two threads writing one protocol buffer, and the
+session it takes down is not this thumbnail's (#148)."
   (when (and server (capture-available-p server) window display)
     (let* ((app-id (c:window-app-id window))
            (title (c:window-title window))
@@ -219,7 +247,26 @@ decoration that can take the session down is not worth having."
         (capture-toplevel server display toplevel)))))
 
 (defun capture-toplevel (server display toplevel)
-  "The frame-copy sequence: source, session, size, buffer, frame, copy, read."
+  "The frame-copy sequence: source, session, size, buffer, frame, copy, read.
+
+ONLY THE THREAD THAT OWNS THE CONNECTION, and this is not a formality (#148).
+Wayflan keeps one circular output buffer per socket and serialises a request
+into it before sending it; two threads doing that at once interleave their
+writes, and what the compositor receives is a message boundary in the wrong
+place.  The symptom is not a clean error: it is either an assertion inside
+WAYFLAN.WIRE::CB-SHIFTOUT -- `more bytes consumed than the buffer holds', which
+is what one thread's flush looks like to another -- or the compositor reading a
+corrupted header and closing the connection with `invalid object 375'.
+
+SO IT IS REFUSED HERE, WHERE THE PROTOCOL IS TOUCHED, rather than trusted to
+every caller.  What found it was the integration harness calling
+CAPTURE-REPORT from its own thread while the window manager thread was busy
+drawing: thirteen requests written from the wrong side of the socket and one
+torn buffer, in a run that then passed because a probe clamped the assertion."
+  (unless (in-wm-thread-p)
+    (error 'capture-off-thread
+           :thread sb-thread:*current-thread*
+           :owner *wm-thread*))
   (let ((source nil) (session nil) (frame nil) (pool nil) (buffer nil)
         (data nil) (size 0)
         (width 0) (height 0) (ready nil) (failed nil) (done nil)

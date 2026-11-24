@@ -142,14 +142,20 @@ change: two of five runs died in wayflan's `cb-shiftout` assertion
 (`(<= (+ start nbytes) end)` with `end` 0) during a capture or echo section,
 which the unmodified tree reproduces — filed separately, because #146 was
 supposed to be the answer to that message.
-- [ ] #148 `make integration` is intermittent: two of five runs on this host died
-in wayflan's `cb-shiftout` assertion — `(<= (+ start nbytes) end)` with `end` 0 —
-during an echo-area or capture section, and everything after the crash reported as
-its own bug (35 failures on `SERVER-SEATS` called with `NIL`). That is the message
-#146 was filed about, so the stale-fasl explanation was at best one cause of two:
-the failing runs had a fresh cache, and the tree as it was before #147 reproduces
-it. The cost is the one #146 was trying to remove — a red run you cannot attribute
-to the diff or to the host — so it sits here rather than behind Phase 1.
+- [x] #148 `make integration` was intermittent: one run in three or four died
+inside wayflan's protocol buffer — `cb-shiftout`'s assertion `(<= (+ start nbytes)
+end)` with `end` 0, or the compositor answering `invalid object 375` — and
+everything after the crash reported as its own bug (35 failures on `SERVER-SEATS`
+called with `NIL`). Both are one cause: the harness called `capture-report` on
+*its own thread*, and a capture sends thirteen requests, so the main thread and
+the window manager thread marshalled into one circular output buffer at once.
+What made it rare is that the two writers have to overlap; what made it cost an
+afternoon is that the crash was attributed to whatever section happened to be
+running. Fixed twice over: `capture-toplevel` now refuses an off-thread caller
+with `capture-off-thread` (a unit test drives it), the harness calls the capture
+on the window manager thread, and the runtime records `*session-end*` so a
+harness can tell a quit from a disconnect — so the next such end is one failure
+and a "the sections after this did not run" line, not thirty-five.
 - [x] #149 an anchored float had no anchor in a restored tree, so an undo hid
 it. `copy-float-record` shared the anchor, which is right for the window (there is
 one of those) and wrong for a node (`copy-node` gives every node a new identity) —

@@ -110,6 +110,34 @@ it -- including when there is no session at all."
     (is (null (r:capture-window (make-instance 'c:window :app-id "foot")
                                 :server nil :display nil)))))
 
+(test a-capture-from-the-wrong-thread-is-refused-rather-than-raced
+  "THE ONE THING A CAPTURE MAY SIGNAL ABOUT IS ITS CALLER (#148).  Wayflan keeps
+one output buffer per socket: two threads marshalling at once interleave two
+requests into one message, and the compositor reads a header that names an
+object nobody made -- `invalid object 375', which is what killed the integration
+run.  The other outcome of the same race is wayflan's own assertion, `more
+bytes consumed than the buffer holds'.
+
+So the check is at the protocol, and this is it: a caller on a thread that does
+not own the connection gets a condition rather than a corrupted session.  The
+managers here are dummies and there is no display -- reaching them would need
+the very request that must not be sent, which is the point."
+  (let ((other (sb-thread:make-thread (lambda () (sleep 5)) :name "elsewhere")))
+    (unwind-protect
+         (with-a-toplevel-server ((a-toplevel "foot"))
+           (setf (r::server-capture-manager r:*server*) :a-manager
+                 (r::server-toplevel-capture-source-manager r:*server*) :a-manager)
+           (is-true (r:capture-available-p r:*server*)
+                    "the compositor would offer the protocols")
+           ;; The runtime's own variable, spelled out: this package does not
+           ;; USE LATTICEWM/RUNTIME, so a bare name here would be a different
+           ;; symbol and the binding would be invisible to IN-WM-THREAD-P.
+           (let ((r::*wm-thread* other))
+             (signals r::capture-off-thread
+               (r:capture-window (make-instance 'c:window :app-id "foot")
+                                 :server r:*server* :display :a-display))))
+      (sb-thread:destroy-thread other))))
+
 (test the-probe-says-why-instead-of-guessing
   "The diagnostic is a command, and a command's answer is a sentence in the echo
 area.  On a compositor that cannot do this the sentence has to say so -- an

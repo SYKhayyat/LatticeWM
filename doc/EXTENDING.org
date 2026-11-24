@@ -938,6 +938,14 @@ Two things to know:
   defers to the next one rather than emitting illegally.
 - Anything else that touches the compositor should go through ~in-wm~, because
   the Wayland client is single-threaded. Redefining a method never needs it.
+  "Single-threaded" is not a tidiness rule: the client marshals a request into
+  one buffer per socket and sends it, and a second thread doing the same at the
+  same moment interleaves two messages into one. The compositor then reads a
+  header that names an object nobody made and closes the connection — and the
+  client, if it is less lucky, asserts inside its own buffer code first. That is
+  what ~capture-window~ refuses with ~CAPTURE-OFF-THREAD~ rather than risk, and
+  the refusing is the shape to copy if you add another entry point that sends
+  before the window manager thread wakes up.
 
 *And the discipline that comes with it:* anything you redefine live and do not
 write back into your config is gone at the next restart. The REPL is a

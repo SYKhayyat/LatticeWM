@@ -410,7 +410,8 @@ what says so if there is ever a fourth."
 
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."
-  (setf *wm-thread* sb-thread:*current-thread*)
+  (setf *wm-thread* sb-thread:*current-thread*
+        *session-end* nil)
   (let ((fd (display-fd (server-display *server*))))
     (unless fd
       (logmsg :warn "could not find the display fd; falling back to polling"))
@@ -423,14 +424,16 @@ what says so if there is ever a fourth."
                ;; has its request folded into this pass rather than the next.
                (run-due-timers)
                (unless (dispatch-events)
-                 (setf (server-running *server*) nil))
+                 (setf (server-running *server*) nil
+                       *session-end* :disconnected))
                ;; The other way a session ends, and the one nothing signalled.
                ;; See CONNECTION-HUNG-UP-P: without this the loop spins a core
                ;; for as long as the machine is up.
                (when (and (server-running *server*)
                           (connection-hung-up-p fd))
                  (logmsg :info "compositor closed the connection")
-                 (setf (server-running *server*) nil))
+                 (setf (server-running *server*) nil
+                       *session-end* :disconnected))
                ;; After the whole batch of events, not inside any of them: a
                ;; device announces itself with twenty-odd events and
                ;; configuring it after the first would mean deciding what a
@@ -440,6 +443,11 @@ what says so if there is ever a fourth."
                (save-state-if-needed)
                (when (server-running *server*)
                  (wait-for-work fd))))
+    ;; Nothing claimed the end, so the flag went false without a reason: say
+    ;; that rather than report it as a quit or a disconnect, either of which
+    ;; would send somebody looking for a cause that is not there.
+    (unless *session-end*
+      (setf *session-end* :stopped))
     (setf *wm-thread* nil)))
 
 ;;; ---------------------------------------------------------------- startup
