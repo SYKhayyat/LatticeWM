@@ -26,6 +26,106 @@ be able to do before anyone else can depend on it.
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.3.0
+
+The release where the pieces that were built separately were wired to each
+other, and the wiring was tested by using them rather than by reading them.
+
+The headline is that the undo ring, the float list and the state file now
+describe the same world.  Floats were the last thing that lived beside the
+tree -- outside the snapshot, outside the settle point, outside the file in
+every way that mattered -- so undoing a layout change hid a picture-in-picture
+for good, dragging one was not an undo step at all, and an anchored float came
+back from a restart pinned to the wrong thing.  All three are fixed together
+because they are one fact: the layout is the tree *and* the floats, and every
+door that reads a layout now reads both.  Writing the tests for that turned up
+a fourth: a saved layout containing a float could not be read at all, because
+`:float-rect` was written as a `#S(...)` structure and `c:rect` has an explicit
+constructor, which makes `#S` unreadable.  Any session with a floating window
+open at save time had been losing its entire layout on the next start, silently,
+for as long as floats have been written down.
+
+The integration suite is the other half.  It had a fault that made it fail in
+whichever section happened to be running -- the harness captured pixels from its
+own thread while the window manager thread was marshalling, and one circular
+output buffer with two writers loses a connection rather than raising an error.
+A probe that decoded message headers found it in one run, and the suite now
+refuses the off-thread capture at the protocol boundary instead of trusting
+every caller to remember.
+
+Around that: `grid` and `restyle` made containers something you can change and
+compose rather than something you pick at startup; the workspace and monitor
+verbs, profiles, gestures, the hidden set and the batch selection turned the
+model's existing vocabulary into commands; the surface and option machinery got
+the checks that make the generated documents trustworthy (`make check` compares
+them to the tree); and the test suite went from "does the command exist" to
+"has anybody run it".
+
+And the harness itself: its thumbnails section handed the deck a *window*
+where a node was expected, so the explicit draw captured nothing and the check
+that counted captures was being satisfied by whichever frame happened to paint
+next.  That is the shape #148 taught, one section over — a real fault hidden
+behind an interleaving that usually goes the other way.
+
+New since 0.2.0: 68 entries below, closing #10 through #151.
+
+- **A saved layout can be read back, and a float remembers the pane it hangs on
+  (#151).**  Two bugs, and the second is the one that hurt.  A `:float-rect` was
+  written as a `#S(...)` structure, and `c:rect` has an explicit constructor —
+  which suppresses the default one — and `#S` is only read through a default
+  constructor, so `read-state-form` answered `:unreadable` for *the whole file*
+  whenever a float was saved: any session with a floating window open at save
+  time lost its entire layout on the next start, and had been doing so for as
+  long as floats have been written down.  The rectangle is a plist now and
+  `read-rect` reads it.  And an anchored float's rectangle is an offset from its
+  anchor's, so the file carries the anchor as a path (`#149`'s answer: a node
+  object does not survive being written down) and `restore-float-anchors`
+  resolves it once the restored tree is installed — a path that no longer
+  resolves is not a place, so that float comes back floating and unpinned at the
+  default size rather than at a corner nobody chose.
+- **A caller during startup queues instead of writing the protocol buffer
+  (#150).**  `in-wm-thread-p` reads a nil `*wm-thread*` as "nobody owns the
+  socket, so run it here", which is right for a unit test and for a session that
+  has ended, and wrong for the milliseconds in which `START` is connecting and
+  the loop has not taken the socket: a caller there marshalled underneath the
+  thread that was about to own it.  `*session-starting*` separates "no session"
+  from "not at its loop yet".
+- **`make integration` no longer fails in a section the diff never reached
+  (#148).**  The harness captured window pixels from its own thread while the
+  window manager thread was marshalling; wayflan keeps one circular output
+  buffer per socket, so two writers interleaved two requests into one message
+  and the compositor answered `invalid object N` and closed the connection.
+  Found with a probe that decoded message headers and recorded the sending
+  thread: thirteen off-thread messages, exactly the thirteen requests
+  `capture-report` sends.  `capture-toplevel` now refuses an off-thread caller
+  (`capture-off-thread`), the harness queues through `wm`, and `*session-end*`
+  (`:quit`, `:disconnected`, `:stopped`) lets a run that dies say so once
+  instead of reporting thirty-five separate failures with one cause.
+- **An anchored float still hangs on its pane after an undo (#149).**  A
+  snapshot copies the tree, so the anchor a float record pointed at named a node
+  in no tree — and an anchored float whose anchor is not placed is hidden, which
+  made undo of any layout change hide a picture-in-picture for good.  A
+  snapshot records each anchor's *path* (the trick the cursor already uses) and
+  `reconcile-floats` re-points it, and an entry that is absent means "say
+  nothing about this float", not "unanchor it".
+- **A float that moves is a layout change (#147).**  The signature that decides
+  whether the layout settled covered the tree and not the floats beside it, so
+  dragging a window left no undo step and the drag itself could be coalesced
+  away.  The layout is the tree plus the floats now; a move is one step, taken
+  at the end of the pointer gesture rather than per motion event.
+- **A build that has moved is a build worth rebuilding (#146).**  Fasls cached
+  on the shape of a path, and the protocol stubs wayflan generates for a package
+  that name it — so a checkout moved, or a `package.lisp` edited, could leave a
+  fasl that still loaded and no longer matched its package.  `tools/stamp.lisp`
+  fingerprints every first-party `package.lisp` by content and drops the
+  project's cache when one moves, leaving `.deps/` alone; gate 24 runs it.
+- **The coordinate overlay can see a float (#145).**  It asked the tree whether
+  a cell was occupied, and floats live beside the tree, so a workspace showing a
+  dialog over an empty cell labelled nothing on the one cell the reader was
+  looking at.  `cell-holds-something-p` asks the question it meant, and
+  `float-placed-rect` is the one place that knows where a float is.
 - **A window that already has a place is not placed again (#144).** `*unplaced*`
   is the arrival list and `place-unplaced-windows` drains it by asking the policy
   to open each window, without asking whether the window already has somewhere to
@@ -277,20 +377,6 @@ be able to do before anyone else can depend on it.
   have one — only the tabs extension defined a method — so a core-only session
   reached `serialize-node` on a leaf, found no applicable method, and never wrote
   the layout at all.  The two defaults the docstrings describe now exist. (#131)
-- **Touch gestures, as a table.** `M-x gesture` binds a gesture to any command
-  (`3 left`, `2 pinch in`, `1 edge top`), `forget-gesture` unbinds one, and
-  `p:*gestures*` is the same thing in a config file; three-finger swipes are the
-  pager and the focus moves by default.  This speaks
-  `river-touch-gestures-v1`, which is new in river 0.5.0 and is **optional**:
-  absent, the table is planned and reported and nothing fires, and a session on
-  0.4.6 is exactly what it was.  It is a *touchscreen* protocol — river consumes
-  trackpad swipes itself and does not forward them (`doc/FINDINGS.org`) — so the
-  table is protocol-agnostic on purpose: a spec is fingers, a trigger and a
-  command, and `p:gesture-plans` fills in the numbers, so the day trackpad
-  gestures arrive the table does not change.  New hooks `:gesture-start`,
-  `:gesture-end`, `:gesture-motion`, `:gesture-scale` and `:gesture-fingers` for
-  whoever wants a continuous gesture (a pan, a zoom) rather than a command.
-  (#16)
 - **Focus stealing, as a decision rather than a rule.** `M-x focus-steal` picks
   `always` (the default and the old behaviour), `smart` or `never`.  `smart`
   gives a new window the keyboard when it continues the application you are

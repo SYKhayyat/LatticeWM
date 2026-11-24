@@ -1303,15 +1303,31 @@ are what a person means by the arrangement, and both are copy-stable."
              (ignore-errors (asdf:load-system "lattice")))
            (unless (find-package "THUMBNAILS")
              (ignore-errors (asdf:load-system "thumbnails"))))
-         (let ((node (window-named "latticewm-a" 1))
+         (let* ((window (window-named "latticewm-a" 1))
+               ;; A NODE, NOT THE WINDOW (#152).  WINDOW-NAMED answers with the
+               ;; window, and P:CELL-PICTURE is asked about a *node*: the
+               ;; thumbnails module answers for a C:NODE, a window is not one,
+               ;; and the shipped NIL came back instead.  That was invisible for
+               ;; as long as it was, because the deck paints itself on the next
+               ;; frame and that paint asks the real leaf -- so the count the
+               ;; checks below look at was filled by a frame, not by this call,
+               ;; and whether the frame landed before or after the count was
+               ;; read was a race (#148's shape: a real fault hidden behind an
+               ;; interleaving that usually goes the other way).
+               (node (and window
+                          (or (c:leaf-holding (c:world-root *world*) window)
+                              ;; A window the tree does not hold still has a
+                              ;; picture; a leaf of its own says so without
+                              ;; asking the tree to agree.
+                              (c:make-leaf window))))
                (begin (find-symbol "PREVIEW-BEGIN" "LATTICE"))
                (finish (find-symbol "PREVIEW-END" "LATTICE"))
                (draw (find-symbol "DRAW-PREVIEW-CELL" "LATTICE"))
                (module (find-package "THUMBNAILS")))
            (cond
              ((or (null node) (null begin) (null draw) (null module))
-              (missing "nothing to draw: window ~a, deck ~a, module ~a"
-                       (and node t) (and begin t) (and module t)))
+              (missing "nothing to draw: window ~a, node ~a, deck ~a, module ~a"
+                       (and window t) (and node t) (and begin t) (and module t)))
              (t
               (flet ((call (name &rest arguments)
                        (apply (symbol-function (find-symbol name "THUMBNAILS"))
@@ -1348,18 +1364,28 @@ are what a person means by the arrangement, and both are copy-stable."
                             "with the module off, drawing the deck captured nothing")
                      (check (zerop (hash-table-count (count-of "*PICTURES*")))
                             "and cached nothing")
-                     ;; ON: the same draw, one capture.
-                     (call "ENABLE")
-                     (wm (lambda () (funcall begin)))
+                     ;; ON: ONE LOOK, ONE CAPTURE -- counted over the look and
+                     ;; not over one call (#152).  A look captures the cell
+                     ;; whichever of its two doors is first: the draw here, or
+                     ;; the deck's own paint of the next frame.  Reading the
+                     ;; counter before the look starts means the answer does not
+                     ;; depend on which of them wins, and the cache means the
+                     ;; loser captures nothing extra.
                      (let ((before (count-of "*CAPTURES*")))
+                       (call "ENABLE")
+                       (wm (lambda () (funcall begin)))
                        (drawn)
+                       (settle)
                        (check (= 1 (- (count-of "*CAPTURES*") before))
-                              "with it on, one look captured ~d picture~:p"
-                              (- (count-of "*CAPTURES*") before))
+                              "with it on, one look captured ~d picture~:p in ~
+a cell of ~d window~:p"
+                              (- (count-of "*CAPTURES*") before)
+                              (length (c:node-windows node)))
                        (check (= 1 (hash-table-count (count-of "*PICTURES*")))
                               "and cached it for the window in the cell")
                        (let ((after (count-of "*CAPTURES*")))
                          (drawn)
+                         (settle)
                          (check (= after (count-of "*CAPTURES*"))
                                 "and drawing the deck again reused it rather ~
                                  than capturing a second time")))
@@ -1404,7 +1430,7 @@ are what a person means by the arrangement, and both are copy-stable."
                      (let* ((before (count-of "*CAPTURES*"))
                             (hidden (c:make-leaf other))
                             (stack (c:make-stack
-                                    (list (c:make-leaf node) hidden) 1))
+                                    (list (c:make-leaf window) hidden) 1))
                             (canvas (and (server-shm *server*)
                                          (wm (lambda ()
                                                (make-canvas (server-shm *server*)
@@ -1432,6 +1458,13 @@ are what a person means by the arrangement, and both are copy-stable."
                 (let* ((panel (find-symbol "DRAW-PREVIEW-PANEL" "LATTICE"))
                        (floats-of (find-symbol "FLOATS-OF" "LATTICE"))
                        (free-of (find-symbol "FREE-FLOATS-OF" "LATTICE"))
+                       ;; THE WORKSPACE, which both of the deck's questions
+                       ;; take: FLOATS-OF asks which floats are anchored *in a
+                       ;; workspace's tree* and the panel draws one.  This was
+                       ;; handed a window, which answered "no floats" for every
+                       ;; window-shaped workspace ever passed to it -- true by
+                       ;; accident, and never the question (#152).
+                       (workspace (c:current-workspace *world*))
                        (shm (server-shm *server*))
                        (canvas (and shm (wm (lambda () (make-canvas shm 200 150))))))
                   (cond
@@ -1439,9 +1472,9 @@ are what a person means by the arrangement, and both are copy-stable."
                      (skip "no deck and no canvas, so no float to draw"))
                     (t
                      (verb "toggle-float")
-                     (check (c:window-floating-p node) "a window can be floated")
+                     (check (c:window-floating-p window) "a window can be floated")
                      (let ((free (wm (lambda () (funcall free-of *world*))))
-                           (anchored (wm (lambda () (funcall floats-of node *world*)))))
+                           (anchored (wm (lambda () (funcall floats-of workspace *world*)))))
                        (check (= 1 (length free))
                               "and the deck asks about it as a float: ~d"
                               (length free))
@@ -1450,11 +1483,11 @@ are what a person means by the arrangement, and both are copy-stable."
                                is pinned to the screen")
                        (check (wm (lambda ()
                                     (funcall panel canvas (c:make-rect 0 0 200 150)
-                                             node 0 0 anchored free)
+                                             workspace 0 0 anchored free)
                                     t))
                               "and the panel draws with a float in the session"))
                      (verb "toggle-float")
-                     (check (not (c:window-floating-p node))
+                     (check (not (c:window-floating-p window))
                             "and putting it back leaves the tree as it was")
                      (wm (lambda () (destroy-canvas canvas))))))
                 ;; THE PIXEL COPY, on a canvas we own: a 2x2 picture of four
