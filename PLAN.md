@@ -233,5 +233,14 @@ rather than fixed here.
 
 Core first: #25 state machine → #7 groups → #18 tags → #36 tabs (+#39 persist) → #10 templates (+#12 profiles) → #41 auto-respawn (+#15 scratchpad persist) → #30 map nav → #38 peek → #28 drag → #29 zoom/pan → #27 focus toggle → #13 stacking → #14 snapping → #23 preview → #17 history → #19 steal-prevention → #20 sharing → #96 workspace sharing (share-workspace, mirror) → #8 multi-monitor → #11 global shortcuts → #16 gestures → #9 animation → #5 recording → #6 invisible wins → #1 infinite workspaces → #3 promote examples.
 
+## Releases
+- [x] 0.3.0 — released 2026-11-23.  Sixty-eight entries of CHANGELOG, closing
+#10 through #152; `VERSION`, the two man pages and the `## 0.3.0` heading move
+together (gate 19), `make check` green including the integration suite against a
+real headless river, `make dist` writes `dist/latticewm-0.3.0.tar.gz` from the
+tagged commit.  The twenty-one `[Release]` mirrors (#42–#62) close here too:
+each one asked for its entry to be under a released heading, which is what this
+is.
+
 ## Routing rule for new issues
 Any AI opening an issue here MUST file safety/runtime items into Phase 1 and modules into Phase 3 in dependency position — never above safety. Mirror-duplicates go to SKIP with the evidence. See AI_ISSUE_ROUTING.md.
