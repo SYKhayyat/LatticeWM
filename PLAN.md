@@ -79,6 +79,12 @@ anchored to.  They sit above Phase 1 for the reason Phase 0 does — nothing
 safety-shape is displaced, because Phase 1 is fully checked — and they move back
 down the day one of them starts touching a safety path.
 
+All five are closed.  Two more were filed by the work itself and are still open:
+the startup window in which `in-wm-thread-p` answers T for any thread (#150) and
+a saved layout that forgets a float's anchor (#151) — both the same class as the
+finding they came from, one layer out, and both written up with the shape of the
+fix rather than a patch that guesses.
+
 - [x] #145 the coordinate overlay asked the *tree* whether a cell was occupied,
 and floats live beside the tree (#138), so a workspace showing a dialog over an
 empty cell drew no coordinate on the one cell the reader was looking at. Now
