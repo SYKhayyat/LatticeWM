@@ -1527,6 +1527,34 @@ already coming")
              "and it is cleared before the body of the sequence runs, so the
 work done inside one can still ask for the next")))
 
+(test a-caller-with-no-thread-yet-queues-instead-of-marshalling
+  "NO SESSION AND NOT YET ARE DIFFERENT ANSWERS (#150).  IN-WM-THREAD-P says yes
+when there is no window manager thread, because queueing work for a thread that
+will never come deadlocks the caller -- that is how the integration harness
+drives the model after a session has ended.  But START connects, binds the
+registry and does a round trip before RUN-EVENT-LOOP takes the socket, and in
+that window every thread used to look like the owner: a caller marshalled into
+the buffer the session thread was about to write, which is #148's two writers
+and one buffer, and a connection lost with `invalid object N'."
+  (let ((r:*server* (make-instance 'r::server))
+        (r::*session-starting* t)
+        (r::*wm-thread* nil)
+        (r::*wm-thread-queue* '())
+        (p:*log-level* nil))
+    (setf (r::server-manager r:*server*) :not-a-proxy)
+    (is-false (r:in-wm-thread-p)
+              "nobody owns the socket yet, and a session is on its way")
+    (r:request-manage)
+    (is-false (r::server-manage-requested r:*server*)
+              "so the request is queued rather than sent")
+    (is (= 1 (length r::*wm-thread-queue*))
+        "and the loop will run it when it gets there")
+    ;; And once there is no session at all, the old answer comes back.
+    (let ((r::*session-starting* nil)
+          (r::*wm-thread-queue* '()))
+      (is-true (r:in-wm-thread-p)
+               "with no session starting and none running, the caller runs it"))))
+
 ;;; ==================================================================
 ;;; FOCUS STEALING (#19)
 ;;; ==================================================================

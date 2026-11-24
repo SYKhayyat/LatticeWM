@@ -410,8 +410,12 @@ what says so if there is ever a fourth."
 
 (defun run-event-loop ()
   "The main loop.  Runs until the connection closes or QUIT is called."
+  ;; The thread first and the flag second: with the order the other way there
+  ;; is an instant in which neither clause of IN-WM-THREAD-P holds and an
+  ;; in-thread caller would queue for itself.
   (setf *wm-thread* sb-thread:*current-thread*
-        *session-end* nil)
+        *session-end* nil
+        *session-starting* nil)
   (let ((fd (display-fd (server-display *server*))))
     (unless fd
       (logmsg :warn "could not find the display fd; falling back to polling"))
@@ -567,6 +571,10 @@ still holds — LOAD-CONFIG catches and logs, so a bad configuration file cannot
 prevent this line being reached, and everything that can fail without a REPL to
 debug it (connecting, binding, the first manage sequence) is still after it."
   (install-debugger-hook)
+  ;; Before anything connects: from here until the event loop takes the socket,
+  ;; no thread owns it and every other thread must queue rather than marshal.
+  ;; See IN-WM-THREAD-P (#150).
+  (setf *session-starting* t)
   (p:add-emergency-thunk 'emergency-shutdown)
   (register-data-registry)
   (setf *world* (c:make-world)
@@ -665,7 +673,10 @@ sequence, and see the backtrace in the log."))
       (guarded "shutdown" (run-shutdown-once))
       (guarded "ipc shutdown" (stop-ipc-server))
       (ignore-errors (wl:wl-display-disconnect display))
-      (setf *server* nil)
+      (setf *server* nil
+            ;; A START that failed before the loop leaves this set, and every
+            ;; later caller would then queue for a thread that never ran.
+            *session-starting* nil)
       (logmsg :info "LatticeWM stopped")
       (ignore-errors (p:close-log-file)))))
 

@@ -79,11 +79,23 @@ anchored to.  They sit above Phase 1 for the reason Phase 0 does — nothing
 safety-shape is displaced, because Phase 1 is fully checked — and they move back
 down the day one of them starts touching a safety path.
 
-All five are closed.  Two more were filed by the work itself and are still open:
-the startup window in which `in-wm-thread-p` answers T for any thread (#150) and
-a saved layout that forgets a float's anchor (#151) — both the same class as the
-finding they came from, one layer out, and both written up with the shape of the
-fix rather than a patch that guesses.
+All five are closed.  Two more were filed by the work itself, both the same class
+as the finding they came from, one layer out:
+
+- [x] #150 the startup window in which `in-wm-thread-p` answered T for every
+thread. START connects, binds the registry and does a round trip before
+`run-event-loop` sets `*wm-thread*`, and `in-wm-thread-p` reads a nil
+`*wm-thread*` as "nobody owns the socket, so run it here" — which is right for a
+unit test and for a session that has ended, and wrong for those few
+milliseconds. A caller there marshalled into the buffer the session thread was
+about to write: #148's fault, arrived at from the other side. `*session-starting*`
+now separates "no session" from "not at its loop yet", and the caller queues.
+- [ ] #151 a *saved* layout forgets a float's anchor: `state.lisp` writes the
+rectangle and `restore-a-float` builds a record with no anchor, so a restart
+unties a picture-in-picture — and the rectangle it keeps is the pane-relative
+one, so the float reappears at an offset that meant something in the last
+session. The answer is #149's, one layer out (a path, and the state file's
+version bumped), and it is the only one of the two left.
 
 - [x] #145 the coordinate overlay asked the *tree* whether a cell was occupied,
 and floats live beside the tree (#138), so a workspace showing a dialog over an

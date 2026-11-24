@@ -55,9 +55,36 @@ because the model was right."
     (save-state-soon)
     (when (null w:*sequence*) (request-manage))))
 
+(defvar *session-starting* nil
+  "True from the moment START begins until the event loop takes the socket.
+
+WHY THIS IS A VARIABLE AND NOT A SECOND USE OF *WM-THREAD* (#150).
+IN-WM-THREAD-P has to answer `yes' when there is no window manager thread,
+because queueing work for a thread that will never come is a deadlock with a
+long name — that is what lets the integration harness drive the model after a
+session has ended, and three of its sections depend on it.  But there is a
+window in which *WM-THREAD* is nil and a session is very much on its way: START
+connects, binds the registry and does a round trip before RUN-EVENT-LOOP sets
+the thread, and in that window every thread looked like the owner.  A caller
+there marshalled into the output buffer the session thread was about to write,
+which is exactly the fault of #148 — two writers, one buffer, a connection lost
+with `invalid object N'.
+
+Set by START and cleared by the loop, so `no session' and `not at its loop yet'
+stop being the same answer.")
+
 (defun in-wm-thread-p ()
-  "True when we are running on the thread that owns the compositor socket."
-  (or (null *wm-thread*) (eq sb-thread:*current-thread* *wm-thread*)))
+  "True when we are running on the thread that owns the compositor socket.
+
+Three cases, and the third is the one that used to be answered wrongly.  On the
+thread: yes.  No thread and no session on its way — a unit test, or a session
+that has ended: yes, and the caller runs the thunk where it stands, because
+there is nobody to queue for.  No thread but START is still connecting: no, so
+the caller queues and the loop runs it a moment later, rather than writing the
+protocol buffer underneath the thread that is about to own it.  See
+*SESSION-STARTING*."
+  (or (eq sb-thread:*current-thread* *wm-thread*)
+      (and (null *wm-thread*) (not *session-starting*))))
 
 (defun manage-request-wanted-p ()
   "Whether asking river for a manage sequence would buy anything.
