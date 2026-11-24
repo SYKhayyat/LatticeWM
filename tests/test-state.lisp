@@ -166,6 +166,129 @@ replaced by `.corrupt' while making room for it."
     (is (probe-file (make-pathname :type "lisp.v99" :defaults path)))
     (is (not (probe-file (make-pathname :type "lisp.corrupt" :defaults path))))))
 
+;;; ---------------------------------- a float whose place is an offset (#151)
+
+(defun state-server-holding (windows)
+  "A server object whose window table holds WINDOWS, for ALL-WINDOWS.
+
+RESTORE-WINDOW-FACTS matches rows to live windows through that table, so a test
+of restoring has to put the windows where the runtime would have put them."
+  (let ((server (make-instance 'r::server))
+        (table (make-hash-table :test #'eq)))
+    (dolist (window windows)
+      (setf (gethash (c:window-identifier window) table) window))
+    (setf (r::server-windows server) table)
+    server))
+
+(defun a-floating-pip (world identifier anchor rect)
+  "WINDOW for IDENTIFIER, floating on WORLD at RECT, anchored to ANCHOR."
+  (let ((window (win identifier)))
+    (setf (c:window-identifier window) identifier
+          (c:window-floating-p window) t)
+    (push (make-instance 'c:floating-window :window window :rect rect
+                         :anchor anchor)
+          (c:world-floats world))
+    window))
+
+(test a-saved-float-remembers-the-pane-it-hangs-on
+  "THE RECTANGLE IS AN OFFSET, SO THE FILE HAS TO CARRY THE BASE (#151).
+
+An anchored float's rectangle is stored relative to its anchor's -- that is what
+ANCHOR-FLOAT re-expresses it to, and what keeps it still when the pane moves.
+SAVE-STATE wrote the rectangle and not the anchor, so a restart kept 14,9 and
+lost `from this pane': the float came back *visible*, at the top-left corner of
+the screen, which reads as a placement bug rather than as a missing field.
+
+The anchor is written as a path for the reason #149 gives for snapshots: a node
+object does not survive being written to a file any more than it survives being
+copied into a snapshot."
+  (with-state-file (path)
+    (let* ((world (fresh-world))
+           (pane (c:current-workspace world))
+           (window (a-floating-pip world "pip" pane (c:make-rect 14 9 200 150))))
+      (let ((r::*world* world)
+            (r:*server* (state-server-holding (list window))))
+        (r:save-state path))
+      (let* ((form (r::read-state-form path))
+             (row (find "pip" (getf form :windows) :key #'first :test #'equal)))
+        (is-true row "the floating window is in the file")
+        (is (equal (list (first (c:world-cursor world)))
+                   (getf (rest row) :anchor-path))
+            "with the path of the pane it hangs on, not only its own rectangle")
+        ;; THE FILE THIS TEST FOUND UNREADABLE (#151).  C:RECT has an explicit
+        ;; constructor, so a RECT object prints as `#S(...)' and reads back as
+        ;; an error -- for the entire file.  A layout saved with a float in it
+        ;; was therefore discarded on the next start, and `confirm that floats
+        ;; persist' (#25) had been confirming the row, not the round trip.
+        (is (integerp (getf (getf (rest row) :float-rect) :x))
+            "and a rectangle that READ can make a form of"))
+      ;; And a restart, which is the point of writing any of it down.
+      (let* ((new-world (fresh-world))
+             (again (win "pip"))
+             (r::*world* new-world)
+             (r:*server* (state-server-holding (list again))))
+        (setf (c:window-identifier again) "pip")
+        (is-true (r:load-state path) "the layout came back")
+        (let* ((float (c:float-of-window new-world again))
+               (expected (c:resolve-path (c:world-root new-world)
+                                         (list (first (c:world-cursor world))))))
+          (is-true float "the float came back as a float")
+          (is (eq expected (c:float-anchor float))
+              "hanging on the pane at the same path, in the restored tree")
+          (is (eq expected (c:resolve-path (c:world-root new-world)
+                                           (list (first (c:world-cursor new-world)))))
+              "which is the restored workspace")
+          (let ((rect (c:float-rect float)))
+            (is (= 14 (c:rect-x rect)) "the offset that was written")
+            (is (= 9 (c:rect-y rect)))
+            (is (= 200 (c:rect-w rect)))
+            (is (= 150 (c:rect-h rect)))))))))
+
+(test a-float-whose-pane-is-gone-comes-back-unpinned-and-not-at-the-corner
+  "AN OFFSET WITH NO BASE IS NOT A RECTANGLE (#151).
+
+The pane a float hung on may have been closed while the program was not
+running, so the path in the file may resolve to nothing.  Keeping the rectangle
+then places the float at 14,9 in *screen* coordinates -- a window stuffed into
+the top-left corner at a size nobody chose -- which is worse than saying so.  It
+comes back floating, unpinned, at the default float size, and the log says why.
+
+Written by editing the file, because that is how the case arises: an
+unresolvable path is what a hand edit or a closed pane leaves behind."
+  (with-state-file (path)
+    (let* ((world (fresh-world))
+           (pane (c:current-workspace world))
+           (window (a-floating-pip world "pip" pane (c:make-rect 14 9 200 150))))
+      (let ((r::*world* world)
+            (r:*server* (state-server-holding (list window))))
+        (r:save-state path))
+      ;; Rewrite the anchor path to one the tree does not have.
+      (let* ((form (r::read-state-form path))
+             (rows (getf form :windows))
+             (row (find "pip" rows :key #'first :test #'equal)))
+        (setf (getf (rest row) :anchor-path) '(0 7 7))
+        (let ((*package* (find-package :keyword))
+              (*print-readably* nil))
+          (with-open-file (out path :direction :output :if-exists :supersede)
+            (write form :stream out))))
+      (let* ((new-world (fresh-world))
+             (again (win "pip"))
+             (r::*world* new-world)
+             (r:*server* (state-server-holding (list again)))
+             (p:*log-level* nil))
+        (setf (c:window-identifier again) "pip")
+        (is-true (r:load-state path))
+        (let ((float (c:float-of-window new-world again)))
+          (is-true float "still a float")
+          (is-false (c:float-anchor float) "and no longer pinned to nothing")
+          (let ((rect (c:float-rect float))
+                (default (c:make-default-float-rect 100 100)))
+            (is (= (c:rect-x default) (c:rect-x rect))
+                "at the default float rectangle, not at a base-less offset")
+            (is (= (c:rect-y default) (c:rect-y rect)))
+            (is (= (c:rect-w default) (c:rect-w rect)))
+            (is (= (c:rect-h default) (c:rect-h rect)))))))))
+
 ;;; --------------------------------------- the seam the core promises (#131)
 
 (test the-core-answers-extra-facts-for-a-node-it-knows-nothing-extra-about

@@ -191,5 +191,10 @@ mentioned it."
     (let ((row (rest (first (r:window-facts (list window))))))
       (is-true (getf row :floating) "the disposition is written")
       (is-true (getf row :fullscreen) "and the prominence")
-      (is-true (getf row :float-rect) "with the rectangle it had, not 0,0")
-      (is (= 768 (c:rect-w (getf row :float-rect))) "the width it had"))))
+      ;; A PLIST, not a RECT OBJECT, and that is the fix in #151: C:RECT has an
+      ;; explicit constructor, so `#S(...)' -- which is what a REC T object
+      ;; printed as -- cannot be READ back, and a state file with a float in it
+      ;; was unreadable in its entirety rather than merely incomplete.
+      (let ((rect (r::read-rect (getf row :float-rect))))
+        (is-true rect "with the rectangle it had, not 0,0")
+        (is (= 768 (c:rect-w rect)) "the width it had")))))

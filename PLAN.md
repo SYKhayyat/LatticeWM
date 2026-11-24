@@ -90,12 +90,15 @@ unit test and for a session that has ended, and wrong for those few
 milliseconds. A caller there marshalled into the buffer the session thread was
 about to write: #148's fault, arrived at from the other side. `*session-starting*`
 now separates "no session" from "not at its loop yet", and the caller queues.
-- [ ] #151 a *saved* layout forgets a float's anchor: `state.lisp` writes the
-rectangle and `restore-a-float` builds a record with no anchor, so a restart
-unties a picture-in-picture — and the rectangle it keeps is the pane-relative
-one, so the float reappears at an offset that meant something in the last
-session. The answer is #149's, one layer out (a path, and the state file's
-version bumped), and it is the only one of the two left.
+- [x] #151 a *saved* layout forgot a float's anchor: `state.lisp` wrote the
+rectangle and `restore-a-float` built a record with no anchor, so a restart
+untied a picture-in-picture — and the rectangle it kept was the pane-relative
+one, so the float reappeared at an offset that meant something in the last
+session. Written as a path (#149's answer) and resolved once the restored tree
+is installed. Testing it turned up the larger half: a `:float-rect` was written
+as a `#S(...)` structure, and `c:rect`'s explicit constructor makes that
+unreadable — so a layout saved with *any* floating window was unreadable in its
+entirety and discarded. It is a plist now, and `read-rect` reads it.
 
 - [x] #145 the coordinate overlay asked the *tree* whether a cell was occupied,
 and floats live beside the tree (#138), so a workspace showing a dialog over an

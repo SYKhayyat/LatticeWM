@@ -188,8 +188,9 @@ been, which for a persistence path is the wrong way round."
         for floating = (c:window-floating-p window)
         for fullscreen = (c:window-fullscreen-p window)
         for pinned = (c:window-pinned-p window)
-        for float-rect = (let ((float (c:float-of-window *world* window)))
-                           (and float (c:copy-rect (c:float-rect float))))
+        for float = (c:float-of-window *world* window)
+        for float-rect = (and float (serialize-rect (c:float-rect float)))
+        for anchor-path = (and float (float-anchor-path (c:float-anchor float)))
         when (and identifier (or tags scratchpad minimized floating fullscreen pinned))
           collect (list identifier
                         :tags (copy-list tags)
@@ -203,9 +204,63 @@ been, which for a persistence path is the wrong way round."
                         :floating floating
                         :fullscreen fullscreen
                         :float-rect float-rect
+                        ;; #151: where the float was pinned, as a path.  The
+                        ;; *rectangle* above is an offset from this node's
+                        ;; rectangle for an anchored float, so a file without
+                        ;; this key does not describe a float in the wrong
+                        ;; place -- it describes one whose place means nothing.
+                        :anchor-path anchor-path
                         :pinned pinned)))
 
-(defun restore-a-float (world window rect)
+(defun serialize-rect (rect)
+  "RECT as a plist, so that a saved layout can be read back.
+
+A RECT OBJECT CANNOT BE READ, WHICH WAS A BUG IN PLAIN SIGHT (#151).  C:RECT is
+a DEFSTRUCT with an explicit constructor, which suppresses the default one, and
+`#S(...)' is only readable through a default constructor.  So the state file
+printed
+
+    :FLOAT-RECT #S(LATTICEWM/CORE:RECT :X 14 :Y 9 :W 200 :H 150)
+
+and READ-STATE-FORM answered :UNREADABLE -- *for the whole file*, not for the
+row.  A session with a floating window in it therefore saved a layout that
+discarded itself: the version gate kept it as `.corrupt', the next session
+started from the configuration, and nothing said so beyond a log line about a
+file the reader could not make a form out of.  #25 wrote the float rect down so
+that a float would come back, and the file it wrote could not be loaded.
+
+A plist is three characters longer and is read by the same READ that reads the
+rest of the file."
+  (list :x (c:rect-x rect) :y (c:rect-y rect)
+        :w (c:rect-w rect) :h (c:rect-h rect)))
+
+(defun read-rect (form)
+  "The rectangle FORM describes, or NIL if it describes none.
+
+Accepts the plist SERIALIZE-RECT writes and, defensively, a RECT object -- some
+other writer of a state file may have had one to hand, and a file that says what
+it means should be read.  Anything else is NIL, which RESTORE-A-FLOAT answers
+with the default float size rather than with a guess."
+  (typecase form
+    (c:rect form)
+    (cons (when (and (integerp (getf form :x)) (integerp (getf form :y))
+                     (integerp (getf form :w)) (integerp (getf form :h)))
+            (c:make-rect (getf form :x) (getf form :y)
+                         (getf form :w) (getf form :h))))
+    (t nil)))
+
+(defun float-anchor-path (anchor)
+  "Where ANCHOR sits in the layout: a path, :ROOT, or NIL for no anchor.
+
+THE PRESENCE OF THE KEY IS THE ANSWER (#151), so its value has to distinguish
+three things rather than two.  A path is a list and the root's path is the empty
+one, which the reader cannot tell from NIL — and NIL is already taken, by `this
+float is pinned to the output'.  :ROOT is written literally because it is three
+characters, a keyword, and unambiguous to anybody reading the file by hand."
+  (when anchor
+    (or (c:node-path-to (c:world-root *world*) anchor) :root)))
+
+(defun restore-a-float (world window rect &optional anchor-path)
   "Put WINDOW back on the float list at RECT, or at the default float size.
 
 Called from RESTORE-WINDOW-FACTS, which is why it does not do the tree surgery
@@ -213,13 +268,19 @@ FLOAT-AWAY-FROM-TREE does: a window that was floating when the layout was saved
 was never in the restored tree in the first place, so there is nothing to take
 it out of.  RECT is what it looked like; a file written before #25 has none, and
 the default float rectangle is the honest answer then -- the alternative is a
-float at 0,0 the size of nothing."
-  (let ((rect (or rect (c:make-default-float-rect 100 100))))
+float at 0,0 the size of nothing.
+
+ANCHOR-PATH is where the float hung in the *saved* tree (#151) and is
+deliberately not resolved here: RESTORE-WINDOW-FACTS runs before LOAD-STATE
+installs the restored tree, so there is nothing yet to resolve it against.  It
+is returned with the window -- as (WINDOW . ANCHOR-PATH) -- and
+RESTORE-FLOAT-ANCHORS answers it once the tree is in place."
+  (let ((rect (or (read-rect rect) (c:make-default-float-rect 100 100))))
     (setf (c:window-floating-p window) t)
     (unless (c:float-of-window world window)
       (push (make-instance 'c:floating-window :window window :rect rect)
             (c:world-floats world)))
-    window))
+    (and anchor-path (cons window anchor-path))))
 
 (defun restore-window-facts (world saved index)
   "Put SAVED per-window state back onto the live windows in INDEX.
@@ -236,47 +297,89 @@ was deliberately put away from reappearing on screen.
 A row that is not a list, or names an identifier no live window has, is skipped
 rather than signalled: a state file is untrusted input the moment somebody edits
 it by hand, which is the same ruling READ-NODE makes three functions up."
-  (dolist (row saved)
-    (when (consp row)
-      ;; PER ROW, not around the whole loop: the DESTRUCTURING-BIND signals on
-      ;; an odd-length plist tail or a key it does not expect -- both reachable
-      ;; the moment somebody hand-edits the file -- and a single bad row caught
-      ;; only by the outer LOAD-STATE guard abandoned the *entire* restore, not
-      ;; just that row.  The docstring promises the row is skipped; this keeps
-      ;; that promise for a malformed list, not only for a non-list.
-      (guarded "restore-window-fact"
-        (destructuring-bind (identifier &key tags scratchpad minimized
-                                          floating fullscreen float-rect pinned) row
-          (let ((window (gethash identifier index)))
-            (when window
-              ;; Reversed, so that a window with no tags yet comes back with
-              ;; them in the order they were given.  WINDOW-TAG-NAMES documents
-              ;; that order and the tag prompt lists them in it.
-              ;;
-              ;; NORMALIZED, because the file is read as text: a tag typed at a
-              ;; prompt is stored as an uninterned symbol and prints as
-              ;; `#:MAIL', which the reader makes a *new* uninterned symbol each
-              ;; time it appears.  The tag in :TAGS and the same name in
-              ;; :SCRATCHPAD would otherwise be two symbols that only look
-              ;; alike, and SCRATCHPAD-SHOW would find nothing.
-              (dolist (tag (reverse tags))
-                (pushnew (normalize-tag tag) (c:window-tags window)
-                         :test #'tag-name=))
-              (when scratchpad
-                (setf (c:prop window :scratchpad) (normalize-tag scratchpad)))
-              ;; Disposition before minimization, so that a window put away
-              ;; floating comes back with both facts in the order ON-MINIMIZE
-              ;; would have seen them.
-              (when (and floating (not (c:window-minimized-p window)))
-                (guarded "restore float"
-                  (restore-a-float world window float-rect)))
-              (when fullscreen
-                (setf (c:window-fullscreen-p window) t))
-              (when pinned
-                (setf (c:window-pinned-p window) t))
-              (when (and minimized (not (c:window-minimized-p window)))
-                (guarded "restore minimized"
-                  (p:on-minimize (p:current-policy) world window)))))))))) 
+  (let ((anchored '()))
+    (dolist (row saved)
+      (when (consp row)
+        ;; PER ROW, not around the whole loop: the DESTRUCTURING-BIND signals
+        ;; on an odd-length plist tail or a key it does not expect -- both
+        ;; reachable the moment somebody hand-edits the file -- and a single bad
+        ;; row caught only by the outer LOAD-STATE guard abandoned the *entire*
+        ;; restore, not just that row.  The docstring promises the row is
+        ;; skipped; this keeps that promise for a malformed list, not only for a
+        ;; non-list.
+        (guarded "restore-window-fact"
+          (destructuring-bind (identifier &key tags scratchpad minimized
+                                            floating fullscreen float-rect
+                                            anchor-path pinned) row
+            (let ((window (gethash identifier index)))
+              (when window
+                ;; Reversed, so that a window with no tags yet comes back with
+                ;; them in the order they were given.  WINDOW-TAG-NAMES
+                ;; documents that order and the tag prompt lists them in it.
+                ;;
+                ;; NORMALIZED, because the file is read as text: a tag typed at
+                ;; a prompt is stored as an uninterned symbol and prints as
+                ;; `#:MAIL', which the reader makes a *new* uninterned symbol
+                ;; each time it appears.  The tag in :TAGS and the same name in
+                ;; :SCRATCHPAD would otherwise be two symbols that only look
+                ;; alike, and SCRATCHPAD-SHOW would find nothing.
+                (dolist (tag (reverse tags))
+                  (pushnew (normalize-tag tag) (c:window-tags window)
+                           :test #'tag-name=))
+                (when scratchpad
+                  (setf (c:prop window :scratchpad) (normalize-tag scratchpad)))
+                ;; Disposition before minimization, so that a window put away
+                ;; floating comes back with both facts in the order ON-MINIMIZE
+                ;; would have seen them.
+                (when (and floating (not (c:window-minimized-p window)))
+                  (guarded "restore float"
+                    (let ((anchored-float (restore-a-float world window float-rect
+                                                           anchor-path)))
+                      (when anchored-float
+                        (push anchored-float anchored)))))
+                (when fullscreen
+                  (setf (c:window-fullscreen-p window) t))
+                (when pinned
+                  (setf (c:window-pinned-p window) t))
+                (when (and minimized (not (c:window-minimized-p window)))
+                  (guarded "restore minimized"
+                    (p:on-minimize (p:current-policy) world window)))))))))
+    (nreverse anchored)))
+
+(defun restore-float-anchors (world root anchored)
+  "Re-point each restored float's anchor into ROOT, the tree just installed.
+
+THE OFFSETS LOOK ABSOLUTE UNTIL THEY ARE RESOLVED (#151).  An anchored float's
+rectangle is an offset from its anchor's, so it is stored that way and it means
+nothing without the anchor: 14,9 from the top-left of a pane is a sensible
+picture-in-picture position and is a float stuffed into the corner of the screen
+if the pane is forgotten.  That is the whole bug -- the float came back *visible*
+and in the wrong relation to everything it was tied to, which reads as a
+placement mistake rather than as a missing field.
+
+A PATH THAT NO LONGER EXISTS IS NOT A PLACE.  The pane may have been closed
+while this program was not running, and the honest answer then is the default
+float rectangle: the saved offset has no base to be relative to, and guessing
+one is how a window ends up somewhere nobody chose.  The float keeps its window
+and its floating disposition; it loses only the pin.
+
+:ROOT, written by FLOAT-ANCHOR-PATH, is the empty path spelled in a way the
+reader can tell from `no anchor'."
+  (dolist (entry anchored)
+    (let* ((window (car entry))
+           (anchor-path (cdr entry))
+           (float (c:float-of-window world window))
+           (anchor (and float (c:resolve-path root anchor-path))))
+      (when float
+        (cond
+          (anchor
+           (setf (c:float-anchor float) anchor))
+          (t
+           (setf (c:float-anchor float) nil
+                 (c:float-rect float) (c:make-default-float-rect 100 100))
+           (logmsg :info "float for ~a was anchored to a pane that is gone; unpinned it"
+                   (c:window-identifier window))))))
+    t)) 
 
 (defun output-workspaces ()
   "Which workspace each output is showing, by output name.
@@ -518,7 +621,7 @@ deleted by the program that failed to read it."
         ;; Before the tree, because it decides which windows the tree is
         ;; allowed to re-place: a window that was on a named scratchpad is
         ;; minimized again here, and the loop below skips minimized windows.
-        (restore-window-facts *world* (getf form :windows) index)
+        (let ((anchored (restore-window-facts *world* (getf form :windows) index)))
         (let ((root (read-node (getf form :root) index)))
           ;; Anything we are managing that the file did not mention has to go
           ;; somewhere, or it would be invisible and unreachable.
@@ -532,6 +635,10 @@ deleted by the program that failed to read it."
                           (c:window-minimized-p window))
                 (guarded "replace unlisted window"
                   (p:on-window-open (p:current-policy) *world* window)))))
+          ;; After the tree is installed, because this is what a path is
+          ;; resolved against (#151).
+          (guarded "restore float anchors"
+            (restore-float-anchors *world* root anchored))
           (restore-output-workspaces (getf form :outputs))
           ;; The restored tree replaced whatever the configuration file built,
           ;; so a policy that requires a shape gets its chance here.  See the
@@ -543,7 +650,7 @@ deleted by the program that failed to read it."
           (run-hooks :layout-restored)
           (logmsg :info "restored layout from ~a" path)
           (mark-dirty)
-          t)))))
+          t))))))
 
 (p:define-option *save-interval-seconds* 5
   "How long the layout may sit changed before it is written out.
